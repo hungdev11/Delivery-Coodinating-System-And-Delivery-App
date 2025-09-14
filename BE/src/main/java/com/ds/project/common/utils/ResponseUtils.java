@@ -18,7 +18,7 @@ public class ResponseUtils {
     public static <T> ResponseEntity<Map<String, Object>> success(T data) {
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
-        response.put("data", data);
+        response.put("result", data);
         response.put("timestamp", LocalDateTime.now());
         return ResponseEntity.ok(response);
     }
@@ -30,7 +30,7 @@ public class ResponseUtils {
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("message", message);
-        response.put("data", data);
+        response.put("result", data);
         response.put("timestamp", LocalDateTime.now());
         return ResponseEntity.ok(response);
     }

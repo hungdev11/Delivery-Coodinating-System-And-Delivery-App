@@ -21,7 +21,6 @@ public class UserDto {
     private String firstName;
     private String lastName;
     private Set<String> roles;
-    private Boolean deleted;
     private String createdAt;
     private String updatedAt;
 }

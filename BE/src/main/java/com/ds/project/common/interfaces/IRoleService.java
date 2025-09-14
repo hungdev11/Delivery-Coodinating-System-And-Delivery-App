@@ -1,7 +1,10 @@
 package com.ds.project.common.interfaces;
 
+import com.ds.project.common.entities.base.BaseResponse;
+import com.ds.project.common.entities.base.Page;
+import com.ds.project.common.entities.base.PagedData;
+import com.ds.project.common.entities.dto.RoleDto;
 import com.ds.project.common.entities.dto.request.RoleRequest;
-import com.ds.project.common.entities.dto.response.RoleResponse;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,27 +17,27 @@ public interface IRoleService {
     /**
      * Create a new role
      */
-    RoleResponse createRole(RoleRequest roleRequest);
+    BaseResponse<RoleDto> createRole(RoleRequest roleRequest);
     
     /**
      * Get role by ID
      */
-    Optional<RoleResponse> getRoleById(String id);
+    Optional<BaseResponse<RoleDto>> getRoleById(String id);
     
     /**
      * Get role by name
      */
-    Optional<RoleResponse> getRoleByName(String name);
+    Optional<BaseResponse<RoleDto>> getRoleByName(String name);
     
     /**
      * Get all roles
      */
-    List<RoleResponse> getAllRoles();
+    BaseResponse<PagedData<Page, RoleDto>> getAllRoles();
     
     /**
      * Update role
      */
-    RoleResponse updateRole(String id, RoleRequest roleRequest);
+    BaseResponse<RoleDto> updateRole(String id, RoleRequest roleRequest);
     
     /**
      * Delete role (soft delete)

@@ -2,7 +2,7 @@ package com.ds.project.common.mapper;
 
 import com.ds.project.app_context.models.User;
 import com.ds.project.common.entities.dto.request.UserRequest;
-import com.ds.project.common.entities.dto.response.UserResponse;
+import com.ds.project.common.entities.dto.UserDto;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -34,7 +34,7 @@ public class UserMapper {
     /**
      * Maps User entity to UserResponse
      */
-    public UserResponse mapToResponse(User user) {
+    public UserDto mapToDto(User user) {
         Set<String> roleNames = Set.of(); 
         
         try {
@@ -50,16 +50,15 @@ public class UserMapper {
                 .warn("Failed to map user roles for user {}: {}", user.getId(), e.getMessage());
         }
         
-        return UserResponse.builder()
+        return UserDto.builder()
             .id(user.getId())
             .email(user.getEmail())
             .username(user.getUsername())
             .firstName(user.getFirstName())
             .lastName(user.getLastName())
             .roles(roleNames)
-            .deleted(user.getDeleted())
-            .createdAt(user.getCreatedAt())
-            .updatedAt(user.getUpdatedAt())
+            .createdAt(user.getCreatedAt().toString())
+            .updatedAt(user.getUpdatedAt().toString())
             .build();
     }
 }

@@ -1,8 +1,8 @@
 package com.ds.project.common.mapper;
 
 import com.ds.project.app_context.models.Setting;
+import com.ds.project.common.entities.dto.SettingDto;
 import com.ds.project.common.entities.dto.request.SettingRequest;
-import com.ds.project.common.entities.dto.response.SettingResponse;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -31,10 +31,10 @@ public class SettingMapper {
     }
     
     /**
-     * Maps Setting entity to SettingResponse
+     * Maps Setting entity to SettingDto
      */
-    public SettingResponse mapToResponse(Setting setting) {
-        return SettingResponse.builder()
+    public SettingDto mapToDto(Setting setting) {
+        return SettingDto.builder()
             .id(setting.getId())
             .key(setting.getKey())
             .group(setting.getGroup())
@@ -42,9 +42,8 @@ public class SettingMapper {
             .type(setting.getType())
             .description(setting.getDescription())
             .level(setting.getLevel())
-            .deleted(setting.getDeleted())
-            .createdAt(setting.getCreatedAt())
-            .updatedAt(setting.getUpdatedAt())
+            .createdAt(setting.getCreatedAt().toString())
+            .updatedAt(setting.getUpdatedAt().toString())
             .build();
     }
 }

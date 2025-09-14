@@ -2,10 +2,11 @@ package com.ds.project.application.controllers.v1;
 
 import com.ds.project.application.annotations.PublicRoute;
 import com.ds.project.business.v1.services.UserService;
+import com.ds.project.common.entities.base.BaseResponse;
 import com.ds.project.common.entities.common.UserPayload;
+import com.ds.project.common.entities.dto.UserDto;
 import com.ds.project.common.entities.dto.request.LoginRequest;
 import com.ds.project.common.entities.dto.response.LoginResponse;
-import com.ds.project.common.entities.dto.response.UserResponse;
 import com.ds.project.common.utils.JwtUtils;
 import com.ds.project.common.utils.ResponseUtils;
 import jakarta.validation.Valid;
@@ -14,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -41,19 +43,26 @@ public class AuthenticationController {
         
         try {
             // Authenticate user
-            UserResponse userResponse = userService.authenticateByEmailOrUsername(
+            Optional<BaseResponse<UserDto>> authResponse = userService.authenticateByEmailOrUsername(
                 loginRequest.getEmailOrUsername(), 
                 loginRequest.getPassword()
-            ).orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
+            );
+            
+            if (authResponse.isEmpty() || authResponse.get().getResult().isEmpty()) {
+                log.warn("Login failed for {}: Invalid credentials", loginRequest.getEmailOrUsername());
+                return ResponseUtils.error("Invalid credentials", HttpStatus.UNAUTHORIZED);
+            }
+            
+            UserDto userDto = authResponse.get().getResult().get();
             
             // Create user payload for JWT
             UserPayload userPayload = UserPayload.builder()
-                .userId(userResponse.getId())
-                .username(userResponse.getUsername())
-                .email(userResponse.getEmail())
-                .firstName(userResponse.getFirstName())
-                .lastName(userResponse.getLastName())
-                .roles(List.copyOf(userResponse.getRoles()))
+                .userId(userDto.getId())
+                .username(userDto.getUsername())
+                .email(userDto.getEmail())
+                .firstName(userDto.getFirstName())
+                .lastName(userDto.getLastName())
+                .roles(List.copyOf(userDto.getRoles()))
                 .build();
             
             // Generate JWT token
@@ -68,16 +77,13 @@ public class AuthenticationController {
                 .token(token)
                 .tokenType("Bearer")
                 .expiresIn(expiresIn)
-                .user(userResponse)
-                .roles(List.copyOf(userResponse.getRoles()))
+                .user(userDto)
+                .roles(userDto.getRoles())
                 .build();
             
-            log.info("Login successful for user: {}", userResponse.getUsername());
-            return ResponseUtils.success(loginResponse, "Login successful");
+            log.info("Login successful for user: {}", userDto.getUsername());
+            return ResponseUtils.success(loginResponse);
             
-        } catch (IllegalArgumentException e) {
-            log.warn("Login failed for {}: {}", loginRequest.getEmailOrUsername(), e.getMessage());
-            return ResponseUtils.error("Invalid credentials", HttpStatus.UNAUTHORIZED);
         } catch (Exception e) {
             log.error("Login error for {}: {}", loginRequest.getEmailOrUsername(), e.getMessage(), e);
             return ResponseUtils.error("Login failed", HttpStatus.INTERNAL_SERVER_ERROR);

@@ -2,8 +2,11 @@ package com.ds.project.business.v1.services;
 
 import com.ds.project.app_context.models.Role;
 import com.ds.project.app_context.repositories.RoleRepository;
+import com.ds.project.common.entities.base.BaseResponse;
+import com.ds.project.common.entities.base.Page;
+import com.ds.project.common.entities.base.PagedData;
+import com.ds.project.common.entities.dto.RoleDto;
 import com.ds.project.common.entities.dto.request.RoleRequest;
-import com.ds.project.common.entities.dto.response.RoleResponse;
 import com.ds.project.common.interfaces.IRoleService;
 import com.ds.project.common.mapper.RoleMapper;
 import lombok.RequiredArgsConstructor;
@@ -29,87 +32,176 @@ public class RoleService implements IRoleService {
     private final RoleMapper roleMapper;
     
     @Override
-    public RoleResponse createRole(RoleRequest roleRequest) {
-        log.info("Creating role: {}", roleRequest.getName());
-        
-        // Check if role already exists
-        if (roleRepository.existsByName(roleRequest.getName())) {
-            throw new IllegalArgumentException("Role with name " + roleRequest.getName() + " already exists");
+    public BaseResponse<RoleDto> createRole(RoleRequest roleRequest) {
+        try {
+            log.info("Creating role: {}", roleRequest.getName());
+            
+            // Check if role already exists
+            if (roleRepository.existsByName(roleRequest.getName())) {
+                return BaseResponse.<RoleDto>builder()
+                    .message(Optional.of("Role with name " + roleRequest.getName() + " already exists"))
+                    .build();
+            }
+            
+            Role role = roleMapper.mapToEntity(roleRequest);
+            
+            Role savedRole = roleRepository.save(role);
+            log.info("Successfully created role: {}", savedRole.getName());
+            
+            RoleDto roleDto = roleMapper.mapToDto(savedRole);
+            return BaseResponse.<RoleDto>builder()
+                .result(Optional.of(roleDto))
+                .build();
+        } catch (Exception e) {
+            log.error("Error creating role: {}", e.getMessage(), e);
+            return BaseResponse.<RoleDto>builder()
+                .message(Optional.of("Failed to create role: " + e.getMessage()))
+                .build();
         }
-        
-        Role role = roleMapper.mapToEntity(roleRequest);
-        
-        Role savedRole = roleRepository.save(role);
-        log.info("Successfully created role: {}", savedRole.getName());
-        
-        return roleMapper.mapToResponse(savedRole);
     }
     
     @Override
     @Transactional(readOnly = true)
-    public Optional<RoleResponse> getRoleById(String id) {
-        log.info("Getting role by ID: {}", id);
-        return roleRepository.findById(id)
-            .filter(role -> !role.getDeleted())
-            .map(roleMapper::mapToResponse);
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<RoleResponse> getRoleByName(String name) {
-        log.info("Getting role by name: {}", name);
-        return roleRepository.findByName(name)
-            .filter(role -> !role.getDeleted())
-            .map(roleMapper::mapToResponse);
-    }
-    
-    @Override
-    @Transactional(readOnly = true)
-    public List<RoleResponse> getAllRoles() {
-        log.info("Getting all roles");
-        return roleRepository.findAll().stream()
-            .filter(role -> !role.getDeleted())
-            .map(roleMapper::mapToResponse)
-            .collect(Collectors.toList());
-    }
-    
-    @Override
-    public RoleResponse updateRole(String id, RoleRequest roleRequest) {
-        log.info("Updating role: {}", id);
-        
-        Role existingRole = roleRepository.findById(id)
-            .filter(role -> !role.getDeleted())
-            .orElseThrow(() -> new IllegalArgumentException("Role not found with id: " + id));
-        
-        // Check if new name conflicts with existing role
-        if (!existingRole.getName().equals(roleRequest.getName()) && 
-            roleRepository.existsByName(roleRequest.getName())) {
-            throw new IllegalArgumentException("Role with name " + roleRequest.getName() + " already exists");
+    public Optional<BaseResponse<RoleDto>> getRoleById(String id) {
+        try {
+            log.info("Getting role by ID: {}", id);
+            return roleRepository.findById(id)
+                .filter(role -> !role.getDeleted())
+                .map(role -> {
+                    RoleDto roleDto = roleMapper.mapToDto(role);
+                    return BaseResponse.<RoleDto>builder()
+                        .result(Optional.of(roleDto))
+                        .build();
+                });
+        } catch (Exception e) {
+            log.error("Error getting role by id {}: {}", id, e.getMessage(), e);
+            return Optional.of(BaseResponse.<RoleDto>builder()
+                .message(Optional.of("Failed to get role: " + e.getMessage()))
+                .build());
         }
-        
-        existingRole.setName(roleRequest.getName());
-        existingRole.setDescription(roleRequest.getDescription());
-        existingRole.setUpdatedAt(LocalDateTime.now());
-        
-        Role updatedRole = roleRepository.save(existingRole);
-        log.info("Successfully updated role: {}", updatedRole.getName());
-        
-        return roleMapper.mapToResponse(updatedRole);
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<BaseResponse<RoleDto>> getRoleByName(String name) {
+        try {
+            log.info("Getting role by name: {}", name);
+            return roleRepository.findByName(name)
+                .filter(role -> !role.getDeleted())
+                .map(role -> {
+                    RoleDto roleDto = roleMapper.mapToDto(role);
+                    return BaseResponse.<RoleDto>builder()
+                        .result(Optional.of(roleDto))
+                        .build();
+                });
+        } catch (Exception e) {
+            log.error("Error getting role by name {}: {}", name, e.getMessage(), e);
+            return Optional.of(BaseResponse.<RoleDto>builder()
+                .message(Optional.of("Failed to get role: " + e.getMessage()))
+                .build());
+        }
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public BaseResponse<PagedData<Page, RoleDto>> getAllRoles() {
+        try {
+            log.info("Getting all roles");
+            List<Role> roles = roleRepository.findAll().stream()
+                .filter(role -> !role.getDeleted())
+                .collect(Collectors.toList());
+            
+            List<RoleDto> roleDtos = roles.stream()
+                .map(roleMapper::mapToDto)
+                .collect(Collectors.toList());
+            
+            Page page = Page.builder()
+                .page(0)
+                .size(roleDtos.size())
+                .totalElements((long) roleDtos.size())
+                .totalPages(1)
+                .build();
+            
+            PagedData<Page, RoleDto> pagedData = PagedData.<Page, RoleDto>builder()
+                .data(roleDtos)
+                .page(page)
+                .build();
+            
+            return BaseResponse.<PagedData<Page, RoleDto>>builder()
+                .result(Optional.of(pagedData))
+                .build();
+        } catch (Exception e) {
+            log.error("Error getting all roles: {}", e.getMessage(), e);
+            return BaseResponse.<PagedData<Page, RoleDto>>builder()
+                .message(Optional.of("Failed to get roles: " + e.getMessage()))
+                .build();
+        }
+    }
+    
+    @Override
+    public BaseResponse<RoleDto> updateRole(String id, RoleRequest roleRequest) {
+        try {
+            log.info("Updating role: {}", id);
+            
+            Role existingRole = roleRepository.findById(id)
+                .filter(role -> !role.getDeleted())
+                .orElse(null);
+            
+            if (existingRole == null) {
+                return BaseResponse.<RoleDto>builder()
+                    .message(Optional.of("Role not found with id: " + id))
+                    .build();
+            }
+            
+            // Check if new name conflicts with existing role
+            if (!existingRole.getName().equals(roleRequest.getName()) && 
+                roleRepository.existsByName(roleRequest.getName())) {
+                return BaseResponse.<RoleDto>builder()
+                    .message(Optional.of("Role with name " + roleRequest.getName() + " already exists"))
+                    .build();
+            }
+            
+            existingRole.setName(roleRequest.getName());
+            existingRole.setDescription(roleRequest.getDescription());
+            existingRole.setUpdatedAt(LocalDateTime.now());
+            
+            Role updatedRole = roleRepository.save(existingRole);
+            log.info("Successfully updated role: {}", updatedRole.getName());
+            
+            RoleDto roleDto = roleMapper.mapToDto(updatedRole);
+            return BaseResponse.<RoleDto>builder()
+                .result(Optional.of(roleDto))
+                .build();
+        } catch (Exception e) {
+            log.error("Error updating role {}: {}", id, e.getMessage(), e);
+            return BaseResponse.<RoleDto>builder()
+                .message(Optional.of("Failed to update role: " + e.getMessage()))
+                .build();
+        }
     }
     
     @Override
     public void deleteRole(String id) {
-        log.info("Soft deleting role: {}", id);
-        
-        Role role = roleRepository.findById(id)
-            .filter(r -> !r.getDeleted())
-            .orElseThrow(() -> new IllegalArgumentException("Role not found with id: " + id));
-        
-        role.setDeleted(true);
-        role.setUpdatedAt(LocalDateTime.now());
-        roleRepository.save(role);
-        
-        log.info("Successfully soft deleted role: {}", role.getName());
+        try {
+            log.info("Soft deleting role: {}", id);
+            
+            Role role = roleRepository.findById(id)
+                .filter(r -> !r.getDeleted())
+                .orElse(null);
+            
+            if (role == null) {
+                log.warn("Role not found with id: {}", id);
+                return;
+            }
+            
+            role.setDeleted(true);
+            role.setUpdatedAt(LocalDateTime.now());
+            roleRepository.save(role);
+            
+            log.info("Successfully soft deleted role: {}", role.getName());
+        } catch (Exception e) {
+            log.error("Error deleting role {}: {}", id, e.getMessage(), e);
+        }
     }
     
     @Override

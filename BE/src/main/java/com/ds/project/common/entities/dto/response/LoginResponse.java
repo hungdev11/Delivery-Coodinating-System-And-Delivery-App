@@ -1,11 +1,12 @@
 package com.ds.project.common.entities.dto.response;
 
+import com.ds.project.common.entities.dto.UserDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
+import java.util.Set;
 
 /**
  * Login response DTO
@@ -15,12 +16,9 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LoginResponse {
-    
     private String token;
+    private String tokenType;
     private long expiresIn;
-    private UserResponse user;
-    private List<String> roles;
-    
-    @Builder.Default
-    private String tokenType = "Bearer";
+    private UserDto user;
+    private Set<String> roles;
 }

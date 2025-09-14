@@ -1,7 +1,10 @@
 package com.ds.project.application.controllers.v1;
 
+import com.ds.project.common.entities.base.BaseResponse;
+import com.ds.project.common.entities.base.PagedData;
+import com.ds.project.common.entities.base.Page;
+import com.ds.project.common.entities.dto.RoleDto;
 import com.ds.project.common.entities.dto.request.RoleRequest;
-import com.ds.project.common.entities.dto.response.RoleResponse;
 import com.ds.project.common.interfaces.IRoleService;
 import com.ds.project.common.utils.ResponseUtils;
 import com.ds.project.application.annotations.AuthRequired;
@@ -10,7 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -26,11 +28,12 @@ public class RoleController {
     @PostMapping
     @AuthRequired
     public ResponseEntity<Map<String, Object>> createRole(@Valid @RequestBody RoleRequest roleRequest) {
-        try {
-            RoleResponse createdRole = roleService.createRole(roleRequest);
-            return ResponseUtils.success(createdRole, "Role created successfully");
-        } catch (Exception e) {
-            return ResponseUtils.error("Failed to create role: " + e.getMessage(), 
+        BaseResponse<RoleDto> response = roleService.createRole(roleRequest);
+        
+        if (response.getResult().isPresent()) {
+            return ResponseUtils.success(response.getResult().get());
+        } else {
+            return ResponseUtils.error(response.getMessage().orElse("Failed to create role"), 
                 org.springframework.http.HttpStatus.BAD_REQUEST);
         }
     }
@@ -39,25 +42,39 @@ public class RoleController {
     @AuthRequired
     public ResponseEntity<Map<String, Object>> getRoleById(@PathVariable String id) {
         return roleService.getRoleById(id)
-            .map(role -> ResponseUtils.success(role))
+            .map(response -> {
+                if (response.getResult().isPresent()) {
+                    return ResponseUtils.success(response.getResult().get());
+                } else {
+                    return ResponseUtils.error(response.getMessage().orElse("Role not found"), 
+                        org.springframework.http.HttpStatus.NOT_FOUND);
+                }
+            })
             .orElse(ResponseUtils.error("Role not found", org.springframework.http.HttpStatus.NOT_FOUND));
     }
     
     @GetMapping
     @AuthRequired
     public ResponseEntity<Map<String, Object>> getAllRoles() {
-        List<RoleResponse> roles = roleService.getAllRoles();
-        return ResponseUtils.success(roles);
+        BaseResponse<PagedData<Page, RoleDto>> response = roleService.getAllRoles();
+        
+        if (response.getResult().isPresent()) {
+            return ResponseUtils.success(response.getResult().get());
+        } else {
+            return ResponseUtils.error(response.getMessage().orElse("Failed to get roles"), 
+                org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
     
     @PutMapping("/{id}")
     @AuthRequired
     public ResponseEntity<Map<String, Object>> updateRole(@PathVariable String id, @Valid @RequestBody RoleRequest roleRequest) {
-        try {
-            RoleResponse updatedRole = roleService.updateRole(id, roleRequest);
-            return ResponseUtils.success(updatedRole, "Role updated successfully");
-        } catch (Exception e) {
-            return ResponseUtils.error("Failed to update role: " + e.getMessage(), 
+        BaseResponse<RoleDto> response = roleService.updateRole(id, roleRequest);
+        
+        if (response.getResult().isPresent()) {
+            return ResponseUtils.success(response.getResult().get());
+        } else {
+            return ResponseUtils.error(response.getMessage().orElse("Failed to update role"), 
                 org.springframework.http.HttpStatus.BAD_REQUEST);
         }
     }

@@ -21,7 +21,6 @@ public class SettingDto {
     private Setting.SettingType type;
     private String description;
     private Setting.SettingLevel level;
-    private Boolean deleted;
     private String createdAt;
     private String updatedAt;
 }

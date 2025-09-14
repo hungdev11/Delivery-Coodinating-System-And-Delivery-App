@@ -22,6 +22,6 @@ public class UserPayload {
     private String firstName;
     private String lastName;
     private List<String> roles;
-    private long issuedAt;
-    private long expiresAt;
+    private long iat;
+    private long exp;
 }

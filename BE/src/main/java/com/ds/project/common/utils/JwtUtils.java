@@ -37,8 +37,8 @@ public class JwtUtils {
             long expirationTime = getExpirationTime(rememberMe);
             long currentTime = Instant.now().getEpochSecond();
             
-            userPayload.setIssuedAt(currentTime);
-            userPayload.setExpiresAt(currentTime + expirationTime);
+            userPayload.setIat(currentTime);
+            userPayload.setExp(currentTime + expirationTime);
             
             return Jwts.builder()
                     .claims(Map.of(
@@ -48,8 +48,8 @@ public class JwtUtils {
                             "firstName", userPayload.getFirstName(),
                             "lastName", userPayload.getLastName(),
                             "roles", userPayload.getRoles(),
-                            "iat", userPayload.getIssuedAt(),
-                            "exp", userPayload.getExpiresAt()
+                            "iat", userPayload.getIat(),
+                            "exp", userPayload.getExp()
                     ))
                     .signWith(getSigningKey())
                     .compact();
@@ -108,8 +108,8 @@ public class JwtUtils {
                 .firstName(claims.get("firstName", String.class))
                 .lastName(claims.get("lastName", String.class))
                 .roles(roles)
-                .issuedAt(claims.get("iat", Long.class))
-                .expiresAt(claims.get("exp", Long.class))
+                .iat(claims.get("iat", Long.class))
+                .exp(claims.get("exp", Long.class))
                 .build();
     }
     
@@ -135,12 +135,12 @@ public class JwtUtils {
             if (rememberMe) {
                 // Try to get save login duration from settings
                 return settingService.getSettingByKey("JWT_SAVE_LOGIN_DURATION")
-                        .map(setting -> Long.parseLong(setting.getValue()))
+                        .map(setting -> Long.parseLong(setting.getResult().orElseThrow().getValue()))
                         .orElse(86400L); // Default: 1 day
             } else {
                 // Try to get expire time from settings
                 return settingService.getSettingByKey("JWT_EXPIRE_TIME")
-                        .map(setting -> Long.parseLong(setting.getValue()))
+                        .map(setting -> Long.parseLong(setting.getResult().orElseThrow().getValue()))
                         .orElse(3600L); // Default: 1 hour
             }
         } catch (Exception e) {

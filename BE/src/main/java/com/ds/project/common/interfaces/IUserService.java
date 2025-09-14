@@ -1,9 +1,11 @@
 package com.ds.project.common.interfaces;
 
+import com.ds.project.common.entities.base.BaseResponse;
+import com.ds.project.common.entities.base.Page;
+import com.ds.project.common.entities.base.PagedData;
+import com.ds.project.common.entities.dto.UserDto;
 import com.ds.project.common.entities.dto.request.UserRequest;
-import com.ds.project.common.entities.dto.response.UserResponse;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -14,32 +16,32 @@ public interface IUserService {
     /**
      * Create a new user
      */
-    UserResponse createUser(UserRequest userRequest);
+    BaseResponse<UserDto> createUser(UserRequest userRequest);
     
     /**
      * Get user by ID
      */
-    Optional<UserResponse> getUserById(String id);
+    Optional<BaseResponse<UserDto>> getUserById(String id);
     
     /**
      * Get user by email
      */
-    Optional<UserResponse> getUserByEmail(String email);
+    Optional<BaseResponse<UserDto>> getUserByEmail(String email);
     
     /**
      * Get user by username
      */
-    Optional<UserResponse> getUserByUsername(String username);
+    Optional<BaseResponse<UserDto>> getUserByUsername(String username);
     
     /**
      * Get all users
      */
-    List<UserResponse> getAllUsers();
+    BaseResponse<PagedData<Page, UserDto>> getAllUsers();
     
     /**
      * Update user
      */
-    UserResponse updateUser(String id, UserRequest userRequest);
+    BaseResponse<UserDto> updateUser(String id, UserRequest userRequest);
     
     /**
      * Delete user (soft delete)
@@ -49,12 +51,12 @@ public interface IUserService {
     /**
      * Assign role to user
      */
-    UserResponse assignRole(String userId, String roleId);
+    BaseResponse<UserDto> assignRole(String userId, String roleId);
     
     /**
      * Remove role from user
      */
-    UserResponse removeRole(String userId, String roleId);
+    BaseResponse<UserDto> removeRole(String userId, String roleId);
     
     /**
      * Check if user has role
@@ -64,10 +66,10 @@ public interface IUserService {
     /**
      * Authenticate user
      */
-    Optional<UserResponse> authenticate(String username, String password);
+    Optional<BaseResponse<UserDto>> authenticate(String username, String password);
     
     /**
      * Authenticate user by email or username
      */
-    Optional<UserResponse> authenticateByEmailOrUsername(String emailOrUsername, String password);
+    Optional<BaseResponse<UserDto>> authenticateByEmailOrUsername(String emailOrUsername, String password);
 }
