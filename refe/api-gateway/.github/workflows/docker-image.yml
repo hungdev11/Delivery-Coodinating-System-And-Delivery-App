@@ -1,0 +1,49 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+        # Chuẩn hoá owner về lowercase (Docker repo bắt buộc lowercase)
+      - name: Normalize owner to lowercase
+        id: norm
+        run: |
+          o='${{ github.repository_owner }}'
+          echo "owner_lc=$(echo "$o" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      # (Tuỳ chọn) In ra tag để dễ quan sát/troubleshoot
+      - name: Show resolved image tags
+        run: |
+          echo "OWNER_LC=${{ steps.norm.outputs.owner_lc }}"
+          echo "RUN_ID=${{ github.run_id }}"
+          echo "TAG_1=ghcr.io/${{ steps.norm.outputs.owner_lc }}/juiceshop_gateway:${{ github.run_id }}"
+          echo "TAG_2=ghcr.io/${{ steps.norm.outputs.owner_lc }}/juiceshop_gateway:latest"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.DEPLOY_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ steps.norm.outputs.owner_lc }}/juiceshop_gateway:${{ github.run_id }}
+            ghcr.io/${{ steps.norm.outputs.owner_lc }}/juiceshop_gateway:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

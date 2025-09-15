@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package products;
+option java_multiple_files = true;
+option java_outer_classname = "ProductServiceProto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "products/common.proto";
+
+// ===== Service =====
+service ProductService {
+  rpc GetProductById (commons.UUIDValue) returns (Product);
+  rpc GetProductListByStaffId (commons.UUIDValue) returns (stream Product);
+  rpc GetProductListByStoreId (commons.UUIDValue) returns (stream Product);
+
+  rpc CreateProduct (CreateProductRequest) returns (Product);
+  rpc UpdateProduct (UpdateProductRequest) returns (Product);
+
+  rpc DeleteProductById (commons.UUIDValue) returns (google.protobuf.Empty);
+  rpc DeleteProductListByStoreId (commons.UUIDValue) returns (google.protobuf.Empty);
+
+}
+
+// Product
+message Product {
+  string id = 1;
+  string storeId = 2;
+  string staffId = 3;
+  string title = 4;
+  string content = 5;
+  string description = 6;
+  string imgLink = 7;
+  int64 totalWaitingShip = 8;
+  int64 totalHearts = 9;
+  int64 totalViews = 10;
+  string langCode = 11;
+  bool enable = 12;
+  optional google.protobuf.Timestamp created_at = 14;
+  optional google.protobuf.Timestamp updated_at = 15;
+}
+
+// Requests
+message CreateProductRequest {
+  string storeId = 1;
+  string staffId = 2;
+  string name = 3;
+  string imgLink = 4;
+}
+
+message UpdateProductRequest {
+  string id = 1;
+  string storeId = 2;
+  string staffId = 3;
+  string title = 4;
+  string content = 5;
+  string description = 6;
+  string imgLink = 7;
+  int32 totalWaitingShip = 8;
+  int32 totalHearts = 9;
+  int32 totalViews = 10;
+  string langCode = 11;
+  bool enable = 12;
+}

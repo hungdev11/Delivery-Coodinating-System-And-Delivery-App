@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package products;
+
+option java_multiple_files = true;
+option java_outer_classname = "ProductHeartProto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "products/common.proto";
+
+service ProductHeartService {
+  rpc GetProductHeartListByProductId (commons.UUIDValue) returns (stream ProductHeart);
+  rpc CreateProductHeart (CreateProductHeartRequest) returns (ProductHeart);
+  rpc DeleteProductHeartById (ProductHeartId) returns (google.protobuf.Empty);
+  rpc DeleteProductHeartList (stream ProductHeart) returns (google.protobuf.Empty);
+}
+
+message ProductHeart {
+  int64 id = 1;
+  string productId = 3;
+  string customerId = 4;
+  google.protobuf.Timestamp createdAt = 5;
+}
+
+message ProductHeartId {
+  int64 id = 1;
+}
+
+message CreateProductHeartRequest {
+  string productId = 1;
+  string customerId = 2;
+}

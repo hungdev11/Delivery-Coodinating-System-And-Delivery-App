@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package products;
+
+option java_multiple_files = true;
+option java_outer_classname = "ProductOptionProto";
+
+import "google/protobuf/empty.proto";
+import "products/common.proto";
+import "products/product.proto";
+
+service ProductOptionService {
+  rpc GetProductOptionListByProductId (commons.UUIDValue) returns (stream ProductOption);
+  rpc GetProductOptionById (ProductOptionId) returns (ProductOption);
+  rpc CreateProductOption (CreateProductOptionRequest) returns (ProductOption);
+  rpc UpdateProductOption (UpdateProductOptionRequest) returns (ProductOption);
+  rpc DeleteProductOptionList (stream ProductOptionId) returns (google.protobuf.Empty);
+  rpc DeleteProductOptionById (ProductOptionId) returns (google.protobuf.Empty);
+}
+
+message ProductOption {
+  int64 id = 1;
+  oneof productRef {
+    string productId = 2;
+    products.Product product = 3;
+  }
+  string sku = 4;
+  string name = 5;
+  double priceRetail = 6;
+  double priceSale = 7;
+  int32 totalWaitingShip = 8;
+  bool enable = 9;
+}
+
+message ProductOptionId {
+  int64 id = 1;
+}
+
+message CreateProductOptionRequest {
+  oneof productRef {
+    string productId = 1;
+    products.Product product = 2;
+  }
+
+  string sku = 3;
+  string name = 4;
+  double priceRetail = 5;
+  double priceSale = 6;
+}
+
+message UpdateProductOptionRequest {
+  int64 id = 1;
+  oneof productRef {
+    string productId = 2;
+    products.Product product = 3;
+  }
+  string sku = 4;
+  string name = 5;
+  double priceRetail = 6;
+  double priceSale = 7;
+  int32 totalWaitingShip = 8;
+  bool enable = 9;
+}

@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package attributes;
+
+option java_multiple_files = true;
+option java_outer_classname = "AttributeServiceProto";
+
+import "products/common.proto";
+import "google/protobuf/empty.proto";
+
+service AttributeService {
+  rpc GetAttributeListByProductOptionId(commons.UUIDValue) returns (AttributeList);
+  rpc GetAttributeById (AttributeId) returns (Attribute);
+  rpc CreateAttribute (CreateAttributeRequest) returns (Attribute);
+  rpc UpdateAttribute (UpdateAttributeRequest) returns (Attribute);
+  rpc DeleteAttributeByID (AttributeId) returns (google.protobuf.Empty);
+}
+
+message AttributeList {
+  repeated Attribute content = 1;
+  commons.PageInfo pageInfo = 2;
+}
+
+message Attribute {
+  int64 attributeId = 1;
+  string name = 2;
+  string description = 3;
+  repeated Attribute attributeValueList = 4;
+}
+
+message AttributeId {
+  int64 attributeId = 1;
+}
+
+message CreateAttributeRequest {
+  string name = 1;
+  string description = 2;
+  optional string parentId = 3;
+}
+
+message UpdateAttributeRequest {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+}

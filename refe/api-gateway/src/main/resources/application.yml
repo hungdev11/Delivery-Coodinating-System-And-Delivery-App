@@ -1,0 +1,56 @@
+server:
+  port: ${API_GATEWAY_SERVER_PORT:21500}
+spring:
+  application.name: api-gateway
+  main:
+    allow-bean-definition-overriding: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/master}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8080/realms/master/protocol/openid-connect/certs}
+  grpc:
+    server:
+      port: ${API_GATEWAY_GRPC_PORT:21000}
+      security:
+        csrf:
+          enabled: false
+
+# Keycloak Configuration
+keycloak:
+  auth-server-url: ${KEYCLOAK_AUTH_SERVER_URL:http://localhost:8080}
+  realm: ${KEYCLOAK_REALM:master}
+  resource: ${KEYCLOAK_RESOURCE:api-gateway}
+  public-client: true
+  principal-attribute: preferred_username
+
+# Public Routes Configuration
+app:
+  security:
+    public-routes:
+      - "/api/public/**"
+      - "/api/auth/**"
+      - "/api/v1/auth/public/**"
+      - "/actuator/health"
+      - "/swagger-ui/**"
+      - "/v3/api-docs/**"
+      - "/error"
+
+grpc:
+  client:
+    core-service:
+      address: static://${CORE_SERVICE_GRPC_HOST:localhost}:${CORE_SERVICE_GRPC_PORT:21002}
+      negotiation-type: plaintext
+    user-service:
+      address: static://${USER_MODULE_GRPC_HOST:localhost}:${USER_MODULE_GRPC_PORT:21001}
+      negotiation-type: plaintext
+    review-service:
+      address: static://${REVIEW_SERVICE_GRPC_HOST:localhost}:${REVIEW_SERVICE_GRPC_PORT:21003}
+      negotiation-type: plaintext
+    voucher-service:
+      address: static://${VOUCHER_SERVICE_GRPC_HOST:localhost}:${VOUCHER_SERVICE_GRPC_PORT:21004}
+      negotiation-type: plaintext
+
+      
+      

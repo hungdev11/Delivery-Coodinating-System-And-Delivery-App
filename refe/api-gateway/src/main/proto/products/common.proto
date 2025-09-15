@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package commons;
+option java_multiple_files = true;
+option java_outer_classname = "CommonProto";
+
+message PageRequest {
+  int32 page = 1;
+  int32 size = 2;
+}
+
+message PageInfo {
+  int32 page = 1;
+  int32 size = 2;
+  int32 totalPages = 3;
+  int64 totalElements = 4;
+}
+
+message UUIDValue {
+  string id = 1;
+}

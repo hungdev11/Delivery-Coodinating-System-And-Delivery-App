@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package products;
+option java_multiple_files = true;
+option java_outer_classname = "ProductOptionImageServiceProto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "products/product-option.proto";
+
+service ProductOptionImageService {
+  rpc GetProductOptionImageListByProductOptionId (products.ProductOptionId) returns (stream ProductOptionImage);
+  rpc CreateProductOptionImage (CreateProductOptionImageRequest) returns (ProductOptionImage);
+  rpc DeleteProductOptionImageList (stream ProductOptionImage) returns (google.protobuf.Empty);
+  rpc DeleteProductOptionImageById (ProductOptionImageId) returns (google.protobuf.Empty);
+}
+
+message ProductOptionImage {
+  int64 id = 1;
+  oneof productOptionRef {
+    uint64 productOptionId = 2;
+    products.ProductOption productOption = 3;
+    google.protobuf.NullValue null = 4;
+  }
+  string title = 5;
+  string imgUrl = 6;
+  bool enable = 7;
+}
+
+message ProductOptionImageId {
+  int64 id = 1;
+}
+
+message CreateProductOptionImageRequest {
+  oneof productOptionRef {
+    uint64 productOptionId = 1;
+    products.ProductOption productOption = 2;
+    google.protobuf.NullValue null = 3;
+  }
+  string title = 4;
+  string imgUrl = 5;
+}

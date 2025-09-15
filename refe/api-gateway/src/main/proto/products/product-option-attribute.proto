@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package products;
+
+option java_multiple_files = true;
+option java_outer_classname = "ProductOptionAttributeProto";
+
+import "google/protobuf/empty.proto";
+import "products/product-option.proto";
+
+service ProductOptionAttributeService {
+  rpc GetProductOptionAttributeListByProductOptionId (products.ProductOptionId) returns (stream ProductOptionAttribute);
+  rpc CreateProductOptionAttribute (CreateProductOptionAttributeRequest) returns (ProductOptionAttribute);
+  rpc UpdateProductOptionAttribute (ProductOptionAttribute) returns (ProductOptionAttribute);
+  rpc DeleteProductOptionAttributeList (stream ProductOptionAttributeId) returns (google.protobuf.Empty);
+  rpc DeleteProductOptionAttributeById (ProductOptionAttributeId) returns (google.protobuf.Empty);
+}
+
+message ProductOptionAttribute {
+  int64 productId = 1;
+  int64 attributeId = 2;
+  bool enable = 3;
+}
+
+message ProductOptionAttributeId {
+  int64 productId = 1;
+  int64 attributeId = 2;
+}
+
+message CreateProductOptionAttributeRequest {
+  int64 productId = 1;
+  int64 attributeId = 2;
+}

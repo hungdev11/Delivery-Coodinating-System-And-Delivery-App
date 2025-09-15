@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: datn_user_module
+  datasource:
+    url: ${USER_MODULE_DB_URL}
+    username: ${USER_MODULE_DB_USERNAME}
+    password: ${USER_MODULE_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    # show-sql: true
+  grpc:
+    server:
+      port: ${USER_MODULE_GRPC_PORT:21001}
+  # security:
+  #   oauth2:
+  #     resourceserver:
+  #       jwt:
+  #         issuer-uri: ${KEYCLOAK_AUTH_SERVER_URL}/realms/${KEYCLOAK_REALM}
+  #         converter:
+  #           resource-id: ${KEYCLOAK_RESOURCE}
+
+server: 
+  port: ${USER_MODULE_SERVER_PORT:21501}
+
+# Bật debug log cho Spring Security và OAuth2
+logging:
+  level:
+    org:
+      springframework:
+        security: DEBUG
+        security.oauth2: DEBUG
+        web: DEBUG
+      lognet: DEBUG
+    io:
+      grpc: DEBUG
+    knp.ptithcm.datn.user_module: DEBUG
+    org.keycloak: DEBUG
+
+# Keycloak Admin Client (for KeycloakAdminConfig)
+keycloak:
+  auth-server-url: ${KEYCLOAK_AUTH_SERVER_URL:http://localhost:8080}
+  realm: ${KEYCLOAK_REALM:keycloak}
+  resource: ${KEYCLOAK_RESOURCE:datn_user_module}
+  credentials:
+    username: ${KEYCLOAK_CREDENTIALS_USERNAME:dev}
+    password: ${KEYCLOAK_CREDENTIALS_PASSWORD:dev}
+    secret: ${KEYCLOAK_CREDENTIALS_SECRET} 
+
+jwt:
+  converter:
+    resource-id: doantotnghiep
+    principal-attribute: sub 

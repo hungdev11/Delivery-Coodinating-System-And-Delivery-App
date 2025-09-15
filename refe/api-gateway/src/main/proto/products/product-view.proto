@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package products;
+
+option java_multiple_files = true;
+option java_outer_classname = "ProductViewProto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "products/common.proto";
+import "products/product.proto";
+
+service ProductViewService {
+  rpc GetProductViewListByProductId (commons.UUIDValue) returns (stream ProductView);
+  rpc CreateProductView (CreateProductViewRequest) returns (ProductView);
+  rpc DeleteProductViewList (stream ProductViewId) returns (google.protobuf.Empty);
+  rpc DeleteProductViewById (ProductViewId) returns (google.protobuf.Empty);
+}
+
+message ProductView {
+  int64 id = 1;
+  oneof productRef {
+    products.Product product = 2;
+    string productId = 3;
+  }
+  string customerId = 4;
+  google.protobuf.Timestamp createdAt = 5;
+}
+
+message ProductViewId {
+  int64 id = 1;
+}
+
+message CreateProductViewRequest {
+  oneof productRef {
+    products.Product product = 1;
+    string productId = 2;
+  }
+  string customerId = 3;
+}
