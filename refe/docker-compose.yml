@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  mysql:
+    platform: linux/x86_64
+    container_name: mysqldb
+    image: mysql:8.0
+    restart: unless-stopped
+    user: root
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+      MYSQL_DATABASE: server_user
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "23307:3306"
+    networks:
+      - easy_traffic_network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "mysqldb", "-uroot", "-padmin" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+    keycloak:
+        image: quay.io/keycloak/keycloak:26.2.5
+        container_name: keycloak
+        restart: unless-stopped
+        command: start-dev
+        environment:
+            KC_DB: mysql
+            KC_DB_URL_HOST: mysql
+            KC_DB_URL_PORT: 3306
+            KC_DB_USERNAME: root
+            KC_DB_PASSWORD: admin
+            KC_DB_URL_DATABASE: server_user
+            KEYCLOAK_ADMIN: admin
+            KEYCLOAK_ADMIN_PASSWORD: admin
+        ports:
+            - '8080:8080'
+        deploy:
+            resources:
+                limits:
+                    memory: 512M
+                    cpus: '0.5'
+                reservations:
+                    memory: 256M
+                    cpus: '0.25'
+        depends_on:
+            mysql:
+                condition: service_healthy
+        networks:
+            - shop_ban_nuoc_network
+
+  mongodb:
+    image: mongodb/mongodb-community-server:5.0-ubuntu2004
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: admin
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - easy_traffic_network
+
+volumes:
+  mysql_data:
+  mongodb_data:
+
+networks:
+  easy_traffic_network:
+    driver: bridge
