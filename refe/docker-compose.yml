@@ -1,26 +1,42 @@
 version: '3.8'
 
 services:
-  mysql:
-    platform: linux/x86_64
-    container_name: mysqldb
-    image: mysql:8.0
-    restart: unless-stopped
-    user: root
-    environment:
-      MYSQL_ROOT_PASSWORD: admin
-      MYSQL_DATABASE: server_user
-    volumes:
-      - mysql_data:/var/lib/mysql
-    ports:
-      - "23307:3306"
-    networks:
-      - easy_traffic_network
-    healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "mysqldb", "-uroot", "-padmin" ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+    mysql:
+        platform: linux/x86_64
+        container_name: mysqldb
+        image: mysql:8.0
+        restart: unless-stopped
+        environment:
+            MYSQL_ROOT_PASSWORD: admin
+        volumes:
+            - mysql_data:/var/lib/mysql
+            - ./server_user_2025-09-17_233443.sql:/docker-entrypoint-initdb.d/initdata.sql
+        ports:
+            - '23307:3306'
+        networks:
+            - shop_ban_nuoc_network
+        deploy:
+            resources:
+                limits:
+                    memory: 512M
+                    cpus: '0.5'
+                reservations:
+                    memory: 256M
+                    cpus: '0.25'
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'mysqladmin',
+                    'ping',
+                    '-h',
+                    'mysqldb',
+                    '-uroot',
+                    '-padmin',
+                ]
+            interval: 10s
+            timeout: 5s
+            retries: 10
 
     keycloak:
         image: quay.io/keycloak/keycloak:26.2.5
@@ -52,24 +68,187 @@ services:
         networks:
             - shop_ban_nuoc_network
 
-  mongodb:
-    image: mongodb/mongodb-community-server:5.0-ubuntu2004
-    container_name: mongodb
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: admin
-    volumes:
-      - mongodb_data:/data/db
-    networks:
-      - easy_traffic_network
+    # mongodb:
+    #   image: mongodb/mongodb-community-server:5.0-ubuntu2004
+    #   container_name: mongodb
+    #   restart: unless-stopped
+    #   ports:
+    #     - "27017:27017"
+    #   environment:
+    #     MONGO_INITDB_ROOT_USERNAME: root
+    #     MONGO_INITDB_ROOT_PASSWORD: admin
+    #   volumes:
+    #     - mongodb_data:/data/db
+    #   networks:
+    #     - shop_ban_nuoc_network
+
+    # core_service:
+    #     image: ghcr.io/konstannguyen/juiceshop_core:latest
+    #     container_name: core_service
+    #     restart: unless-stopped
+    #     ports:
+    #         - '${CORE_SERVICE_GRPC_PORT:-21000}:${CORE_SERVICE_GRPC_PORT:-21000}'
+    #     environment:
+    #         CORE_SERVICE_GRPC_PORT: ${CORE_SERVICE_GRPC_PORT:-21000}
+    #         CORE_SERVICE_DB_HOST: ${CORE_SERVICE_DB_HOST}
+    #         CORE_SERVICE_DB_PORT: ${CORE_SERVICE_DB_PORT}
+    #         CORE_SERVICE_DB_NAME: ${CORE_SERVICE_DB_NAME}
+    #         CORE_SERVICE_DB_URL: ${CORE_SERVICE_DB_URL}
+    #         CORE_SERVICE_DB_USERNAME: ${CORE_SERVICE_DB_USERNAME}
+    #         CORE_SERVICE_DB_PASSWORD: ${CORE_SERVICE_DB_PASSWORD}
+    #     deploy:
+    #         resources:
+    #             limits:
+    #                 memory: 256M
+    #                 cpus: '0.25'
+    #             reservations:
+    #                 memory: 128M
+    #                 cpus: '0.125'
+    #     depends_on:
+    #         mysql:
+    #             condition: service_healthy
+    #     networks:
+    #         - shop_ban_nuoc_network
+
+    user-service:
+        image: ghcr.io/phuongp2003/juiceshop_user:latest
+        container_name: user-service
+        restart: unless-stopped
+        ports:
+            - '${USER_MODULE_GRPC_PORT}:${USER_MODULE_GRPC_PORT}'
+        environment:
+            DB_HOST: mysql              # Tên container MySQL
+            DB_PORT: 3306              # Port nội bộ
+            USER_MODULE_GRPC_PORT: 21001
+            DB_USERNAME: ${DB_USERNAME}
+            DB_PASSWORD: ${DB_PASSWORD}
+            USER_MODULE_DB_NAME: ${USER_MODULE_DB_NAME:-datn_user_module} 
+            USER_MODULE_DB_URL: jdbc:mysql://${DB_HOST}:${DB_PORT}/${USER_MODULE_DB_NAME}
+            USER_MODULE_DB_USERNAME: ${USER_MODULE_DB_USERNAME}
+            USER_MODULE_DB_PASSWORD: ${USER_MODULE_DB_PASSWORD}
+            API_GATEWAY_GRPC_PORT: ${API_GATEWAY_GRPC_PORT}
+            KEYCLOAK_AUTH_SERVER_URL: ${KEYCLOAK_AUTH_SERVER_URL}
+            KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+            KEYCLOAK_RESOURCE: ${KEYCLOAK_RESOURCE}
+            KEYCLOAK_CREDENTIALS_USERNAME: ${KEYCLOAK_CREDENTIALS_USERNAME}
+            KEYCLOAK_CREDENTIALS_PASSWORD: ${KEYCLOAK_CREDENTIALS_PASSWORD}
+            KEYCLOAK_CREDENTIALS_SECRET: ${KEYCLOAK_CREDENTIALS_SECRET}
+            JWT_RESOURCE_ID: ${JWT_RESOURCE_ID}
+            JWT_PRINCIPAL_ATTRIBUTE: ${JWT_PRINCIPAL_ATTRIBUTE}
+        deploy:
+            resources:
+                limits:
+                    memory: 256M
+                    cpus: '0.25'
+                reservations:
+                    memory: 128M
+                    cpus: '0.125'
+        depends_on:
+            mysql:
+                condition: service_healthy
+            keycloak:
+                condition: service_started
+        networks:
+            - shop_ban_nuoc_network
+
+    # review_service:
+    #     image: ghcr.io/konstannguyen/juiceshop_review:latest
+    #     container_name: review_service
+    #     restart: unless-stopped
+    #     ports:
+    #         - '${REVIEW_SERVICE_GRPC_PORT:-21002}:${REVIEW_SERVICE_GRPC_PORT:-21002}'
+    #     environment:
+    #         REVIEW_SERVICE_GRPC_PORT: ${REVIEW_SERVICE_GRPC_PORT:-21002}
+    #         REVIEW_SERVICE_DB_HOST: ${REVIEW_SERVICE_DB_HOST}
+    #         REVIEW_SERVICE_DB_PORT: ${REVIEW_SERVICE_DB_PORT}
+    #         REVIEW_SERVICE_DB_NAME: ${REVIEW_SERVICE_DB_NAME}
+    #         REVIEW_SERVICE_DB_URL: ${REVIEW_SERVICE_DB_URL}
+    #         REVIEW_SERVICE_DB_USERNAME: ${REVIEW_SERVICE_DB_USERNAME}
+    #         REVIEW_SERVICE_DB_PASSWORD: ${REVIEW_SERVICE_DB_PASSWORD}
+    #     deploy:
+    #         resources:
+    #             limits:
+    #                 memory: 256M
+    #                 cpus: '0.25'
+    #             reservations:
+    #                 memory: 128M
+    #                 cpus: '0.125'
+    #     depends_on:
+    #         mysql:
+    #             condition: service_healthy
+    #     networks:
+    #         - shop_ban_nuoc_network
+
+    # voucher_service:
+    #     image: ghcr.io/konstannguyen/juiceshop_voucher:latest
+    #     container_name: voucher_service
+    #     restart: unless-stopped
+    #     ports:
+    #         - '${VOUCHER_SERVICE_GRPC_PORT:-21003}:${VOUCHER_SERVICE_GRPC_PORT:-21003}'
+    #     environment:
+    #         VOUCHER_SERVICE_GRPC_PORT: ${VOUCHER_SERVICE_GRPC_PORT:-21003}
+    #         VOUCHER_SERVICE_DB_HOST: ${VOUCHER_SERVICE_DB_HOST}
+    #         VOUCHER_SERVICE_DB_PORT: ${VOUCHER_SERVICE_DB_PORT}
+    #         VOUCHER_SERVICE_DB_NAME: ${VOUCHER_SERVICE_DB_NAME}
+    #         VOUCHER_SERVICE_DB_URL: ${VOUCHER_SERVICE_DB_URL}
+    #         VOUCHER_SERVICE_DB_USERNAME: ${VOUCHER_SERVICE_DB_USERNAME}
+    #         VOUCHER_SERVICE_DB_PASSWORD: ${VOUCHER_SERVICE_DB_PASSWORD}
+    #     deploy:
+    #         resources:
+    #             limits:
+    #                 memory: 256M
+    #                 cpus: '0.25'
+    #             reservations:
+    #                 memory: 128M
+    #                 cpus: '0.125'
+    #     depends_on:
+    #         mysql:
+    #             condition: service_healthy
+    #     networks:
+    #         - shop_ban_nuoc_network
+
+    api_gateway:
+        image: ghcr.io/konstannguyen/juiceshop_gateway:latest
+        container_name: api_gateway
+        restart: unless-stopped
+        ports:
+            - "${API_GATEWAY_SERVER_PORT}:${API_GATEWAY_SERVER_PORT}"
+        environment:
+            KEYCLOAK_AUTH_SERVER_URL: ${KEYCLOAK_AUTH_SERVER_URL}
+            KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+            KEYCLOAK_RESOURCE: ${KEYCLOAK_RESOURCE}
+            CORE_SERVICE_GRPC_HOST: ${CORE_SERVICE_GRPC_HOST}
+            USER_MODULE_GRPC_HOST: ${USER_MODULE_GRPC_HOST}
+            REVIEW_SERVICE_GRPC_HOST: ${REVIEW_SERVICE_GRPC_HOST}
+            VOUCHER_SERVICE_GRPC_HOST: ${VOUCHER_SERVICE_GRPC_HOST}
+            CORE_SERVICE_GRPC_PORT: ${CORE_SERVICE_GRPC_PORT}
+            USER_MODULE_GRPC_PORT: ${USER_MODULE_GRPC_PORT}
+            REVIEW_SERVICE_GRPC_PORT: ${REVIEW_SERVICE_GRPC_PORT}
+            VOUCHER_SERVICE_GRPC_PORT: ${VOUCHER_SERVICE_GRPC_PORT}
+        deploy:
+            resources:
+                limits:
+                    memory: 256M
+                    cpus: '0.25'
+                reservations:
+                    memory: 128M
+                    cpus: '0.125'
+        depends_on:
+            # core_service:
+            #     condition: service_started
+            user-service:
+                condition: service_started
+            # review_service:
+            #     condition: service_started
+            # voucher_service:
+            #     condition: service_started
+        networks:
+            - shop_ban_nuoc_network
 
 volumes:
-  mysql_data:
-  mongodb_data:
+    mysql_data:
+    mongodb_data:
 
 networks:
-  easy_traffic_network:
-    driver: bridge
+    shop_ban_nuoc_network:
+        driver: bridge
