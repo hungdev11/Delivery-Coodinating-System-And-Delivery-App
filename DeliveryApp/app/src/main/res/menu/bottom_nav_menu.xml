@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/nav_orders" android:title="Đơn hàng" android:icon="@drawable/ic_list" />
+    <item android:id="@+id/nav_map" android:title="Bản đồ" android:icon="@drawable/ic_map" />
+    <item android:id="@+id/nav_activity" android:title="Hoạt động" android:icon="@drawable/ic_delivery" />
+    <item android:id="@+id/nav_profile" android:title="Cá nhân" android:icon="@drawable/ic_user" />
+</menu>

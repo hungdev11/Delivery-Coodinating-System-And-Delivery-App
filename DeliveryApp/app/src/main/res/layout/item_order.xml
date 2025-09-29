@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/bg_card"
+    android:layout_marginBottom="8dp">
+
+    <TextView
+        android:id="@+id/tvOrderId"
+        android:text="Mã đơn: #00000"
+        android:textStyle="bold"
+        android:textSize="16sp"
+        android:textColor="#000000"
+        android:layout_height="wrap_content"
+        android:layout_width="wrap_content"/>
+
+    <TextView
+        android:id="@+id/tvCustomer"
+        android:text="Khách hàng: ..."
+        android:textColor="#444444"
+        android:layout_height="wrap_content"
+        android:layout_width="wrap_content"/>
+
+    <TextView
+        android:id="@+id/tvAddress"
+        android:text="Địa chỉ: ..."
+        android:textColor="#666666"
+        android:layout_height="wrap_content"
+        android:layout_width="wrap_content"/>
+
+    <TextView
+        android:id="@+id/tvStatus"
+        android:text="Trạng thái: ..."
+        android:textColor="#4C84FF"
+        android:layout_height="wrap_content"
+        android:layout_width="wrap_content"/>
+
+    <TextView
+        android:id="@+id/tvAmount"
+        android:text="350.000 ₫"
+        android:textStyle="bold"
+        android:textColor="#28A745"
+        android:layout_marginTop="4dp"
+        android:layout_height="wrap_content"
+        android:layout_width="wrap_content"/>
+</LinearLayout>
