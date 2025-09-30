@@ -1,40 +1,45 @@
 server:
-  port: ${API_GATEWAY_SERVER_PORT:21500}
+  port: 21500
+
 spring:
-  application.name: api-gateway
+  application:
+    name: api-gateway
   main:
     allow-bean-definition-overriding: true
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/master}
-          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8080/realms/master/protocol/openid-connect/certs}
-  
+          issuer-uri: http://${KEYCLOAK_HOST:localhost}:${KEYCLOAK_PORT:8080}/realms/${KEYCLOAK_REALM:keycloak}
+          jwk-set-uri: http://${KEYCLOAK_HOST:localhost}:${KEYCLOAK_PORT:8080}/realms/${KEYCLOAK_REALM:keycloak}/protocol/openid-connect/certs
 
-# Keycloak Configuration
+# Keycloak Configuration (from env.local)
 keycloak:
-  auth-server-url: ${KEYCLOAK_AUTH_SERVER_URL:http://localhost:8080}
-  realm: ${KEYCLOAK_REALM:master}
-  resource: ${KEYCLOAK_RESOURCE:api-gateway}
+  auth-server-url: http://${KEYCLOAK_HOST:localhost}:${KEYCLOAK_PORT:8080}
+  realm: ${KEYCLOAK_REALM:keycloak}
+  resource: ${KEYCLOAK_RESOURCE:doantotnghiep}
   public-client: true
   principal-attribute: preferred_username
 
-# Public Routes Configuration
-app:
-  security:
-    public-routes:
-      - "/api/public/**"
-      - "/api/auth/**"
-      - "/api/v1/auth/public/**"
-      - "/actuator/health"
-      - "/swagger-ui/**"
-      - "/v3/api-docs/**"
-      - "/error"
-
+# Microservices Configuration
+# Domain-based URLs for Docker support, can override via env
 services:
   user:
-    base-url: ${USER_SERVICE_BASE_URL:http://localhost:22001}
+    base-url: ${USER_SERVICE_URL:http://user-service:8080}
+  settings:
+    base-url: ${SETTINGS_SERVICE_URL:http://settings-service:8080}
+  # Uncomment and add other services as needed
+  # order:
+  #   base-url: ${ORDER_SERVICE_URL:http://order-service:8080}
+  # delivery:
+  #   base-url: ${DELIVERY_SERVICE_URL:http://delivery-service:8080}
+
+# Logging Configuration
+logging:
+  level:
+    com.ds.gateway: INFO
+    org.springframework.security: DEBUG
+    org.springframework.web: INFO
 
       
       

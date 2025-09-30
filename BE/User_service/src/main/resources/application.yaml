@@ -1,51 +1,212 @@
+server:
+  port: 21501
+
 spring:
   application:
-    name: user_service
+    name: user-service
   datasource:
-    url: ${USER_MODULE_DB_URL}
-    username: ${USER_MODULE_DB_USERNAME}
-    password: ${USER_MODULE_DB_PASSWORD}
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${USER_DB_NAME:ds_user_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: update
-    # show-sql: true
-  # security:
-  #   oauth2:
-  #     resourceserver:
-  #       jwt:
-  #         issuer-uri: ${KEYCLOAK_AUTH_SERVER_URL}/realms/${KEYCLOAK_REALM}
-  #         converter:
-  #           resource-id: ${KEYCLOAK_RESOURCE}
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
 
-server: 
-  port: ${USER_MODULE_SERVER_PORT:21501}
+# Keycloak Configuration (from env.local)
+keycloak:
+  auth-server-url: http://${KEYCLOAK_HOST:localhost}:${KEYCLOAK_PORT:8080}
+  realm: ${KEYCLOAK_REALM:keycloak}
+  resource: ${KEYCLOAK_RESOURCE:doantotnghiep}
+  credentials:
+    username: ${KEYCLOAK_ADMIN_USERNAME:dev}
+    password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
+    secret: ${KEYCLOAK_CLIENT_SECRET}
+  
+  # Keycloak Initialization Configuration
+  init:
+    enabled: true
+    master:
+      realm: master
+      username: ${KEYCLOAK_ADMIN_USERNAME:dev}
+      password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
+    
+    realms:
+      # Main Backend Realm (always use "keycloak" as primary realm)
+      - name: keycloak
+        displayName: "Delivery System - Backend"
+        enabled: true
+        roles:
+          - name: ADMIN
+            description: "Administrator role with full access"
+          - name: MANAGER
+            description: "Manager role with management access"
+          - name: DRIVER
+            description: "Delivery driver role"
+          - name: USER
+            description: "Regular user role"
+        
+        clients:
+          # Backend service client
+          - clientId: delivery-backend
+            name: "Delivery System Backend Service"
+            secret: ${KEYCLOAK_CLIENT_SECRET}
+            publicClient: false
+            serviceAccountsEnabled: true
+            standardFlowEnabled: true
+            directAccessGrantsEnabled: true
+            redirectUris:
+              - "*"
+            webOrigins:
+              - "*"
+            roles:
+              - user-service
+              - order-service
+              - delivery-service
+              - admin-service
+        
+        users:
+          # System Administrator
+          - username: admin
+            email: admin@delivery-system.com
+            firstName: System
+            lastName: Administrator
+            password: admin123
+            enabled: true
+            emailVerified: true
+            realmRoles:
+              - ADMIN
+            clientRoles:
+              delivery-backend:
+                - admin-service
+          
+          # Manager User
+          - username: manager
+            email: manager@delivery-system.com
+            firstName: Test
+            lastName: Manager
+            password: manager123
+            enabled: true
+            emailVerified: true
+            realmRoles:
+              - MANAGER
+            clientRoles:
+              delivery-backend:
+                - user-service
+                - order-service
+          
+          # Driver User
+          - username: driver01
+            email: driver01@delivery-system.com
+            firstName: John
+            lastName: Driver
+            password: driver123
+            enabled: true
+            emailVerified: true
+            realmRoles:
+              - DRIVER
+            clientRoles:
+              delivery-backend:
+                - delivery-service
+          
+          # Regular User
+          - username: user01
+            email: user01@delivery-system.com
+            firstName: Jane
+            lastName: Customer
+            password: user123
+            enabled: true
+            emailVerified: true
+            realmRoles:
+              - USER
+            clientRoles:
+              delivery-backend:
+                - user-service
+      
+      # Frontend Realm for Client Applications
+      - name: delivery-system-client
+        displayName: "Delivery System - Client"
+        enabled: true
+        roles:
+          - name: APP_USER
+            description: "Mobile/Web app user"
+        
+        clients:
+          # Management Web Application
+          - clientId: delivery-management-web
+            name: "Delivery Management Web App"
+            publicClient: true
+            serviceAccountsEnabled: false
+            standardFlowEnabled: true
+            directAccessGrantsEnabled: true
+            redirectUris:
+              - "http://localhost:5173/*"
+              - "http://127.0.0.1:5173/*"
+              - "http://localhost:3000/*"
+            webOrigins:
+              - "http://localhost:5173"
+              - "http://127.0.0.1:5173"
+              - "http://localhost:3000"
+            roles:
+              - web-admin
+              - web-manager
+          
+          # Mobile Application
+          - clientId: delivery-mobile-app
+            name: "Delivery Mobile App"
+            publicClient: true
+            serviceAccountsEnabled: false
+            standardFlowEnabled: true
+            directAccessGrantsEnabled: true
+            redirectUris:
+              - "deliveryapp://*"
+              - "http://localhost/*"
+            webOrigins:
+              - "*"
+            roles:
+              - mobile-user
+              - mobile-driver
+        
+        users:
+          # Web Admin User
+          - username: webadmin
+            email: webadmin@delivery-system.com
+            firstName: Web
+            lastName: Admin
+            password: webadmin123
+            enabled: true
+            emailVerified: true
+            realmRoles:
+              - APP_USER
+            clientRoles:
+              delivery-management-web:
+                - web-admin
+          
+          # Mobile User
+          - username: mobileuser
+            email: mobileuser@delivery-system.com
+            firstName: Mobile
+            lastName: User
+            password: mobile123
+            enabled: true
+            emailVerified: true
+            realmRoles:
+              - APP_USER
+            clientRoles:
+              delivery-mobile-app:
+                - mobile-user
 
-# Bật debug log cho Spring Security và OAuth2
+# Settings Service URL
+SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:http://localhost:21502}
+
+# Logging Configuration
 logging:
   level:
-    org:
-      springframework:
-        security: DEBUG
-        security.oauth2: DEBUG
-        web: DEBUG
-      lognet: DEBUG
-    io:
-      grpc: DEBUG
-    knp.ptithcm.datn.user_module: DEBUG
-    org.keycloak: DEBUG
-
-# Keycloak Admin Client (for KeycloakAdminConfig)
-keycloak:
-  auth-server-url: ${KEYCLOAK_AUTH_SERVER_URL:http://localhost:8080}
-  realm: ${KEYCLOAK_REALM:keycloak}
-  resource: ${KEYCLOAK_RESOURCE:datn_user_module}
-  credentials:
-    username: ${KEYCLOAK_CREDENTIALS_USERNAME:dev}
-    password: ${KEYCLOAK_CREDENTIALS_PASSWORD:dev}
-    secret: ${KEYCLOAK_CREDENTIALS_SECRET} 
-
-jwt:
-  converter:
-    resource-id: doantotnghiep
-    principal-attribute: sub 
+    com.ds: INFO
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE 

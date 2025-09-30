@@ -10,10 +10,10 @@
 		<relativePath/> 
 	</parent>
 	<groupId>com.ds</groupId>
-	<artifactId>user_service</artifactId>
+	<artifactId>user</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>user_service</name>
-	<description>Demo project for Spring Boot</description>
+	<name>user</name>
+	<description>User Service for Delivery System</description>
 	<url />
 	<licenses>
 		<license />
@@ -56,6 +56,11 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>test</scope>
+		</dependency>
 		
 		<dependency>
 			<groupId>org.projectlombok</groupId>
@@ -70,7 +75,7 @@
 		<dependency>
 			<groupId>org.keycloak</groupId>
 			<artifactId>keycloak-admin-client</artifactId>
-			<version>22.0.1</version>
+			<version>24.0.5</version>
 		</dependency>
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>

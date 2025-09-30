@@ -1,49 +1,38 @@
+# Test Configuration for User Service
 spring:
-  application:
-    name: datn_user_module
   datasource:
-    url: ${USER_MODULE_DB_URL}
-    username: ${USER_MODULE_DB_USERNAME}
-    password: ${USER_MODULE_DB_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
   jpa:
     hibernate:
-      ddl-auto: update
-    # show-sql: true
-  # security:
-  #   oauth2:
-  #     resourceserver:
-  #       jwt:
-  #         issuer-uri: ${KEYCLOAK_AUTH_SERVER_URL}/realms/${KEYCLOAK_REALM}
-  #         converter:
-  #           resource-id: ${KEYCLOAK_RESOURCE}
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+  h2:
+    console:
+      enabled: true
 
-server: 
-  port: ${USER_MODULE_SERVER_PORT}
+# Disable Keycloak initialization in tests
+keycloak:
+  init:
+    enabled: false
+  auth-server-url: http://localhost:8080
+  realm: test-realm
+  resource: test-client
+  credentials:
+    secret: test-secret
 
-# Bật debug log cho Spring Security và OAuth2
+# Disable Settings Service calls in tests
+SETTINGS_SERVICE_URL: http://localhost:21502
+
+# Logging
 logging:
   level:
-    org:
-      springframework:
-        security: DEBUG
-        security.oauth2: DEBUG
-        web: DEBUG
-      lognet: DEBUG
-    io:
-      grpc: DEBUG
-
-# Keycloak Admin Client (for KeycloakAdminConfig)
-keycloak:
-  auth-server-url: ${KEYCLOAK_AUTH_SERVER_URL}
-  realm: ${KEYCLOAK_REALM}
-  resource: ${KEYCLOAK_RESOURCE}
-  credentials:
-    username: ${KEYCLOAK_CREDENTIALS_USERNAME}
-    password: ${KEYCLOAK_CREDENTIALS_PASSWORD}
-    secret: ${KEYCLOAK_CREDENTIALS_SECRET} 
-
-jwt:
-  converter:
-    resource-id: doantotnghiep
-    principal-attribute: sub 
+    com.ds: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG

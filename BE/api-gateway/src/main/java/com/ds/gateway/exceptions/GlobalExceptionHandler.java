@@ -1,8 +1,8 @@
 package com.ds.gateway.exceptions;
 
-import com.ds.common.exceptions.ForbiddenException;
-import com.ds.common.exceptions.ServiceUnavailableException;
-import com.ds.common.exceptions.UnauthorizedException;
+import com.ds.gateway.common.exceptions.ForbiddenException;
+import com.ds.gateway.common.exceptions.ServiceUnavailableException;
+import com.ds.gateway.common.exceptions.UnauthorizedException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
