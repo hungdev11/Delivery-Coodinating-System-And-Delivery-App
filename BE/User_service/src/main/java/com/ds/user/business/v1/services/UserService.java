@@ -58,4 +58,32 @@ public class UserService implements IUserService {
     public Optional<User> getUserByEmail(String email) {
         return userRepository.findByEmail(email);
     }
+
+    @Override
+    public Optional<User> getUserByKeycloakId(String keycloakId) {
+        return userRepository.findByKeycloakId(keycloakId);
+    }
+
+    @Override
+    public User upsertByKeycloakId(String keycloakId, String username, String email, String firstName, String lastName) {
+        Optional<User> existingOpt = userRepository.findByKeycloakId(keycloakId);
+        if (existingOpt.isPresent()) {
+            User existing = existingOpt.get();
+            existing.setUsername(username != null ? username : existing.getUsername());
+            existing.setEmail(email != null ? email : existing.getEmail());
+            existing.setFirstName(firstName != null ? firstName : existing.getFirstName());
+            existing.setLastName(lastName != null ? lastName : existing.getLastName());
+            return userRepository.save(existing);
+        }
+
+        User user = User.builder()
+                .keycloakId(keycloakId)
+                .username(username)
+                .email(email)
+                .firstName(firstName)
+                .lastName(lastName)
+                .status(User.UserStatus.ACTIVE)
+                .build();
+        return userRepository.save(user);
+    }
 }

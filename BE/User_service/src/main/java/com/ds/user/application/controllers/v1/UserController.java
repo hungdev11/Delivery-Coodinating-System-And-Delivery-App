@@ -1,6 +1,7 @@
 package com.ds.user.application.controllers.v1;
 
 import com.ds.user.app_context.models.User;
+import com.ds.user.common.entities.dto.auth.SyncUserRequest;
 import com.ds.user.common.interfaces.IUserService;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,5 +46,24 @@ public class UserController {
     public ResponseEntity<Void> deleteUser(@PathVariable UUID id) {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/keycloak/{keycloakId}")
+    public ResponseEntity<User> getUserByKeycloakId(@PathVariable String keycloakId) {
+        return userService.getUserByKeycloakId(keycloakId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/sync")
+    public ResponseEntity<User> upsertByKeycloakId(@RequestBody SyncUserRequest request) {
+        User result = userService.upsertByKeycloakId(
+            request.getKeycloakId(),
+            request.getUsername(),
+            request.getEmail(),
+            request.getFirstName(),
+            request.getLastName()
+        );
+        return ResponseEntity.ok(result);
     }
 }

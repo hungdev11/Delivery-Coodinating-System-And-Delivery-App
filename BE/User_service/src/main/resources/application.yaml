@@ -19,58 +19,70 @@ spring:
 
 # Keycloak Configuration (from env.local)
 keycloak:
-  auth-server-url: http://${KEYCLOAK_HOST:localhost}:${KEYCLOAK_PORT:8080}
-  realm: ${KEYCLOAK_REALM:keycloak}
-  resource: ${KEYCLOAK_RESOURCE:doantotnghiep}
+  auth-server-url: ${KEYCLOAK_URL:http://localhost:8080}
+  realm: ${KEYCLOAK_REALM:delivery-system}
+  resource: ${KEYCLOAK_CLIENT_ID:frontend-client}
   credentials:
     username: ${KEYCLOAK_ADMIN_USERNAME:dev}
     password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
-    secret: ${KEYCLOAK_CLIENT_SECRET}
+    secret: ${KEYCLOAK_CLIENT_SECRET:}
   
-  # Keycloak Initialization Configuration
   init:
-    enabled: true
+    enabled: ${KEYCLOAK_INIT_ENABLED:true}
     master:
-      realm: master
+      realm: ${KEYCLOAK_MASTER_REALM:master}
       username: ${KEYCLOAK_ADMIN_USERNAME:dev}
       password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
-    
+    default:
+      realm: ${KEYCLOAK_DEFAULT_REALM:delivery-system}
+      client-id: ${KEYCLOAK_DEFAULT_CLIENT_ID:frontend-client}
+
     realms:
-      # Main Backend Realm (always use "keycloak" as primary realm)
-      - name: keycloak
-        displayName: "Delivery System - Backend"
+      - name: delivery-system
+        displayName: "Delivery System"
         enabled: true
         roles:
           - name: ADMIN
-            description: "Administrator role with full access"
+            description: "System administrator with full access"
           - name: MANAGER
-            description: "Manager role with management access"
-          - name: DRIVER
-            description: "Delivery driver role"
-          - name: USER
-            description: "Regular user role"
-        
+            description: "Manager with management access"
+          - name: STAFF
+            description: "Staff member with operational access"
+          - name: SHIPPER
+            description: "Delivery driver/shipper"
+          - name: CLIENT
+            description: "End customer/client"
+
         clients:
-          # Backend service client
-          - clientId: delivery-backend
-            name: "Delivery System Backend Service"
-            secret: ${KEYCLOAK_CLIENT_SECRET}
+          - clientId: backend-client
+            name: "Backend Control Client"
             publicClient: false
             serviceAccountsEnabled: true
             standardFlowEnabled: true
             directAccessGrantsEnabled: true
+            redirectUris: ["*"]
+            webOrigins: ["*"]
+            roles:
+              - admin-service
+              - management-service
+
+          - clientId: frontend-client
+            name: "Frontend User Client"
+            publicClient: false
+            serviceAccountsEnabled: false
+            standardFlowEnabled: true
+            directAccessGrantsEnabled: true
             redirectUris:
-              - "*"
+              - "http://localhost:5173/*"
+              - "http://localhost:3000/*"
             webOrigins:
-              - "*"
+              - "http://localhost:5173"
+              - "http://localhost:3000"
             roles:
               - user-service
-              - order-service
               - delivery-service
-              - admin-service
-        
+
         users:
-          # System Administrator
           - username: admin
             email: admin@delivery-system.com
             firstName: System
@@ -78,13 +90,10 @@ keycloak:
             password: admin123
             enabled: true
             emailVerified: true
-            realmRoles:
-              - ADMIN
+            realmRoles: [ADMIN]
             clientRoles:
-              delivery-backend:
-                - admin-service
-          
-          # Manager User
+              backend-client: [admin-service]
+
           - username: manager
             email: manager@delivery-system.com
             firstName: Test
@@ -92,116 +101,52 @@ keycloak:
             password: manager123
             enabled: true
             emailVerified: true
-            realmRoles:
-              - MANAGER
+            realmRoles: [MANAGER]
             clientRoles:
-              delivery-backend:
-                - user-service
-                - order-service
-          
-          # Driver User
-          - username: driver01
-            email: driver01@delivery-system.com
-            firstName: John
-            lastName: Driver
-            password: driver123
+              backend-client: [management-service]
+
+          - username: staff
+            email: staff@delivery-system.com
+            firstName: Staff
+            lastName: Member
+            password: staff123
             enabled: true
             emailVerified: true
-            realmRoles:
-              - DRIVER
+            realmRoles: [STAFF]
             clientRoles:
-              delivery-backend:
-                - delivery-service
-          
-          # Regular User
-          - username: user01
-            email: user01@delivery-system.com
+              backend-client: [management-service]
+
+          - username: shipper01
+            email: shipper01@delivery-system.com
+            firstName: John
+            lastName: Shipper
+            password: shipper123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHIPPER]
+            clientRoles:
+              frontend-client: [delivery-service]
+
+          - username: client01
+            email: client01@delivery-system.com
             firstName: Jane
             lastName: Customer
-            password: user123
+            password: client123
             enabled: true
             emailVerified: true
-            realmRoles:
-              - USER
+            realmRoles: [CLIENT]
             clientRoles:
-              delivery-backend:
-                - user-service
-      
-      # Frontend Realm for Client Applications
-      - name: delivery-system-client
-        displayName: "Delivery System - Client"
-        enabled: true
-        roles:
-          - name: APP_USER
-            description: "Mobile/Web app user"
-        
-        clients:
-          # Management Web Application
-          - clientId: delivery-management-web
-            name: "Delivery Management Web App"
-            publicClient: true
-            serviceAccountsEnabled: false
-            standardFlowEnabled: true
-            directAccessGrantsEnabled: true
-            redirectUris:
-              - "http://localhost:5173/*"
-              - "http://127.0.0.1:5173/*"
-              - "http://localhost:3000/*"
-            webOrigins:
-              - "http://localhost:5173"
-              - "http://127.0.0.1:5173"
-              - "http://localhost:3000"
-            roles:
-              - web-admin
-              - web-manager
-          
-          # Mobile Application
-          - clientId: delivery-mobile-app
-            name: "Delivery Mobile App"
-            publicClient: true
-            serviceAccountsEnabled: false
-            standardFlowEnabled: true
-            directAccessGrantsEnabled: true
-            redirectUris:
-              - "deliveryapp://*"
-              - "http://localhost/*"
-            webOrigins:
-              - "*"
-            roles:
-              - mobile-user
-              - mobile-driver
-        
-        users:
-          # Web Admin User
-          - username: webadmin
-            email: webadmin@delivery-system.com
-            firstName: Web
-            lastName: Admin
-            password: webadmin123
-            enabled: true
-            emailVerified: true
-            realmRoles:
-              - APP_USER
-            clientRoles:
-              delivery-management-web:
-                - web-admin
-          
-          # Mobile User
-          - username: mobileuser
-            email: mobileuser@delivery-system.com
-            firstName: Mobile
-            lastName: User
-            password: mobile123
-            enabled: true
-            emailVerified: true
-            realmRoles:
-              - APP_USER
-            clientRoles:
-              delivery-mobile-app:
-                - mobile-user
+              frontend-client: [user-service]
 
 # Settings Service URL
 SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:http://localhost:21502}
+
+# User Service Settings
+user:
+  settings:
+    service:
+      max-retries: 10
+      retry-delay-seconds: 10
 
 # Logging Configuration
 logging:

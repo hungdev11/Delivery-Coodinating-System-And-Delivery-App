@@ -6,7 +6,6 @@ import com.ds.setting.app_context.repositories.SystemSettingRepository;
 import com.ds.setting.common.entities.dto.CreateSettingRequest;
 import com.ds.setting.common.entities.dto.SystemSettingDto;
 import com.ds.setting.common.entities.dto.UpdateSettingRequest;
-import com.ds.setting.common.exceptions.ReadOnlySettingException;
 import com.ds.setting.common.exceptions.SettingNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +51,36 @@ public class SettingsService {
     public String getValue(String key, String defaultValue) {
         try {
             return getValue(key);
+        } catch (SettingNotFoundException e) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Get setting by key and group (composite lookup)
+     */
+    @Cacheable(value = "settings", key = "#key + '_' + #group")
+    public SystemSettingDto getByKeyAndGroup(String key, String group) {
+        SystemSetting setting = settingRepository.findByKeyAndGroup(key, group)
+                .orElseThrow(() -> new SettingNotFoundException(
+                        String.format("Setting not found: key=%s, group=%s", key, group)));
+        return toDto(setting);
+    }
+
+    /**
+     * Get setting value by key and group
+     */
+    @Cacheable(value = "settings", key = "'value_' + #key + '_' + #group")
+    public String getValueByKeyAndGroup(String key, String group) {
+        return getByKeyAndGroup(key, group).getValue();
+    }
+
+    /**
+     * Get setting value by key and group with default
+     */
+    public String getValueByKeyAndGroup(String key, String group, String defaultValue) {
+        try {
+            return getValueByKeyAndGroup(key, group);
         } catch (SettingNotFoundException e) {
             return defaultValue;
         }
@@ -123,6 +152,49 @@ public class SettingsService {
     }
 
     /**
+     * Create or update a setting by key and group
+     */
+    @Transactional
+    @CacheEvict(value = {"settings", "settingsByGroup"}, allEntries = true)
+    public SystemSettingDto createOrUpdateByKeyAndGroup(String key, String group, CreateSettingRequest request) {
+        return settingRepository.findByKeyAndGroup(key, group)
+                .map(existing -> {
+                    // Update existing setting
+                    if (request.getDescription() != null) {
+                        existing.setDescription(request.getDescription());
+                    }
+                    if (request.getType() != null) {
+                        existing.setType(request.getType());
+                    }
+                    if (request.getValue() != null) {
+                        existing.setValue(request.getValue());
+                    }
+                    if (request.getDisplayMode() != null) {
+                        existing.setDisplayMode(request.getDisplayMode());
+                    }
+                    SystemSetting updated = settingRepository.save(existing);
+                    log.info("Updated setting: key={}, group={}", key, group);
+                    return toDto(updated);
+                })
+                .orElseGet(() -> {
+                    // Create new setting
+                    SystemSetting setting = SystemSetting.builder()
+                            .key(key)
+                            .group(group)
+                            .description(request.getDescription())
+                            .type(request.getType())
+                            .value(request.getValue())
+                            .level(request.getLevel())
+                            .isReadOnly(request.getIsReadOnly())
+                            .displayMode(request.getDisplayMode())
+                            .build();
+                    SystemSetting saved = settingRepository.save(setting);
+                    log.info("Created setting: key={}, group={}", key, group);
+                    return toDto(saved);
+                });
+    }
+
+    /**
      * Update a setting
      */
     @Transactional
@@ -130,11 +202,6 @@ public class SettingsService {
     public SystemSettingDto updateSetting(String key, UpdateSettingRequest request, String updatedBy) {
         SystemSetting setting = settingRepository.findById(key)
                 .orElseThrow(() -> new SettingNotFoundException("Setting not found: " + key));
-
-        // Check if read-only
-        if (Boolean.TRUE.equals(setting.getIsReadOnly())) {
-            throw new ReadOnlySettingException("Cannot update read-only setting: " + key);
-        }
 
         // Update fields if provided
         if (request.getDescription() != null) {
@@ -162,6 +229,41 @@ public class SettingsService {
     }
 
     /**
+     * Update a setting by key and group
+     */
+    @Transactional
+    @CacheEvict(value = {"settings", "settingsByGroup"}, allEntries = true)
+    public SystemSettingDto updateByKeyAndGroup(String key, String group, UpdateSettingRequest request, String updatedBy) {
+        SystemSetting setting = settingRepository.findByKeyAndGroup(key, group)
+                .orElseThrow(() -> new SettingNotFoundException(
+                        String.format("Setting not found: key=%s, group=%s", key, group)));
+
+        // Update fields if provided
+        if (request.getDescription() != null) {
+            setting.setDescription(request.getDescription());
+        }
+
+        if (request.getType() != null) {
+            setting.setType(request.getType());
+        }
+
+        if (request.getValue() != null) {
+            setting.setValue(request.getValue());
+        }
+
+        if (request.getDisplayMode() != null) {
+            setting.setDisplayMode(request.getDisplayMode());
+        }
+
+        setting.setUpdatedBy(updatedBy);
+
+        SystemSetting updated = settingRepository.save(setting);
+        log.info("Updated setting: key={}, group={}, updatedBy={}", key, group, updatedBy);
+
+        return toDto(updated);
+    }
+
+    /**
      * Delete a setting
      */
     @Transactional
@@ -169,11 +271,6 @@ public class SettingsService {
     public void deleteSetting(String key) {
         SystemSetting setting = settingRepository.findById(key)
                 .orElseThrow(() -> new SettingNotFoundException("Setting not found: " + key));
-
-        // Check if read-only
-        if (Boolean.TRUE.equals(setting.getIsReadOnly())) {
-            throw new ReadOnlySettingException("Cannot delete read-only setting: " + key);
-        }
 
         settingRepository.delete(setting);
         log.info("Deleted setting: key={}", key);

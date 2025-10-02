@@ -1,6 +1,7 @@
 package com.ds.user.application.startup.data.services;
 
 import com.ds.user.application.startup.data.KeycloakInitConfig;
+import com.ds.user.common.interfaces.ISettingsWriterService;
 import jakarta.ws.rs.core.Response;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,7 @@ import java.util.Optional;
 public class ClientInitializationService {
 
     private final RoleInitializationService roleInitializationService;
+    private final ISettingsWriterService settingsWriterService;
 
     /**
      * Create client with its roles
@@ -35,16 +37,10 @@ public class ClientInitializationService {
 
             if (existingClient.isPresent()) {
                 log.info("Client '{}' already exists", clientConfig.getClientId());
-                
+                writeClientSettings(realmResource, existingClient.get());
                 // Log secret info for existing client
                 if (!clientConfig.isPublicClient()) {
-                    String existingSecret = existingClient.get().getSecret();
-                    if (existingSecret != null && !existingSecret.isEmpty()) {
-                        log.info("Client '{}' secret: {}", clientConfig.getClientId(), maskSecret(existingSecret));
-                        log.warn("Client '{}' - If you need the full secret, check Keycloak Admin Console", clientConfig.getClientId());
-                    } else {
-                        log.warn("Client '{}' - Cannot retrieve secret (may need regeneration in Keycloak Admin Console)", clientConfig.getClientId());
-                    }
+                    log.info("Client '{}' is confidential; secret should be managed in Keycloak and Settings Service (not in config)", clientConfig.getClientId());
                 }
                 
                 // Create client roles
@@ -64,25 +60,17 @@ public class ClientInitializationService {
             clientRepresentation.setRedirectUris(clientConfig.getRedirectUris());
             clientRepresentation.setWebOrigins(clientConfig.getWebOrigins());
 
-            if (!clientConfig.isPublicClient() && clientConfig.getSecret() != null) {
-                clientRepresentation.setSecret(clientConfig.getSecret());
-                log.info("Client '{}' will be created with configured secret", clientConfig.getClientId());
-            }
-
             Response response = realmResource.clients().create(clientRepresentation);
             
             if (response.getStatus() == 201) {
                 log.info("Client '{}' created successfully", clientConfig.getClientId());
                 
-                // Log secret information for confidential clients
-                if (!clientConfig.isPublicClient() && clientConfig.getSecret() != null) {
-                    log.info("✓ Client '{}' secret configured: {}", clientConfig.getClientId(), maskSecret(clientConfig.getSecret()));
-                    log.info("✓ Make sure KEYCLOAK_CLIENT_SECRET in env.local matches this value");
-                }
-                
                 // Get created client ID
                 String clientId = extractIdFromLocationHeader(response);
                 if (clientId != null) {
+                    // Create/update settings for the client
+                    ClientRepresentation created = realmResource.clients().get(clientId).toRepresentation();
+                    writeClientSettings(realmResource, created);
                     roleInitializationService.createClientRoles(realmResource, clientId, clientConfig.getRoles());
                 }
             } else {
@@ -107,13 +95,61 @@ public class ClientInitializationService {
         return null;
     }
 
-    /**
-     * Mask secret for logging (show first 4 and last 4 characters)
-     */
-    private String maskSecret(String secret) {
-        if (secret == null || secret.length() <= 8) {
-            return "****";
+    private void writeClientSettings(RealmResource realmResource, ClientRepresentation client) {
+        String realmName = realmResource.toRepresentation().getRealm();
+        String realmKey = realmName.replace("-", "_").toUpperCase();
+        String clientKey = client.getClientId().replace("-", "_").toUpperCase();
+        
+        // Save client ID
+        settingsWriterService.createSetting(
+                "KEYCLOAK_CLIENT_" + clientKey + "_ID",
+                "keycloak",
+                "Client ID for " + client.getName(),
+                "STRING",
+                client.getClientId(),
+                "SYSTEM",
+                true,
+                "TEXT"
+        );
+        
+        // Save realm info
+        settingsWriterService.createSetting(
+                "KEYCLOAK_REALM_" + realmKey,
+                "keycloak",
+                "Realm: " + realmName,
+                "STRING",
+                realmName,
+                "SYSTEM",
+                true,
+                "TEXT"
+        );
+        
+        // Get and save client secret for confidential clients
+        if (Boolean.FALSE.equals(client.isPublicClient())) {
+            try {
+                // Get the actual client secret from Keycloak
+                org.keycloak.representations.idm.CredentialRepresentation secret = 
+                    realmResource.clients().get(client.getId()).getSecret();
+                
+                if (secret != null && secret.getValue() != null) {
+                    settingsWriterService.createSetting(
+                            "KEYCLOAK_CLIENT_" + clientKey + "_SECRET",
+                            "keycloak",
+                            "Client secret for " + client.getName(),
+                            "STRING",
+                            secret.getValue(),
+                            "SYSTEM",
+                            true,
+                            "PASSWORD"
+                    );
+                    log.info("  ✓ Saved client secret for '{}' to Settings Service", client.getClientId());
+                } else {
+                    log.warn("  ⚠ Client '{}' is confidential but no secret was found", client.getClientId());
+                }
+            } catch (Exception e) {
+                log.error("  ✗ Failed to retrieve/save secret for client '{}': {}", 
+                    client.getClientId(), e.getMessage(), e);
+            }
         }
-        return secret.substring(0, 4) + "****" + secret.substring(secret.length() - 4);
     }
 }

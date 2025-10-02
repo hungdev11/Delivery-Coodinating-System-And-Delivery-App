@@ -56,6 +56,24 @@ public class SettingsController {
         return ResponseEntity.ok(settingsService.getByGroup(group));
     }
 
+    @GetMapping("/group/{group}/key/{key}")
+    @Operation(summary = "Get setting by key and group")
+    public ResponseEntity<SystemSettingDto> getSettingByKeyAndGroup(
+            @PathVariable String group,
+            @PathVariable String key) {
+        log.info("GET /api/v1/settings/group/{}/key/{} - Get setting by key and group", group, key);
+        return ResponseEntity.ok(settingsService.getByKeyAndGroup(key, group));
+    }
+
+    @GetMapping("/group/{group}/key/{key}/value")
+    @Operation(summary = "Get setting value by key and group")
+    public ResponseEntity<String> getSettingValueByKeyAndGroup(
+            @PathVariable String group,
+            @PathVariable String key) {
+        log.info("GET /api/v1/settings/group/{}/key/{}/value - Get setting value by key and group", group, key);
+        return ResponseEntity.ok(settingsService.getValueByKeyAndGroup(key, group));
+    }
+
     @GetMapping("/level/{level}")
     @Operation(summary = "Get settings by level")
     public ResponseEntity<List<SystemSettingDto>> getSettingsByLevel(@PathVariable SettingLevel level) {
@@ -88,6 +106,29 @@ public class SettingsController {
         log.info("PUT /api/v1/settings/{} - Update setting by: {}", key, userId);
         SystemSettingDto updated = settingsService.updateSetting(key, request, userId);
         return ResponseEntity.ok(updated);
+    }
+
+    @PutMapping("/group/{group}/key/{key}")
+    @Operation(summary = "Update a setting by key and group")
+    public ResponseEntity<SystemSettingDto> updateSettingByKeyAndGroup(
+            @PathVariable String group,
+            @PathVariable String key,
+            @Valid @RequestBody UpdateSettingRequest request,
+            @RequestHeader(value = "X-User-Id", required = false, defaultValue = "system") String userId) {
+        log.info("PUT /api/v1/settings/group/{}/key/{} - Update setting by: {}", group, key, userId);
+        SystemSettingDto updated = settingsService.updateByKeyAndGroup(key, group, request, userId);
+        return ResponseEntity.ok(updated);
+    }
+
+    @PutMapping("/group/{group}/key/{key}/upsert")
+    @Operation(summary = "Create or update a setting by key and group")
+    public ResponseEntity<SystemSettingDto> createOrUpdateSetting(
+            @PathVariable String group,
+            @PathVariable String key,
+            @Valid @RequestBody CreateSettingRequest request) {
+        log.info("PUT /api/v1/settings/group/{}/key/{}/upsert - Create or update setting", group, key);
+        SystemSettingDto result = settingsService.createOrUpdateByKeyAndGroup(key, group, request);
+        return ResponseEntity.ok(result);
     }
 
     @DeleteMapping("/{key}")

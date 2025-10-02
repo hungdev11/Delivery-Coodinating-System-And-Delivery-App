@@ -54,4 +54,9 @@ public interface SystemSettingRepository extends JpaRepository<SystemSetting, St
            "LOWER(s.key) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
            "LOWER(s.description) LIKE LOWER(CONCAT('%', :search, '%'))")
     List<SystemSetting> searchSettings(@Param("search") String search);
+
+    /**
+     * Find setting by key and group (composite lookup)
+     */
+    Optional<SystemSetting> findByKeyAndGroup(String key, String group);
 }

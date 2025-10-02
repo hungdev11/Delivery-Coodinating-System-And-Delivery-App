@@ -47,4 +47,10 @@ public interface IUserServiceClient {
      * Get user by Keycloak ID
      */
     CompletableFuture<UserDto> getUserByKeycloakId(String keycloakId);
+    
+    /**
+     * Sync user by Keycloak ID (create or update)
+     */
+    CompletableFuture<UserDto> syncUserByKeycloakId(String keycloakId, String username, String email, 
+                                                    String firstName, String lastName);
 }

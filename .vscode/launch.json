@@ -31,5 +31,17 @@
             "args": "",
             "envFile": "${workspaceFolder}/.env"
         }
+    ],
+    "compounds": [
+        {
+            "name": "Run All Services",
+            "configurations": [
+                "Spring Boot-SettingsServiceApplication<setting>",
+                "Spring Boot-UserServiceApplication<user_service>",
+                "Spring Boot-GatewayApplication<api-gateway>"
+            ],
+            "stopAll": true,
+            // "preLaunchTask": "BE: build all (parallel)"
+        }
     ]
 }

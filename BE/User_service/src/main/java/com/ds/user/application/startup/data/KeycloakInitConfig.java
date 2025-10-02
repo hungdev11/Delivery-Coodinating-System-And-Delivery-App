@@ -18,12 +18,25 @@ public class KeycloakInitConfig {
     private boolean enabled = true;
     private MasterConfig master = new MasterConfig();
     private List<RealmConfig> realms = List.of();
+    private DefaultConfig defaultConfig = new DefaultConfig();
     
     @Getter
     public static class MasterConfig {
         private String realm = "master";
         private String username = "dev";
         private String password = "dev";
+        
+        public void setRealm(String realm) {
+            this.realm = realm;
+        }
+        
+        public void setUsername(String username) {
+            this.username = username;
+        }
+        
+        public void setPassword(String password) {
+            this.password = password;
+        }
     }
     
     @Getter
@@ -177,6 +190,20 @@ public class KeycloakInitConfig {
         }
     }
     
+    @Getter
+    public static class DefaultConfig {
+        private String realm = "delivery-system";
+        private String clientId = "frontend-client";
+        
+        public void setRealm(String realm) {
+            this.realm = realm;
+        }
+        
+        public void setClientId(String clientId) {
+            this.clientId = clientId;
+        }
+    }
+    
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
@@ -187,5 +214,9 @@ public class KeycloakInitConfig {
     
     public void setRealms(List<RealmConfig> realms) {
         this.realms = realms;
+    }
+    
+    public void setDefaultConfig(DefaultConfig defaultConfig) {
+        this.defaultConfig = defaultConfig;
     }
 }

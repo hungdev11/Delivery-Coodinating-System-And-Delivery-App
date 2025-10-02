@@ -8,11 +8,14 @@ import com.ds.gateway.common.exceptions.ServiceUnavailableException;
 import com.ds.gateway.common.interfaces.IUserServiceClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -23,6 +26,7 @@ import java.util.concurrent.CompletableFuture;
 public class UserServiceClient implements IUserServiceClient {
     
     @Autowired
+    @Qualifier("userServiceWebClient")
     private WebClient userServiceWebClient;
     
     @Override
@@ -110,6 +114,28 @@ public class UserServiceClient implements IUserServiceClient {
         
         return userServiceWebClient.get()
             .uri("/api/v1/users/keycloak/{keycloakId}", keycloakId)
+            .retrieve()
+            .bodyToMono(new ParameterizedTypeReference<BaseResponse<UserDto>>() {})
+            .map(BaseResponse::getResult)
+            .onErrorMap(ex -> new ServiceUnavailableException("User service unavailable: " + ex.getMessage(), ex))
+            .toFuture();
+    }
+    
+    @Override
+    public CompletableFuture<UserDto> syncUserByKeycloakId(String keycloakId, String username, String email, 
+                                                           String firstName, String lastName) {
+        log.debug("Syncing user by Keycloak ID via REST: {}", keycloakId);
+        
+        Map<String, String> request = new HashMap<>();
+        request.put("keycloakId", keycloakId);
+        if (username != null) request.put("username", username);
+        if (email != null) request.put("email", email);
+        if (firstName != null) request.put("firstName", firstName);
+        if (lastName != null) request.put("lastName", lastName);
+        
+        return userServiceWebClient.post()
+            .uri("/api/v1/users/sync")
+            .bodyValue(request)
             .retrieve()
             .bodyToMono(new ParameterizedTypeReference<BaseResponse<UserDto>>() {})
             .map(BaseResponse::getResult)
