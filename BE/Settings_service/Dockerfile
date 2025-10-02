@@ -1,4 +1,4 @@
-# Multi-stage build for User Service
+# Multi-stage build for Settings Service
 FROM eclipse-temurin:21-jdk-alpine AS builder
 
 # Set working directory
@@ -41,11 +41,11 @@ RUN chown spring:spring app.jar
 USER spring
 
 # Expose port
-EXPOSE 21501
+EXPOSE 21502
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:21501/actuator/health || exit 1
+  CMD curl -f http://localhost:21502/actuator/health || exit 1
 
 # Run the application
 ENTRYPOINT ["java", "-jar", "app.jar"]
