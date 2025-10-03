@@ -1,0 +1,36 @@
+server:
+  port: 21502
+
+spring:
+  application:
+    name: settings-service
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${SETTINGS_DB_NAME:ds_settings_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+  cache:
+    type: simple
+    cache-names:
+      - settings
+      - settingsByGroup
+
+# Settings Service Configuration
+settings:
+  cache:
+    ttl-minutes: ${CACHE_TTL_MINUTES:60}
+
+# Logging Configuration
+logging:
+  level:
+    com.ds: INFO
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE 

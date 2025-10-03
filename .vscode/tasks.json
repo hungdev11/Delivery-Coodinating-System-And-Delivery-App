@@ -1,0 +1,47 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "BE: build User_service",
+            "type": "shell",
+            "command": ".\\mvnw.cmd",
+            "args": ["-T", "1C", "-DskipTests", "clean", "install"],
+            "options": {
+                "cwd": "${workspaceFolder}\\BE\\User_service"
+            },
+            "problemMatcher": ["$javac"],
+            "group": "build"
+        },
+        {
+            "label": "BE: build Settings_service",
+            "type": "shell",
+            "command": ".\\mvnw.cmd",
+            "args": ["-T", "1C", "-DskipTests", "clean", "install"],
+            "options": {
+                "cwd": "${workspaceFolder}\\BE\\Settings_service"
+            },
+            "problemMatcher": ["$javac"],
+            "group": "build"
+        },
+        {
+            "label": "BE: build api-gateway",
+            "type": "shell",
+            "command": ".\\mvnw.cmd",
+            "args": ["-T", "1C", "-DskipTests", "clean", "install"],
+            "options": {
+                "cwd": "${workspaceFolder}\\BE\\api-gateway"
+            },
+            "problemMatcher": ["$javac"],
+            "group": "build"
+        },
+        {
+            "label": "BE: build all (parallel)",
+            "dependsOrder": "parallel",
+            "dependsOn": [
+                "BE: build User_service",
+                "BE: build Settings_service",
+                "BE: build api-gateway"
+            ]
+        }
+    ]
+}

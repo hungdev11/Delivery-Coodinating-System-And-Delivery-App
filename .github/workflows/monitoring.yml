@@ -1,0 +1,131 @@
+# name: Monitoring and Health Checks
+
+# on:
+#   schedule:
+#     # Run every 5 minutes
+#     - cron: '*/5 * * * *'
+#   workflow_dispatch:
+#     inputs:
+#       check_type:
+#         description: 'Type of health check'
+#         required: true
+#         default: 'all'
+#         type: choice
+#         options:
+#         - all
+#         - api-gateway
+#         - user-service
+#         - settings-service
+
+# env:
+#   REGISTRY: ghcr.io
+#   IMAGE_NAME_PREFIX: dss
+
+# jobs:
+#   health-check-api-gateway:
+#     runs-on: ubuntu-latest
+#     if: github.event.inputs.check_type == 'all' || github.event.inputs.check_type == 'api-gateway' || github.event_name == 'schedule'
+    
+#     steps:
+#       - name: Check API Gateway Health
+#         run: |
+#           echo "Checking API Gateway health..."
+#           # Add actual health check commands here
+#           # curl -f http://staging-api-gateway.example.com:21500/actuator/health || exit 1
+#           echo "API Gateway health check passed"
+
+#       - name: Check API Gateway Metrics
+#         run: |
+#           echo "Checking API Gateway metrics..."
+#           # Add metrics check commands here
+#           # curl -f http://staging-api-gateway.example.com:21500/actuator/metrics || exit 1
+#           echo "API Gateway metrics check passed"
+
+#   health-check-user-service:
+#     runs-on: ubuntu-latest
+#     if: github.event.inputs.check_type == 'all' || github.event.inputs.check_type == 'user-service' || github.event_name == 'schedule'
+    
+#     steps:
+#       - name: Check User Service Health
+#         run: |
+#           echo "Checking User Service health..."
+#           # Add actual health check commands here
+#           # curl -f http://staging-user-service.example.com:21501/actuator/health || exit 1
+#           echo "User Service health check passed"
+
+#       - name: Check User Service Metrics
+#         run: |
+#           echo "Checking User Service metrics..."
+#           # Add metrics check commands here
+#           # curl -f http://staging-user-service.example.com:21501/actuator/metrics || exit 1
+#           echo "User Service metrics check passed"
+
+#   health-check-settings-service:
+#     runs-on: ubuntu-latest
+#     if: github.event.inputs.check_type == 'all' || github.event.inputs.check_type == 'settings-service' || github.event_name == 'schedule'
+    
+#     steps:
+#       - name: Check Settings Service Health
+#         run: |
+#           echo "Checking Settings Service health..."
+#           # Add actual health check commands here
+#           # curl -f http://staging-settings-service.example.com:21502/actuator/health || exit 1
+#           echo "Settings Service health check passed"
+
+#       - name: Check Settings Service Metrics
+#         run: |
+#           echo "Checking Settings Service metrics..."
+#           # Add metrics check commands here
+#           # curl -f http://staging-settings-service.example.com:21502/actuator/metrics || exit 1
+#           echo "Settings Service metrics check passed"
+
+#   performance-check:
+#     runs-on: ubuntu-latest
+#     if: github.event.inputs.check_type == 'all' || github.event_name == 'schedule'
+    
+#     steps:
+#       - name: Check API Response Times
+#         run: |
+#           echo "Checking API response times..."
+#           # Add performance check commands here
+#           # Add load testing or response time checks
+#           echo "Performance check completed"
+
+#       - name: Check Database Connections
+#         run: |
+#           echo "Checking database connections..."
+#           # Add database health checks here
+#           echo "Database connection check completed"
+
+#   security-check:
+#     runs-on: ubuntu-latest
+#     if: github.event.inputs.check_type == 'all' || github.event_name == 'schedule'
+    
+#     steps:
+#       - name: Check SSL Certificates
+#         run: |
+#           echo "Checking SSL certificates..."
+#           # Add SSL certificate expiration checks
+#           echo "SSL certificate check completed"
+
+#       - name: Check Security Headers
+#         run: |
+#           echo "Checking security headers..."
+#           # Add security header checks
+#           echo "Security headers check completed"
+
+#   notify-failures:
+#     runs-on: ubuntu-latest
+#     needs: [health-check-api-gateway, health-check-user-service, health-check-settings-service, performance-check, security-check]
+#     if: always() && (needs.health-check-api-gateway.result == 'failure' || needs.health-check-user-service.result == 'failure' || needs.health-check-settings-service.result == 'failure' || needs.performance-check.result == 'failure' || needs.security-check.result == 'failure')
+    
+#     steps:
+#       - name: Send Failure Notification
+#         run: |
+#           echo "🚨 Health check failures detected!"
+#           echo "API Gateway: ${{ needs.health-check-api-gateway.result }}"
+#           echo "User Service: ${{ needs.health-check-user-service.result }}"
+#           echo "Settings Service: ${{ needs.health-check-settings-service.result }}"
+#           echo "Performance: ${{ needs.performance-check.result }}"
+#           echo "Security: ${{ needs.security-check.result }}"
+#           # Add actual notification logic here (Slack, email, etc.)

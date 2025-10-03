@@ -1,0 +1,38 @@
+# Test Configuration for User Service
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+  h2:
+    console:
+      enabled: true
+
+# Disable Keycloak initialization in tests
+keycloak:
+  init:
+    enabled: false
+  auth-server-url: http://localhost:8080
+  realm: test-realm
+  resource: test-client
+  credentials:
+    secret: test-secret
+
+# Disable Settings Service calls in tests
+SETTINGS_SERVICE_URL: http://localhost:21502
+
+# Logging
+logging:
+  level:
+    com.ds: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG

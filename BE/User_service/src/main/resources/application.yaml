@@ -1,0 +1,157 @@
+server:
+  port: 21501
+
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${USER_DB_NAME:ds_user_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+# Keycloak Configuration (from env.local)
+keycloak:
+  auth-server-url: ${KEYCLOAK_URL:http://localhost:8080}
+  realm: ${KEYCLOAK_REALM:delivery-system}
+  resource: ${KEYCLOAK_CLIENT_ID:frontend-client}
+  credentials:
+    username: ${KEYCLOAK_ADMIN_USERNAME:dev}
+    password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
+    secret: ${KEYCLOAK_CLIENT_SECRET:}
+  
+  init:
+    enabled: ${KEYCLOAK_INIT_ENABLED:true}
+    master:
+      realm: ${KEYCLOAK_MASTER_REALM:master}
+      username: ${KEYCLOAK_ADMIN_USERNAME:dev}
+      password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
+    default:
+      realm: ${KEYCLOAK_DEFAULT_REALM:delivery-system}
+      client-id: ${KEYCLOAK_DEFAULT_CLIENT_ID:frontend-client}
+
+    realms:
+      - name: delivery-system
+        displayName: "Delivery System"
+        enabled: true
+        roles:
+          - name: ADMIN
+            description: "System administrator with full access"
+          - name: MANAGER
+            description: "Manager with management access"
+          - name: STAFF
+            description: "Staff member with operational access"
+          - name: SHIPPER
+            description: "Delivery driver/shipper"
+          - name: CLIENT
+            description: "End customer/client"
+
+        clients:
+          - clientId: backend-client
+            name: "Backend Control Client"
+            publicClient: false
+            serviceAccountsEnabled: true
+            standardFlowEnabled: true
+            directAccessGrantsEnabled: true
+            redirectUris: ["*"]
+            webOrigins: ["*"]
+            roles:
+              - admin-service
+              - management-service
+
+          - clientId: frontend-client
+            name: "Frontend User Client"
+            publicClient: false
+            serviceAccountsEnabled: false
+            standardFlowEnabled: true
+            directAccessGrantsEnabled: true
+            redirectUris:
+              - "http://localhost:5173/*"
+              - "http://localhost:3000/*"
+            webOrigins:
+              - "http://localhost:5173"
+              - "http://localhost:3000"
+            roles:
+              - user-service
+              - delivery-service
+
+        users:
+          - username: admin
+            email: admin@delivery-system.com
+            firstName: System
+            lastName: Administrator
+            password: admin123
+            enabled: true
+            emailVerified: true
+            realmRoles: [ADMIN]
+            clientRoles:
+              backend-client: [admin-service]
+
+          - username: manager
+            email: manager@delivery-system.com
+            firstName: Test
+            lastName: Manager
+            password: manager123
+            enabled: true
+            emailVerified: true
+            realmRoles: [MANAGER]
+            clientRoles:
+              backend-client: [management-service]
+
+          - username: staff
+            email: staff@delivery-system.com
+            firstName: Staff
+            lastName: Member
+            password: staff123
+            enabled: true
+            emailVerified: true
+            realmRoles: [STAFF]
+            clientRoles:
+              backend-client: [management-service]
+
+          - username: shipper01
+            email: shipper01@delivery-system.com
+            firstName: John
+            lastName: Shipper
+            password: shipper123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHIPPER]
+            clientRoles:
+              frontend-client: [delivery-service]
+
+          - username: client01
+            email: client01@delivery-system.com
+            firstName: Jane
+            lastName: Customer
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+
+# Settings Service URL
+SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:http://localhost:21502}
+
+# User Service Settings
+user:
+  settings:
+    service:
+      max-retries: 10
+      retry-delay-seconds: 10
+
+# Logging Configuration
+logging:
+  level:
+    com.ds: INFO
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE 
