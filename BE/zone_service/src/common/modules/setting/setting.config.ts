@@ -4,7 +4,7 @@ import type { SettingsConfig } from './setting.model';
  * Default configuration for Settings Service
  */
 export const DEFAULT_SETTINGS_CONFIG: SettingsConfig = {
-  baseUrl: process.env.SETTINGS_SERVICE_URL || 'http://localhost:8080',
+  baseUrl: process.env.SETTINGS_SERVICE_URL || 'http://localhost:21502',
   timeout: parseInt(process.env.SETTINGS_SERVICE_TIMEOUT || '10000'),
   headers: {
     'User-Agent': 'ZoneService/1.0.0',
@@ -20,15 +20,15 @@ export const DEFAULT_SETTINGS_CONFIG: SettingsConfig = {
 export const SETTINGS_CONFIGS = {
   development: {
     ...DEFAULT_SETTINGS_CONFIG,
-    baseUrl: 'http://localhost:8080'
+    baseUrl: 'http://localhost:21502'
   },
   staging: {
     ...DEFAULT_SETTINGS_CONFIG,
-    baseUrl: process.env.SETTINGS_SERVICE_URL || 'http://settings-service-staging:8080'
+    baseUrl: process.env.SETTINGS_SERVICE_URL || 'http://settings-service-staging:21502'
   },
   production: {
     ...DEFAULT_SETTINGS_CONFIG,
-    baseUrl: process.env.SETTINGS_SERVICE_URL || 'http://settings-service:8080',
+    baseUrl: process.env.SETTINGS_SERVICE_URL || 'http://settings-service:21502',
     timeout: 15000 // Longer timeout for production
   }
 };
@@ -74,34 +74,34 @@ export function validateSettingsConfig(config: SettingsConfig): void {
  */
 export const ZONE_SETTING_KEYS = {
   // Zone configuration
-  DEFAULT_ZONE_RADIUS: 'default_zone_radius',
-  MAX_ZONE_RADIUS: 'max_zone_radius',
-  MIN_ZONE_RADIUS: 'min_zone_radius',
+  DEFAULT_ZONE_RADIUS: 'DEFAULT_ZONE_RADIUS',
+  MAX_ZONE_RADIUS: 'MAX_ZONE_RADIUS',
+  MIN_ZONE_RADIUS: 'MIN_ZONE_RADIUS',
   
   // Center configuration
-  DEFAULT_CENTER_LATITUDE: 'default_center_latitude',
-  DEFAULT_CENTER_LONGITUDE: 'default_center_longitude',
+  DEFAULT_CENTER_LATITUDE: 'DEFAULT_CENTER_LATITUDE',
+  DEFAULT_CENTER_LONGITUDE: 'DEFAULT_CENTER_LONGITUDE',
   
   // Performance settings
-  ZONE_CACHE_TTL: 'zone_cache_ttl',
-  MAX_ZONES_PER_REQUEST: 'max_zones_per_request',
+  ZONE_CACHE_TTL: 'ZONE_CACHE_TTL',
+  MAX_ZONES_PER_REQUEST: 'MAX_ZONES_PER_REQUEST',
   
   // Feature flags
-  ENABLE_ZONE_VALIDATION: 'enable_zone_validation',
-  ENABLE_GEOCODING: 'enable_geocoding',
+  ENABLE_ZONE_VALIDATION: 'ENABLE_ZONE_VALIDATION',
+  ENABLE_GEOCODING: 'ENABLE_GEOCODING',
   
   // Integration settings
-  MAPS_API_KEY: 'maps_api_key',
-  GEOCODING_SERVICE_URL: 'geocoding_service_url'
+  MAPS_API_KEY: 'MAPS_API_KEY',
+  GEOCODING_SERVICE_URL: 'GEOCODING_SERVICE_URL'
 } as const;
 
 /**
  * Common setting groups used by Zone Service
  */
 export const ZONE_SETTING_GROUPS = {
-  ZONE_CONFIG: 'zone_config',
-  CENTER_CONFIG: 'center_config',
-  PERFORMANCE: 'performance',
-  FEATURE_FLAGS: 'feature_flags',
-  INTEGRATIONS: 'integrations'
+  ZONE_CONFIG: 'ZONE_CONFIG',
+  CENTER_CONFIG: 'CENTER_CONFIG',
+  PERFORMANCE: 'PERFORMANCE',
+  FEATURE_FLAGS: 'FEATURE_FLAGS',
+  INTEGRATIONS: 'INTEGRATIONS'
 } as const;

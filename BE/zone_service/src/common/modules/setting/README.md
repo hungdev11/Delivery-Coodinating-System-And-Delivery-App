@@ -131,17 +131,17 @@ const updatedSetting = await settingsService.updateSetting(
 
 ```typescript
 export const ZONE_SETTING_KEYS = {
-  DEFAULT_ZONE_RADIUS: 'default_zone_radius',
-  MAX_ZONE_RADIUS: 'max_zone_radius',
-  MIN_ZONE_RADIUS: 'min_zone_radius',
-  DEFAULT_CENTER_LATITUDE: 'default_center_latitude',
-  DEFAULT_CENTER_LONGITUDE: 'default_center_longitude',
-  ZONE_CACHE_TTL: 'zone_cache_ttl',
-  MAX_ZONES_PER_REQUEST: 'max_zones_per_request',
-  ENABLE_ZONE_VALIDATION: 'enable_zone_validation',
-  ENABLE_GEOCODING: 'enable_geocoding',
-  MAPS_API_KEY: 'maps_api_key',
-  GEOCODING_SERVICE_URL: 'geocoding_service_url'
+  DEFAULT_ZONE_RADIUS: 'DEFAULT_ZONE_RADIUS',
+  MAX_ZONE_RADIUS: 'MAX_ZONE_RADIUS',
+  MIN_ZONE_RADIUS: 'MIN_ZONE_RADIUS',
+  DEFAULT_CENTER_LATITUDE: 'DEFAULT_CENTER_LATITUDE',
+  DEFAULT_CENTER_LONGITUDE: 'DEFAULT_CENTER_LONGITUDE',
+  ZONE_CACHE_TTL: 'ZONE_CACHE_TTL',
+  MAX_ZONES_PER_REQUEST: 'MAX_ZONES_PER_REQUEST',
+  ENABLE_ZONE_VALIDATION: 'ENABLE_ZONE_VALIDATION',
+  ENABLE_GEOCODING: 'ENABLE_GEOCODING',
+  MAPS_API_KEY: 'MAPS_API_KEY',
+  GEOCODING_SERVICE_URL: 'GEOCODING_SERVICE_URL'
 };
 ```
 
