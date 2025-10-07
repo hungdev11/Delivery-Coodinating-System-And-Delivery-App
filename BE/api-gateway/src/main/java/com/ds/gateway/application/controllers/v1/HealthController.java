@@ -28,6 +28,6 @@ public class HealthController {
         healthInfo.put("service", "api-gateway");
         healthInfo.put("timestamp", LocalDateTime.now());
         
-        return ResponseEntity.ok(BaseResponse.success("API Gateway is running", healthInfo));
+        return ResponseEntity.ok(BaseResponse.success(healthInfo, "API Gateway is running"));
     }
 }

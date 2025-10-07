@@ -1,0 +1,12 @@
+model zone_geohash_cells {
+  geohash_cell_id String  @id @default(uuid())
+  geohash         String
+  level           Int
+  parent          String?
+  polygon         Json?
+
+  zone_id String
+  zones   zones  @relation(fields: [zone_id], references: [zone_id])
+
+  destination destination[]
+}

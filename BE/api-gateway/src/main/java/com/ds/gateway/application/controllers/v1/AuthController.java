@@ -43,7 +43,7 @@ public class AuthController {
         log.info("Login request for username: {} with type: {}", request.getUsername(), request.getType());
         
         return keycloakAuthService.login(request.getUsername(), request.getPassword(), request.getType())
-            .thenApply(response -> ResponseEntity.ok(BaseResponse.success("Login successful", response)))
+            .thenApply(response -> ResponseEntity.ok(BaseResponse.success(response, "Login successful")))
             .exceptionally(ex -> {
                 log.error("Login failed: {}", ex.getMessage());
                 return ResponseEntity.badRequest().body(BaseResponse.error("Login failed: " + ex.getMessage()));
@@ -60,7 +60,7 @@ public class AuthController {
         log.info("Default login request for username: {}", request.getUsername());
         
         return keycloakAuthService.defaultLogin(request.getUsername(), request.getPassword())
-            .thenApply(response -> ResponseEntity.ok(BaseResponse.success("Default login successful", response)))
+            .thenApply(response -> ResponseEntity.ok(BaseResponse.success(response, "Default login successful")))
             .exceptionally(ex -> {
                 log.error("Default login failed: {}", ex.getMessage());
                 return ResponseEntity.badRequest().body(BaseResponse.error("Default login failed: " + ex.getMessage()));
@@ -82,7 +82,7 @@ public class AuthController {
                 request.getPassword(), 
                 request.getRealm(), 
                 request.getClientId())
-            .thenApply(response -> ResponseEntity.ok(BaseResponse.success("Custom login successful", response)))
+            .thenApply(response -> ResponseEntity.ok(BaseResponse.success(response, "Custom login successful")))
             .exceptionally(ex -> {
                 log.error("Custom login failed: {}", ex.getMessage());
                 return ResponseEntity.badRequest().body(BaseResponse.error("Custom login failed: " + ex.getMessage()));
@@ -108,7 +108,7 @@ public class AuthController {
         log.info("Token validation request");
         
         return keycloakAuthService.validateTokenAndGetUserInfo(token)
-            .thenApply(userInfo -> ResponseEntity.ok(BaseResponse.success("Token valid", userInfo)))
+            .thenApply(userInfo -> ResponseEntity.ok(BaseResponse.success(userInfo, "Token valid")))
             .exceptionally(ex -> {
                 log.error("Token validation failed: {}", ex.getMessage());
                 return ResponseEntity.badRequest().body(BaseResponse.error("Token validation failed: " + ex.getMessage()));
@@ -125,7 +125,7 @@ public class AuthController {
         log.info("Refresh token request");
         
         return keycloakAuthService.refreshToken(request.getRefreshToken())
-            .thenApply(response -> ResponseEntity.ok(BaseResponse.success("Token refreshed", response)))
+            .thenApply(response -> ResponseEntity.ok(BaseResponse.success(response, "Token refreshed")))
             .exceptionally(ex -> {
                 log.error("Token refresh failed: {}", ex.getMessage());
                 return ResponseEntity.badRequest().body(BaseResponse.error("Token refresh failed: " + ex.getMessage()));
@@ -142,7 +142,7 @@ public class AuthController {
         log.info("Logout request");
         
         return keycloakAuthService.logout(request.getRefreshToken())
-            .thenApply(success -> ResponseEntity.ok(BaseResponse.success("Logout successful", success)))
+            .thenApply(success -> ResponseEntity.ok(BaseResponse.success(success, "Logout successful")))
             .exceptionally(ex -> {
                 log.error("Logout failed: {}", ex.getMessage());
                 return ResponseEntity.badRequest().body(BaseResponse.error("Logout failed: " + ex.getMessage()));
@@ -164,7 +164,7 @@ public class AuthController {
         KeycloakUserInfoDto userInfo = keycloakAuthService.extractUserInfoFromJwt(jwt);
         
         log.info("Current user info requested: {}", userInfo.getPreferredUsername());
-        return ResponseEntity.ok(BaseResponse.success("User info retrieved", userInfo));
+        return ResponseEntity.ok(BaseResponse.success(userInfo, "User info retrieved"));
     }
     
     /**
@@ -194,7 +194,7 @@ public class AuthController {
                 keycloakUserInfo.getFamilyName())
             .thenApply(user -> {
                 log.info("User synced successfully: {}", user);
-                return ResponseEntity.ok(BaseResponse.success("User synced successfully", user));
+                return ResponseEntity.ok(BaseResponse.success(user, "User synced successfully"));
             })
             .exceptionally(ex -> {
                 log.error("Failed to sync user: {}", ex.getMessage(), ex);

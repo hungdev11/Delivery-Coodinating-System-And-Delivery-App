@@ -27,6 +27,17 @@ settings:
   cache:
     ttl-minutes: ${CACHE_TTL_MINUTES:60}
 
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+
 # Logging Configuration
 logging:
   level:
