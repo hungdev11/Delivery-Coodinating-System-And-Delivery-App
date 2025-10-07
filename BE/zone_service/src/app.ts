@@ -6,6 +6,7 @@
 import 'reflect-metadata';
 import express, { Express } from 'express';
 import cors from 'cors';
+import { config } from '@config/config';
 import { logger } from './common/logger/logger.service';
 import { requestLogger } from './common/middleware/logger.middleware';
 import { errorHandler, notFoundHandler } from './common/middleware/error.middleware';
@@ -19,11 +20,11 @@ export function createApp(): Express {
   const app = express();
 
   // CORS configuration
-  const corsOrigins = process.env.CORS_ORIGINS?.split(',').map(origin => origin.trim()) || ['*'];
+  const corsOrigins = config.cors.origins;
   
   app.use(
     cors({
-      origin: corsOrigins.includes('*') ? '*' : corsOrigins,
+      origin: corsOrigins.length === 0 ? '*' : corsOrigins,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],

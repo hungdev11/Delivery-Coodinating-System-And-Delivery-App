@@ -138,8 +138,10 @@ keycloak:
             clientRoles:
               frontend-client: [user-service]
 
-# Settings Service URL
-SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:http://localhost:21502}
+# External Services
+services:
+  settings:
+    base-url: ${SETTINGS_SERVICE_URL:http://localhost:21502}
 
 # User Service Settings
 user:

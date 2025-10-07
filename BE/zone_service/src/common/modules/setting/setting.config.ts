@@ -1,11 +1,12 @@
 import type { SettingsConfig } from './setting.model';
+import { config } from '../../config/config';
 
 /**
  * Default configuration for Settings Service
  */
 export const DEFAULT_SETTINGS_CONFIG: SettingsConfig = {
-  baseUrl: process.env.SETTINGS_SERVICE_URL || 'http://localhost:21502',
-  timeout: parseInt(process.env.SETTINGS_SERVICE_TIMEOUT || '10000'),
+  baseUrl: config.settings.serviceUrl,
+  timeout: config.settings.timeout,
   headers: {
     'User-Agent': 'ZoneService/1.0.0',
     ...(process.env.SETTINGS_SERVICE_API_KEY && {
@@ -24,11 +25,11 @@ export const SETTINGS_CONFIGS = {
   },
   staging: {
     ...DEFAULT_SETTINGS_CONFIG,
-    baseUrl: process.env.SETTINGS_SERVICE_URL || 'http://settings-service-staging:21502'
+    baseUrl: config.settings.serviceUrl || 'http://settings-service-staging:21502'
   },
   production: {
     ...DEFAULT_SETTINGS_CONFIG,
-    baseUrl: process.env.SETTINGS_SERVICE_URL || 'http://settings-service:21502',
+    baseUrl: config.settings.serviceUrl || 'http://settings-service:21502',
     timeout: 15000 // Longer timeout for production
   }
 };

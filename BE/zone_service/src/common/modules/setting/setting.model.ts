@@ -3,9 +3,11 @@
  */
 
 export enum SettingLevel {
-  SYSTEM = 'SYSTEM',
-  USER = 'USER',
-  GROUP = 'GROUP'
+  SYSTEM = 0,
+  APPLICATION = 1,
+  SERVICE = 2,
+  FEATURE = 3,
+  USER = 4
 }
 
 export enum SettingType {
@@ -148,24 +150,38 @@ export class SettingModel {
   }
 
   /**
-   * Check if setting is system level
+   * Check if setting is system level (highest priority)
    */
   isSystemLevel(): boolean {
     return this.setting.level === SettingLevel.SYSTEM;
   }
 
   /**
-   * Check if setting is user level
+   * Check if setting is application level
    */
-  isUserLevel(): boolean {
-    return this.setting.level === SettingLevel.USER;
+  isApplicationLevel(): boolean {
+    return this.setting.level === SettingLevel.APPLICATION;
   }
 
   /**
-   * Check if setting is group level
+   * Check if setting is service level
    */
-  isGroupLevel(): boolean {
-    return this.setting.level === SettingLevel.GROUP;
+  isServiceLevel(): boolean {
+    return this.setting.level === SettingLevel.SERVICE;
+  }
+
+  /**
+   * Check if setting is feature level
+   */
+  isFeatureLevel(): boolean {
+    return this.setting.level === SettingLevel.FEATURE;
+  }
+
+  /**
+   * Check if setting is user level (lowest priority)
+   */
+  isUserLevel(): boolean {
+    return this.setting.level === SettingLevel.USER;
   }
 
   /**

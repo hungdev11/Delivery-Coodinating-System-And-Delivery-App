@@ -1,4 +1,4 @@
-package com.ds.gateway.common.entities.dto.common;
+package com.ds.user.common.entities.dto.common;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

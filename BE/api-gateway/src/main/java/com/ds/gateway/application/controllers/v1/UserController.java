@@ -78,7 +78,7 @@ public class UserController {
         log.info("Create user: {}", request.getUsername());
         
         return userServiceClient.createUser(request)
-            .thenApply(user -> ResponseEntity.ok(BaseResponse.success("User created successfully", user)))
+            .thenApply(user -> ResponseEntity.ok(BaseResponse.success(user, "User created successfully")))
             .exceptionally(ex -> {
                 log.error("Failed to create user: {}", ex.getMessage());
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to create user: " + ex.getMessage()));
@@ -92,7 +92,7 @@ public class UserController {
         log.info("Update user: {}", id);
         
         return userServiceClient.updateUser(id, request)
-            .thenApply(user -> ResponseEntity.ok(BaseResponse.success("User updated successfully", user)))
+            .thenApply(user -> ResponseEntity.ok(BaseResponse.success(user, "User updated successfully")))
             .exceptionally(ex -> {
                 log.error("Failed to update user: {}", ex.getMessage());
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to update user: " + ex.getMessage()));
@@ -105,7 +105,7 @@ public class UserController {
         log.info("Delete user: {}", id);
         
         return userServiceClient.deleteUser(id)
-            .thenApply(v -> ResponseEntity.ok(BaseResponse.<Void>success("User deleted successfully", null)))
+            .thenApply(v -> ResponseEntity.ok(BaseResponse.<Void>success(null, "User deleted successfully")))
             .exceptionally(ex -> {
                 log.error("Failed to delete user: {}", ex.getMessage());
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to delete user: " + ex.getMessage()));

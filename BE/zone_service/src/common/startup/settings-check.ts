@@ -5,6 +5,7 @@
 
 import axios from 'axios';
 import { logger } from '../logger/logger.service';
+import { config } from '@config/config';
 
 const MAX_RETRIES = 10;
 const RETRY_DELAY = 10000; // 10 seconds
@@ -46,7 +47,7 @@ async function checkOnce(baseUrl: string): Promise<boolean> {
  * Check if settings service is available
  */
 export async function checkSettingsService(): Promise<boolean> {
-  const settingsUrl = process.env.SETTINGS_SERVICE_URL;
+  const settingsUrl = config.settings.serviceUrl;
 
   if (!settingsUrl) {
     logger.warn('SETTINGS_SERVICE_URL not configured, skipping health check');

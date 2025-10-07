@@ -88,7 +88,7 @@ Copy `env.local` and configure:
 
 ```env
 # Database Configuration
-DB_CONNECTION=mysql://root:root@localhost:3306/ds_zone_service
+ZONE_DB_CONNECTION=mysql://root:root@localhost:3306/ds_zone_service
 
 # Settings Service Configuration
 SETTINGS_SERVICE_URL=http://localhost:3001
@@ -412,7 +412,7 @@ ISC
 
 ### Database Connection Failed
 - Verify MySQL is running
-- Check `DB_CONNECTION` URL
+- Check `ZONE_DB_CONNECTION` URL
 - Run migrations: `npm run prisma:migrate`
 
 ### Prisma Client Not Generated

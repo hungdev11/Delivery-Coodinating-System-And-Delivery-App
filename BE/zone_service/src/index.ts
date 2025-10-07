@@ -6,6 +6,7 @@
 import 'reflect-metadata';
 import 'dotenv/config';
 import { createApp } from './app';
+import { config, validateConfig } from '@config/config';
 import { logger } from './common/logger/logger.service';
 import { prisma, PrismaClientSingleton } from './common/database/prisma.client';
 import { kafkaService } from './common/kafka/kafka.service';
@@ -23,25 +24,25 @@ export * from './modules';
  */
 async function bootstrap() {
   try {
+    // Validate configuration
+    validateConfig();
+    
     logger.info('🚀 Zone Service Starting...');
-    logger.info(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
-    logger.info(`🔌 Database: ${process.env.DB_CONNECTION ? '✓ Configured' : '✗ Not configured'}`);
+    logger.info(`📍 Environment: ${config.server.nodeEnv}`);
+    logger.info(`🔌 Database: ${config.database.url.replace(/\/\/.*@/, '//***@')}`);
 
     // Step 1: Check Settings Service availability
     logger.info('Step 1: Checking Settings Service...');
+    logger.info(`Settings Service URL: ${config.settings.serviceUrl}`);
     const settingsAvailable = await checkSettingsService();
-    if (!settingsAvailable && process.env.SETTINGS_SERVICE_URL) {
-      logger.error('Settings Service is required but not available');
-      process.exit(1);
+    if (!settingsAvailable) {
+      logger.error('Settings Service is not available. Failing fast as per policy.');
+      throw new Error('Settings Service unavailable');
     }
 
     // Step 2: Initialize default settings
-    if (settingsAvailable) {
-      logger.info('Step 2: Initializing settings...');
-      await initializeSettings();
-    } else {
-      logger.warn('Step 2: Skipping settings initialization (service not configured)');
-    }
+    logger.info('Step 2: Initializing settings...');
+    await initializeSettings();
 
     // Step 3: Test database connection
     logger.info('Step 3: Testing database connection...');
@@ -49,13 +50,13 @@ async function bootstrap() {
     logger.info('✓ Database connection successful');
 
     // Step 4: Initialize Kafka (optional, non-blocking)
-    if (process.env.KAFKA_BROKERS) {
+    if (config.kafka.brokers.length > 0) {
       logger.info('Step 4: Initializing Kafka...');
       try {
         await kafkaService.initialize({
-          brokers: process.env.KAFKA_BROKERS.split(','),
-          clientId: 'zone-service',
-          groupId: process.env.KAFKA_GROUP_ID || 'zone-service-group',
+          brokers: config.kafka.brokers,
+          clientId: config.kafka.clientId,
+          groupId: config.kafka.groupId,
         });
         logger.info('✓ Kafka initialized');
       } catch (error) {
@@ -68,13 +69,12 @@ async function bootstrap() {
     // Step 5: Create and start Express application
     logger.info('Step 5: Starting Express server...');
     const app = createApp();
-    const port = parseInt(process.env.PORT || '3003');
 
-    const server = app.listen(port, '0.0.0.0', () => {
+    const server = app.listen(config.server.port, '0.0.0.0', () => {
       logger.info(`✅ Zone Service initialized successfully`);
-      logger.info(`⚡ Server running on port ${port}`);
-      logger.info(`🔗 Health check: http://localhost:${port}/health`);
-      logger.info(`🔗 API endpoint: http://localhost:${port}/api/v1`);
+      logger.info(`⚡ Server running on port ${config.server.port}`);
+      logger.info(`🔗 Health check: http://localhost:${config.server.port}/health`);
+      logger.info(`🔗 API endpoint: http://localhost:${config.server.port}/api/v1`);
     });
 
     // Graceful shutdown handling

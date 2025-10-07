@@ -4,6 +4,7 @@
  */
 
 import { logger } from '../logger/logger.service';
+import { config } from '@config/config';
 import { createSettingService, ZONE_SETTING_KEYS, ZONE_SETTING_GROUPS } from '../modules/setting';
 import { SettingLevel, SettingType } from '../modules/setting/setting.model';
 
@@ -98,11 +99,11 @@ const DEFAULT_SETTINGS: SettingDefinition[] = [
  * Initialize settings
  */
 export async function initializeSettings(): Promise<void> {
-  const settingsUrl = process.env.SETTINGS_SERVICE_URL;
+  const settingsUrl = config.settings.serviceUrl;
 
   if (!settingsUrl) {
-    logger.warn('SETTINGS_SERVICE_URL not configured, skipping settings initialization');
-    return;
+    logger.error('SETTINGS_SERVICE_URL not configured. Failing fast as per policy.');
+    throw new Error('Missing SETTINGS_SERVICE_URL');
   }
 
   try {
@@ -113,26 +114,32 @@ export async function initializeSettings(): Promise<void> {
     let skipped = 0;
 
     for (const setting of DEFAULT_SETTINGS) {
-      try {
-        const exists = await settingsService.settingExists(setting.key);
+      const exists = await settingsService.settingExists(setting.group, setting.key);
 
-        if (!exists) {
-          await settingsService.createSetting({
-            key: setting.key,
-            group: setting.group,
-            description: setting.description,
-            type: setting.type,
-            value: setting.value,
-            level: setting.level,
-          });
+      if (!exists) {
+        try {
+          await settingsService.upsertSetting(
+            setting.group,
+            setting.key,
+            {
+              key: setting.key,
+              group: setting.group,
+              description: setting.description,
+              type: setting.type,
+              value: setting.value,
+              level: setting.level,
+            },
+            'zone-service-init'
+          );
           created++;
-          logger.info(`Setting created: ${setting.key}`);
-        } else {
-          skipped++;
-          logger.debug(`Setting already exists: ${setting.key}`);
+          logger.info(`Setting created: ${setting.group}/${setting.key}`);
+        } catch (error) {
+          logger.error(`Failed to create required setting: ${setting.group}/${setting.key}`, { error });
+          throw new Error(`Unable to create required setting ${setting.group}/${setting.key}`);
         }
-      } catch (error) {
-        logger.error(`Failed to initialize setting: ${setting.key}`, { error });
+      } else {
+        skipped++;
+        logger.debug(`Setting already exists: ${setting.group}/${setting.key}`);
       }
     }
 

@@ -3,6 +3,9 @@
  * Central export point for all common utilities, helpers, and modules
  */
 
+// Export config
+export * from './config';
+
 // Export database
 export * from './database';
 
