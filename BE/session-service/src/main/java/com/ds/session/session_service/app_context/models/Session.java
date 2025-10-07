@@ -10,6 +10,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import com.fasterxml.jackson.annotation.JsonSubTypes.Type;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -46,9 +48,8 @@ public class Session {
     private UUID id;
 
     // =====================================
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "delivery_man_id", nullable = false)
-    private DeliveryMan deliveryMan;
+    @Column(name = "delivery_man_id", nullable = false, updatable = false)
+    private String deliveryManId;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "task_id", nullable = false)

@@ -17,4 +17,11 @@ public class TaskResponse {
     private LocalDateTime completedAt;
     private int attemptCount;
     private LocalDateTime createdAt;
+
+    //Parcel info
+    private double weight;
+    private String receiverName;
+    private String receiverPhone;
+    private String deliveryLocation;
+    private String note;
 }
