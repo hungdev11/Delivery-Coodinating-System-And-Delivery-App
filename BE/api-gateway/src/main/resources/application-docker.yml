@@ -17,6 +17,8 @@ services:
     url: ${USER_SERVICE_URL:http://user-service:21501}
   settings:
     url: ${SETTINGS_SERVICE_URL:http://settings-service:21502}
+  zone:
+    url: ${ZONE_SERVICE_URL:http://zone-service:21503}
 
 # Management endpoints
 management:

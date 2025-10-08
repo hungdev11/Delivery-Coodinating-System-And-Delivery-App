@@ -1,0 +1,143 @@
+version: '3.8'
+
+services:
+  # Keycloak
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.2
+    container_name: dss-keycloak
+    restart: on-failure
+    env_file:
+      - .env
+    environment:
+      KEYCLOAK_ADMIN: dev
+      KEYCLOAK_ADMIN_PASSWORD: dev
+      KC_DB: mysql
+      KC_DB_URL: ${KEYCLOAK_DB_URL}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USERNAME:root}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:root}
+    ports:
+      - "8080:8080"
+    command: start-dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Settings Service
+  settings-service:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/Settings_service
+      dockerfile: Dockerfile
+    container_name: dss-settings-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      SETTINGS_DB_NAME: ${SETTINGS_DB_NAME}
+      SERVER_PORT: 21502
+    
+    depends_on: {}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:21502/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # User Service
+  user-service:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/User_service
+      dockerfile: Dockerfile
+    container_name: dss-user-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      USER_DB_NAME: ${USER_DB_NAME}
+      KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: master
+      KEYCLOAK_CLIENT_ID: dss-client
+      KEYCLOAK_CLIENT_SECRET: dss-secret
+      SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:http://settings-service:21502}
+      SERVER_PORT: 21501
+    
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      settings-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:21501/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Zone Service
+  zone-service:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/zone_service
+      dockerfile: Dockerfile
+    container_name: dss-zone-service
+    environment:
+      NODE_ENV: production
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      ZONE_DB_CONNECTION: ${ZONE_DB_CONNECTION}
+      SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:http://settings-service:21502}
+      PORT: 21503
+    
+    depends_on:
+      settings-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:21503/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # API Gateway
+  api-gateway:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/api-gateway
+      dockerfile: Dockerfile
+    container_name: dss-api-gateway
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:master}
+      KEYCLOAK_CLIENT_ID: dss-client
+      USER_SERVICE_URL: ${USER_SERVICE_URL:http://user-service:21501}
+      SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:http://settings-service:21502}
+      ZONE_SERVICE_URL: ${ZONE_SERVICE_URL:http://zone-service:21503}
+      SERVER_PORT: 21500
+    ports:
+      - "21500:21500"
+    depends_on:
+      user-service:
+        condition: service_healthy
+      settings-service:
+        condition: service_healthy
+      zone-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:21500/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:

@@ -96,7 +96,7 @@ SETTINGS_SERVICE_TIMEOUT=10000
 
 # Server Configuration
 NODE_ENV=development
-PORT=3003
+PORT=21503
 LOG_LEVEL=info
 
 # CORS Configuration (comma-separated origins)
@@ -128,7 +128,7 @@ npm run start:prod
 ### Base URL
 
 ```
-http://localhost:3003/api/v1
+http://localhost:21503/api/v1
 ```
 
 ### Health Check Endpoints
@@ -346,7 +346,7 @@ npm run prisma:studio
 docker build -t zone-service .
 
 # Run container
-docker run -p 3003:3003 --env-file env.local zone-service
+docker run -p 21503:21503 --env-file env.local zone-service
 ```
 
 ## 📝 Design Principles
@@ -422,7 +422,7 @@ npm run prisma:generate
 
 ### Port Already in Use
 - Change `PORT` in env.local
-- Kill process using port 3003
+- Kill process using port 21503
 
 ## 📞 Support
 
