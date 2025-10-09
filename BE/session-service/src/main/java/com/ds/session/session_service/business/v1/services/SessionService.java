@@ -91,6 +91,10 @@ public class SessionService implements ISessionService {
         return buildResponse(session.getTask(), session);
     }
 
+    /*
+     * before run this function
+     * Delivery man input new time window , system popup message if time window fully out of session time
+     */
     @Override
     public TaskSessionResponse changeTimeWindow(UUID taskId, UUID deliveryManId, LocalDateTime startTime, LocalDateTime endTime) {
         Session session = findSession(taskId, deliveryManId);
