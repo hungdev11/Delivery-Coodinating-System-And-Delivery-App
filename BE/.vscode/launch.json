@@ -1,0 +1,42 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "SessionServiceApplication",
+            "request": "launch",
+            "mainClass": "com.ds.session.session_service.SessionServiceApplication",
+            "projectName": "session-service"
+        },
+        {
+            "type": "java",
+            "name": "Current File",
+            "request": "launch",
+            "mainClass": "${file}"
+        },
+        {
+            "type": "java",
+            "name": "GatewayApplication",
+            "request": "launch",
+            "mainClass": "com.ds.gateway.GatewayApplication",
+            "projectName": "api-gateway"
+        },
+        {
+            "type": "java",
+            "name": "SettingsServiceApplication",
+            "request": "launch",
+            "mainClass": "com.ds.setting.SettingsServiceApplication",
+            "projectName": "setting"
+        },
+        {
+            "type": "java",
+            "name": "UserServiceApplication",
+            "request": "launch",
+            "mainClass": "com.ds.user.UserServiceApplication",
+            "projectName": "user"
+        }
+    ]
+}
