@@ -26,7 +26,7 @@ public class UserDto {
     private String address;
     private String identityNumber;
     private List<String> roles;
-    private Integer status;
+    private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -19,11 +19,26 @@ Base URL: `http://localhost:8080/api/v1`
 ```json
 {
   "result": {
+    "message": "Login successful",
     "access_token": "eyJhbGc...",
     "expires_in": 300,
     "refresh_expires_in": 1800,
     "refresh_token": "eyJhbGc...",
-    "token_type": "Bearer"
+    "token_type": "Bearer",
+    "user": {
+      "id": "uuid",
+      "keycloakId": "keycloak-uuid",
+      "username": "johndoe",
+      "email": "john@example.com",
+      "firstName": "John",
+      "lastName": "Doe",
+      "phone": "+84123456789",
+      "address": "123 Main St",
+      "identityNumber": "0123456789",
+      "status": "ACTIVE",
+      "createdAt": "2024-01-01T00:00:00",
+      "updatedAt": "2024-01-01T00:00:00"
+    }
   },
   "message": "Login successful"
 }

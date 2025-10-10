@@ -4,15 +4,12 @@ import com.ds.user.app_context.models.User;
 import com.ds.user.common.entities.dto.*;
 import com.ds.user.common.entities.dto.auth.SyncUserRequest;
 import com.ds.user.common.entities.dto.common.BaseResponse;
-import com.ds.user.common.entities.dto.common.PagedData;
-import com.ds.user.common.entities.dto.common.PagingRequest;
 import com.ds.user.common.interfaces.IUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -70,6 +67,18 @@ public class UserController {
                         .body(BaseResponse.error("User not found")));
     }
 
+    @GetMapping("/username/{username}")
+    @Operation(summary = "Get user by username")
+    public ResponseEntity<BaseResponse<UserDto>> getUserByUsername(@PathVariable String username) {
+        log.info("GET /api/v1/users/username/{} - Get user by username", username);
+        
+        return userService.getUserByUsername(username)
+                .map(user -> ResponseEntity.ok(BaseResponse.success(UserDto.from(user))))
+                .orElse(ResponseEntity
+                        .status(HttpStatus.NOT_FOUND)
+                        .body(BaseResponse.error("User not found")));
+    }
+
     @GetMapping
     @Operation(summary = "Get all users")
     public ResponseEntity<BaseResponse<List<UserDto>>> listUsers() {
@@ -112,18 +121,6 @@ public class UserController {
         log.info("DELETE /api/v1/users/{} - Delete user", id);
         userService.deleteUser(id);
         return ResponseEntity.ok(BaseResponse.success(null, "User deleted successfully"));
-    }
-
-    @GetMapping("/keycloak/{keycloakId}")
-    @Operation(summary = "Get user by Keycloak ID")
-    public ResponseEntity<BaseResponse<UserDto>> getUserByKeycloakId(@PathVariable String keycloakId) {
-        log.info("GET /api/v1/users/keycloak/{} - Get user by Keycloak ID", keycloakId);
-        
-        return userService.getUserByKeycloakId(keycloakId)
-                .map(user -> ResponseEntity.ok(BaseResponse.success(UserDto.from(user))))
-                .orElse(ResponseEntity
-                        .status(HttpStatus.NOT_FOUND)
-                        .body(BaseResponse.error("User not found")));
     }
 
     @PostMapping("/sync")

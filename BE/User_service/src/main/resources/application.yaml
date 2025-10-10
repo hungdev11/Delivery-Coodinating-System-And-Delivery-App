@@ -5,17 +5,21 @@ spring:
   application:
     name: user-service
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${USER_DB_NAME:ds_user_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${USER_DB_NAME:ds_user_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${JPA_DDL_AUTO:validate}
     show-sql: false
     properties:
       hibernate:
         format_sql: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
 
 # Keycloak Configuration (from env.local)
 keycloak:
@@ -68,6 +72,7 @@ keycloak:
 
           - clientId: frontend-client
             name: "Frontend User Client"
+            secret: ""  # Will be auto-generated
             publicClient: false
             serviceAccountsEnabled: false
             standardFlowEnabled: true
@@ -143,6 +148,17 @@ services:
   settings:
     base-url: ${SETTINGS_SERVICE_URL:http://localhost:21502}
 
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+
 # User Service Settings
 user:
   settings:
@@ -151,9 +167,15 @@ user:
       retry-delay-seconds: 10
 
 # Logging Configuration
+# Only log errors from frameworks/libraries, keep developer logs at INFO
 logging:
   level:
-    com.ds: INFO
-    org.springframework.web: INFO
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE 
+    root: ERROR                          # All libraries default to ERROR
+    com.ds: INFO                         # Developer logs at INFO level
+    org.springframework: ERROR           # Spring framework errors only
+    org.springframework.web: ERROR       # Spring web errors only
+    org.springframework.boot: ERROR      # Spring Boot errors only
+    org.hibernate: ERROR                 # Hibernate errors only (no SQL logging)
+    org.flywaydb: ERROR                  # Flyway errors only
+    com.zaxxer.hikari: ERROR             # HikariCP errors only
+    org.keycloak: ERROR                  # Keycloak admin client errors only 

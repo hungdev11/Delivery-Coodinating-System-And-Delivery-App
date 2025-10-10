@@ -31,7 +31,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install production dependencies only
-RUN npm ci --only=production
+RUN npm ci --production
 
 # Copy prisma schema for runtime
 COPY prisma ./prisma
@@ -44,12 +44,11 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 ENV NODE_ENV=production
 
 # Expose port
-EXPOSE 3003
+EXPOSE 21503
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "console.log('healthy')" || exit 1
 
-# Start application
-CMD ["npm", "run", "start:prod"]
-
+# Run migrations then start application (use local devDependency via npx)
+CMD sh -c "npx prisma migrate deploy && npm run start:prod"

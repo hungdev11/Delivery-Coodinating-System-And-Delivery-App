@@ -25,15 +25,37 @@ public class RealmInitializationService {
      */
     public RealmResource createOrGetRealm(Keycloak masterKeycloak, KeycloakInitConfig.RealmConfig config) {
         try {
-            // Check if realm exists
+            log.info("Checking if realm '{}' exists...", config.getName());
+            
+            // First check if realm exists by trying to get it
             RealmResource realmResource = masterKeycloak.realm(config.getName());
-            realmResource.toRepresentation();
-            log.info("Realm '{}' already exists", config.getName());
-            writeRealmSettings(config);
-            return realmResource;
-        } catch (NotFoundException e) {
-            // Realm doesn't exist, create it
-            log.info("Creating new realm: {}", config.getName());
+            
+            try {
+                // Try to get realm representation - this will throw NotFoundException if realm doesn't exist
+                realmResource.toRepresentation();
+                log.info("✓ Realm '{}' already exists - retrieving existing data", config.getName());
+                
+                // Realm exists, save settings and return
+                writeRealmSettings(config);
+                return realmResource;
+                
+            } catch (NotFoundException e) {
+                // Realm doesn't exist, create it
+                log.info("Realm '{}' does not exist - creating new realm...", config.getName());
+                return createNewRealm(masterKeycloak, config);
+            }
+            
+        } catch (Exception e) {
+            log.error("✗ Failed to check/create realm '{}': {}", config.getName(), e.getMessage(), e);
+            return null;
+        }
+    }
+    
+    /**
+     * Create a new realm
+     */
+    private RealmResource createNewRealm(Keycloak masterKeycloak, KeycloakInitConfig.RealmConfig config) {
+        try {
             RealmRepresentation realmRepresentation = new RealmRepresentation();
             realmRepresentation.setRealm(config.getName());
             realmRepresentation.setDisplayName(config.getDisplayName() != null ? config.getDisplayName() : config.getName());
@@ -44,15 +66,18 @@ public class RealmInitializationService {
             realmRepresentation.setResetPasswordAllowed(true);
             realmRepresentation.setEditUsernameAllowed(false);
 
-            try {
-                masterKeycloak.realms().create(realmRepresentation);
-                log.info("Realm '{}' created successfully", config.getName());
-                writeRealmSettings(config);
-                return masterKeycloak.realm(config.getName());
-            } catch (Exception ex) {
-                log.error("Failed to create realm '{}': {}", config.getName(), ex.getMessage(), ex);
-                return null;
-            }
+            masterKeycloak.realms().create(realmRepresentation);
+            log.info("✓ Realm '{}' created successfully", config.getName());
+            
+            // Save settings after successful creation
+            writeRealmSettings(config);
+            
+            // Return the newly created realm resource
+            return masterKeycloak.realm(config.getName());
+            
+        } catch (Exception ex) {
+            log.error("✗ Failed to create realm '{}': {}", config.getName(), ex.getMessage(), ex);
+            return null;
         }
     }
 
