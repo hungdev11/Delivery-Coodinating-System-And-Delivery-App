@@ -56,6 +56,11 @@ Base URL: `http://localhost:8081/api/v1`
 }
 ```
 
+### GET /users/username/:username
+- Description: Get user by username.
+- Response 200: Same as GET /users/:id
+- Response 404: Same as GET /users/:id
+
 ### GET /users/keycloak/:keycloakId
 - Description: Get user by Keycloak ID.
 - Response 200 same as GET /users/:id

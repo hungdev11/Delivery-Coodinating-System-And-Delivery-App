@@ -4,6 +4,7 @@ import com.ds.gateway.common.entities.dto.auth.*;
 import com.ds.gateway.common.enums.LoginType;
 import com.ds.gateway.common.exceptions.ServiceUnavailableException;
 import com.ds.gateway.common.interfaces.IKeycloakAuthService;
+import com.ds.gateway.common.interfaces.IUserServiceClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -35,6 +36,9 @@ public class KeycloakAuthService implements IKeycloakAuthService {
     @Autowired
     private SettingsClient settingsClient;
     
+    @Autowired
+    private IUserServiceClient userServiceClient;
+    
     @Value("${keycloak.backend.realm}")
     private String backendRealm;
     
@@ -45,24 +49,25 @@ public class KeycloakAuthService implements IKeycloakAuthService {
     private String defaultClientId;
     
     @Override
-    public CompletableFuture<KeycloakTokenResponseDto> login(String username, String password, String type) {
-        log.debug("Login request via Keycloak for user: {} with type: {}", username, type);
+    public CompletableFuture<LoginResponseDto> login(String username, String password, String type) {
+        log.debug("🔐 SERVICE LOGIN - Username: {}, Type: {}", username, type);
         
         // Get login type configuration
         LoginType loginType = LoginType.fromString(type);
         String targetRealm = loginType.getRealm();
         String targetClientId = loginType.getClientId();
         
-        log.debug("Using realm: {} and client: {} for login type: {}", targetRealm, targetClientId, loginType);
+        log.debug("🔐 SERVICE LOGIN - Using realm: {} and client: {} for login type: {}", targetRealm, targetClientId, loginType);
         
         return loginWithRealmAndClient(username, password, targetRealm, targetClientId);
     }
     
     /**
-     * Login with specific realm and client ID
+     * Login with specific realm and client ID and return tokens + user info
      */
-    public CompletableFuture<KeycloakTokenResponseDto> loginWithRealmAndClient(String username, String password, String realm, String clientId) {
-        log.debug("Login request via Keycloak for user: {} with realm: {} and client: {}", username, realm, clientId);
+    @Override
+    public CompletableFuture<LoginResponseDto> loginWithRealmAndClient(String username, String password, String realm, String clientId) {
+        log.debug("🔐 SERVICE LOGIN - Username: {}, Realm: {}, Client: {}", username, realm, clientId);
         
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
         formData.add("grant_type", "password");
@@ -72,6 +77,9 @@ public class KeycloakAuthService implements IKeycloakAuthService {
         String clientSecret = resolveClientSecret(clientId);
         if (clientSecret != null && !clientSecret.isBlank()) {
             formData.add("client_secret", clientSecret);
+            log.debug("🔐 SERVICE LOGIN - Using client secret for client: {}", clientId);
+        } else {
+            log.debug("🔐 SERVICE LOGIN - No client secret for client: {}", clientId);
         }
         
         return keycloakWebClient.post()
@@ -80,16 +88,39 @@ public class KeycloakAuthService implements IKeycloakAuthService {
             .bodyValue(formData)
             .retrieve()
             .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
-            .map(this::mapToTokenResponseDto)
-            .onErrorMap(ex -> new ServiceUnavailableException("Keycloak login service unavailable: " + ex.getMessage(), ex))
+            .map(tokenMap -> {
+                log.debug("🔐 SERVICE LOGIN - Keycloak token response received for user: {}", username);
+                return mapToTokenResponseDto(tokenMap);
+            })
+            .flatMap(tokenResponse -> {
+                log.debug("🔐 SERVICE LOGIN - Fetching user info from User Service for user: {}", username);
+                // Get user info from User Service after successful Keycloak login
+                return Mono.fromFuture(userServiceClient.getUserByUsername(username))
+                    .map(user -> {
+                        log.debug("🔐 SERVICE LOGIN - User info retrieved, building LoginResponseDto for user: {}", username);
+                        return LoginResponseDto.builder()
+                            .message("Login successful")
+                            .accessToken(tokenResponse.getAccessToken())
+                            .refreshToken(tokenResponse.getRefreshToken())
+                            .tokenType(tokenResponse.getTokenType())
+                            .expiresIn(tokenResponse.getExpiresIn())
+                            .user(user)
+                            .build();
+                    });
+            })
+            .onErrorMap(ex -> {
+                log.error("❌ SERVICE LOGIN - Keycloak authentication failed for user: {}, error: {}", username, ex.getMessage());
+                return new ServiceUnavailableException("Keycloak login service unavailable: " + ex.getMessage(), ex);
+            })
             .toFuture();
     }
     
     /**
      * Default login using default realm and client configuration from Settings Service
      */
-    public CompletableFuture<KeycloakTokenResponseDto> defaultLogin(String username, String password) {
-        log.debug("Default login request via Keycloak for user: {}", username);
+    @Override
+    public CompletableFuture<LoginResponseDto> defaultLogin(String username, String password) {
+        log.debug("🔐 SERVICE DEFAULT LOGIN - Username: {}", username);
         
         // Get dynamic default values from Settings Service
         String dynamicRealm = settingsClient.getDefaultRealm();
@@ -99,7 +130,7 @@ public class KeycloakAuthService implements IKeycloakAuthService {
         String targetRealm = (dynamicRealm != null) ? dynamicRealm : defaultRealm;
         String targetClientId = (dynamicClientId != null) ? dynamicClientId : defaultClientId;
         
-        log.debug("Using dynamic default realm: {} and client: {}", targetRealm, targetClientId);
+        log.debug("🔐 SERVICE DEFAULT LOGIN - Using realm: {} and client: {} for user: {}", targetRealm, targetClientId, username);
         return loginWithRealmAndClient(username, password, targetRealm, targetClientId);
     }
     

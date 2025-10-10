@@ -2,10 +2,9 @@ import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import type {
   SystemSettingDto,
   CreateSettingRequest,
-  UpdateSettingRequest,
   SettingsConfig
 } from './setting.model';
-import { SettingLevel, SettingModel } from './setting.model';
+import { SettingModel } from './setting.model';
 
 /**
  * Service class for interacting with Settings Service API

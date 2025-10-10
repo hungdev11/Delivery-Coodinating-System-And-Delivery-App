@@ -2,7 +2,7 @@
 
 ## Base URL
 ```
-http://localhost:3003/api/v1
+http://localhost:21503/api/v1
 ```
 
 ## Response Format
@@ -777,7 +777,7 @@ All error responses follow the same format:
 
 **Step 1: Create Center**
 ```bash
-curl -X POST http://localhost:3003/api/v1/centers \
+curl -X POST http://localhost:21503/api/v1/centers \
   -H "Content-Type: application/json" \
   -d '{
     "code": "CTR001",
@@ -790,7 +790,7 @@ curl -X POST http://localhost:3003/api/v1/centers \
 
 **Step 2: Create Zone for Center**
 ```bash
-curl -X POST http://localhost:3003/api/v1/zones \
+curl -X POST http://localhost:21503/api/v1/zones \
   -H "Content-Type: application/json" \
   -d '{
     "code": "ZONE001",
@@ -803,15 +803,15 @@ curl -X POST http://localhost:3003/api/v1/zones \
 
 **Search centers by name:**
 ```bash
-curl "http://localhost:3003/api/v1/centers?search=central&page=0&size=20"
+curl "http://localhost:21503/api/v1/centers?search=central&page=0&size=20"
 ```
 
 **Get zones for specific center:**
 ```bash
-curl "http://localhost:3003/api/v1/zones/center/550e8400-e29b-41d4-a716-446655440000"
+curl "http://localhost:21503/api/v1/zones/center/550e8400-e29b-41d4-a716-446655440000"
 ```
 
 **Filter zones by center with pagination:**
 ```bash
-curl "http://localhost:3003/api/v1/zones?centerId=550e8400-e29b-41d4-a716-446655440000&page=0&size=10"
+curl "http://localhost:21503/api/v1/zones?centerId=550e8400-e29b-41d4-a716-446655440000&page=0&size=10"
 ```

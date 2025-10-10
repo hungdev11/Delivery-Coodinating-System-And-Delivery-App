@@ -1,6 +1,17 @@
 /**
  * Logger Service
  * Winston-based logging service with different log levels
+ *
+ * Usage:
+ * - Use logger.info() for developer logs (business logic, important events)
+ * - Use logger.error() for errors and exceptions
+ * - Use logger.warn() for warnings
+ * - Use logger.debug() for debug information (only shown when LOG_LEVEL=debug)
+ *
+ * Configuration:
+ * - Set LOG_LEVEL=info (default) to show info, warn, and error logs
+ * - Set LOG_LEVEL=error to only show errors (suppress info/warn from application)
+ * - Third-party libraries typically don't log through Winston
  */
 
 import winston from 'winston';

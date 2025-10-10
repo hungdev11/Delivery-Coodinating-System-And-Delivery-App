@@ -50,6 +50,10 @@ All endpoints require authentication via JWT token.
 - Description: Get user by ID (requires auth).
 - Response 200: Same as GET /users/me
 
+### GET /users/username/:username
+- Description: Get user by username (requires auth).
+- Response 200: Same as GET /users/me
+
 ### POST /users
 - Description: Create user (requires ADMIN role).
 - Body:

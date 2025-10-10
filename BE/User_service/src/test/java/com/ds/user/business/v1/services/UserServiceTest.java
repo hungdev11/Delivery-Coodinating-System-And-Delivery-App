@@ -137,33 +137,4 @@ class UserServiceTest {
         verify(userRepository).findByKeycloakId(KEYCLOAK_ID);
         verify(userRepository).save(existingUser);
     }
-
-    @Test
-    void getUserByKeycloakId_shouldReturnUser_whenExists() {
-        // Given
-        when(userRepository.findByKeycloakId(KEYCLOAK_ID)).thenReturn(Optional.of(testUser));
-
-        // When
-        Optional<User> result = userService.getUserByKeycloakId(KEYCLOAK_ID);
-
-        // Then
-        assertThat(result).isPresent();
-        assertThat(result.get().getKeycloakId()).isEqualTo(KEYCLOAK_ID);
-        
-        verify(userRepository).findByKeycloakId(KEYCLOAK_ID);
-    }
-
-    @Test
-    void getUserByKeycloakId_shouldReturnEmpty_whenNotExists() {
-        // Given
-        when(userRepository.findByKeycloakId(KEYCLOAK_ID)).thenReturn(Optional.empty());
-
-        // When
-        Optional<User> result = userService.getUserByKeycloakId(KEYCLOAK_ID);
-
-        // Then
-        assertThat(result).isEmpty();
-        
-        verify(userRepository).findByKeycloakId(KEYCLOAK_ID);
-    }
 }

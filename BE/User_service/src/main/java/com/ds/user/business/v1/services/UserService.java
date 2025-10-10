@@ -60,11 +60,6 @@ public class UserService implements IUserService {
     }
 
     @Override
-    public Optional<User> getUserByKeycloakId(String keycloakId) {
-        return userRepository.findByKeycloakId(keycloakId);
-    }
-
-    @Override
     public User upsertByKeycloakId(String keycloakId, String username, String email, String firstName, String lastName) {
         Optional<User> existingOpt = userRepository.findByKeycloakId(keycloakId);
         if (existingOpt.isPresent()) {
