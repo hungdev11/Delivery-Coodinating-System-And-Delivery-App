@@ -3,13 +3,10 @@ package com.ds.session.session_service.business.v1.services;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import com.ds.session.session_service.app_context.models.Session;
 import com.ds.session.session_service.app_context.models.Task;
 import com.ds.session.session_service.app_context.repositories.SessionRepository;
@@ -114,16 +111,14 @@ public class SessionService implements ISessionService {
     @Override
     public PageResponse<TaskSessionResponse> getTasksOfDeliveryMan(UUID deliveryManId, LocalDateTime beginTime,
             LocalDateTime endTime, int page, int size, String sortBy, String direction) {
-        Pageable pageable = PageUtil.build(page, size, sortBy, direction);
+        Pageable pageable = PageUtil.build(page, size, sortBy, direction, Session.class);
 
         Page<Session> sessionPage = sessionRepository
                 .findByDeliveryManIdAndAssignedAtBetween(deliveryManId.toString(), beginTime, endTime, pageable);
 
-        List<TaskSessionResponse> result = sessionPage.getContent().stream()
-                .map(s -> buildResponse(s.getTask(), s))
-                .collect(Collectors.toList());
-
-        return PageResponse.from(PageUtil.toPage(result, pageable));
+        return PageResponse.from(sessionPage.map(
+            s -> buildResponse(s.getTask(), s))
+        );
     }
 
     @Override

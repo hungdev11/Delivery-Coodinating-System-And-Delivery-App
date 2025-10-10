@@ -12,6 +12,6 @@ public interface ITaskService {
     TaskResponse createTask(CreateTaskRequest request);
     TaskResponse updateTask(UUID taskId, UpdateTaskRequest request);
     void deleteTask(UUID id);
-    PageResponse<TaskResponse> getTasks(String keyword, int page, int size, String sortBy, String direction);
+    PageResponse<TaskResponse> getTasks(int page, int size, String sortBy, String direction);
     Optional<TaskResponse> getTask(UUID id);
 }

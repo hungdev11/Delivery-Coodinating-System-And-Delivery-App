@@ -1,10 +1,7 @@
 package com.ds.session.session_service.business.v1.services;
-
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
-
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,16 +72,13 @@ public class TaskService implements ITaskService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<TaskResponse> getTasks(String keyword, int page, int size, String sortBy, String direction) {
-        Pageable pageable = PageUtil.build(page, size, sortBy, direction);
-        List<TaskResponse> tasks = taskRepository.findAll()
-                .stream()
-                .map(task -> {
-                    ParcelMock.Parcel parcel = getParcel(task.getParcelId());
-                    return toDto(task, parcel);
-                })
-                .collect(Collectors.toList());
-        return PageResponse.from(PageUtil.toPage(tasks, pageable));
+    public PageResponse<TaskResponse> getTasks(int page, int size, String sortBy, String direction) {
+        Pageable pageable = PageUtil.build(page, size, sortBy, direction, Task.class);
+        Page<Task> tasks = taskRepository.findAll(pageable);
+
+        return PageResponse.from(tasks.map(t -> {
+            return toDto(t, getParcel(t.getParcelId()));
+        }));
     }
 
     @Override

@@ -58,13 +58,12 @@ public class SessionController {
 
     @GetMapping
     public ResponseEntity<PageResponse<TaskResponse>> getTasks(
-            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "id") String sortBy,
             @RequestParam(defaultValue = "desc") String direction
     ) {
-        PageResponse<TaskResponse> tasks = taskService.getTasks(keyword, page, size, sortBy, direction);
+        PageResponse<TaskResponse> tasks = taskService.getTasks(page, size, sortBy, direction);
         return ResponseEntity.ok(tasks);
     }
 
