@@ -39,6 +39,8 @@ export const config = {
   },
 
   // Logging Configuration
+  // Set LOG_LEVEL=error to only show errors from libraries
+  // Default 'info' level shows developer logs (logger.info, logger.warn, logger.error)
   logging: {
     level: process.env.LOG_LEVEL || 'info',
   },

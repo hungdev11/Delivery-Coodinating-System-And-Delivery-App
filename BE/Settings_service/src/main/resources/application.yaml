@@ -47,9 +47,14 @@ management:
       show-details: always
 
 # Logging Configuration
+# Only log errors from frameworks/libraries, keep developer logs at INFO
 logging:
   level:
-    com.ds: INFO
-    org.springframework.web: INFO
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE 
+    root: ERROR                          # All libraries default to ERROR
+    com.ds: INFO                         # Developer logs at INFO level
+    org.springframework: ERROR           # Spring framework errors only
+    org.springframework.web: ERROR       # Spring web errors only
+    org.springframework.boot: ERROR      # Spring Boot errors only
+    org.hibernate: ERROR                 # Hibernate errors only (no SQL logging)
+    org.flywaydb: ERROR                  # Flyway errors only
+    com.zaxxer.hikari: ERROR             # HikariCP errors only 

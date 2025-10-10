@@ -40,7 +40,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       SETTINGS_DB_NAME: ${SETTINGS_DB_NAME}
       SERVER_PORT: 21502
-    
+    ports:
+      - "21502:21502"
     depends_on: {}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21502/actuator/health"]
@@ -71,7 +72,8 @@ services:
       KEYCLOAK_CLIENT_SECRET: dss-secret
       SETTINGS_SERVICE_URL: http://settings-service:21502
       SERVER_PORT: 21501
-    
+    ports:
+      - "21501:21501"
     depends_on:
       keycloak:
         condition: service_healthy
@@ -102,7 +104,8 @@ services:
       ZONE_DB_CONNECTION: ${ZONE_DB_CONNECTION}
       SETTINGS_SERVICE_URL: http://settings-service:21502
       PORT: 21503
-    
+    ports:
+      - "21503:21503"
     depends_on:
       settings-service:
         condition: service_healthy
@@ -113,36 +116,36 @@ services:
       retries: 120
       start_period: 30s
 
-  # API Gateway
-  api-gateway:
-    restart: on-failure
-    env_file:
-      - .env
-    build:
-      context: ./BE/api-gateway
-      dockerfile: Dockerfile
-    container_name: dss-api-gateway
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
-      KEYCLOAK_REALM: master
-      KEYCLOAK_CLIENT_ID: dss-client
-      USER_SERVICE_URL: http://user-service:21501
-      SETTINGS_SERVICE_URL: http://settings-service:21502
-      ZONE_SERVICE_URL: http://zone-service:21503
-      SERVER_PORT: 21500
-    ports:
-      - "21500:21500"
-    depends_on:
-      user-service:
-        condition: service_healthy
-      settings-service:
-        condition: service_healthy
-      zone-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:21500/actuator/health"]
-      interval: 10s
-      timeout: 10s
-      retries: 120
-      start_period: 30s
+  # # API Gateway
+  # api-gateway:
+  #   restart: on-failure
+  #   env_file:
+  #     - .env
+  #   build:
+  #     context: ./BE/api-gateway
+  #     dockerfile: Dockerfile
+  #   container_name: dss-api-gateway
+  #   environment:
+  #     SPRING_PROFILES_ACTIVE: docker
+  #     KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
+  #     KEYCLOAK_REALM: master
+  #     KEYCLOAK_CLIENT_ID: dss-client
+  #     USER_SERVICE_URL: http://user-service:21501
+  #     SETTINGS_SERVICE_URL: http://settings-service:21502
+  #     ZONE_SERVICE_URL: http://zone-service:21503
+  #     SERVER_PORT: 21500
+  #   ports:
+  #     - "21500:21500"
+  #   depends_on:
+  #     user-service:
+  #       condition: service_healthy
+  #     settings-service:
+  #       condition: service_healthy
+  #     zone-service:
+  #       condition: service_healthy
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:21500/actuator/health"]
+  #     interval: 10s
+  #     timeout: 10s
+  #     retries: 120
+  #     start_period: 30s

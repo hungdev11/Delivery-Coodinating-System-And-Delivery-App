@@ -51,11 +51,16 @@ services:
     base-url: ${ZONE_SERVICE_URL:http://localhost:21503}
 
 # Logging Configuration
+# Only log errors from frameworks/libraries, keep developer logs at INFO
 logging:
   level:
-    com.ds.gateway: INFO
-    org.springframework.security: DEBUG
-    org.springframework.web: INFO
+    root: ERROR                          # All libraries default to ERROR
+    com.ds.gateway: INFO                 # Developer logs at INFO level
+    org.springframework: ERROR           # Spring framework errors only
+    org.springframework.web: ERROR       # Spring web errors only
+    org.springframework.boot: ERROR      # Spring Boot errors only
+    org.springframework.security: ERROR  # Spring Security errors only
+    org.keycloak: ERROR                  # Keycloak errors only
 
       
       

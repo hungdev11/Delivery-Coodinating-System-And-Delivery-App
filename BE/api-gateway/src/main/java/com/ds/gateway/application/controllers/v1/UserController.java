@@ -12,7 +12,6 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -47,7 +46,7 @@ public class UserController {
     }
     
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @AuthRequired({"ADMIN", "MANAGER"})
     public CompletableFuture<ResponseEntity<BaseResponse<List<UserDto>>>> listUsers() {
         log.info("List all users");
         
@@ -72,7 +71,7 @@ public class UserController {
     }
     
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @AuthRequired({"ADMIN"})
     public CompletableFuture<ResponseEntity<BaseResponse<UserDto>>> createUser(
             @Valid @RequestBody CreateUserRequestDto request) {
         log.info("Create user: {}", request.getUsername());

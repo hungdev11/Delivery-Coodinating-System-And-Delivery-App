@@ -2,6 +2,7 @@ package com.ds.gateway.application.security;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -15,6 +16,7 @@ import java.util.stream.Collectors;
 /**
  * User context holder for authenticated users from Keycloak JWT
  */
+@Slf4j
 @Data
 @Builder
 public class UserContext {
@@ -93,44 +95,70 @@ public class UserContext {
         return jwt.getClaimAsString("email");
     }
 
-    private static Set<String> extractRoles(Jwt jwt) {
+    public static Set<String> extractRoles(Jwt jwt) {
+        log.debug("🔍 EXTRACTING ROLES from JWT token");
+        log.debug("🔍 JWT claims: {}", jwt.getClaims());
+        
         try {
             // Try to extract from realm_access.roles
             Object realmAccess = jwt.getClaim("realm_access");
+            log.debug("🔍 Realm access claim: {}", realmAccess);
+            
             if (realmAccess instanceof java.util.Map) {
+                @SuppressWarnings("unchecked")
                 java.util.Map<String, Object> realmMap = (java.util.Map<String, Object>) realmAccess;
                 Object roles = realmMap.get("roles");
+                log.debug("🔍 Realm roles: {}", roles);
+                
                 if (roles instanceof Collection) {
-                    return ((Collection<?>) roles).stream()
+                    Set<String> roleSet = ((Collection<?>) roles).stream()
                         .map(Object::toString)
                         .collect(Collectors.toSet());
+                    log.debug("✅ EXTRACTED ROLES from realm_access: {}", roleSet);
+                    return roleSet;
                 }
             }
         } catch (Exception e) {
-            // Fallback to resource_access
+            log.debug("🔍 Failed to extract from realm_access: {}", e.getMessage());
         }
 
         try {
             // Try to extract from resource_access
             Object resourceAccess = jwt.getClaim("resource_access");
+            log.debug("🔍 Resource access claim: {}", resourceAccess);
+            
             if (resourceAccess instanceof java.util.Map) {
+                @SuppressWarnings("unchecked")
                 java.util.Map<String, Object> resourceMap = (java.util.Map<String, Object>) resourceAccess;
-                // Try to get roles from api-gateway client
-                Object clientRoles = resourceMap.get("api-gateway");
-                if (clientRoles instanceof java.util.Map) {
-                    java.util.Map<String, Object> clientMap = (java.util.Map<String, Object>) clientRoles;
-                    Object roles = clientMap.get("roles");
-                    if (roles instanceof Collection) {
-                        return ((Collection<?>) roles).stream()
-                            .map(Object::toString)
-                            .collect(Collectors.toSet());
+                
+                // Try multiple client IDs that might have roles
+                String[] clientIds = {"backend-client", "frontend-client", "api-gateway"};
+                for (String clientId : clientIds) {
+                    log.debug("🔍 Checking client: {}", clientId);
+                    Object clientRoles = resourceMap.get(clientId);
+                    log.debug("🔍 Client {} roles: {}", clientId, clientRoles);
+                    
+                    if (clientRoles instanceof java.util.Map) {
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, Object> clientMap = (java.util.Map<String, Object>) clientRoles;
+                        Object roles = clientMap.get("roles");
+                        log.debug("🔍 Client {} roles object: {}", clientId, roles);
+                        
+                        if (roles instanceof Collection) {
+                            Set<String> roleSet = ((Collection<?>) roles).stream()
+                                .map(Object::toString)
+                                .collect(Collectors.toSet());
+                            log.debug("✅ EXTRACTED ROLES from resource_access[{}]: {}", clientId, roleSet);
+                            return roleSet;
+                        }
                     }
                 }
             }
         } catch (Exception e) {
-            // If all else fails, return empty set
+            log.debug("🔍 Failed to extract from resource_access: {}", e.getMessage());
         }
 
+        log.debug("❌ NO ROLES FOUND in JWT token");
         return Collections.emptySet();
     }
 
@@ -150,7 +178,16 @@ public class UserContext {
     }
 
     private static String extractRealm(Jwt jwt) {
-        return jwt.getClaimAsString("iss");
+        String iss = jwt.getClaimAsString("iss");
+        if (iss != null && iss.contains("/realms/")) {
+            // Extract realm name from issuer URI
+            // Example: http://localhost:8080/realms/delivery-system -> delivery-system
+            String[] parts = iss.split("/realms/");
+            if (parts.length > 1) {
+                return parts[1];
+            }
+        }
+        return iss; // Fallback to full issuer if parsing fails
     }
 
     private static String extractClientId(Jwt jwt) {
