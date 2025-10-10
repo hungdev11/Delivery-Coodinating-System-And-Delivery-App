@@ -99,7 +99,7 @@ public class UserController {
     }
     
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @AuthRequired({"ADMIN"})
     public CompletableFuture<ResponseEntity<BaseResponse<Void>>> deleteUser(@PathVariable String id) {
         log.info("Delete user: {}", id);
         
