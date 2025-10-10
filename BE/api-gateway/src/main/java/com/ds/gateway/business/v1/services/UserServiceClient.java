@@ -109,19 +109,6 @@ public class UserServiceClient implements IUserServiceClient {
     }
     
     @Override
-    public CompletableFuture<UserDto> getUserByKeycloakId(String keycloakId) {
-        log.debug("Getting user by Keycloak ID via REST: {}", keycloakId);
-        
-        return userServiceWebClient.get()
-            .uri("/api/v1/users/keycloak/{keycloakId}", keycloakId)
-            .retrieve()
-            .bodyToMono(new ParameterizedTypeReference<BaseResponse<UserDto>>() {})
-            .map(BaseResponse::getResult)
-            .onErrorMap(ex -> new ServiceUnavailableException("User service unavailable: " + ex.getMessage(), ex))
-            .toFuture();
-    }
-    
-    @Override
     public CompletableFuture<UserDto> syncUserByKeycloakId(String keycloakId, String username, String email, 
                                                            String firstName, String lastName) {
         log.debug("Syncing user by Keycloak ID via REST: {}", keycloakId);

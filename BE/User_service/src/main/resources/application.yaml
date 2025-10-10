@@ -5,7 +5,7 @@ spring:
   application:
     name: user-service
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${USER_DB_NAME:ds_user_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${USER_DB_NAME:ds_user_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -72,6 +72,7 @@ keycloak:
 
           - clientId: frontend-client
             name: "Frontend User Client"
+            secret: ""  # Will be auto-generated
             publicClient: false
             serviceAccountsEnabled: false
             standardFlowEnabled: true
@@ -146,6 +147,17 @@ keycloak:
 services:
   settings:
     base-url: ${SETTINGS_SERVICE_URL:http://localhost:21502}
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
 
 # User Service Settings
 user:

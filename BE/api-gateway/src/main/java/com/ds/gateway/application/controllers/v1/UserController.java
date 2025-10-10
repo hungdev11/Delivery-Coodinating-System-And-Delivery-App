@@ -38,7 +38,7 @@ public class UserController {
         
         log.info("Get current user: {}", currentUser.getUserId());
         
-        return userServiceClient.getUserByKeycloakId(currentUser.getUserId())
+        return userServiceClient.getUserByUsername(currentUser.getUsername())
             .thenApply(user -> ResponseEntity.ok(BaseResponse.success(user)))
             .exceptionally(ex -> {
                 log.error("Failed to get current user: {}", ex.getMessage());

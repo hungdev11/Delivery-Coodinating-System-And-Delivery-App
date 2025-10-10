@@ -12,8 +12,8 @@
     },
 
     // Environment Settings
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "CommonJS",
+    "moduleResolution": "node",
     "target": "ESNext",
     "lib": ["ESNext"],
     "types": ["node"],
