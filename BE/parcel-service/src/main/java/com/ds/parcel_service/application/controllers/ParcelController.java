@@ -7,15 +7,23 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import com.ds.parcel_service.common.annotations.EnumValue;
 import com.ds.parcel_service.common.entities.dto.request.ParcelCreateRequest;
+import com.ds.parcel_service.common.entities.dto.request.ParcelFilterRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelUpdateRequest;
 import com.ds.parcel_service.common.entities.dto.response.PageResponse;
 import com.ds.parcel_service.common.entities.dto.response.ParcelResponse;
+import com.ds.parcel_service.common.enums.ParcelEvent;
 import com.ds.parcel_service.common.interfaces.IParcelService;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+
+
 
 @RestController
 @RequestMapping("/api/v1/parcels")
@@ -55,15 +63,22 @@ public class ParcelController {
         ParcelResponse response = parcelService.getParcelByCode(code);
         return ResponseEntity.ok(response);
     }
-
-    @GetMapping
+    
+    @GetMapping()
     public ResponseEntity<PageResponse<ParcelResponse>> getParcels(
+            // Spring tự động ánh xạ các Query Param thành đối tượng ParcelFilterRequest
+            @Valid ParcelFilterRequest filter, 
+            
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false, defaultValue = "asc") String direction) {
-        log.info("Fetching parcels page={} size={}", page, size);
-        PageResponse<ParcelResponse> response = parcelService.getParcels(page, size, sortBy, direction);
+        
+        log.info("Fetching parcels page={} size={}. Filters: {}", page, size, filter);
+        
+        // Truyền đối tượng filter đã được ánh xạ vào Service
+        PageResponse<ParcelResponse> response = parcelService.getParcels(filter, page, size, sortBy, direction);
+        
         return ResponseEntity.ok(response);
     }
 
@@ -72,5 +87,14 @@ public class ParcelController {
         log.warn("Deleting parcel id={} (not implemented)", parcelId);
         parcelService.deleteParcel(parcelId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/change-status/{parcelId}")
+    public ParcelResponse changeParcelStatus(@PathVariable String parcelId, 
+                                @RequestParam 
+                                @NotNull(message = "event must not be null")
+                                @EnumValue(name = "event", enumClass = ParcelEvent.class, message = "event must be a valid enum value") String event
+    ) {
+        return parcelService.changeParcelStatus(UUID.fromString(parcelId), ParcelEvent.valueOf(event));
     }
 }

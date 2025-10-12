@@ -3,6 +3,7 @@ package com.ds.parcel_service.app_context.models;
 import java.math.BigDecimal;
 import java.sql.Types;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.UUID;
 
 import org.hibernate.annotations.JdbcTypeCode;
@@ -16,6 +17,8 @@ import com.ds.parcel_service.common.enums.ParcelStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -48,6 +51,7 @@ public class Parcel {
     private String receiverId;
     
     @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
     private DeliveryType deliveryType;
 
     @Column(nullable = false)
@@ -56,14 +60,12 @@ public class Parcel {
     @Column(nullable = false)
     private String sendTo;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ParcelStatus status;
 
     @Column(nullable = false)
     private double weight;
-
-    // @Column(nullable = false)
-    // private int[] dimension;
 
     @Column(nullable = false)
     private BigDecimal value;
@@ -75,4 +77,8 @@ public class Parcel {
     @LastModifiedDate
     @Column(nullable = false)
     private LocalDateTime updatedAt;
+
+    private LocalDateTime deliveredAt;
+    private LocalTime windowStart;
+    private LocalTime windowEnd;
 }

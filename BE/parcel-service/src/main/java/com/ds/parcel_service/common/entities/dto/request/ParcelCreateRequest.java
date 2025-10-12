@@ -1,6 +1,8 @@
 package com.ds.parcel_service.common.entities.dto.request;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
+
 import com.ds.parcel_service.common.annotations.EnumValue;
 import com.ds.parcel_service.common.enums.DeliveryType;
 
@@ -40,4 +42,7 @@ public class ParcelCreateRequest {
     @NotNull(message = "value must not be null")
     @DecimalMin(value = "0.0", inclusive = true, message = "value must be greater than or equal to 0")
     private BigDecimal value;
+
+    private LocalTime windowStart;
+    private LocalTime windowEnd;
 }

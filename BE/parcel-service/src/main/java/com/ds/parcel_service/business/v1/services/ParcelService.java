@@ -1,23 +1,35 @@
 package com.ds.parcel_service.business.v1.services;
 
-
+import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import com.ds.parcel_service.app_context.models.Parcel;
 import com.ds.parcel_service.app_context.repositories.ParcelRepository;
 import com.ds.parcel_service.common.entities.dto.request.ParcelCreateRequest;
+import com.ds.parcel_service.common.entities.dto.request.ParcelFilterRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelUpdateRequest;
 import com.ds.parcel_service.common.entities.dto.response.PageResponse;
 import com.ds.parcel_service.common.entities.dto.response.ParcelResponse;
 import com.ds.parcel_service.common.enums.DeliveryType;
+import com.ds.parcel_service.common.enums.ParcelEvent;
 import com.ds.parcel_service.common.enums.ParcelStatus;
 import com.ds.parcel_service.common.exceptions.ResourceNotFound;
 import com.ds.parcel_service.common.interfaces.IParcelService;
+import com.ds.parcel_service.common.parcelstates.DeliveredState;
+import com.ds.parcel_service.common.parcelstates.FailedState;
+import com.ds.parcel_service.common.parcelstates.IParcelState;
+import com.ds.parcel_service.common.parcelstates.InWarehouseState;
+import com.ds.parcel_service.common.parcelstates.OnRouteState;
+import com.ds.parcel_service.common.parcelstates.SuccessedState;
 import com.ds.parcel_service.common.utils.PageUtil;
+import com.ds.parcel_service.common.utils.ParcelSpecification;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,11 +40,66 @@ public class ParcelService implements IParcelService{
 
     private final ParcelRepository parcelRepository;
 
+    private final Map<ParcelStatus, IParcelState> stateMap = Map.of(
+        ParcelStatus.IN_WAREHOUSE, new InWarehouseState(),
+        ParcelStatus.ON_ROUTE, new OnRouteState(),
+        ParcelStatus.DELIVERED, new DeliveredState(),
+        ParcelStatus.FAILED, new FailedState(),
+        ParcelStatus.SUCCESSED, new SuccessedState()
+    );
+
+    //Validate state transition path
+    private boolean isTransitionValid(ParcelStatus current, ParcelStatus next) {
+        return switch (current) {
+            case IN_WAREHOUSE -> next == ParcelStatus.ON_ROUTE;
+            case ON_ROUTE -> next == ParcelStatus.DELIVERED || next == ParcelStatus.FAILED || next == ParcelStatus.IN_WAREHOUSE;
+            case DELIVERED -> next == ParcelStatus.SUCCESSED || next == ParcelStatus.FAILED;
+            case FAILED, SUCCESSED -> false; // Last state
+            default -> false;
+        };
+    }
+
+    @Transactional
+    private Parcel processTransition(UUID parcelId, ParcelEvent event) {
+        Parcel parcel = parcelRepository.findById(parcelId)
+            .orElseThrow(() -> new ResourceNotFound("Parcel not found"));
+
+        ParcelStatus currentStatus = parcel.getStatus();
+                
+        IParcelState currentStateObject = stateMap.get(currentStatus);
+        if (currentStateObject == null) {
+            log.error("Missing state handler for status: {}", currentStatus);
+            throw new IllegalStateException("Missing state handler for current status.");
+        }
+        
+        ParcelStatus nextStatus = currentStateObject.handleTransition(event);
+
+        if (currentStatus.equals(nextStatus)) {
+            log.info("Parcel {} state remains {}. Event processed: {}", parcelId, currentStatus, event);
+            return parcel; 
+        }
+
+        if (!isTransitionValid(parcel.getStatus(), nextStatus)) {
+            throw new IllegalStateException("Invalid state transition from " 
+                                            + parcel.getStatus() + " to " + nextStatus);
+        }
+
+        // mark delivered for background job works
+        if (nextStatus == ParcelStatus.DELIVERED) {
+            parcel.setDeliveredAt(LocalDateTime.now());
+        }
+        
+        parcel.setStatus(nextStatus);
+        return parcelRepository.save(parcel);
+    }
+
+    @Override
+    public ParcelResponse changeParcelStatus(UUID parcelId, ParcelEvent event) {
+        return toDto(processTransition(parcelId, event));
+    }
+
     @Override
     public ParcelResponse createParcel(ParcelCreateRequest request) {
-        /* 
-         * tạo parcel, lấy address trong parcel tạo destination
-        */
         validateUniqueCode(request.getCode());
         Parcel parcel = Parcel.builder()
                             .code(request.getCode())
@@ -41,14 +108,14 @@ public class ParcelService implements IParcelService{
                             .receiverId(request.getReceiverId())
                             .receiveFrom(request.getReceiveFrom())
                             .sendTo(request.getSendTo())
-                            .status(ParcelStatus.IN_WAREHOUSE)
+                            .status(ParcelStatus.IN_WAREHOUSE) 
                             .weight(request.getWeight())
                             .value(request.getValue())
+                            .windowStart(request.getWindowStart())
+                            .windowEnd(request.getWindowEnd())
                             .build();
 
-        // Call zone service create or get destination
-        // create parcel destination properly
-        // get receiver info (phone number)
+        // [Logic: Call zone service, create destination, get receiver info...]
 
         Parcel savedParcel = parcelRepository.save(parcel);
         return toDto(savedParcel);
@@ -59,6 +126,11 @@ public class ParcelService implements IParcelService{
         Parcel parcel = parcelRepository.findById(parcelId).orElseThrow(() -> {
             return new ResourceNotFound("Parcel not found");
         });
+        
+        if (parcel.getStatus() != ParcelStatus.IN_WAREHOUSE) {
+             throw new IllegalStateException("Cannot update parcel data after it leaves the warehouse.");
+        }
+        
         parcel.setWeight(request.getWeight());
         parcel.setValue(request.getValue());
         return toDto(parcelRepository.save(parcel));
@@ -66,8 +138,8 @@ public class ParcelService implements IParcelService{
 
     @Override
     public void deleteParcel(UUID parcelId) {
-        //haven't seen usecase to use
-        throw new UnsupportedOperationException("Unimplemented method 'deleteParcel'");
+        // [Logic: Thêm kiểm tra trạng thái trước khi cho phép xóa]
+        return;
     }
 
     @Override
@@ -77,20 +149,27 @@ public class ParcelService implements IParcelService{
 
     @Override
     public ParcelResponse getParcelByCode(String code) {
-        return toDto(parcelRepository.findByCode(code).orElseThrow(() -> new RuntimeException("Parcel with code already exists")));
+        return toDto(parcelRepository.findByCode(code).orElseThrow(() -> new ResourceNotFound("Parcel with code not found")));
     }
 
     @Override
-    public PageResponse<ParcelResponse> getParcels(int page, int size, String sortBy,
-            String direction) {
+    public PageResponse<ParcelResponse> getParcels(
+        ParcelFilterRequest filter, 
+        int page, 
+        int size, 
+        String sortBy,
+        String direction
+    )  {
         Pageable pageable = PageUtil.build(page, size, sortBy, direction, Parcel.class);
-        Page<Parcel> parcels = parcelRepository.findAll(pageable);
+        Specification<Parcel> spec = ParcelSpecification.buildeSpecification(filter);
+        Page<Parcel> parcels = parcelRepository.findAll(spec, pageable);
         return PageResponse.from(parcels.map(this::toDto));
     }
 
     private ParcelResponse toDto(Parcel parcel) {
-        //get phone number here
+        // [Logic: get phone number here]
         return ParcelResponse.builder()
+                            .id(parcel.getId().toString())
                             .code(parcel.getCode())
                             .deliveryType(parcel.getDeliveryType())
                             .senderId(parcel.getSenderId())
@@ -102,12 +181,15 @@ public class ParcelService implements IParcelService{
                             .status(parcel.getStatus())
                             .createdAt(parcel.getCreatedAt())
                             .updatedAt(parcel.getUpdatedAt())
+                            .deliveredAt(parcel.getDeliveredAt())
+                            .windowStart(parcel.getWindowStart())
+                            .windowEnd(parcel.getWindowEnd())
                             .build();
     }
 
     private void validateUniqueCode(String code) {
         if (parcelRepository.existsByCode(code)) {
-            throw new RuntimeException("Parcel with code already exists");
+            throw new IllegalStateException("Parcel with code already exists");
         }
     }
 
@@ -117,7 +199,6 @@ public class ParcelService implements IParcelService{
         });
     }
 
-    //update status
     //update address
     // parcel staticstic
 }
