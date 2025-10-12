@@ -12,19 +12,19 @@ import java.util.concurrent.CompletableFuture;
 public interface IKeycloakAuthService {
     
     /**
-     * Login user with username/password and return tokens
+     * Login user with username/password and return tokens + user info
      */
-    CompletableFuture<KeycloakTokenResponseDto> login(String username, String password, String type);
+    CompletableFuture<LoginResponseDto> login(String username, String password, String type);
     
     /**
-     * Login with specific realm and client ID
+     * Login with specific realm and client ID and return tokens + user info
      */
-    CompletableFuture<KeycloakTokenResponseDto> loginWithRealmAndClient(String username, String password, String realm, String clientId);
+    CompletableFuture<LoginResponseDto> loginWithRealmAndClient(String username, String password, String realm, String clientId);
     
     /**
-     * Default login using default realm and client configuration
+     * Default login using default realm and client configuration and return tokens + user info
      */
-    CompletableFuture<KeycloakTokenResponseDto> defaultLogin(String username, String password);
+    CompletableFuture<LoginResponseDto> defaultLogin(String username, String password);
     
     /**
      * Validate JWT token and extract user information

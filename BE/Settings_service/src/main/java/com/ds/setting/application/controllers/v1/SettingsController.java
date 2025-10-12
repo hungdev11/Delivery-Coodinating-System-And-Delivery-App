@@ -1,16 +1,14 @@
 package com.ds.setting.application.controllers.v1;
 
-import com.ds.setting.app_context.models.SystemSetting.SettingLevel;
 import com.ds.setting.business.v1.services.SettingsService;
 import com.ds.setting.common.entities.dto.CreateSettingRequest;
 import com.ds.setting.common.entities.dto.SystemSettingDto;
-import com.ds.setting.common.entities.dto.UpdateSettingRequest;
+import com.ds.setting.common.entities.dto.common.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,6 +16,7 @@ import java.util.List;
 
 /**
  * REST API Controller for Settings Management
+ * Settings are always identified by group/key pair
  */
 @Slf4j
 @RestController
@@ -28,114 +27,53 @@ public class SettingsController {
 
     private final SettingsService settingsService;
 
-    @GetMapping
-    @Operation(summary = "Get all settings")
-    public ResponseEntity<List<SystemSettingDto>> getAllSettings() {
-        log.info("GET /api/v1/settings - Get all settings");
-        return ResponseEntity.ok(settingsService.getAllSettings());
+    @GetMapping("/{group}")
+    @Operation(summary = "Get all settings by group (service identifier)")
+    public ResponseEntity<BaseResponse<List<SystemSettingDto>>> getSettingsByGroup(@PathVariable String group) {
+        log.info("GET /api/v1/settings/{} - Get settings by group", group);
+        List<SystemSettingDto> settings = settingsService.getByGroup(group);
+        return ResponseEntity.ok(BaseResponse.success(settings));
     }
 
-    @GetMapping("/{key}")
-    @Operation(summary = "Get setting by key")
-    public ResponseEntity<SystemSettingDto> getSettingByKey(@PathVariable String key) {
-        log.info("GET /api/v1/settings/{} - Get setting by key", key);
-        return ResponseEntity.ok(settingsService.getByKey(key));
-    }
-
-    @GetMapping("/{key}/value")
-    @Operation(summary = "Get setting value by key")
-    public ResponseEntity<String> getSettingValue(@PathVariable String key) {
-        log.info("GET /api/v1/settings/{}/value - Get setting value", key);
-        return ResponseEntity.ok(settingsService.getValue(key));
-    }
-
-    @GetMapping("/group/{group}")
-    @Operation(summary = "Get settings by group")
-    public ResponseEntity<List<SystemSettingDto>> getSettingsByGroup(@PathVariable String group) {
-        log.info("GET /api/v1/settings/group/{} - Get settings by group", group);
-        return ResponseEntity.ok(settingsService.getByGroup(group));
-    }
-
-    @GetMapping("/group/{group}/key/{key}")
-    @Operation(summary = "Get setting by key and group")
-    public ResponseEntity<SystemSettingDto> getSettingByKeyAndGroup(
+    @GetMapping("/{group}/{key}")
+    @Operation(summary = "Get setting by group and key pair")
+    public ResponseEntity<BaseResponse<SystemSettingDto>> getSetting(
             @PathVariable String group,
             @PathVariable String key) {
-        log.info("GET /api/v1/settings/group/{}/key/{} - Get setting by key and group", group, key);
-        return ResponseEntity.ok(settingsService.getByKeyAndGroup(key, group));
+        log.info("GET /api/v1/settings/{}/{} - Get setting by group/key", group, key);
+        SystemSettingDto setting = settingsService.getByKeyAndGroup(key, group);
+        return ResponseEntity.ok(BaseResponse.success(setting));
     }
 
-    @GetMapping("/group/{group}/key/{key}/value")
-    @Operation(summary = "Get setting value by key and group")
-    public ResponseEntity<String> getSettingValueByKeyAndGroup(
+    @GetMapping("/{group}/{key}/value")
+    @Operation(summary = "Get setting value only by group and key pair")
+    public ResponseEntity<BaseResponse<String>> getSettingValue(
             @PathVariable String group,
             @PathVariable String key) {
-        log.info("GET /api/v1/settings/group/{}/key/{}/value - Get setting value by key and group", group, key);
-        return ResponseEntity.ok(settingsService.getValueByKeyAndGroup(key, group));
+        log.info("GET /api/v1/settings/{}/{}/value - Get setting value", group, key);
+        String value = settingsService.getValueByKeyAndGroup(key, group);
+        return ResponseEntity.ok(BaseResponse.success(value));
     }
 
-    @GetMapping("/level/{level}")
-    @Operation(summary = "Get settings by level")
-    public ResponseEntity<List<SystemSettingDto>> getSettingsByLevel(@PathVariable SettingLevel level) {
-        log.info("GET /api/v1/settings/level/{} - Get settings by level", level);
-        return ResponseEntity.ok(settingsService.getByLevel(level));
-    }
-
-
-    @GetMapping("/search")
-    @Operation(summary = "Search settings")
-    public ResponseEntity<List<SystemSettingDto>> searchSettings(@RequestParam String q) {
-        log.info("GET /api/v1/settings/search?q={} - Search settings", q);
-        return ResponseEntity.ok(settingsService.searchSettings(q));
-    }
-
-    @PostMapping
-    @Operation(summary = "Create a new setting")
-    public ResponseEntity<SystemSettingDto> createSetting(@Valid @RequestBody CreateSettingRequest request) {
-        log.info("POST /api/v1/settings - Create setting: key={}", request.getKey());
-        SystemSettingDto created = settingsService.createSetting(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
-    }
-
-    @PutMapping("/{key}")
-    @Operation(summary = "Update a setting")
-    public ResponseEntity<SystemSettingDto> updateSetting(
-            @PathVariable String key,
-            @Valid @RequestBody UpdateSettingRequest request,
-            @RequestHeader(value = "X-User-Id", required = false, defaultValue = "system") String userId) {
-        log.info("PUT /api/v1/settings/{} - Update setting by: {}", key, userId);
-        SystemSettingDto updated = settingsService.updateSetting(key, request, userId);
-        return ResponseEntity.ok(updated);
-    }
-
-    @PutMapping("/group/{group}/key/{key}")
-    @Operation(summary = "Update a setting by key and group")
-    public ResponseEntity<SystemSettingDto> updateSettingByKeyAndGroup(
+    @PutMapping("/{group}/{key}")
+    @Operation(summary = "Upsert (create or update) a setting by group/key pair")
+    public ResponseEntity<BaseResponse<SystemSettingDto>> upsertSetting(
             @PathVariable String group,
             @PathVariable String key,
-            @Valid @RequestBody UpdateSettingRequest request,
+            @Valid @RequestBody CreateSettingRequest request,
             @RequestHeader(value = "X-User-Id", required = false, defaultValue = "system") String userId) {
-        log.info("PUT /api/v1/settings/group/{}/key/{} - Update setting by: {}", group, key, userId);
-        SystemSettingDto updated = settingsService.updateByKeyAndGroup(key, group, request, userId);
-        return ResponseEntity.ok(updated);
+        log.info("PUT /api/v1/settings/{}/{} - Upsert setting by: {}", group, key, userId);
+        SystemSettingDto result = settingsService.upsertByKeyAndGroup(key, group, request, userId);
+        return ResponseEntity.ok(BaseResponse.success(result, "Setting saved successfully"));
     }
 
-    @PutMapping("/group/{group}/key/{key}/upsert")
-    @Operation(summary = "Create or update a setting by key and group")
-    public ResponseEntity<SystemSettingDto> createOrUpdateSetting(
+    @DeleteMapping("/{group}/{key}")
+    @Operation(summary = "Delete a setting by group/key pair")
+    public ResponseEntity<BaseResponse<Void>> deleteSetting(
             @PathVariable String group,
-            @PathVariable String key,
-            @Valid @RequestBody CreateSettingRequest request) {
-        log.info("PUT /api/v1/settings/group/{}/key/{}/upsert - Create or update setting", group, key);
-        SystemSettingDto result = settingsService.createOrUpdateByKeyAndGroup(key, group, request);
-        return ResponseEntity.ok(result);
-    }
-
-    @DeleteMapping("/{key}")
-    @Operation(summary = "Delete a setting")
-    public ResponseEntity<Void> deleteSetting(@PathVariable String key) {
-        log.info("DELETE /api/v1/settings/{} - Delete setting", key);
-        settingsService.deleteSetting(key);
-        return ResponseEntity.noContent().build();
+            @PathVariable String key) {
+        log.info("DELETE /api/v1/settings/{}/{} - Delete setting", group, key);
+        settingsService.deleteByKeyAndGroup(key, group);
+        return ResponseEntity.ok(BaseResponse.success(null, "Setting deleted successfully"));
     }
 }

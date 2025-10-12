@@ -11,12 +11,12 @@ import org.springframework.web.reactive.function.client.WebClient;
  */
 @Configuration
 public class WebClientConfig {
-    
+
     @Bean
     public RestTemplate restTemplate() {
         return new RestTemplate();
     }
-    
+
     @Bean("userServiceWebClient")
     public WebClient userServiceWebClient(
             @Value("${services.user.base-url}") String baseUrl) {
@@ -24,7 +24,7 @@ public class WebClientConfig {
                 .baseUrl(baseUrl)
                 .build();
     }
-    
+
     @Bean("keycloakWebClient")
     public WebClient keycloakWebClient(
             @Value("${keycloak.auth-server-url}") String keycloakUrl) {
@@ -32,10 +32,18 @@ public class WebClientConfig {
                 .baseUrl(keycloakUrl)
                 .build();
     }
-    
+
     @Bean("settingsServiceWebClient")
     public WebClient settingsServiceWebClient(
             @Value("${services.settings.base-url}") String baseUrl) {
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .build();
+    }
+
+    @Bean("zoneServiceWebClient")
+    public WebClient zoneServiceWebClient(
+            @Value("${services.zone.base-url}") String baseUrl) {
         return WebClient.builder()
                 .baseUrl(baseUrl)
                 .build();

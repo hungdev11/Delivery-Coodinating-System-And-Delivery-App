@@ -152,11 +152,12 @@ public class SettingsService {
     }
 
     /**
-     * Create or update a setting by key and group
+     * Upsert (Create or Update) a setting by key and group
+     * This is the main API for settings modification
      */
     @Transactional
     @CacheEvict(value = {"settings", "settingsByGroup"}, allEntries = true)
-    public SystemSettingDto createOrUpdateByKeyAndGroup(String key, String group, CreateSettingRequest request) {
+    public SystemSettingDto upsertByKeyAndGroup(String key, String group, CreateSettingRequest request, String userId) {
         return settingRepository.findByKeyAndGroup(key, group)
                 .map(existing -> {
                     // Update existing setting
@@ -169,11 +170,16 @@ public class SettingsService {
                     if (request.getValue() != null) {
                         existing.setValue(request.getValue());
                     }
+                    if (request.getLevel() != null) {
+                        existing.setLevel(request.getLevel());
+                    }
                     if (request.getDisplayMode() != null) {
                         existing.setDisplayMode(request.getDisplayMode());
                     }
+                    existing.setUpdatedBy(userId);
+                    
                     SystemSetting updated = settingRepository.save(existing);
-                    log.info("Updated setting: key={}, group={}", key, group);
+                    log.info("Updated setting: key={}, group={}, updatedBy={}", key, group, userId);
                     return toDto(updated);
                 })
                 .orElseGet(() -> {
@@ -185,11 +191,12 @@ public class SettingsService {
                             .type(request.getType())
                             .value(request.getValue())
                             .level(request.getLevel())
-                            .isReadOnly(request.getIsReadOnly())
-                            .displayMode(request.getDisplayMode())
+                            .isReadOnly(request.getIsReadOnly() != null ? request.getIsReadOnly() : false)
+                            .displayMode(request.getDisplayMode() != null ? request.getDisplayMode() : SystemSetting.DisplayMode.TEXT)
+                            .updatedBy(userId)
                             .build();
                     SystemSetting saved = settingRepository.save(setting);
-                    log.info("Created setting: key={}, group={}", key, group);
+                    log.info("Created setting: key={}, group={}, createdBy={}", key, group, userId);
                     return toDto(saved);
                 });
     }
@@ -264,16 +271,17 @@ public class SettingsService {
     }
 
     /**
-     * Delete a setting
+     * Delete a setting by key and group
      */
     @Transactional
     @CacheEvict(value = {"settings", "settingsByGroup"}, allEntries = true)
-    public void deleteSetting(String key) {
-        SystemSetting setting = settingRepository.findById(key)
-                .orElseThrow(() -> new SettingNotFoundException("Setting not found: " + key));
+    public void deleteByKeyAndGroup(String key, String group) {
+        SystemSetting setting = settingRepository.findByKeyAndGroup(key, group)
+                .orElseThrow(() -> new SettingNotFoundException(
+                        String.format("Setting not found: key=%s, group=%s", key, group)));
 
         settingRepository.delete(setting);
-        log.info("Deleted setting: key={}", key);
+        log.info("Deleted setting: key={}, group={}", key, group);
     }
 
     /**

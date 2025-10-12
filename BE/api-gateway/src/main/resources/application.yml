@@ -40,25 +40,27 @@ keycloak:
     realm: ${KEYCLOAK_DEFAULT_REALM:delivery-system}
     client-id: ${KEYCLOAK_DEFAULT_CLIENT_ID:frontend-client}
 
-# Microservices Configuration
-# Domain-based URLs for Docker support, can override via env
+# External Services Configuration
+# Default to localhost for local development, override via env for Docker
 services:
   user:
-    base-url: ${USER_SERVICE_URL:http://user-service:8080}
+    base-url: ${USER_SERVICE_URL:http://localhost:21501}
   settings:
-    base-url: ${SETTINGS_SERVICE_URL:http://settings-service:8080}
-  # Uncomment and add other services as needed
-  # order:
-  #   base-url: ${ORDER_SERVICE_URL:http://order-service:8080}
-  # delivery:
-  #   base-url: ${DELIVERY_SERVICE_URL:http://delivery-service:8080}
+    base-url: ${SETTINGS_SERVICE_URL:http://localhost:21502}
+  zone:
+    base-url: ${ZONE_SERVICE_URL:http://localhost:21503}
 
 # Logging Configuration
+# Only log errors from frameworks/libraries, keep developer logs at INFO
 logging:
   level:
-    com.ds.gateway: INFO
-    org.springframework.security: DEBUG
-    org.springframework.web: INFO
+    root: ERROR                          # All libraries default to ERROR
+    com.ds.gateway: INFO                 # Developer logs at INFO level
+    org.springframework: ERROR           # Spring framework errors only
+    org.springframework.web: ERROR       # Spring web errors only
+    org.springframework.boot: ERROR      # Spring Boot errors only
+    org.springframework.security: ERROR  # Spring Security errors only
+    org.keycloak: ERROR                  # Keycloak errors only
 
       
       

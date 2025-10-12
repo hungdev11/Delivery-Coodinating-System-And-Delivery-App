@@ -1,0 +1,9 @@
+model working_places {
+  working_places_id String    @id @default(uuid())
+  delivery_man_id   String
+  start_at          DateTime
+  end_at            DateTime?
+
+  zone_id String
+  zones   zones  @relation(fields: [zone_id], references: [zone_id])
+}

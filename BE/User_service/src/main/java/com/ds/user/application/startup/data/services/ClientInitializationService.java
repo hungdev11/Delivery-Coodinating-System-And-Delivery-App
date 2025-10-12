@@ -23,32 +23,48 @@ public class ClientInitializationService {
     private final ISettingsWriterService settingsWriterService;
 
     /**
-     * Create client with its roles
+     * Create or get existing client with its roles
      */
     public void createClient(RealmResource realmResource, KeycloakInitConfig.ClientConfig clientConfig) {
-        log.info("Creating client: {}", clientConfig.getClientId());
+        log.info("Processing client: {}", clientConfig.getClientId());
 
         try {
             // Check if client exists
+            log.debug("Checking if client '{}' exists...", clientConfig.getClientId());
             Optional<ClientRepresentation> existingClient = realmResource.clients()
                     .findByClientId(clientConfig.getClientId())
                     .stream()
                     .findFirst();
 
             if (existingClient.isPresent()) {
-                log.info("Client '{}' already exists", clientConfig.getClientId());
+                log.info("✓ Client '{}' already exists - retrieving existing data", clientConfig.getClientId());
+                
+                // Client exists, save settings and create roles
                 writeClientSettings(realmResource, existingClient.get());
-                // Log secret info for existing client
+                
                 if (!clientConfig.isPublicClient()) {
-                    log.info("Client '{}' is confidential; secret should be managed in Keycloak and Settings Service (not in config)", clientConfig.getClientId());
+                    log.info("Client '{}' is confidential; secret managed in Keycloak and Settings Service", clientConfig.getClientId());
                 }
                 
-                // Create client roles
+                // Create/update client roles
                 roleInitializationService.createClientRoles(realmResource, existingClient.get().getId(), clientConfig.getRoles());
                 return;
             }
 
-            // Create new client
+            // Client doesn't exist, create it
+            log.info("Client '{}' does not exist - creating new client...", clientConfig.getClientId());
+            createNewClient(realmResource, clientConfig);
+
+        } catch (Exception e) {
+            log.error("✗ Error processing client '{}': {}", clientConfig.getClientId(), e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Create a new client
+     */
+    private void createNewClient(RealmResource realmResource, KeycloakInitConfig.ClientConfig clientConfig) {
+        try {
             ClientRepresentation clientRepresentation = new ClientRepresentation();
             clientRepresentation.setClientId(clientConfig.getClientId());
             clientRepresentation.setName(clientConfig.getName());
@@ -59,11 +75,16 @@ public class ClientInitializationService {
             clientRepresentation.setDirectAccessGrantsEnabled(clientConfig.isDirectAccessGrantsEnabled());
             clientRepresentation.setRedirectUris(clientConfig.getRedirectUris());
             clientRepresentation.setWebOrigins(clientConfig.getWebOrigins());
+            
+            // Set client secret if provided (will be auto-generated if empty)
+            if (clientConfig.getSecret() != null && !clientConfig.getSecret().isBlank()) {
+                clientRepresentation.setSecret(clientConfig.getSecret());
+            }
 
             Response response = realmResource.clients().create(clientRepresentation);
             
             if (response.getStatus() == 201) {
-                log.info("Client '{}' created successfully", clientConfig.getClientId());
+                log.info("✓ Client '{}' created successfully", clientConfig.getClientId());
                 
                 // Get created client ID
                 String clientId = extractIdFromLocationHeader(response);
@@ -72,14 +93,16 @@ public class ClientInitializationService {
                     ClientRepresentation created = realmResource.clients().get(clientId).toRepresentation();
                     writeClientSettings(realmResource, created);
                     roleInitializationService.createClientRoles(realmResource, clientId, clientConfig.getRoles());
+                } else {
+                    log.error("✗ Failed to extract client ID from response for '{}'", clientConfig.getClientId());
                 }
             } else {
-                log.error("Failed to create client '{}'. Status: {}", clientConfig.getClientId(), response.getStatus());
+                log.error("✗ Failed to create client '{}'. Status: {}", clientConfig.getClientId(), response.getStatus());
             }
             response.close();
 
         } catch (Exception e) {
-            log.error("Error creating client '{}': {}", clientConfig.getClientId(), e.getMessage(), e);
+            log.error("✗ Failed to create client '{}': {}", clientConfig.getClientId(), e.getMessage(), e);
         }
     }
 
@@ -124,30 +147,78 @@ public class ClientInitializationService {
                 "TEXT"
         );
         
+        // Save default realm and client configuration
+        settingsWriterService.createSetting(
+                "KEYCLOAK_DEFAULT_REALM",
+                "keycloak",
+                "Default Keycloak realm for authentication",
+                "STRING",
+                realmName,
+                "SYSTEM",
+                true,
+                "TEXT"
+        );
+        
+        settingsWriterService.createSetting(
+                "KEYCLOAK_DEFAULT_CLIENT_ID",
+                "keycloak",
+                "Default Keycloak client ID for authentication",
+                "STRING",
+                client.getClientId(),
+                "SYSTEM",
+                true,
+                "TEXT"
+        );
+        
         // Get and save client secret for confidential clients
         if (Boolean.FALSE.equals(client.isPublicClient())) {
             try {
+                log.debug("  Processing confidential client '{}' - attempting to get/generate secret", client.getClientId());
+                
                 // Get the actual client secret from Keycloak
                 org.keycloak.representations.idm.CredentialRepresentation secret = 
                     realmResource.clients().get(client.getId()).getSecret();
                 
-                if (secret != null && secret.getValue() != null) {
+                String secretValue = null;
+                
+                if (secret != null && secret.getValue() != null && !secret.getValue().trim().isEmpty()) {
+                    secretValue = secret.getValue();
+                    log.debug("  ✓ Retrieved existing secret for client '{}'", client.getClientId());
+                } else {
+                    log.warn("  ⚠ Client '{}' is confidential but no valid secret was found. Generating new secret...", client.getClientId());
+                    
+                    // Generate a new secret for the client
+                    org.keycloak.representations.idm.CredentialRepresentation newSecret = 
+                        realmResource.clients().get(client.getId()).generateNewSecret();
+                    
+                    if (newSecret != null && newSecret.getValue() != null && !newSecret.getValue().trim().isEmpty()) {
+                        secretValue = newSecret.getValue();
+                        log.debug("  ✓ Generated new secret for client '{}'", client.getClientId());
+                    } else {
+                        log.error("  ✗ Failed to generate valid secret for client '{}'", client.getClientId());
+                    }
+                }
+                
+                // Save the secret to Settings Service if we have a valid value
+                if (secretValue != null && !secretValue.trim().isEmpty()) {
                     settingsWriterService.createSetting(
                             "KEYCLOAK_CLIENT_" + clientKey + "_SECRET",
                             "keycloak",
                             "Client secret for " + client.getName(),
                             "STRING",
-                            secret.getValue(),
+                            secretValue,
                             "SYSTEM",
                             true,
                             "PASSWORD"
                     );
-                    log.info("  ✓ Saved client secret for '{}' to Settings Service", client.getClientId());
+                    log.info("  ✓ Saved client secret for '{}' to Settings Service (length: {})", 
+                        client.getClientId(), secretValue.length());
                 } else {
-                    log.warn("  ⚠ Client '{}' is confidential but no secret was found", client.getClientId());
+                    log.error("  ✗ Cannot save secret for client '{}' - value is empty or null", client.getClientId());
                 }
+                
             } catch (Exception e) {
-                log.error("  ✗ Failed to retrieve/save secret for client '{}': {}", 
+                log.error("  ✗ Failed to retrieve/generate/save secret for client '{}': {}", 
                     client.getClientId(), e.getMessage(), e);
             }
         }

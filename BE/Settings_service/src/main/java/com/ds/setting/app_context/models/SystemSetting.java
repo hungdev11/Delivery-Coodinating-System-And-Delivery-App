@@ -2,12 +2,10 @@ package com.ds.setting.app_context.models;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.JdbcTypeCode;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.sql.Types;
 import java.time.LocalDateTime;
 
 /**
@@ -44,8 +42,8 @@ public class SystemSetting {
     @Column(name = "setting_value", columnDefinition = "TEXT")
     private String value;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "level", length = 20, nullable = false)
+    @Enumerated(EnumType.ORDINAL)
+    @Column(name = "level", nullable = false)
     private SettingLevel level;
 
     @Column(name = "is_read_only", nullable = false)
@@ -81,13 +79,24 @@ public class SystemSetting {
     /**
      * Setting Level Enum
      * Định nghĩa mức độ quan trọng/phạm vi của setting
+     * Sử dụng ORDINAL (số) để lưu trong database
      */
     public enum SettingLevel {
-        SYSTEM,      // System-wide settings (highest priority)
-        APPLICATION, // Application-level settings
-        SERVICE,     // Service-specific settings
-        FEATURE,     // Feature-specific settings
-        USER         // User-level settings (lowest priority)
+        SYSTEM(0),      // System-wide settings (highest priority)
+        APPLICATION(1), // Application-level settings
+        SERVICE(2),     // Service-specific settings
+        FEATURE(3),     // Feature-specific settings
+        USER(4);        // User-level settings (lowest priority)
+        
+        private final int value;
+        
+        SettingLevel(int value) {
+            this.value = value;
+        }
+        
+        public int getValue() {
+            return value;
+        }
     }
 
     /**

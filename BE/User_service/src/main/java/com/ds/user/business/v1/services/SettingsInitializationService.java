@@ -162,7 +162,7 @@ public class SettingsInitializationService implements ISettingsInitializationSer
 
     private boolean isSettingsAlreadyInitialized() {
         try {
-            String url = settingsServiceUrl + "/api/v1/settings/group/keycloak";
+            String url = settingsServiceUrl + "/api/v1/settings/keycloak";
             List<?> response = restTemplate.getForObject(url, List.class);
             return response != null && !response.isEmpty();
         } catch (Exception e) {
@@ -206,10 +206,10 @@ public class SettingsInitializationService implements ISettingsInitializationSer
                 createSetting("KEYCLOAK_CLIENT_" + clientKey + "_ID", "keycloak", "Client ID for " + clientConfig.getName(),
                         "STRING", clientConfig.getClientId(), "SYSTEM", true, "TEXT");
 
-                if (!clientConfig.isPublicClient() && clientConfig.getSecret() != null) {
-                    createSetting("KEYCLOAK_CLIENT_" + clientKey + "_SECRET", "keycloak",
-                            "Client secret for " + clientConfig.getName(), "STRING", clientConfig.getSecret(),
-                            "SYSTEM", true, "PASSWORD");
+                // Skip creating secret setting here - it will be handled by ClientInitializationService
+                // after the client is created and we can retrieve/generate the actual secret from Keycloak
+                if (!clientConfig.isPublicClient()) {
+                    log.debug("Confidential client '{}' detected - secret will be generated during client creation", clientConfig.getClientId());
                 }
             }
         }
@@ -219,20 +219,28 @@ public class SettingsInitializationService implements ISettingsInitializationSer
     public void createSetting(String key, String group, String description,
                               String type, String value, String level, boolean isReadOnly, String displayMode) {
         try {
-            // Use upsert endpoint with key+group
-            String url = settingsServiceUrl + "/api/v1/settings/group/" + group + "/key/" + key + "/upsert";
+            // Validate that value is not null or empty
+            if (value == null || value.trim().isEmpty()) {
+                log.warn("  Skipping creation of '{}' in group '{}' - value is null or empty", key, group);
+                return;
+            }
+            
+            // Use new upsert endpoint: PUT /{group}/{key}
+            String url = settingsServiceUrl + "/api/v1/settings/" + group + "/" + key;
             Map<String, Object> request = new HashMap<>();
             request.put("key", key);
             request.put("group", group);
             request.put("description", description);
             request.put("type", type);
-            request.put("value", value);
-            request.put("level", level);
+            request.put("value", value.trim()); // Trim whitespace
+            // Convert level from string to integer (ORDINAL)
+            request.put("level", convertLevelToOrdinal(level));
             request.put("isReadOnly", isReadOnly);
             request.put("displayMode", displayMode);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-User-Id", "user-service-init");
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
             restTemplate.put(url, entity);
             log.info("  ✓ Created/Updated: {} in group {}", key, group);
@@ -240,11 +248,26 @@ public class SettingsInitializationService implements ISettingsInitializationSer
             log.warn("  Failed to create/update '{}' in group '{}': {}", key, group, e.getMessage());
         }
     }
+    
+    /**
+     * Convert level string to ordinal integer
+     * SYSTEM(0), APPLICATION(1), SERVICE(2), FEATURE(3), USER(4)
+     */
+    private int convertLevelToOrdinal(String level) {
+        switch (level.toUpperCase()) {
+            case "SYSTEM": return 0;
+            case "APPLICATION": return 1;
+            case "SERVICE": return 2;
+            case "FEATURE": return 3;
+            case "USER": return 4;
+            default: return 0; // Default to SYSTEM
+        }
+    }
 
     @Override
     public Optional<String> getSettingValue(String key, String group) {
         try {
-            String url = settingsServiceUrl + "/api/v1/settings/group/" + group + "/key/" + key + "/value";
+            String url = settingsServiceUrl + "/api/v1/settings/" + group + "/" + key + "/value";
             String value = restTemplate.getForObject(url, String.class);
             return Optional.ofNullable(value);
         } catch (Exception e) {
@@ -261,7 +284,7 @@ public class SettingsInitializationService implements ISettingsInitializationSer
     @Override
     public boolean settingExists(String key, String group) {
         try {
-            String url = settingsServiceUrl + "/api/v1/settings/group/" + group + "/key/" + key;
+            String url = settingsServiceUrl + "/api/v1/settings/" + group + "/" + key;
             restTemplate.getForObject(url, Object.class);
             return true;
         } catch (Exception e) {
