@@ -49,6 +49,8 @@ services:
     base-url: ${SETTINGS_SERVICE_URL:http://localhost:21502}
   session:
     base-url: ${SESSION_SERVICE_URL:http://localhost:21505}
+  parcel:
+    base-url: ${PARCEL_SERVICE_URL:http://localhost:21506}
   # Uncomment and add other services as needed
   # order:
   #   base-url: ${ORDER_SERVICE_URL:http://order-service:8080}
