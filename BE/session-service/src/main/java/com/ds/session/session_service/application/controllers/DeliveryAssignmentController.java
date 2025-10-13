@@ -18,8 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.request.UpdateTaskRequest;
 import com.ds.session.session_service.common.entities.dto.response.PageResponse;
-
-import com.ds.session.session_service.common.interfaces.ITaskService;
+import com.ds.session.session_service.common.interfaces.IDeliveryAssignmentService;
 import com.ds.session.session_service.common.utils.Utility;
 
 import lombok.RequiredArgsConstructor;
@@ -27,7 +26,9 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/v1/tasks")
 @RequiredArgsConstructor
-public class SessionController {
+public class DeliveryAssignmentController {
+
+    private final IDeliveryAssignmentService sessionService;
 
     // @PostMapping("/{taskId}/accept")
     // public ResponseEntity<Void> acceptTask(@PathVariable String taskId,

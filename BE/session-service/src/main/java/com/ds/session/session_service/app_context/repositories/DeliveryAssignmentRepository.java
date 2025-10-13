@@ -9,14 +9,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import com.ds.session.session_service.app_context.models.Session;
+import com.ds.session.session_service.app_context.models.DeliveryAssignment;
 
 @Repository
-public interface SessionRepository extends JpaRepository<Session, UUID>{
+public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssignment, UUID>{
 
-    Optional<Session> findByTask_IdAndDeliveryManId(UUID taskId, String deliveryManId);
+    Optional<DeliveryAssignment> findByTask_IdAndDeliveryManId(UUID taskId, String deliveryManId);
 
-    Page<Session> findByDeliveryManIdAndAssignedAtBetween(String deliveryManId, LocalDateTime beginTime,
+    Page<DeliveryAssignment> findByDeliveryManIdAndAssignedAtBetween(String deliveryManId, LocalDateTime beginTime,
             LocalDateTime endTime, Pageable pageable);
 
 }
