@@ -29,7 +29,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
+    @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
         log.error("Illegal argument: {}", ex.getMessage());
         ErrorResponse error = ErrorResponse.builder()
