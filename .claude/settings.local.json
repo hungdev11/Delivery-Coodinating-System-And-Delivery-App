@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mv /mnt/e/graduate/DS/BE/zone_service/README.md /mnt/e/graduate/DS/BE/zone_service/README.old.md)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

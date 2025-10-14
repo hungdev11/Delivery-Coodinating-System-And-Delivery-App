@@ -1,426 +1,692 @@
 # Routing API Documentation
 
+**Complete routing API reference with examples and integration guides**
+
+---
+
 ## Base URL
+
 ```
-http://localhost:3000/api/v1/routing
+http://localhost:21503/api/v1/routing
 ```
 
-## Endpoints
+---
 
-### 1. Calculate Route
+## Table of Contents
 
-Calculate optimal route between multiple waypoints with turn-by-turn navigation.
+1. [Calculate Route](#1-calculate-route)
+2. [Multi-Stop Route](#2-multi-stop-route)
+3. [Get OSRM Status](#3-get-osrm-status)
+4. [Response Reference](#response-reference)
+5. [Integration Examples](#integration-examples)
+6. [Testing](#testing)
 
-**Endpoint:** `POST /routing/route`
+---
 
-**Request Body:**
+## 1. Calculate Route
+
+Calculate optimal route between waypoints using OSRM with traffic-aware weights.
+
+### Endpoint
+
+```
+POST /api/v1/routing/route
+```
+
+### Request Body
+
 ```json
 {
   "waypoints": [
-    { "lat": 10.8505, "lon": 106.7717 },
-    { "lat": 10.8231, "lon": 106.6297 }
+    { "lat": 10.8505, "lon": 106.7718 },
+    { "lat": 10.8623, "lon": 106.8032 }
   ],
-  "alternatives": false,
-  "steps": true,
-  "annotations": true
+  "options": {
+    "alternatives": false,
+    "steps": true,
+    "overview": "full"
+  }
 }
 ```
 
-**Parameters:**
-- `waypoints` (required): Array of coordinate objects
-  - `lat` (number): Latitude
-  - `lon` (number): Longitude
-- `alternatives` (optional, boolean): Return alternative routes
-- `steps` (optional, boolean): Include turn-by-turn steps (default: true)
-- `annotations` (optional, boolean): Include traffic and POI data (default: true)
+### Parameters
 
-**Response:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `waypoints` | `Coordinate[]` | ✅ | Array of 2-25 waypoints |
+| `waypoints[].lat` | `number` | ✅ | Latitude (10.7-11.0 for Thu Duc) |
+| `waypoints[].lon` | `number` | ✅ | Longitude (106.6-106.9 for Thu Duc) |
+| `options.alternatives` | `boolean` | ❌ | Return alternative routes (default: false) |
+| `options.steps` | `boolean` | ❌ | Include turn-by-turn navigation (default: true) |
+| `options.overview` | `string` | ❌ | Geometry detail: `full`, `simplified`, `false` (default: `full`) |
+
+### Response (Success)
+
 ```json
 {
-  "success": true,
-  "data": {
-    "code": "Ok",
-    "routes": [{
-      "distance": 15420,
-      "duration": 1250,
-      "geometry": "{...}",
-      "legs": [{
-        "distance": 15420,
-        "duration": 1250,
-        "steps": [{
-          "distance": 250,
-          "duration": 45,
-          "instruction": "Turn right onto Xa Lộ Hà Nội",
-          "name": "Xa Lộ Hà Nội",
-          "maneuver": {
-            "type": "turn",
-            "modifier": "right",
-            "location": [106.7717, 10.8505]
-          },
-          "addresses": ["PTIT", "Học viện Công nghệ Bưu chính Viễn thông"],
-          "trafficLevel": "NORMAL"
-        }]
-      }],
-      "trafficSummary": {
-        "averageSpeed": 35.5,
-        "congestionLevel": "NORMAL",
-        "estimatedDelay": 120
-      }
+  "code": "Ok",
+  "routes": [{
+    "distance": 6400.5,
+    "duration": 510.2,
+    "weight": 548.7,
+    "geometry": {
+      "type": "LineString",
+      "coordinates": [[106.7718, 10.8505], [106.8032, 10.8623]]
+    },
+    "legs": [{
+      "distance": 6400.5,
+      "duration": 510.2,
+      "steps": [{
+        "distance": 250,
+        "duration": 45,
+        "instruction": "Head east on Phạm Văn Đồng",
+        "name": "Phạm Văn Đồng",
+        "maneuver": {
+          "type": "depart",
+          "location": [106.7718, 10.8505]
+        }
+      }, {
+        "distance": 1200,
+        "duration": 120,
+        "instruction": "Turn right onto Xa Lộ Hà Nội",
+        "name": "Xa Lộ Hà Nội",
+        "maneuver": {
+          "type": "turn",
+          "modifier": "right",
+          "location": [106.7750, 10.8510]
+        }
+      }]
     }]
-  }
-}
-```
-
-**Example:**
-```bash
-curl -X POST http://localhost:3000/api/v1/routing/route \
-  -H "Content-Type: application/json" \
-  -d '{
-    "waypoints": [
-      {"lat": 10.8505, "lon": 106.7717},
-      {"lat": 10.8231, "lon": 106.6297}
-    ]
-  }'
-```
-
----
-
-### 2. Priority-Based Route (Delivery)
-
-Calculate multi-stop route optimized by delivery priority. Higher priority stops are visited first.
-
-**Endpoint:** `POST /routing/priority-route`
-
-**Request Body:**
-```json
-{
+  }],
   "waypoints": [
-    { "lat": 10.8505, "lon": 106.7717 },
-    { "lat": 10.8400, "lon": 106.7600 },
-    { "lat": 10.8231, "lon": 106.6297 }
-  ],
-  "priorities": [3, 1]
+    { "location": [106.7718, 10.8505], "name": "Phạm Văn Đồng" },
+    { "location": [106.8032, 10.8623], "name": "Man Thiện" }
+  ]
 }
 ```
 
-**Parameters:**
-- `waypoints` (required): Array of coordinate objects
-- `priorities` (required): Array of priority values for each segment
-  - Length must be `waypoints.length - 1`
-  - Higher number = higher priority
+### Response Fields
 
-**Use Case:**
-- Delivery driver has 3 stops
-- Stop 2 has priority 3 (urgent)
-- Stop 3 has priority 1 (normal)
-- System calculates: Start → Stop 2 (urgent) → Stop 3 (normal)
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | `string` | `Ok` or error code |
+| `routes` | `Route[]` | Array of routes (1 or more if alternatives requested) |
+| `routes[].distance` | `number` | Total distance in meters |
+| `routes[].duration` | `number` | Total duration in seconds |
+| `routes[].weight` | `number` | Total routing cost (includes traffic) |
+| `routes[].geometry` | `object` | GeoJSON LineString geometry |
+| `routes[].legs` | `Leg[]` | Route segments between waypoints |
+| `waypoints` | `Waypoint[]` | Snapped waypoint locations |
 
-**Response:**
-Same format as `/route` endpoint.
+### Error Responses
 
-**Example:**
-```bash
-curl -X POST http://localhost:3000/api/v1/routing/priority-route \
-  -H "Content-Type: application/json" \
-  -d '{
-    "waypoints": [
-      {"lat": 10.8505, "lon": 106.7717},
-      {"lat": 10.8400, "lon": 106.7600},
-      {"lat": 10.8231, "lon": 106.6297}
-    ],
-    "priorities": [3, 1]
-  }'
-```
+#### 400 Bad Request - Invalid Waypoints
 
----
-
-### 3. Simple Route (Quick Query)
-
-Get route between two points using query parameters. Simplified version for quick lookups.
-
-**Endpoint:** `GET /routing/simple`
-
-**Query Parameters:**
-- `fromLat` (required): Starting latitude
-- `fromLon` (required): Starting longitude
-- `toLat` (required): Destination latitude
-- `toLon` (required): Destination longitude
-
-**Example:**
-```bash
-curl "http://localhost:3000/api/v1/routing/simple?fromLat=10.8505&fromLon=106.7717&toLat=10.8231&toLon=106.6297"
-```
-
-**Response:**
-Same format as POST `/route` endpoint.
-
----
-
-### 4. Get OSRM Status
-
-Check the status of OSRM instances (dual-instance setup for zero-downtime updates).
-
-**Endpoint:** `GET /routing/status`
-
-**Response:**
 ```json
 {
-  "success": true,
-  "data": {
-    "activeInstance": 1,
-    "instance1Healthy": true,
-    "instance2Healthy": true,
-    "instance1Url": "http://osrm-instance-1:5000",
-    "instance2Url": "http://osrm-instance-2:5000"
-  }
-}
-```
-
-**Response Fields:**
-- `activeInstance` (number): Currently active instance (1 or 2)
-- `instance1Healthy` (boolean): Health status of instance 1
-- `instance2Healthy` (boolean): Health status of instance 2
-- `instance1Url` (string): URL of instance 1
-- `instance2Url` (string): URL of instance 2
-
-**Example:**
-```bash
-curl "http://localhost:3000/api/v1/routing/status"
-```
-
----
-
-### 5. Switch OSRM Instance (Admin)
-
-Switch the active OSRM instance. Used for zero-downtime updates when weights change.
-
-**Endpoint:** `POST /routing/switch-instance`
-
-**Request Body:**
-```json
-{
-  "instance": 2
-}
-```
-
-**Parameters:**
-- `instance` (required): Target instance number (1 or 2)
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "message": "Switched to instance 2"
-  }
-}
-```
-
-**Usage Pattern:**
-1. Instance 1 is active, serving traffic
-2. Rebuild instance 2 with updated weights
-3. Verify instance 2 is healthy via `/status`
-4. Call `/switch-instance` with `instance: 2`
-5. Traffic now uses instance 2
-6. Instance 1 becomes standby for next update
-
-**Example:**
-```bash
-curl -X POST http://localhost:3000/api/v1/routing/switch-instance \
-  -H "Content-Type: application/json" \
-  -d '{"instance": 2}'
-```
-
----
-
-## Dual Instance Architecture
-
-The system uses **two OSRM instances** for zero-downtime weight updates:
-
-```
-┌─────────────┐
-│   Routing   │
-│   Service   │
-└──────┬──────┘
-       │
-  ┌────┴─────┐
-  │  Router  │ (Selects active instance)
-  └────┬─────┘
-       │
-  ┌────┴──────────────┐
-  │                   │
-┌─▼────────┐   ┌──────▼──┐
-│ OSRM-1   │   │ OSRM-2  │
-│ (Active) │   │(Standby)│
-└──────────┘   └─────────┘
-```
-
-**Benefits:**
-- Updates weights without service interruption
-- Failover if one instance fails
-- A/B testing of different routing profiles
-
-**Weight Update Flow:**
-1. Traffic data updated every 15-60 minutes
-2. When significant weight changes detected:
-   - Rebuild standby instance with new weights
-   - Switch to standby instance
-   - Old instance becomes new standby
-
----
-
-## Response Fields
-
-### Route Object
-- `distance` (number): Total distance in meters
-- `duration` (number): Total duration in seconds
-- `geometry` (string): Encoded route geometry (GeoJSON)
-- `legs` (array): Array of route legs
-- `trafficSummary` (object): Traffic information
-
-### Step Object
-- `distance` (number): Step distance in meters
-- `duration` (number): Step duration in seconds
-- `instruction` (string): Human-readable instruction
-- `name` (string): Road/street name
-- `maneuver` (object): Turn maneuver details
-- `addresses` (array): POIs along this step
-- `trafficLevel` (string): Current traffic level
-
-### Traffic Levels
-- `FREE_FLOW`: Thông thoáng (green)
-- `NORMAL`: Bình thường (yellow)
-- `SLOW`: Chậm (orange)
-- `CONGESTED`: Ùn tắc (red)
-- `BLOCKED`: Tắc nghẽn hoàn toàn (dark red)
-
-### Maneuver Types
-- `turn`: Standard turn
-- `depart`: Start of route
-- `arrive`: End of route
-- `merge`: Merge onto road
-- `on-ramp`: Highway entrance
-- `off-ramp`: Highway exit
-- `fork`: Road splits
-- `roundabout`: Roundabout
-- `continue`: Continue straight
-
-### Maneuver Modifiers
-- `left`: Turn left
-- `right`: Turn right
-- `slight-left`: Bear left
-- `slight-right`: Bear right
-- `sharp-left`: Sharp left turn
-- `sharp-right`: Sharp right turn
-- `straight`: Go straight
-
----
-
-## Error Responses
-
-### 400 Bad Request
-```json
-{
-  "success": false,
+  "code": "InvalidInput",
   "message": "At least 2 waypoints are required"
 }
 ```
 
-### 500 Internal Server Error
+#### 400 Bad Request - Out of Bounds
+
 ```json
 {
-  "success": false,
-  "message": "Failed to calculate route",
-  "error": "OSRM query failed"
+  "code": "InvalidInput",
+  "message": "Coordinates must be within Thu Duc area (lat: 10.7-11.0, lon: 106.6-106.9)"
 }
 ```
 
-### 503 Service Unavailable
+#### 200 OK - No Route Found
+
 ```json
 {
-  "success": false,
-  "message": "OSRM service unavailable"
+  "code": "NoRoute",
+  "message": "No route found between waypoints"
 }
 ```
+
+**Note:** OSRM returns 200 with `code: "NoRoute"` when no route exists (not 404).
+
+### Examples
+
+#### Example 1: Simple Route
+
+**Request:**
+
+```bash
+curl -X POST http://localhost:21503/api/v1/routing/route \
+  -H "Content-Type: application/json" \
+  -d '{
+    "waypoints": [
+      {"lat": 10.8505, "lon": 106.7718},
+      {"lat": 10.8623, "lon": 106.8032}
+    ]
+  }'
+```
+
+**Response Summary:**
+- Distance: 6.4 km
+- Duration: 8.5 minutes
+- Route: Phạm Văn Đồng → Xa Lộ Hà Nội → Man Thiện
+
+#### Example 2: Route with Steps
+
+```bash
+curl -X POST http://localhost:21503/api/v1/routing/route \
+  -H "Content-Type: application/json" \
+  -d '{
+    "waypoints": [
+      {"lat": 10.8505, "lon": 106.7718},
+      {"lat": 10.8623, "lon": 106.8032}
+    ],
+    "options": {
+      "steps": true,
+      "overview": "full"
+    }
+  }'
+```
+
+#### Example 3: Multiple Waypoints (Delivery Route)
+
+```bash
+curl -X POST http://localhost:21503/api/v1/routing/route \
+  -H "Content-Type: application/json" \
+  -d '{
+    "waypoints": [
+      {"lat": 10.8505, "lon": 106.7718},
+      {"lat": 10.8550, "lon": 106.7800},
+      {"lat": 10.8600, "lon": 106.7900},
+      {"lat": 10.8623, "lon": 106.8032}
+    ]
+  }'
+```
+
+**Use Case:** Delivery driver with 3 stops
+
+---
+
+## 2. Multi-Stop Route
+
+**COMING SOON** - Optimized multi-stop routing with priority support.
+
+Calculate route with multiple delivery stops, optimized by priority or distance.
+
+### Endpoint (Planned)
+
+```
+POST /api/v1/routing/multi-route
+```
+
+### Request Body (Planned)
+
+```json
+{
+  "waypoints": [
+    { "lat": 10.8505, "lon": 106.7718, "priority": 1 },
+    { "lat": 10.8550, "lon": 106.7800, "priority": 3 },
+    { "lat": 10.8600, "lon": 106.7900, "priority": 2 }
+  ],
+  "optimize": "priority"
+}
+```
+
+### Parameters (Planned)
+
+- `waypoints[].priority`: Delivery priority (1-10, higher = more urgent)
+- `optimize`: `priority` (visit by urgency) or `distance` (shortest total distance)
+
+---
+
+## 3. Get OSRM Status
+
+Check health and active instance of dual OSRM setup.
+
+### Endpoint
+
+```
+GET /api/v1/routing/osrm-status
+```
+
+### Response
+
+```json
+{
+  "activeInstance": 1,
+  "instances": {
+    "instance1": {
+      "url": "http://localhost:5000",
+      "healthy": true,
+      "lastCheck": "2025-01-15T10:30:00.000Z"
+    },
+    "instance2": {
+      "url": "http://localhost:5001",
+      "healthy": true,
+      "lastCheck": "2025-01-15T10:30:00.000Z"
+    }
+  },
+  "totalRequests": 15234,
+  "successRate": 99.8
+}
+```
+
+### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `activeInstance` | `number` | Currently active instance (1 or 2) |
+| `instances.instance1.healthy` | `boolean` | Health status of instance 1 |
+| `instances.instance2.healthy` | `boolean` | Health status of instance 2 |
+| `totalRequests` | `number` | Total routing requests since startup |
+| `successRate` | `number` | Success rate percentage |
+
+### Example
+
+```bash
+curl http://localhost:21503/api/v1/routing/osrm-status
+```
+
+---
+
+## Response Reference
+
+### Route Object
+
+```typescript
+interface Route {
+  distance: number        // Total distance (meters)
+  duration: number        // Total duration (seconds)
+  weight: number          // Routing cost (includes traffic weights)
+  geometry: GeoJSON       // Route geometry
+  legs: Leg[]             // Route legs between waypoints
+}
+```
+
+### Leg Object
+
+```typescript
+interface Leg {
+  distance: number        // Leg distance (meters)
+  duration: number        // Leg duration (seconds)
+  steps: Step[]           // Turn-by-turn steps
+  summary: string         // Human-readable summary
+}
+```
+
+### Step Object
+
+```typescript
+interface Step {
+  distance: number              // Step distance (meters)
+  duration: number              // Step duration (seconds)
+  instruction: string           // Human-readable instruction
+  name: string                  // Road/street name
+  maneuver: Maneuver           // Turn maneuver details
+  geometry: GeoJSON            // Step geometry
+}
+```
+
+### Maneuver Object
+
+```typescript
+interface Maneuver {
+  type: ManeuverType           // Type of maneuver
+  modifier?: ManeuverModifier  // Turn modifier
+  location: [number, number]   // [lon, lat] of maneuver
+  bearing_before?: number      // Bearing before turn (degrees)
+  bearing_after?: number       // Bearing after turn (degrees)
+}
+```
+
+### Maneuver Types
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `turn` | Standard turn | Turn right onto Xa Lộ Hà Nội |
+| `depart` | Start of route | Head east on Phạm Văn Đồng |
+| `arrive` | End of route | You have arrived |
+| `merge` | Merge onto road | Merge onto highway |
+| `on ramp` | Highway entrance | Take ramp onto expressway |
+| `off ramp` | Highway exit | Exit expressway |
+| `fork` | Road splits | Keep left at fork |
+| `roundabout` | Roundabout | Take 2nd exit at roundabout |
+| `continue` | Continue straight | Continue on current road |
+
+### Maneuver Modifiers
+
+| Modifier | Description |
+|----------|-------------|
+| `left` | Turn left |
+| `right` | Turn right |
+| `slight left` | Bear left |
+| `slight right` | Bear right |
+| `sharp left` | Sharp left turn |
+| `sharp right` | Sharp right turn |
+| `straight` | Go straight |
+| `uturn` | U-turn |
 
 ---
 
 ## Integration Examples
 
-### JavaScript/TypeScript
-```typescript
-const response = await fetch('http://localhost:3000/api/v1/routing/route', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    waypoints: [
-      { lat: 10.8505, lon: 106.7717 },
-      { lat: 10.8231, lon: 106.6297 }
-    ]
-  })
-});
+### JavaScript / TypeScript
 
-const data = await response.json();
-if (data.success) {
-  const route = data.data.routes[0];
-  console.log(`Distance: ${route.distance}m`);
-  console.log(`Duration: ${route.duration}s`);
+```typescript
+interface Waypoint {
+  lat: number
+  lon: number
 }
+
+interface RoutingResponse {
+  code: string
+  routes: Route[]
+  waypoints: Waypoint[]
+}
+
+async function getRoute(
+  waypoints: Waypoint[]
+): Promise<RoutingResponse> {
+  const response = await fetch(
+    'http://localhost:21503/api/v1/routing/route',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ waypoints })
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(`Routing failed: ${response.statusText}`)
+  }
+
+  const data = await response.json()
+
+  if (data.code !== 'Ok') {
+    throw new Error(`No route found: ${data.message}`)
+  }
+
+  return data
+}
+
+// Usage
+const waypoints = [
+  { lat: 10.8505, lon: 106.7718 },
+  { lat: 10.8623, lon: 106.8032 }
+]
+
+const result = await getRoute(waypoints)
+const route = result.routes[0]
+
+console.log(`Distance: ${(route.distance / 1000).toFixed(2)} km`)
+console.log(`Duration: ${(route.duration / 60).toFixed(1)} min`)
+console.log(`Steps: ${route.legs[0].steps.length}`)
 ```
 
 ### Python
+
 ```python
 import requests
+from typing import List, Dict
 
-response = requests.post(
-    'http://localhost:3000/api/v1/routing/route',
-    json={
-        'waypoints': [
-            {'lat': 10.8505, 'lon': 106.7717},
-            {'lat': 10.8231, 'lon': 106.6297}
-        ]
-    }
-)
+def get_route(waypoints: List[Dict[str, float]]) -> Dict:
+    """
+    Get route from Zone Service
 
-data = response.json()
-if data['success']:
-    route = data['data']['routes'][0]
-    print(f"Distance: {route['distance']}m")
-    print(f"Duration: {route['duration']}s")
+    Args:
+        waypoints: List of {"lat": float, "lon": float}
+
+    Returns:
+        Route data dict
+    """
+    url = 'http://localhost:21503/api/v1/routing/route'
+
+    response = requests.post(url, json={'waypoints': waypoints})
+    response.raise_for_status()
+
+    data = response.json()
+
+    if data['code'] != 'Ok':
+        raise Exception(f"No route found: {data.get('message')}")
+
+    return data
+
+# Usage
+waypoints = [
+    {'lat': 10.8505, 'lon': 106.7718},
+    {'lat': 10.8623, 'lon': 106.8032}
+]
+
+result = get_route(waypoints)
+route = result['routes'][0]
+
+print(f"Distance: {route['distance'] / 1000:.2f} km")
+print(f"Duration: {route['duration'] / 60:.1f} min")
+print(f"Steps: {len(route['legs'][0]['steps'])}")
 ```
 
-### Java
+### Java (Spring)
+
 ```java
-RestTemplate restTemplate = new RestTemplate();
-HttpHeaders headers = new HttpHeaders();
-headers.setContentType(MediaType.APPLICATION_JSON);
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.*;
+import java.util.*;
 
-Map<String, Object> request = new HashMap<>();
-request.put("waypoints", Arrays.asList(
-    Map.of("lat", 10.8505, "lon", 106.7717),
-    Map.of("lat", 10.8231, "lon", 106.6297)
-));
+public class ZoneServiceClient {
 
-HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-ResponseEntity<String> response = restTemplate.postForEntity(
-    "http://localhost:3000/api/v1/routing/route",
-    entity,
-    String.class
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final String baseUrl = "http://localhost:21503/api/v1/routing";
+
+    public Map<String, Object> getRoute(List<Waypoint> waypoints) {
+        String url = baseUrl + "/route";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        Map<String, Object> request = new HashMap<>();
+        request.put("waypoints", waypoints);
+
+        HttpEntity<Map<String, Object>> entity =
+            new HttpEntity<>(request, headers);
+
+        ResponseEntity<Map> response = restTemplate.postForEntity(
+            url, entity, Map.class
+        );
+
+        Map<String, Object> data = response.getBody();
+
+        if (!"Ok".equals(data.get("code"))) {
+            throw new RuntimeException("No route found");
+        }
+
+        return data;
+    }
+
+    static class Waypoint {
+        public double lat;
+        public double lon;
+
+        public Waypoint(double lat, double lon) {
+            this.lat = lat;
+            this.lon = lon;
+        }
+    }
+}
+
+// Usage
+ZoneServiceClient client = new ZoneServiceClient();
+
+List<ZoneServiceClient.Waypoint> waypoints = Arrays.asList(
+    new ZoneServiceClient.Waypoint(10.8505, 106.7718),
+    new ZoneServiceClient.Waypoint(10.8623, 106.8032)
 );
+
+Map<String, Object> result = client.getRoute(waypoints);
+```
+
+### Android (Kotlin)
+
+```kotlin
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.Body
+import retrofit2.http.POST
+
+data class Waypoint(val lat: Double, val lon: Double)
+data class RouteRequest(val waypoints: List<Waypoint>)
+data class RouteResponse(
+    val code: String,
+    val routes: List<Route>,
+    val waypoints: List<Waypoint>
+)
+data class Route(
+    val distance: Double,
+    val duration: Double,
+    val legs: List<Leg>
+)
+
+interface ZoneServiceApi {
+    @POST("api/v1/routing/route")
+    suspend fun getRoute(@Body request: RouteRequest): RouteResponse
+}
+
+// Usage in ViewModel
+class RoutingViewModel : ViewModel() {
+    private val api = Retrofit.Builder()
+        .baseUrl("http://10.0.2.2:21503/")  // Android emulator localhost
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+        .create(ZoneServiceApi::class.java)
+
+    suspend fun getRoute(
+        start: Waypoint,
+        end: Waypoint
+    ): Route? {
+        return try {
+            val response = api.getRoute(
+                RouteRequest(waypoints = listOf(start, end))
+            )
+
+            if (response.code == "Ok") {
+                response.routes.firstOrNull()
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("Routing", "Error getting route", e)
+            null
+        }
+    }
+}
 ```
 
 ---
 
-## Notes
+## Testing
 
-1. **Coordinates:** Must be in WGS84 format (lat/lon)
-2. **OSRM Required:** Routing endpoints require OSRM service to be running
-3. **Rate Limiting:** Consider implementing rate limiting for production
-4. **Caching:** Route responses can be cached for identical requests
-5. **Traffic:** Traffic data updates every 15-60 minutes (configurable)
+### Manual Testing
+
+```bash
+# Test simple route
+curl -X POST http://localhost:21503/api/v1/routing/route \
+  -H "Content-Type: application/json" \
+  -d '{
+    "waypoints": [
+      {"lat": 10.8505, "lon": 106.7718},
+      {"lat": 10.8623, "lon": 106.8032}
+    ]
+  }' | jq '.routes[0] | {distance, duration, steps: .legs[0].steps | length}'
+
+# Expected output:
+# {
+#   "distance": 6400.5,
+#   "duration": 510.2,
+#   "steps": 11
+# }
+```
+
+### Automated Testing
+
+```bash
+# Run OSRM stress test
+cd /path/to/zone_service
+npx tsx test-osrm-hard-routes.ts
+
+# Expected: 100% success rate
+```
+
+### Performance Testing
+
+```bash
+# Test response time
+time curl -X POST http://localhost:21503/api/v1/routing/route \
+  -H "Content-Type: application/json" \
+  -d '{
+    "waypoints": [
+      {"lat": 10.8505, "lon": 106.7718},
+      {"lat": 10.8623, "lon": 106.8032}
+    ]
+  }' > /dev/null
+
+# Target: < 100ms
+```
+
+---
+
+## Common Issues
+
+### Issue: "NoRoute" Response
+
+**Cause:** No connected path between waypoints
+
+**Solution:**
+
+```bash
+# 1. Check connectivity
+npm run check:connectivity
+
+# 2. Verify OSRM is healthy
+docker ps | grep osrm
+
+# 3. Try coordinates from database
+npm run prisma:studio
+# Browse road_nodes table, copy real coordinates
+```
+
+### Issue: Coordinates Outside Thu Duc
+
+**Cause:** Waypoints outside Thu Duc boundary
+
+**Thu Duc Bounds:**
+- Latitude: 10.7 - 11.0
+- Longitude: 106.6 - 106.9
+
+**Solution:** Ensure coordinates are within bounds
+
+### Issue: Timeout
+
+**Cause:** OSRM instance not responding
+
+**Solution:**
+
+```bash
+# Check OSRM logs
+docker logs dss-osrm-1 --tail 50
+
+# Restart if needed
+docker-compose restart osrm-instance-1
+```
+
+---
 
 ## See Also
 
-- [ROUTING_SYSTEM.md](../../ROUTING_SYSTEM.md) - System architecture
-- [NEXT_STEPS.md](../../NEXT_STEPS.md) - Setup guide
-- [Zones API](./zones.md) - Zone management endpoints
+- [ARCHITECTURE.md](../ARCHITECTURE.md) - System architecture
+- [OSRM.md](../OSRM.md) - OSRM setup and configuration
+- [Zones API](./zones.md) - Zone management
+- [Centers API](./centers.md) - Distribution centers
+
+---
+
+**Last Updated:** 2025-01-15
+**Version:** 1.0.0
