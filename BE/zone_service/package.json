@@ -1,0 +1,56 @@
+{
+  "name": "zone_service",
+  "version": "1.0.0",
+  "description": "Zone Service - Microservice for zone and location management",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc && tsc-alias",
+    "start": "node dist/index.js",
+    "start:prod": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "clean": "rimraf dist",
+    "prebuild": "npm run clean && npm run prisma:generate"
+  },
+  "keywords": [
+    "microservice",
+    "zone",
+    "location",
+    "geospatial"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.10.5",
+    "prisma": "^6.16.3",
+    "rimraf": "^6.0.1",
+    "tsc-alias": "^1.8.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.3",
+    "axios": "^1.12.2",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0",
+    "kafkajs": "^2.2.4",
+    "reflect-metadata": "^0.2.2",
+    "winston": "^3.18.3"
+  },
+  "prisma": {
+    "schema": "./prisma"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

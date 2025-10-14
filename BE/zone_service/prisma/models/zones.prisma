@@ -1,0 +1,12 @@
+model zones {
+  zone_id  String  @id @default(uuid())
+  code     String  @unique
+  name     String
+  polygon  Json?
+
+  center_id String
+  centers   centers @relation(fields: [center_id], references: [center_id])
+
+  working_places    working_places[]
+  zone_geohash_cells zone_geohash_cells[]
+}
