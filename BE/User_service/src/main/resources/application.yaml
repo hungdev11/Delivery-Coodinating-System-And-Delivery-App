@@ -23,13 +23,13 @@ spring:
 
 # Keycloak Configuration (from env.local)
 keycloak:
-  auth-server-url: ${KEYCLOAK_URL:http://localhost:8080}
+  auth-server-url: ${KEYCLOAK_URL:https://keycloak.phuongy.works}
   realm: ${KEYCLOAK_REALM:delivery-system}
   resource: ${KEYCLOAK_CLIENT_ID:frontend-client}
   credentials:
     username: ${KEYCLOAK_ADMIN_USERNAME:dev}
     password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
-    secret: ${KEYCLOAK_CLIENT_SECRET:}
+    secret: ${KEYCLOAK_CLIENT_SECRET:46sGOyba6nyt8UhLkKAQgzmbedF9L042}
   
   init:
     enabled: ${KEYCLOAK_INIT_ENABLED:true}

@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import feign.FeignException; // Cần import này
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -28,6 +29,39 @@ public class GlobalExceptionHandler {
                 .build();
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
+    
+    @ExceptionHandler(FeignException.class)
+    public ResponseEntity<ErrorResponse> handleFeignExceptions(FeignException ex) {
+        // Lấy mã trạng thái HTTP từ Feign Exception (ví dụ: 404, 500)
+        HttpStatus status = HttpStatus.resolve(ex.status());
+        
+        if (status == null) {
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+
+        log.error("Feign communication error (Status: {}): {}", ex.status(), ex.getMessage());
+
+        // Xử lý đặc biệt cho lỗi 404 (Not Found) từ Service khác
+        if (status == HttpStatus.NOT_FOUND) {
+             ErrorResponse error = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.NOT_FOUND.value())
+                .error("Dependent Resource Not Found") 
+                .message("Resource required from external service was not found. Details: " + ex.getMessage()) 
+                .build();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+        }
+        
+        // Xử lý các lỗi Feign khác (ví dụ: 400 Bad Request, 500 Internal Server Error)
+        ErrorResponse error = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(status.value())
+                .error(status.getReasonPhrase())
+                .message("Error communicating with external service: " + ex.getMessage())
+                .build();
+        return ResponseEntity.status(status).body(error);
+    }
+    // --- Kết thúc Bổ sung ---
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {

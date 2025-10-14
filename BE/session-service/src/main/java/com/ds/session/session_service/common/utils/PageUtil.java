@@ -1,6 +1,7 @@
 package com.ds.session.session_service.common.utils;
 
 
+import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.List;
 
@@ -12,10 +13,10 @@ import org.springframework.data.domain.Sort;
 
 public class PageUtil {
 
-    public static Pageable build(int page, int size, String sortBy, String direction) {
+    public static Pageable build(int page, int size, String sortBy, String direction, Class<?> entityClass) {
         Sort sort = Sort.unsorted();
 
-        if (sortBy != null && !sortBy.isBlank()) {
+        if (isValidSortFieldDeep(entityClass, direction)) {
             sort = direction != null && direction.equalsIgnoreCase("desc")
                     ? Sort.by(sortBy).descending()
                     : Sort.by(sortBy).ascending();
@@ -46,5 +47,17 @@ public class PageUtil {
         }
 
         return new PageImpl<>(pagedList, pageable, list.size());
+    }
+
+    public static boolean isValidSortFieldDeep(Class<?> entityClass, String fieldName) {
+        if (fieldName == null || fieldName.isBlank()) return false;
+        Class<?> current = entityClass;
+        while (current != null && current != Object.class) {
+            for (Field f : current.getDeclaredFields()) {
+                if (f.getName().equals(fieldName)) return true;
+            }
+            current = current.getSuperclass();
+        }
+        return false;
     }
 }
