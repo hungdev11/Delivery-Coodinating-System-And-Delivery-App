@@ -15,25 +15,7 @@ spring:
 
 # Keycloak Configuration (reusing admin credentials from User Service)
 keycloak:
-  auth-server-url: ${KEYCLOAK_URL:https://keycloak.phuongy.works}
-  realm: ${KEYCLOAK_REALM:delivery-system}
-  resource: ${KEYCLOAK_CLIENT_ID:frontend-client}
-  credentials:
-    username: ${KEYCLOAK_ADMIN_USERNAME:dev}
-    password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
-    secret: ${KEYCLOAK_CLIENT_SECRET:46sGOyba6nyt8UhLkKAQgzmbedF9L042}
-  
-  # Multi-realm configuration for different login types
-  backend:
-    realm: ${KEYCLOAK_REALM:delivery-system}
-    issuer-uri: ${KEYCLOAK_URL:https://keycloak.phuongy.works}/realms/${KEYCLOAK_REALM:delivery-system}
-    jwk-set-uri: ${KEYCLOAK_URL:https://keycloak.phuongy.works}/realms/${KEYCLOAK_REALM:delivery-system}/protocol/openid-connect/certs
-    client-id: backend-client
-  client:
-    realm: ${KEYCLOAK_CLIENT_REALM:delivery-system}
-    issuer-uri: ${KEYCLOAK_URL:https://keycloak.phuongy.works}/realms/${KEYCLOAK_CLIENT_REALM:delivery-system}
-    jwk-set-uri: ${KEYCLOAK_URL:https://keycloak.phuongy.works}/realms/${KEYCLOAK_CLIENT_REALM:delivery-system}/protocol/openid-connect/certs
-    client-id: frontend-client
+ 
   
   # Default login configuration (from Settings Service)
   default:
