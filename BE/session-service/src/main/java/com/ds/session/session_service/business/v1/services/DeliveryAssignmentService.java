@@ -1,7 +1,8 @@
 package com.ds.session.session_service.business.v1.services;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -19,9 +20,8 @@ import com.ds.session.session_service.common.exceptions.ResourceNotFound;
 import com.ds.session.session_service.common.interfaces.IDeliveryAssignmentService;
 import com.ds.session.session_service.common.mapper.ParcelMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectMapper; 
 
-import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -34,98 +34,144 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     private final DeliveryAssignmentRepository deliveryAssignmentRepository;
     private final ParcelServiceClient parcelServiceClient;
     private final ParcelMapper parcelMapper; 
-    private final LocalDateTime beginOfDay = LocalDateTime.MIN;
-    private final LocalDateTime endOfDay = beginOfDay.plus(24, ChronoUnit.HOURS);
+    
+    private final ObjectMapper objectMapper = new ObjectMapper(); 
+    
+    private LocalDateTime getStartOfToday() {
+        return LocalDateTime.now().toLocalDate().atStartOfDay();
+    }
+    
+    private LocalDateTime getEndOfToday() {
+        return LocalDateTime.now().toLocalDate().atTime(LocalTime.MAX);
+    }
 
     @Override
     public boolean acceptTask(UUID parcelId, UUID deliveryManId) {
-        try {
-            ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(parcelId);
-            
-            if (parcelResponse.getStatus() == null || !"IN_WAREHOUSE".equals(parcelResponse.getStatus())) {
-                log.warn("Cannot take this parcel", parcelId);
-                return false;
-            }
-            // check shipper zone and parcel's destination zone 
-            // ....
-            // check today, is this parcel is assigned with this shipper?
-            if (deliveryAssignmentRepository.existsByDeliveryManIdAndParcelIdAndScanedAtBetween(
-                deliveryManId.toString(), 
-                parcelId.toString(), 
-                beginOfDay, 
-                endOfDay))
-            {
-                log.warn("This parcel already assigned to shipper today", parcelId);
-                return false;
-            }
-            // transit parcel status
-            parcelServiceClient.changeParcelStatus(parcelId, ParcelEvent.SCAN_QR);
-        } catch (FeignException e) {
-            log.error("Failed to fetch ParcelInfo for parcelId {}. HTTP Error: {}", parcelId, e.status());
-            return false; 
+        ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(parcelId);
+        
+        if (parcelResponse == null || parcelResponse.getStatus() == null || !"IN_WAREHOUSE".equals(parcelResponse.getStatus())) {
+            log.warn("Cannot accept parcel {}. Status is invalid or null.", parcelId);
+            return false;
         }
-        // create new and save
+
+        final String parcelIdStr = parcelId.toString();
+        final String deliveryManIdStr = deliveryManId.toString();
+        
+        if (isParcelAlreadyAssignedToday(deliveryManIdStr, parcelIdStr)) {
+            log.warn("Parcel {} already assigned to shipper {} today.", parcelId, deliveryManId);
+            return false;
+        }
+
+        parcelServiceClient.changeParcelStatus(parcelId, ParcelEvent.SCAN_QR);
+
         DeliveryAssignment deliveryAssignment = DeliveryAssignment.builder()
-            .deliveryManId(deliveryManId.toString())
-            .parcelId(parcelId.toString())
+            .deliveryManId(deliveryManIdStr)
+            .parcelId(parcelIdStr)
+            .failReason("")
             .scanedAt(LocalDateTime.now())
             .status(AssignmentStatus.PROCESSING)
             .build();
         deliveryAssignmentRepository.save(deliveryAssignment);
+        
+        log.info("Successfully accepted task for parcel {} by delivery man {}.", parcelId, deliveryManId);
         return true;
     }
 
     @Override
     public DeliveryAssignmentResponse completeTask(UUID parcelId, UUID deliveryManId, RouteInfo routeInfo) {
-        DeliveryAssignment deliveryAssignment = findAssignmentIn(parcelId.toString(), deliveryManId.toString(), beginOfDay, endOfDay);
-        insertRouteInfo(deliveryAssignment, routeInfo);
-        if (!AssignmentStatus.PROCESSING.equals(deliveryAssignment.getStatus())) {
-            throw new RuntimeException("Can not finish assignment not processing");
-        }
-        ParcelInfo parcel = parcelMapper.toParcelInfo(parcelServiceClient.changeParcelStatus(parcelId, ParcelEvent.DELIVERY_SUCCESSFUL));
-        deliveryAssignment.setStatus(AssignmentStatus.SUCCESS);
-        deliveryAssignment.setFailReason("");
+        DeliveryAssignment assignment = getAssignmentOrFail(parcelId.toString(), deliveryManId.toString());
+        
+        ensureStatusIsProcessing(assignment);
+        
+        insertRouteInfo(assignment, routeInfo);
+        
+        ParcelInfo parcel = updateParcelStatusAndMap(parcelId, ParcelEvent.DELIVERY_SUCCESSFUL);
+        assignment.setStatus(AssignmentStatus.SUCCESS);
 
-        deliveryAssignmentRepository.save(deliveryAssignment);
-        return DeliveryAssignmentResponse.from(deliveryAssignment, parcel, "Phan Phi Hung", "Maria Akamoto");
+        assignment.setFailReason(null); 
+
+        deliveryAssignmentRepository.save(assignment);
+
+        return DeliveryAssignmentResponse.from(assignment, parcel, "Phan Phi Hung", "Maria Akamoto");
     }
 
     @Override
     public DeliveryAssignmentResponse deliveryFailed(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo) {
-        DeliveryAssignment deliveryAssignment = findAssignmentIn(parcelId.toString(), deliveryManId.toString(), beginOfDay, endOfDay);
-        insertRouteInfo(deliveryAssignment, routeInfo);
-        if (!AssignmentStatus.PROCESSING.equals(deliveryAssignment.getStatus())) {
-            throw new RuntimeException("Can not finish assignment not processing");
-        }
-        ParcelInfo parcel = parcelMapper.toParcelInfo(parcelServiceClient.changeParcelStatus(parcelId, ParcelEvent.CAN_NOT_DELIVERY));
-        deliveryAssignment.setStatus(AssignmentStatus.FAILED);
-        deliveryAssignment.setFailReason(reason);
+        DeliveryAssignment assignment = getAssignmentOrFail(parcelId.toString(), deliveryManId.toString());
 
-        deliveryAssignmentRepository.save(deliveryAssignment);
-        return DeliveryAssignmentResponse.from(deliveryAssignment, parcel, "Phan Phi Hung", "Maria Akamoto");
-    }
-
-    private void insertRouteInfo(DeliveryAssignment deliveryAssignment, RouteInfo routeInfo) {
-        // insert route info even success or fail
-        // validate route info
+        ensureStatusIsProcessing(assignment);
         
-        deliveryAssignment.setDistanceM(routeInfo.getDistanceM());
-        deliveryAssignment.setDurationS(routeInfo.getDurationS());
-        deliveryAssignment.setWaypoints(toJson(routeInfo.getWaypoints()));
+        insertRouteInfo(assignment, routeInfo);
+        
+        ParcelInfo parcel = updateParcelStatusAndMap(parcelId, ParcelEvent.CAN_NOT_DELIVERY);
+        assignment.setStatus(AssignmentStatus.FAILED);
+        assignment.setFailReason(reason);
 
-        deliveryAssignmentRepository.save(deliveryAssignment);
+        deliveryAssignmentRepository.save(assignment);
+        return DeliveryAssignmentResponse.from(assignment, parcel, "Phan Phi Hung", "Maria Akamoto");
     }
 
+    @Override
+    public List<DeliveryAssignmentResponse> getDailyTasks(UUID deliveryManId) {
+        List<DeliveryAssignment> tasks = deliveryAssignmentRepository.findAllByDeliveryManIdAndScanedAtBetween(
+            deliveryManId.toString(), 
+            getStartOfToday(), 
+            getEndOfToday()
+        );
+        List<DeliveryAssignmentResponse> res = tasks.stream().map(t -> {
+            ParcelResponse response = parcelServiceClient.fetchParcelResponse(UUID.fromString(t.getParcelId()));
+            ParcelInfo parcelInfo = parcelMapper.toParcelInfo(response);
+            return DeliveryAssignmentResponse.from(t, parcelInfo, "Phan Phi Hung", "Maria Akamoto");
+        }).toList();
+
+        return res;
+    }
+
+    // --- UTILITY METHODS ---
     private String toJson(Object obj) {
         try {
-            return new ObjectMapper().writeValueAsString(obj);
+            return objectMapper.writeValueAsString(obj);
         } catch (JsonProcessingException e) {
+            // Chuyển đổi JsonProcessingException thành RuntimeException
+            log.error("Failed to serialize route info object to JSON string.", e);
             throw new RuntimeException("Failed to serialize route info", e);
         }
     }
 
-    private DeliveryAssignment findAssignmentIn(String parcelId, String deliveryManId, LocalDateTime start, LocalDateTime end) {
-        return deliveryAssignmentRepository.findByDeliveryManIdAndParcelIdAndScanedAtBetween(parcelId, deliveryManId, start, end)
-                .orElseThrow(() -> new ResourceNotFound("Delivery assignment not found"));
+    private void insertRouteInfo(DeliveryAssignment deliveryAssignment, RouteInfo routeInfo) {
+        deliveryAssignment.setDistanceM(routeInfo.getDistanceM());
+        deliveryAssignment.setDurationS(routeInfo.getDurationS());
+        deliveryAssignment.setWaypoints(toJson(routeInfo.getWaypoints())); 
+        deliveryAssignmentRepository.save(deliveryAssignment); 
     }
+    
+    private DeliveryAssignment getAssignmentOrFail(String parcelId, String deliveryManId) {
+        return deliveryAssignmentRepository.findByDeliveryManIdAndParcelIdAndScanedAtBetween(
+                deliveryManId, 
+                parcelId, 
+                getStartOfToday(), 
+                getEndOfToday())
+            .orElseThrow(() -> new ResourceNotFound("Delivery assignment not found for today."));
+    }
+
+    private boolean isParcelAlreadyAssignedToday(String deliveryManId, String parcelId) {
+        return deliveryAssignmentRepository.existsByDeliveryManIdAndParcelIdAndScanedAtBetween(
+            deliveryManId, 
+            parcelId, 
+            getStartOfToday(), 
+            getEndOfToday());
+    }
+
+    private void ensureStatusIsProcessing(DeliveryAssignment assignment) {
+        if (!AssignmentStatus.PROCESSING.equals(assignment.getStatus())) {
+            throw new IllegalStateException("Can not finish assignment that is not currently PROCESSING.");
+        }
+    }
+
+    private ParcelInfo updateParcelStatusAndMap(UUID parcelId, ParcelEvent event) {
+        ParcelResponse response = parcelServiceClient.changeParcelStatus(parcelId, event);
+        return parcelMapper.toParcelInfo(response);
+    }
+
+    
 }

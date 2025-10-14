@@ -29,7 +29,6 @@ public class DeliveryAssignmentResponse {
     private String deliveryLocation;
     private BigDecimal value;
     private double weight;
-    private String note;
     private LocalDateTime createdAt;
     private LocalDateTime completedAt;
     private double routeDistanceM;
