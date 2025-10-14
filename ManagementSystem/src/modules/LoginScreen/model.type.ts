@@ -1,10 +1,10 @@
 export class LoginForm {
-  emailOrUsername: string
+  username: string
   password: string
   rememberMe: boolean
 
-  constructor(emailOrUsername: string, password: string, rememberMe: boolean) {
-    this.emailOrUsername = emailOrUsername
+  constructor(username: string, password: string, rememberMe: boolean) {
+    this.username = username
     this.password = password
     this.rememberMe = rememberMe
   }

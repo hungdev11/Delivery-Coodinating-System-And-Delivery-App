@@ -15,25 +15,7 @@ spring:
 
 # Keycloak Configuration (reusing admin credentials from User Service)
 keycloak:
-  auth-server-url: ${KEYCLOAK_URL:http://localhost:8080}
-  realm: ${KEYCLOAK_REALM:delivery-system}
-  resource: ${KEYCLOAK_CLIENT_ID:frontend-client}
-  credentials:
-    username: ${KEYCLOAK_ADMIN_USERNAME:dev}
-    password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
-    secret: ${KEYCLOAK_CLIENT_SECRET:}
-  
-  # Multi-realm configuration for different login types
-  backend:
-    realm: ${KEYCLOAK_REALM:delivery-system}
-    issuer-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}
-    jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}/protocol/openid-connect/certs
-    client-id: backend-client
-  client:
-    realm: ${KEYCLOAK_CLIENT_REALM:delivery-system}
-    issuer-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_CLIENT_REALM:delivery-system}
-    jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_CLIENT_REALM:delivery-system}/protocol/openid-connect/certs
-    client-id: frontend-client
+ 
   
   # Default login configuration (from Settings Service)
   default:
@@ -49,6 +31,15 @@ services:
     base-url: ${SETTINGS_SERVICE_URL:http://localhost:21502}
   zone:
     base-url: ${ZONE_SERVICE_URL:http://localhost:21503}
+  session:
+    base-url: ${SESSION_SERVICE_URL:http://localhost:21505}
+  parcel:
+    base-url: ${PARCEL_SERVICE_URL:http://localhost:21506}
+  # Uncomment and add other services as needed
+  # order:
+  #   base-url: ${ORDER_SERVICE_URL:http://order-service:8080}
+  # delivery:
+  #   base-url: ${DELIVERY_SERVICE_URL:http://delivery-service:8080}
 
 # Logging Configuration
 # Only log errors from frameworks/libraries, keep developer logs at INFO
