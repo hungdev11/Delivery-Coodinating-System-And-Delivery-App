@@ -1,0 +1,64 @@
+// User feedback and suggestions for route improvements
+model user_feedback {
+  feedback_id           String   @id @default(uuid())
+
+  // Associated road segment
+  segment_id            String
+  road_segment          road_segments @relation(fields: [segment_id], references: [segment_id])
+
+  // User who submitted feedback
+  user_id               String
+
+  // Feedback type
+  feedback_type         FeedbackType
+  severity              FeedbackSeverity @default(MINOR)
+
+  // Details
+  description           String?
+  suggested_weight_adj  Float?   // Suggested adjustment to weight
+
+  // Status
+  status                FeedbackStatus @default(PENDING)
+  reviewed_by           String?
+  reviewed_at           DateTime?
+
+  // Impact on routing (if approved)
+  applied               Boolean  @default(false)
+  applied_at            DateTime?
+  weight_adjustment     Float?   // Actual adjustment applied
+
+  // Metadata
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@index([segment_id])
+  @@index([user_id])
+  @@index([status])
+  @@index([created_at])
+}
+
+enum FeedbackType {
+  ROAD_CLOSED           // Đường đóng
+  CONSTRUCTION          // Đang thi công
+  ACCIDENT              // Tai nạn
+  POOR_CONDITION        // Đường xấu
+  TRAFFIC_ALWAYS_BAD    // Giao thông luôn tệ
+  BETTER_ROUTE          // Có đường tốt hơn
+  INCORRECT_INFO        // Thông tin sai
+  OTHER                 // Khác
+}
+
+enum FeedbackSeverity {
+  MINOR     // Nhỏ
+  MODERATE  // Vừa
+  MAJOR     // Lớn
+  CRITICAL  // Nghiêm trọng
+}
+
+enum FeedbackStatus {
+  PENDING   // Chờ xử lý
+  REVIEWING // Đang xem xét
+  APPROVED  // Đã duyệt
+  REJECTED  // Từ chối
+  RESOLVED  // Đã giải quyết
+}

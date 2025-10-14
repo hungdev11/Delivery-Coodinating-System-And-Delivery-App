@@ -6,11 +6,13 @@
 import { Router } from 'express';
 import { centerRouter } from './center';
 import { zoneRouter } from './zone';
+import { routingRouter } from './routing';
 
 const routes = Router();
 
 // Register module routes
 routes.use('/centers', centerRouter);
 routes.use('/zones', zoneRouter);
+routes.use('/routing', routingRouter);
 
 export { routes };

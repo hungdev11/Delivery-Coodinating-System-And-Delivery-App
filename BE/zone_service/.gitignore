@@ -22,6 +22,47 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
+# OSRM Data Files (Large binary files)
+!osrm_data/.gitkeep
+!osrm_data/*/.gitkeep
+*.osrm
+*.osrm.*
+*.osm.xml
+*.osm.pbf
+
+# Raw Data Files (Large datasets)
+raw_data/*
+!raw_data/.gitkeep
+!raw_data/*/.gitkeep
+*.poly
+*.pbf
+*.cell_metrics
+*.cells
+*.cnbg
+*.cnbg_to_ebg
+*.datasource_names
+*.ebg
+*.ebg_nodes
+*.edges
+*.enw
+*.fileIndex
+*.geometry
+*.icd
+*.maneuver_overrides
+*.mldgr
+*.names
+*.nbg_nodes
+*.partition
+*.properties
+*.ramIndex
+*.restrictions
+*.timestamp
+*.tld
+*.tls
+*.turn_duration_penalties
+*.turn_penalties_index
+*.turn_weight_penalties
+
 # OS
 .DS_Store
 .DS_Store?

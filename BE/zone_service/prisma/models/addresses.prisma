@@ -1,0 +1,49 @@
+// Points of Interest and addresses along road segments
+model addresses {
+  address_id            String   @id @default(uuid())
+
+  // Address information
+  name                  String   // e.g., "Học viện Công nghệ Bưu chính Viễn thông"
+  name_en               String?
+  address_text          String?  // Full address text
+
+  // Location
+  lat                   Float
+  lon                   Float
+
+  // Association with road segment
+  segment_id            String?
+  road_segment          road_segments? @relation(fields: [segment_id], references: [segment_id])
+
+  // Zone and ward information
+  zone_id               String?
+  zones                 zones?   @relation(fields: [zone_id], references: [zone_id])
+  ward_name             String?  // e.g., "Tăng Nhơn Phú"
+  district_name         String?  // e.g., "Thủ Đức"
+
+  // Address type
+  address_type          AddressType @default(GENERAL)
+
+  // Metadata
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@index([segment_id])
+  @@index([zone_id])
+  @@index([name])
+}
+
+enum AddressType {
+  GENERAL           // General address
+  SCHOOL            // Trường học
+  HOSPITAL          // Bệnh viện
+  GOVERNMENT        // Cơ quan chính phủ
+  SHOPPING          // Trung tâm mua sắm
+  RESTAURANT        // Nhà hàng
+  HOTEL             // Khách sạn
+  BANK              // Ngân hàng
+  GAS_STATION       // Trạm xăng
+  PARKING           // Bãi đậu xe
+  BUS_STOP          // Trạm xe buýt
+  LANDMARK          // Địa danh nổi tiếng
+}

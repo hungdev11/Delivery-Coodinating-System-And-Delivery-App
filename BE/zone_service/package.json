@@ -12,7 +12,12 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "seed": "tsx index.ts",
+    "seed:zones": "tsx processors/zones-seeder.ts",
+    "seed:roads": "tsx processors/roads-seeder.ts",
+    "extract:thuduc": "tsx extract-thuduc-roads.ts",
+    "osrm:generate": "tsx generate-osrm-data.ts",
+    "check:connectivity": "tsx check-road-connectivity.ts",
     "clean": "rimraf dist",
     "prebuild": "npm run clean && npm run prisma:generate"
   },
@@ -35,7 +40,9 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^6.17.1",
     "@prisma/client": "^6.16.3",
+    "@turf/turf": "^7.1.0",
     "axios": "^1.12.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
@@ -43,6 +50,9 @@
     "dotenv": "^16.4.5",
     "express": "^5.1.0",
     "kafkajs": "^2.2.4",
+    "ngeohash": "^0.6.3",
+    "osm-pbf-parser": "^2.3.0",
+    "pbf": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "winston": "^3.18.3"
   },

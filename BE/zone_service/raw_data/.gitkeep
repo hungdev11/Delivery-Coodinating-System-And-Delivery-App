@@ -1,0 +1,3 @@
+# This file ensures the raw_data directory is tracked by git
+# The actual data files are ignored but the directory structure is preserved
+# for data processing scripts

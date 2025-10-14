@@ -1,0 +1,50 @@
+// Master road information
+model roads {
+  road_id        String   @id @default(uuid())
+  osm_id         String?  @unique // Original OSM way ID
+  name           String
+  name_en        String?  // English name if available
+  road_type      RoadType // highway, primary, secondary, residential, service, etc.
+
+  // Speed information (in km/h)
+  max_speed      Float?
+  avg_speed      Float?
+
+  // Road characteristics
+  one_way        Boolean  @default(false)
+  lanes          Int?
+  surface        String?  // asphalt, concrete, unpaved, etc.
+
+  // Geometry - full linestring of the road
+  geometry       Json?    // GeoJSON LineString
+
+  // Zone association
+  zone_id        String?
+  zones          zones?   @relation(fields: [zone_id], references: [zone_id])
+
+  // Related segments
+  road_segments  road_segments[]
+
+  // Metadata
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  @@index([name])
+  @@index([road_type])
+  @@index([zone_id])
+}
+
+enum RoadType {
+  MOTORWAY      // Cao tốc
+  TRUNK         // Đường huyết mạch
+  PRIMARY       // Đường chính
+  SECONDARY     // Đường phụ
+  TERTIARY      // Đường cấp 3
+  RESIDENTIAL   // Đường dân cư
+  SERVICE       // Đường dịch vụ
+  UNCLASSIFIED  // Chưa phân loại
+  LIVING_STREET // Đường khu dân cư
+  PEDESTRIAN    // Đường dành cho người đi bộ
+  TRACK         // Đường mòn
+  PATH          // Lối đi
+}

@@ -103,6 +103,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       ZONE_DB_CONNECTION: ${ZONE_DB_CONNECTION}
       SETTINGS_SERVICE_URL: http://settings-service:21502
+      OSRM_INSTANCE_1_URL: http://osrm-instance-1:5000
+      OSRM_INSTANCE_2_URL: http://osrm-instance-2:5000
       PORT: 21503
     ports:
       - "21503:21503"
@@ -149,3 +151,37 @@ services:
       timeout: 10s
       retries: 120
       start_period: 30s
+
+  # OSRM Instance 1 (Primary routing engine)
+  osrm-instance-1:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-1
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-instance-1:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # OSRM Instance 2 (Standby routing engine for zero-downtime updates)
+  osrm-instance-2:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-2
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-instance-2:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "5001:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

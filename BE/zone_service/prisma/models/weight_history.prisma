@@ -1,0 +1,25 @@
+// Weight calculation history and audit log
+model weight_history {
+  history_id            String   @id @default(uuid())
+
+  // Associated road segment
+  segment_id            String
+  // Note: no direct relation to allow historical data even if segment is deleted
+
+  // Weight values at this point in time
+  base_weight           Float
+  delta_weight          Float
+  current_weight        Float
+
+  // Factors contributing to weight
+  traffic_multiplier    Float    @default(1)
+  user_feedback_adj     Float    @default(0)
+  other_adjustments     Json?    // Additional factors in JSON
+
+  // Metadata
+  calculated_at         DateTime @default(now())
+  calculation_trigger   String?  // What triggered the recalculation
+
+  @@index([segment_id])
+  @@index([calculated_at])
+}

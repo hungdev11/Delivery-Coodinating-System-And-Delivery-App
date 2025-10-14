@@ -1,0 +1,36 @@
+// Intersections and junction points
+model road_nodes {
+  node_id               String   @id @default(uuid())
+  osm_id                String?  @unique // Original OSM node ID
+
+  // Geographic coordinates
+  lat                   Float
+  lon                   Float
+
+  // Node type
+  node_type             NodeType @default(INTERSECTION)
+
+  // Associated zone
+  zone_id               String?
+  zones                 zones?   @relation(fields: [zone_id], references: [zone_id])
+
+  // Connected segments
+  segments_from         road_segments[] @relation("SegmentFromNode")
+  segments_to           road_segments[] @relation("SegmentToNode")
+
+  // Metadata
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@index([lat, lon])
+  @@index([zone_id])
+}
+
+enum NodeType {
+  INTERSECTION      // Giao lộ
+  TRAFFIC_LIGHT     // Đèn giao thông
+  STOP_SIGN         // Biển dừng
+  ROUNDABOUT        // Vòng xuyến
+  ENDPOINT          // Điểm cuối đường
+  WAYPOINT          // Điểm trên đường
+}

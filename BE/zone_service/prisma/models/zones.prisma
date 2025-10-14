@@ -7,6 +7,10 @@ model zones {
   center_id String
   centers   centers @relation(fields: [center_id], references: [center_id])
 
-  working_places    working_places[]
+  working_places     working_places[]
   zone_geohash_cells zone_geohash_cells[]
+  roads              roads[]
+  road_nodes         road_nodes[]
+  road_segments      road_segments[]
+  addresses          addresses[]
 }
