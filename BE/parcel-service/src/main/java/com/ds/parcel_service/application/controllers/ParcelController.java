@@ -5,7 +5,15 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.ds.parcel_service.common.annotations.EnumValue;
 import com.ds.parcel_service.common.entities.dto.request.ParcelCreateRequest;
@@ -20,8 +28,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 
 
 
@@ -97,4 +103,25 @@ public class ParcelController {
     ) {
         return parcelService.changeParcelStatus(UUID.fromString(parcelId), ParcelEvent.valueOf(event));
     }
+
+    @PutMapping("/confirm/{parcelId}")
+    public ParcelResponse confirmParcelArrived(@PathVariable String parcelId) {
+        return parcelService.changeParcelStatus(UUID.fromString(parcelId), ParcelEvent.CUSTOMER_RECEIVED);
+    }
+
+    @PutMapping("/broken-accident/{parcelId}")
+    public ParcelResponse notifyBrokenParcel(@PathVariable String parcelId) {
+        return parcelService.changeParcelStatus(UUID.fromString(parcelId), ParcelEvent.ACCIDENT);
+    }
+
+    @PutMapping("/refuse/{parcelId}")
+    public ParcelResponse refuseParcel(@PathVariable String parcelId) {
+        return parcelService.changeParcelStatus(UUID.fromString(parcelId), ParcelEvent.CUSTOMER_REJECT);
+    }
+
+    @PutMapping("/return-to-warehouse/{parcelId}")
+    public ParcelResponse returnParcelBacktoWareHouse(@PathVariable String parcelId) {
+        return parcelService.changeParcelStatus(UUID.fromString(parcelId), ParcelEvent.POSTPONE);
+    }
+
 }
