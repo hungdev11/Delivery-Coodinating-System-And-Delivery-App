@@ -13,7 +13,6 @@ public interface IUserService {
     List<User> listUsers();
     Optional<User> getUserByUsername(String username);
     Optional<User> getUserByEmail(String email);
-    Optional<User> getUserByKeycloakId(String keycloakId);
 
     /**
      * Create or update a user record based on Keycloak ID.

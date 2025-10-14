@@ -12,7 +12,6 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -38,7 +37,7 @@ public class UserController {
         
         log.info("Get current user: {}", currentUser.getUserId());
         
-        return userServiceClient.getUserByKeycloakId(currentUser.getUserId())
+        return userServiceClient.getUserByUsername(currentUser.getUsername())
             .thenApply(user -> ResponseEntity.ok(BaseResponse.success(user)))
             .exceptionally(ex -> {
                 log.error("Failed to get current user: {}", ex.getMessage());
@@ -47,7 +46,7 @@ public class UserController {
     }
     
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @AuthRequired({"ADMIN", "MANAGER"})
     public CompletableFuture<ResponseEntity<BaseResponse<List<UserDto>>>> listUsers() {
         log.info("List all users");
         
@@ -72,13 +71,13 @@ public class UserController {
     }
     
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @AuthRequired({"ADMIN"})
     public CompletableFuture<ResponseEntity<BaseResponse<UserDto>>> createUser(
             @Valid @RequestBody CreateUserRequestDto request) {
         log.info("Create user: {}", request.getUsername());
         
         return userServiceClient.createUser(request)
-            .thenApply(user -> ResponseEntity.ok(BaseResponse.success("User created successfully", user)))
+            .thenApply(user -> ResponseEntity.ok(BaseResponse.success(user, "User created successfully")))
             .exceptionally(ex -> {
                 log.error("Failed to create user: {}", ex.getMessage());
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to create user: " + ex.getMessage()));
@@ -92,7 +91,7 @@ public class UserController {
         log.info("Update user: {}", id);
         
         return userServiceClient.updateUser(id, request)
-            .thenApply(user -> ResponseEntity.ok(BaseResponse.success("User updated successfully", user)))
+            .thenApply(user -> ResponseEntity.ok(BaseResponse.success(user, "User updated successfully")))
             .exceptionally(ex -> {
                 log.error("Failed to update user: {}", ex.getMessage());
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to update user: " + ex.getMessage()));
@@ -100,12 +99,12 @@ public class UserController {
     }
     
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @AuthRequired({"ADMIN"})
     public CompletableFuture<ResponseEntity<BaseResponse<Void>>> deleteUser(@PathVariable String id) {
         log.info("Delete user: {}", id);
         
         return userServiceClient.deleteUser(id)
-            .thenApply(v -> ResponseEntity.ok(BaseResponse.<Void>success("User deleted successfully", null)))
+            .thenApply(v -> ResponseEntity.ok(BaseResponse.<Void>success(null, "User deleted successfully")))
             .exceptionally(ex -> {
                 log.error("Failed to delete user: {}", ex.getMessage());
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to delete user: " + ex.getMessage()));

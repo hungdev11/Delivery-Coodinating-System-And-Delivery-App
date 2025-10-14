@@ -1,0 +1,9 @@
+model destination {
+  destination_id String  @id @default(uuid())
+  lat            Float
+  lon            Float
+  address_text   String?
+
+  geohash_cell_id    String?
+  zone_geohash_cells zone_geohash_cells? @relation(fields: [geohash_cell_id], references: [geohash_cell_id])
+}

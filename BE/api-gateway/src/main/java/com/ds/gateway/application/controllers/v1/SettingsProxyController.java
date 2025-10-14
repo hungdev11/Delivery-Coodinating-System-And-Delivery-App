@@ -9,7 +9,8 @@ import org.springframework.web.client.RestTemplate;
 
 /**
  * API Gateway proxy for Settings Service
- * Allows external access to settings endpoints
+ * Settings are always identified by group/key pair
+ * Group represents the service/module identifier
  */
 @Slf4j
 @RestController
@@ -23,73 +24,59 @@ public class SettingsProxyController {
     private String settingsServiceUrl;
 
     /**
-     * Get setting by key (requires authentication)
+     * Get all settings by group (service identifier)
      */
-    @GetMapping("/{key}")
-    public ResponseEntity<?> getSettingByKey(@PathVariable String key) {
-        log.info("GET /api/v1/settings/{} - Proxying to Settings Service", key);
-        String url = settingsServiceUrl + "/api/v1/settings/" + key;
+    @GetMapping("/{group}")
+    public ResponseEntity<?> getSettingsByGroup(@PathVariable String group) {
+        log.info("GET /api/v1/settings/{} - Proxying to Settings Service", group);
+        String url = settingsServiceUrl + "/api/v1/settings/" + group;
         return ResponseEntity.ok(restTemplate.getForObject(url, Object.class));
     }
 
     /**
-     * Get setting value by key (requires authentication)
+     * Get setting by group and key pair
      */
-    @GetMapping("/{key}/value")
-    public ResponseEntity<String> getSettingValue(@PathVariable String key) {
-        log.info("GET /api/v1/settings/{}/value - Proxying to Settings Service", key);
-        String url = settingsServiceUrl + "/api/v1/settings/" + key + "/value";
+    @GetMapping("/{group}/{key}")
+    public ResponseEntity<?> getSetting(@PathVariable String group, @PathVariable String key) {
+        log.info("GET /api/v1/settings/{}/{} - Proxying to Settings Service", group, key);
+        String url = settingsServiceUrl + "/api/v1/settings/" + group + "/" + key;
+        return ResponseEntity.ok(restTemplate.getForObject(url, Object.class));
+    }
+
+    /**
+     * Get setting value only by group and key pair
+     */
+    @GetMapping("/{group}/{key}/value")
+    public ResponseEntity<String> getSettingValue(@PathVariable String group, @PathVariable String key) {
+        log.info("GET /api/v1/settings/{}/{}/value - Proxying to Settings Service", group, key);
+        String url = settingsServiceUrl + "/api/v1/settings/" + group + "/" + key + "/value";
         return ResponseEntity.ok(restTemplate.getForObject(url, String.class));
     }
 
     /**
-     * Get settings by group (requires authentication)
+     * Upsert (create or update) a setting by group/key pair
+     * Requires admin authentication - implement role check
      */
-    @GetMapping("/group/{group}")
-    public ResponseEntity<?> getSettingsByGroup(@PathVariable String group) {
-        log.info("GET /api/v1/settings/group/{} - Proxying to Settings Service", group);
-        String url = settingsServiceUrl + "/api/v1/settings/group/" + group;
-        return ResponseEntity.ok(restTemplate.getForObject(url, Object.class));
-    }
-
-    /**
-     * Search settings (requires authentication)
-     */
-    @GetMapping("/search")
-    public ResponseEntity<?> searchSettings(@RequestParam String q) {
-        log.info("GET /api/v1/settings/search?q={} - Proxying to Settings Service", q);
-        String url = settingsServiceUrl + "/api/v1/settings/search?q=" + q;
-        return ResponseEntity.ok(restTemplate.getForObject(url, Object.class));
-    }
-
-    /**
-     * Create setting (requires admin authentication - implement role check)
-     */
-    @PostMapping
-    public ResponseEntity<?> createSetting(@RequestBody Object request) {
-        log.info("POST /api/v1/settings - Proxying to Settings Service");
-        String url = settingsServiceUrl + "/api/v1/settings";
-        return ResponseEntity.ok(restTemplate.postForObject(url, request, Object.class));
-    }
-
-    /**
-     * Update setting (requires admin authentication - implement role check)
-     */
-    @PutMapping("/{key}")
-    public ResponseEntity<?> updateSetting(@PathVariable String key, @RequestBody Object request) {
-        log.info("PUT /api/v1/settings/{} - Proxying to Settings Service", key);
-        String url = settingsServiceUrl + "/api/v1/settings/" + key;
+    @PutMapping("/{group}/{key}")
+    public ResponseEntity<?> upsertSetting(
+            @PathVariable String group, 
+            @PathVariable String key, 
+            @RequestBody Object request,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        log.info("PUT /api/v1/settings/{}/{} - Proxying to Settings Service (user: {})", group, key, userId);
+        String url = settingsServiceUrl + "/api/v1/settings/" + group + "/" + key;
         restTemplate.put(url, request);
         return ResponseEntity.ok().build();
     }
 
     /**
-     * Delete setting (requires admin authentication - implement role check)
+     * Delete a setting by group/key pair
+     * Requires admin authentication - implement role check
      */
-    @DeleteMapping("/{key}")
-    public ResponseEntity<?> deleteSetting(@PathVariable String key) {
-        log.info("DELETE /api/v1/settings/{} - Proxying to Settings Service", key);
-        String url = settingsServiceUrl + "/api/v1/settings/" + key;
+    @DeleteMapping("/{group}/{key}")
+    public ResponseEntity<?> deleteSetting(@PathVariable String group, @PathVariable String key) {
+        log.info("DELETE /api/v1/settings/{}/{} - Proxying to Settings Service", group, key);
+        String url = settingsServiceUrl + "/api/v1/settings/" + group + "/" + key;
         restTemplate.delete(url);
         return ResponseEntity.noContent().build();
     }

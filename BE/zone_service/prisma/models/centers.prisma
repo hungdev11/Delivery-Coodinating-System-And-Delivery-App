@@ -1,0 +1,11 @@
+model centers {
+  center_id String  @id @default(uuid())
+  code      String  @unique
+  name      String
+  address   String?
+  lat       Float?
+  lon       Float?
+  polygon   Json?
+
+  zones zones[]
+}

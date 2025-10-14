@@ -42,12 +42,12 @@ import java.nio.charset.StandardCharsets;
 public class SecurityConfig {
 
     private final CorsConfigurationSource corsConfigurationSource;
-    private final MultiRealmAuthenticationManagerResolver multiRealmAuthenticationManagerResolver;
+    private final SimpleAuthenticationManagerResolver authenticationManagerResolver;
 
     public SecurityConfig(CorsConfigurationSource corsConfigurationSource,
-                         MultiRealmAuthenticationManagerResolver multiRealmAuthenticationManagerResolver) {
+                         SimpleAuthenticationManagerResolver authenticationManagerResolver) {
         this.corsConfigurationSource = corsConfigurationSource;
-        this.multiRealmAuthenticationManagerResolver = multiRealmAuthenticationManagerResolver;
+        this.authenticationManagerResolver = authenticationManagerResolver;
     }
 
     /**
@@ -68,7 +68,7 @@ public class SecurityConfig {
                 .anyRequest().permitAll()
             )
             .oauth2ResourceServer(oauth2 -> oauth2
-                .authenticationManagerResolver(multiRealmAuthenticationManagerResolver)
+                .authenticationManagerResolver(authenticationManagerResolver)
                 .authenticationEntryPoint(customAuthenticationEntryPoint())
             )
             .exceptionHandling(exceptionHandling -> exceptionHandling
