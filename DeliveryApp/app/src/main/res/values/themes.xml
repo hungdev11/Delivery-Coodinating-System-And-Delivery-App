@@ -6,4 +6,30 @@
     </style>
 
     <style name="Theme.DeliveryApp" parent="Base.Theme.DeliveryApp" />
+
+    <style name="DetailRowStyle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:paddingTop">4dp</item>
+        <item name="android:paddingBottom">4dp</item>
+    </style>
+
+    <style name="DetailLabelStyle">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">0.4</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/material_grey_600</item>
+    </style>
+
+    <style name="DetailValueStyle">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">0.6</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/black</item>
+        <item name="android:gravity">end</item>
+        <item name="android:textAlignment">viewEnd</item>
+    </style>
 </resources>

@@ -8,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId "com.ds.deliveryapp"
-        minSdk 21
+        minSdk 26
         targetSdk 36
         versionCode 1
         versionName "1.0"
@@ -23,8 +23,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
@@ -37,7 +37,22 @@ dependencies {
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
-
+    //Lombok lib
+    compileOnly(libs.lombok)
+    annotationProcessor(libs.lombok)
+    testCompileOnly(libs.lombok)
+    testAnnotationProcessor(libs.lombok)
     //Scan code library
     implementation libs.zxing.android.embedded
+    //
+    implementation libs.retrofit
+    // Converter (for JSON serialization/deserialization - GSON is common)
+    implementation libs.converter.gson
+    implementation libs.gson
+    implementation libs.gson.javatime.serialisers
+
+    // OkHttp (usually included by Retrofit, but good practice to define)
+    implementation libs.okhttp
+
+
 }

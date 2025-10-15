@@ -1,5 +1,6 @@
 package com.ds.session.session_service.business.v1.services;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
@@ -121,7 +122,27 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         List<DeliveryAssignmentResponse> res = tasks.stream().map(t -> {
             ParcelResponse response = parcelServiceClient.fetchParcelResponse(UUID.fromString(t.getParcelId()));
             ParcelInfo parcelInfo = parcelMapper.toParcelInfo(response);
-            return DeliveryAssignmentResponse.from(t, parcelInfo, "Phan Phi Hung", "Maria Akamoto");
+            return DeliveryAssignmentResponse.from(t, parcelInfo, "0935960974", "Maria Akamoto");
+        }).toList();
+
+        return res;
+    }
+
+    @Override
+    public List<DeliveryAssignmentResponse> getTasksBetween(UUID deliveryManId, LocalDate start, LocalDate end) {
+        List<DeliveryAssignment> tasks;
+        if (start == null || end == null) {
+            tasks = deliveryAssignmentRepository.findAllByDeliveryManId(deliveryManId.toString());
+        } else {
+            tasks = deliveryAssignmentRepository.findAllByDeliveryManIdAndScanedAtBetween(
+                deliveryManId.toString(), 
+                start.atStartOfDay(),
+                end.atTime(LocalTime.MAX));
+        }
+        List<DeliveryAssignmentResponse> res = tasks.stream().map(t -> {
+            ParcelResponse response = parcelServiceClient.fetchParcelResponse(UUID.fromString(t.getParcelId()));
+            ParcelInfo parcelInfo = parcelMapper.toParcelInfo(response);
+            return DeliveryAssignmentResponse.from(t, parcelInfo, "0935960974", "Maria Akamoto");
         }).toList();
 
         return res;
