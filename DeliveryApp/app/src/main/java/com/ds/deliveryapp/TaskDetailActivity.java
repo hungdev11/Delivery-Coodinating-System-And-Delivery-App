@@ -24,19 +24,12 @@ import java.text.NumberFormat;
 import java.util.Locale;
 
 public class TaskDetailActivity extends AppCompatActivity {
-
-    private static final String TAG = "TaskDetailActivity";
-
-    // KHAI BÁO BIẾN CẤP LỚP (ĐÃ KIỂM TRA LẠI ĐẦY ĐỦ)
-
-    // View từ activity_task_detail_driver_optimized.xml
     private TextView tvParcelCode, tvStatus, tvReceiverName, tvReceiverPhone, tvDeliveryLocation;
     private Button btnCallReceiver, btnOpenMap, btnMainAction;
-    private TextView tvParcelValue, tvRouteDurationDisplay;
+    private TextView tvParcelValue;
 
     // View từ card_details_and_route_info.xml (included)
     private TextView tvDeliveryType, tvWeight, tvParcelId;
-    private TextView tvRouteDistance, tvRouteDuration; // Đảm bảo khai báo đủ
     private TextView tvCreatedAt, tvCompletedAt, tvFailReason;
     private LinearLayout layoutCompletedAt, layoutFailReason;
 
@@ -45,7 +38,6 @@ public class TaskDetailActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Đảm bảo tên layout khớp với file XML đang được sử dụng
         setContentView(R.layout.activity_task_detail);
 
         initViews();
@@ -68,7 +60,6 @@ public class TaskDetailActivity extends AppCompatActivity {
     }
 
     private void initViews() {
-        // Ánh xạ View từ activity_task_detail.xml
         tvParcelCode = findViewById(R.id.tv_parcel_code);
         tvStatus = findViewById(R.id.tv_status);
         tvReceiverName = findViewById(R.id.tv_receiver_name_detail);
@@ -101,7 +92,6 @@ public class TaskDetailActivity extends AppCompatActivity {
         if (tvReceiverName != null) tvReceiverName.setText(task.getReceiverName() != null ? task.getReceiverName() : "Khách hàng");
         if (tvReceiverPhone != null) tvReceiverPhone.setText(task.getReceiverPhone());
         if (tvDeliveryLocation != null) tvDeliveryLocation.setText("Địa chỉ: " + task.getDeliveryLocation());
-        if (tvRouteDurationDisplay != null) tvRouteDurationDisplay.setText(formatDurationS(task.getRouteDurationS()));
 
         // CARD 2: COD
         if (tvParcelValue != null) tvParcelValue.setText(FormaterUtil.formatCurrency(task.getValue()));
@@ -110,10 +100,6 @@ public class TaskDetailActivity extends AppCompatActivity {
         if (tvDeliveryType != null) tvDeliveryType.setText(DeliveryType.NORMAL.equals(task.getDeliveryType()) ? "Giao Hàng Tiêu Chuẩn" : "Giao Hàng Nhanh");
         if (tvWeight != null) tvWeight.setText(formatWeight(task.getWeight()));
         if (tvParcelId != null) tvParcelId.setText(task.getParcelId());
-
-        // Kiểm tra null cho tvRouteDistance/tvRouteDuration
-        if (tvRouteDistance != null) tvRouteDistance.setText(formatDistanceM(task.getRouteDistanceM()));
-        if (tvRouteDuration != null) tvRouteDuration.setText(formatDurationS(task.getRouteDurationS()));
 
         if (tvCreatedAt != null) tvCreatedAt.setText(task.getCreatedAt());
 
@@ -178,7 +164,7 @@ public class TaskDetailActivity extends AppCompatActivity {
                 }
             });
         }
-        
+
         // Nút Chỉ Đường
         if (btnOpenMap != null) {
             btnOpenMap.setOnClickListener(v -> {

@@ -150,7 +150,7 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
     public void fetchTasksByDateRange(LocalDate startDate, LocalDate endDate) {
         tvEmptyState.setVisibility(View.GONE);
 
-        Retrofit retrofit = RetrofitClient.getRetrofitInstance();
+        Retrofit retrofit = RetrofitClient.getSessionRetrofitInstance();
         SessionClient service = retrofit.create(SessionClient.class);
 
         String start = startDate.format(apiFormatter);

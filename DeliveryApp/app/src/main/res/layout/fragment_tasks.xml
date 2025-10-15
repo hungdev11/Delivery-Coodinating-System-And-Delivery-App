@@ -14,6 +14,7 @@
         android:orientation="vertical"
         android:padding="12dp"
         android:background="@android:color/white"
+        android:elevation="4dp"
         app:layout_constraintTop_toTopOf="parent">
         <TextView
             android:layout_width="wrap_content"
@@ -24,16 +25,35 @@
             android:textColor="@color/black"/>
     </LinearLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rv_tasks_list"
+    <LinearLayout
+        android:id="@+id/sticky_button_container"
         android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@android:color/transparent"
+        android:elevation="8dp"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <Button
+            android:id="@+id/btnScanOrder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📷 QUÉT BƯU KIỆN"
+            android:backgroundTint="#007BFF"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:textSize="16sp"/>
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerOrders"  android:layout_width="match_parent"
         android:layout_height="0dp"
         android:paddingTop="8dp"
         android:clipToPadding="false"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
         app:layout_constraintTop_toBottomOf="@id/layout_header"
-        app:layout_constraintBottom_toBottomOf="parent"
-        tools:listitem="@layout/item_task" />
+        app:layout_constraintBottom_toTopOf="@id/sticky_button_container" tools:listitem="@layout/item_task" />
 
     <ProgressBar
         android:id="@+id/progress_bar"

@@ -3,10 +3,11 @@ package com.ds.deliveryapp;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
-// ... (Các imports khác giữ nguyên)
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -33,7 +34,11 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private RecyclerView rvTasks;
     private TasksAdapter adapter;
     private List<DeliveryAssignment> tasks;
-    private View loadingLayout; // Giả định có loading spinner trong fragment_tasks
+    private ProgressBar progressBar;
+    private Button btnScanOrder;
+
+    // Yêu cầu code: Cần một mã Request Code duy nhất cho onActivityResult
+    private static final int SCAN_REQUEST_CODE = 1001;
 
     private static final String DRIVER_ID = "0bbfa6a6-1c0b-4e4f-9e6e-11e36c142ea5";
     private static final String TAG = "TaskFragment";
@@ -42,48 +47,68 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        // Sử dụng layout fragment_tasks đã được chỉnh sửa để có RecyclerView
         View view = inflater.inflate(R.layout.fragment_tasks, container, false);
 
         tasks = new ArrayList<>();
         adapter = new TasksAdapter(tasks, this);
 
-        // Ánh xạ RecyclerView
-        rvTasks = view.findViewById(R.id.rv_tasks_list); // Sửa ID từ recyclerOrders thành rv_tasks_list
+        rvTasks = view.findViewById(R.id.recyclerOrders);
         rvTasks.setLayoutManager(new LinearLayoutManager(getContext()));
         rvTasks.setAdapter(adapter);
 
-        // Ánh xạ Progress Bar
-        loadingLayout = view.findViewById(R.id.progress_bar);
+        progressBar = view.findViewById(R.id.progress_bar);
+
+        btnScanOrder = view.findViewById(R.id.btnScanOrder);
+        btnScanOrder.setOnClickListener(v -> {
+            Intent intent = new Intent(getContext(), QrScanActivity.class);
+            // Dùng startActivityForResult để refresh danh sách nếu nhận nhiệm vụ thành công
+            startActivityForResult(intent, SCAN_REQUEST_CODE);
+        });
 
         fetchTodayTasks(DRIVER_ID);
 
         return view;
     }
 
+    // Phương thức xử lý kết quả từ QrScanActivity (thông qua ParcelDetailActivity)
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        // Kiểm tra xem Activity là từ Scan và có kết quả thành công không
+        if (requestCode == SCAN_REQUEST_CODE && resultCode == getActivity().RESULT_OK) {
+            // Nếu nhận nhiệm vụ thành công, tải lại danh sách
+            Toast.makeText(getContext(), "Cập nhật danh sách nhiệm vụ...", Toast.LENGTH_SHORT).show();
+            fetchTodayTasks(DRIVER_ID);
+        }
+    }
+
+
     // Triển khai phương thức click từ TasksAdapter.OnTaskClickListener
     @Override
     public void onOrderClick(DeliveryAssignment task) {
+        // Giả sử TaskDetailActivity tồn tại
         Intent intent = new Intent(getActivity(), TaskDetailActivity.class);
 
         // Truyền đối tượng DeliveryAssignment đầy đủ
+        // Cần đảm bảo DeliveryAssignment implements Serializable/Parcelable
         intent.putExtra("TASK_DETAIL", task);
 
         startActivity(intent);
     }
 
     public void fetchTodayTasks(String driverId) {
-        loadingLayout.setVisibility(View.VISIBLE);
+        progressBar.setVisibility(View.VISIBLE); // Hiển thị ProgressBar
 
-        Retrofit retrofit = RetrofitClient.getRetrofitInstance(); // Giả định tồn tại
-        SessionClient service = retrofit.create(SessionClient.class); // Giả định tồn tại
+        Retrofit retrofit = RetrofitClient.getSessionRetrofitInstance();
+        SessionClient service = retrofit.create(SessionClient.class);
 
-        Call<List<DeliveryAssignment>> call = service.getTasksToday(driverId); // Giả định tồn tại
+        Call<List<DeliveryAssignment>> call = service.getTasksToday(driverId);
 
         call.enqueue(new Callback<List<DeliveryAssignment>>() {
             @Override
             public void onResponse(Call<List<DeliveryAssignment>> call, Response<List<DeliveryAssignment>> response) {
-                loadingLayout.setVisibility(View.GONE);
+                progressBar.setVisibility(View.GONE); // Ẩn ProgressBar
                 if (response.isSuccessful() && response.body() != null) {
                     List<DeliveryAssignment> newTasks = response.body();
 
@@ -101,7 +126,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             }
             @Override
             public void onFailure(Call<List<DeliveryAssignment>> call, Throwable t) {
-                loadingLayout.setVisibility(View.GONE);
+                progressBar.setVisibility(View.GONE); // Ẩn ProgressBar
                 Log.e(TAG, "Network error: " + t.getMessage());
                 Toast.makeText(getContext(), "Lỗi kết nối mạng.", Toast.LENGTH_LONG).show();
             }
