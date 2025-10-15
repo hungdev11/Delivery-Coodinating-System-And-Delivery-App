@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="4dp"
+    android:layout_marginBottom="8dp"
+    android:layout_marginTop="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Thông Tin Chi Tiết &amp; Vận Hành"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/black"
+            android:layout_marginBottom="8dp"/>
+
+        <LinearLayout style="@style/DetailRowStyle">
+            <TextView style="@style/DetailLabelStyle" android:text="Loại Giao Hàng:" />
+            <TextView
+                android:id="@+id/tv_delivery_type"
+                style="@style/DetailValueStyle"
+                tools:text="Giao Hàng Tiêu Chuẩn" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/DetailRowStyle">
+            <TextView style="@style/DetailLabelStyle" android:text="Cân Nặng:" />
+            <TextView
+                android:id="@+id/tv_weight"
+                style="@style/DetailValueStyle"
+                tools:text="2.5 kg" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/DetailRowStyle">
+            <TextView style="@style/DetailLabelStyle" android:text="ID Đơn Hàng Nội Bộ:" />
+            <TextView
+                android:id="@+id/tv_parcel_id"
+                style="@style/DetailValueStyle"
+                tools:text="a1b2c3d4e5f6g7h8" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/material_grey_300"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"/>
+
+        <LinearLayout style="@style/DetailRowStyle">
+            <TextView style="@style/DetailLabelStyle" android:text="Tạo Lúc:" />
+            <TextView
+                android:id="@+id/tv_created_at"
+                style="@style/DetailValueStyle"
+                tools:text="15/10/2025 10:00" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/layout_completed_at"
+            style="@style/DetailRowStyle">
+            <TextView style="@style/DetailLabelStyle" android:text="Hoàn Thành Lúc:" />
+            <TextView
+                android:id="@+id/tv_completed_at"
+                style="@style/DetailValueStyle"
+                android:textStyle="italic"
+                tools:text="15/10/2025 12:30" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/layout_fail_reason"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="12dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Lý Do Thất Bại:"
+                android:textStyle="bold"
+                android:textColor="@android:color/holo_red_dark"
+                android:layout_marginBottom="4dp"/>
+            <TextView
+                android:id="@+id/tv_fail_reason"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:textColor="@color/black"
+                tools:text="Khách hàng không nghe máy, hẹn giao lại vào ngày mai." />
+        </LinearLayout>
+
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

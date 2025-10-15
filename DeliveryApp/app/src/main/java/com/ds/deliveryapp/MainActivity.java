@@ -17,7 +17,7 @@ public class MainActivity extends AppCompatActivity {
             Fragment selectedFragment = null;
             int id = item.getItemId();
 
-            if (id == R.id.nav_orders) selectedFragment = new OrderFragment();
+            if (id == R.id.nav_orders) selectedFragment = new TaskFragment();
             else if (id == R.id.nav_map) selectedFragment = new MapFragment();
             else if (id == R.id.nav_activity) selectedFragment = new ActivityFragment();
             else if (id == R.id.nav_profile) selectedFragment = new ProfileFragment();
