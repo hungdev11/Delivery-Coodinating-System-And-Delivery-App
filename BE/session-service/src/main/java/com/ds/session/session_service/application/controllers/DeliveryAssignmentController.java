@@ -1,8 +1,10 @@
 package com.ds.session.session_service.application.controllers;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -53,5 +55,19 @@ public class DeliveryAssignmentController {
     @GetMapping("/today/{deliveryManId}")
     public ResponseEntity<List<DeliveryAssignmentResponse>> getDailyTasks(@PathVariable UUID deliveryManId) {
         return ResponseEntity.ok(deliveryAssignmentService.getDailyTasks(deliveryManId));
+    }
+
+    @GetMapping("/{deliveryManId}")
+    public ResponseEntity<List<DeliveryAssignmentResponse>> getDailyTasks(
+        @PathVariable UUID deliveryManId, 
+        @RequestParam(required = false) 
+        @DateTimeFormat(pattern = "dd/MM/yyyy")
+        LocalDate start, 
+
+        @RequestParam(required = false) 
+        @DateTimeFormat(pattern = "dd/MM/yyyy")
+        LocalDate end
+    ){
+        return ResponseEntity.ok(deliveryAssignmentService.getTasksBetween(deliveryManId, start, end));
     }
 }

@@ -15,4 +15,5 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
     boolean existsByDeliveryManIdAndParcelIdAndScanedAtBetween(String deliveryManId, String parcelId, LocalDateTime start, LocalDateTime end);
     Optional<DeliveryAssignment> findByDeliveryManIdAndParcelIdAndScanedAtBetween(String parcelId, String deliveryManId, LocalDateTime start, LocalDateTime end);
     List<DeliveryAssignment> findAllByDeliveryManIdAndScanedAtBetween(String deliveryManId, LocalDateTime start, LocalDateTime end);
+    List<DeliveryAssignment> findAllByDeliveryManId(String string);
 }
