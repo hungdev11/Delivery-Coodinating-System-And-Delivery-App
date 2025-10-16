@@ -1,8 +1,8 @@
 package com.ds.deliveryapp.clients;
 
+import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.model.DeliveryAssignment;
 
-import java.time.LocalDate;
 import java.util.List;
 
 import retrofit2.Call;
@@ -13,12 +13,24 @@ import retrofit2.http.Query;
 
 public interface SessionClient {
     @GET("assignments/today/{id}")
-    Call<List<DeliveryAssignment>> getTasksToday(@Path("id") String driverId);
+    Call<PageResponse<DeliveryAssignment>> getTasksToday(@Path("id") String driverId,
+                                                 @Query("status") List<String> status,
+                                                 @Query("page") int page,
+                                                 @Query("size") int size);
 
     @GET("assignments/{id}")
-    Call<List<DeliveryAssignment>> getTasksIn(@Path("id") String driverId,
-                                              @Query("start") String start,
-                                              @Query("end") String end);
+    Call<PageResponse<DeliveryAssignment>> getTasks(
+            @Path("id") String driverId,
+            @Query("status") List<String> status,
+            // Sửa kiểu dữ liệu từ LocalDate sang String
+            @Query("createdAtStart") String createdAtStart,
+            @Query("createdAtEnd") String createdAtEnd,
+            @Query("completedAtStart") String completedAtStart,
+            @Query("completedAtEnd") String completedAtEnd,
+            @Query("page") int page,
+            @Query("size") int size
+    );
+
     @POST("assignments/{parcelId}/accept")
     Call<Boolean> acceptTask(@Path("parcelId") String parcelId,
                              @Query("deliveryManId") String deliveryManId);

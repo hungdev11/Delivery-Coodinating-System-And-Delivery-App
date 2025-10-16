@@ -6,157 +6,237 @@
     android:layout_height="match_parent"
     android:background="#F5F6FA">
 
-    <LinearLayout
-        android:orientation="vertical"
-        android:padding="16dp"
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <!-- Header -->
-        <TextView
-            android:text="Tổng hợp giao hàng"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:textColor="@color/black"
-            android:layout_marginBottom="8dp"
-            android:layout_height="wrap_content"
-            android:layout_width="wrap_content"/>
-
-        <!-- Layout Chọn Ngày Bắt Đầu và Ngày Kết Thúc -->
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="8dp"
-            android:background="@drawable/bg_card"
-            android:layout_marginBottom="12dp">
+            android:padding="16dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:text="Tổng hợp giao hàng"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/black"
+                android:layout_marginBottom="16dp"
                 android:layout_height="wrap_content"
-                android:text="Khoảng thời gian:"
-                android:textSize="14sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="4dp">
-
-                <!-- Ngày Bắt Đầu -->
-                <TextView
-                    android:id="@+id/tv_start_date"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/black"
-                    tools:text="14/10/2025"/>
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=" - "
-                    android:textSize="16sp"
-                    android:textColor="@color/black"
-                    android:paddingStart="4dp"
-                    android:paddingEnd="4dp"/>
-
-                <!-- Ngày Kết Thúc -->
-                <TextView
-                    android:id="@+id/tv_end_date"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/black"
-                    tools:text="15/10/2025"/>
-
-                <ImageView
-                    android:id="@+id/img_date_picker"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@android:drawable/ic_menu_today"
-                    android:contentDescription="Chọn ngày"
-                    android:paddingStart="16dp"/>
-            </LinearLayout>
-
-            <Button
-                android:id="@+id/btn_select_dates"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Chọn Khoảng Thời Gian"
-                style="@style/Widget.AppCompat.Button.Colored"
-                android:textColor="@android:color/white"/>
-
-        </LinearLayout>
-
-        <!-- Card Tóm tắt Tổng hợp -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardCornerRadius="8dp"
-            app:cardElevation="2dp"
-            android:layout_marginBottom="16dp">
+                android:layout_width="wrap_content"/>
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="12dp">
+                android:padding="12dp"
+                android:background="@drawable/bg_card"
+                android:layout_marginBottom="16dp">
 
                 <TextView
-                    android:id="@+id/tvDistance"
-                    android:text="Tổng quãng đường: 0 km"
+                    android:textColor="@android:color/black"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Bộ Lọc Tìm Kiếm"
+                    android:textSize="16sp"
                     android:textStyle="bold"
-                    android:textColor="@color/black"
-                    android:layout_height="wrap_content"
-                    android:layout_width="wrap_content"/>
+                    android:layout_marginBottom="8dp"/>
 
                 <TextView
-                    android:id="@+id/tvOrdersCount"
-                    android:text="Tổng đơn đã xử lý: 0"
+                    android:textColor="@android:color/black"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_width="wrap_content"/>
+                    android:text="Trạng thái (Status):"
+                    android:textSize="14sp"
+                    android:layout_marginTop="8dp"/>
+
+                <Spinner
+                    android:id="@+id/spinner_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:layout_marginBottom="12dp"/>
+                <TextView
+                    android:textColor="@android:color/black"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Ngày Tạo (Created At):"
+                    android:textSize="14sp"
+                    android:layout_marginTop="8dp"/>
+
+                <LinearLayout
+                    android:id="@+id/layout_created_at_dates"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/tv_created_at_start"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:textColor="@android:color/black"
+                        tools:text="14/10/2025"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text=" - "
+                        android:textSize="16sp"
+                        android:textColor="@android:color/black"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"/>
+
+                    <TextView
+                        android:id="@+id/tv_created_at_end"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:textColor="@android:color/black"
+                        tools:text="15/10/2025"/>
+
+                    <ImageView
+                        android:id="@+id/img_created_at_picker"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_calendar"
+                        android:contentDescription="Chọn ngày tạo"
+                        android:paddingStart="16dp"/>
+                </LinearLayout>
 
                 <TextView
-                    android:id="@+id/tvTime"
-                    android:text="Tổng thời gian: 0 phút"
+                    android:textColor="@android:color/black"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_width="wrap_content"/>
+                    android:text="Ngày Hoàn Thành (Completed At):"
+                    android:textSize="14sp"
+                    android:layout_marginTop="12dp"/>
+
+                <LinearLayout
+                    android:id="@+id/layout_completed_at_dates"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/tv_completed_at_start"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:textColor="@android:color/black"
+                        tools:text="14/10/2025"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text=" - "
+                        android:textSize="16sp"
+                        android:textColor="@android:color/black"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"/>
+
+                    <TextView
+                        android:id="@+id/tv_completed_at_end"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:textColor="@android:color/black"
+                        tools:text="15/10/2025"/>
+
+                    <ImageView
+                        android:id="@+id/img_completed_at_picker"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_calendar"
+                        android:contentDescription="Chọn ngày hoàn thành"
+                        android:paddingStart="16dp"/>
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/btn_apply_filters"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="Áp Dụng Bộ Lọc"
+                    style="@style/Widget.AppCompat.Button.Colored"
+                    android:textColor="@android:color/white"/>
+
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
 
-        <!-- RecyclerView cho danh sách đơn hàng đã hoàn thành -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Chi Tiết Đơn Hàng"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="@color/black"
-            android:layout_marginBottom="8dp"/>
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="8dp"
+                app:cardElevation="2dp"
+                app:cardBackgroundColor="@android:color/white"
+                android:layout_marginBottom="16dp">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerActivities"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:nestedScrollingEnabled="false"
-            tools:listitem="@layout/item_task"/>
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
 
-        <TextView
-            android:id="@+id/tv_empty_state"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Không tìm thấy đơn hàng nào trong khoảng thời gian này."
-            android:gravity="center"
-            android:padding="24dp"
-            android:visibility="gone"
-            android:textColor="@color/material_grey_600"/>
+                    <TextView
+                        android:id="@+id/tvDistance"
+                        android:text="Tổng quãng đường: 0 km"
+                        android:textStyle="bold"
+                        android:textColor="@android:color/black"
+                        android:layout_height="wrap_content"
+                        android:layout_width="wrap_content"/>
 
-    </LinearLayout>
+                    <TextView
+                        android:textColor="@android:color/black"
+                        android:id="@+id/tvOrdersCount"
+                        android:text="Tổng đơn đã xử lý: 0"
+                        android:layout_height="wrap_content"
+                        android:layout_width="wrap_content"/>
+
+                    <TextView
+                        android:textColor="@android:color/black"
+                        android:id="@+id/tvTime"
+                        android:text="Tổng thời gian: 0 phút"
+                        android:layout_height="wrap_content"
+                        android:layout_width="wrap_content"/>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Chi Tiết Đơn Hàng"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/black"
+                android:layout_marginBottom="8dp"/>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerActivities"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false"
+                tools:listitem="@layout/item_task"/>
+
+            <TextView
+                android:id="@+id/tv_empty_state"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Không tìm thấy đơn hàng nào trong khoảng thời gian này."
+                android:gravity="center"
+                android:padding="24dp"
+                android:visibility="gone"
+                android:textColor="@android:color/darker_gray"/>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

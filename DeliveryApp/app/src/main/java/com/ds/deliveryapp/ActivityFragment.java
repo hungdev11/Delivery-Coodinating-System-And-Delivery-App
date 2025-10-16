@@ -10,8 +10,10 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.LinearLayout;
+import android.widget.ImageView;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -23,14 +25,16 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.ds.deliveryapp.adapter.TasksAdapter;
 import com.ds.deliveryapp.clients.SessionClient;
+import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.DeliveryAssignment;
+import com.ds.deliveryapp.utils.SpinnerItem; // Sử dụng lớp SpinnerItem đã định nghĩa
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -41,21 +45,34 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
 
     private RecyclerView rvActivities;
     private TasksAdapter adapter;
-    private List<DeliveryAssignment> completedTasks;
+    private List<DeliveryAssignment> allTasks = new ArrayList<>();
 
-    // Đã thay thế tvSelectedDate bằng hai TextView
-    private TextView tvStartDate, tvEndDate, tvDistance, tvOrdersCount, tvTime, tvEmptyState;
-    private Button btnSelectDates;
+    private TextView tvDistance, tvOrdersCount, tvTime, tvEmptyState;
+    private TextView tvCreatedAtStart, tvCreatedAtEnd;
+    private ImageView imgCreatedAtPicker;
+    private TextView tvCompletedAtStart, tvCompletedAtEnd;
+    private ImageView imgCompletedAtPicker;
+    private Spinner spinnerStatus;
+    private Button btnApplyFilters;
 
-    // Biến cho khoảng thời gian
-    private LocalDate selectedStartDate;
-    private LocalDate selectedEndDate;
+    private LocalDate createdAtStart;
+    private LocalDate createdAtEnd;
+    private LocalDate completedAtStart;
+    private LocalDate completedAtEnd;
 
-    private final DateTimeFormatter apiFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private int currentPage = 0;
+    private final int pageSize = 10;
+    private boolean isLoading = false;
+    private boolean isLastPage = false;
+    private List<SpinnerItem> statusOptions;
+
+    private LinearLayoutManager layoutManager;
+
+    private final DateTimeFormatter apiFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private final DateTimeFormatter uiFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private static final String DRIVER_ID = "0bbfa6a6-1c0b-4e4f-9e6e-11e36c142ea5";
-    private static final String TAG = "HistoryFragment";
+    private static final String TAG = "ActivityFragment";
 
     @Nullable
     @Override
@@ -63,53 +80,117 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
                              @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_activity, container, false);
 
-        completedTasks = new ArrayList<>();
-        adapter = new TasksAdapter(completedTasks, this);
+        adapter = new TasksAdapter(allTasks, this);
 
-        // 1. Ánh xạ Views
+        // 1. Ánh xạ Views (Bao gồm Spinner)
         initViews(view);
 
         // 2. Thiết lập RecyclerView
-        rvActivities.setLayoutManager(new LinearLayoutManager(getContext()));
+        layoutManager = new LinearLayoutManager(getContext());
+        rvActivities.setLayoutManager(layoutManager);
         rvActivities.setAdapter(adapter);
+        setupPaginationScrollListener();
 
-        // 3. Thiết lập khoảng ngày mặc định (Hôm nay)
-        selectedStartDate = LocalDate.now();
-        selectedEndDate = LocalDate.now();
-        updateDateDisplay();
-        fetchTasksByDateRange(selectedStartDate, selectedEndDate);
+        // 3. Thiết lập khoảng ngày mặc định và Status
+        setDefaultFilters();
+        setupStatusSpinnerLogic(); // Sử dụng logic SpinnerItem đã sửa lỗi
 
-        // 4. Thiết lập sự kiện chọn ngày
-        btnSelectDates.setOnClickListener(v -> showDatePickerDialog(true));
+        // 4. Thiết lập sự kiện
+        imgCreatedAtPicker.setOnClickListener(v -> showDatePickerDialog(true, true));
+        imgCompletedAtPicker.setOnClickListener(v -> showDatePickerDialog(false, true));
+        btnApplyFilters.setOnClickListener(v -> {
+            resetPaginationAndFetchTasks();
+        });
+
+        // Tải dữ liệu lần đầu
+        fetchTasks(currentPage);
 
         return view;
     }
 
     private void initViews(View view) {
-        // Ánh xạ các View mới cho ngày bắt đầu và kết thúc
-        tvStartDate = view.findViewById(R.id.tv_start_date);
-        tvEndDate = view.findViewById(R.id.tv_end_date);
-        btnSelectDates = view.findViewById(R.id.btn_select_dates);
-
+        // Headers
         tvDistance = view.findViewById(R.id.tvDistance);
         tvOrdersCount = view.findViewById(R.id.tvOrdersCount);
         tvTime = view.findViewById(R.id.tvTime);
         rvActivities = view.findViewById(R.id.recyclerActivities);
         tvEmptyState = view.findViewById(R.id.tv_empty_state);
+
+        // Created At Filters
+        tvCreatedAtStart = view.findViewById(R.id.tv_created_at_start);
+        tvCreatedAtEnd = view.findViewById(R.id.tv_created_at_end);
+        imgCreatedAtPicker = view.findViewById(R.id.img_created_at_picker);
+
+        // Completed At Filters
+        tvCompletedAtStart = view.findViewById(R.id.tv_completed_at_start);
+        tvCompletedAtEnd = view.findViewById(R.id.tv_completed_at_end);
+        imgCompletedAtPicker = view.findViewById(R.id.img_completed_at_picker);
+
+        // Status and Apply Button
+        spinnerStatus = view.findViewById(R.id.spinner_status); // ⚠️ Đã ánh xạ
+        btnApplyFilters = view.findViewById(R.id.btn_apply_filters);
     }
 
-    private void updateDateDisplay() {
-        tvStartDate.setText(selectedStartDate.format(uiFormatter));
-        tvEndDate.setText(selectedEndDate.format(uiFormatter));
+    private void initializeStatusOptions() {
+        statusOptions = new ArrayList<>();
+        statusOptions.add(new SpinnerItem("Tất cả", null));
+        statusOptions.add(new SpinnerItem("Đang giao", "PROCESSING"));
+        statusOptions.add(new SpinnerItem("Đã giao thành công", "SUCCESS"));
+        statusOptions.add(new SpinnerItem("Giao hàng thất bại", "FAILED"));
     }
 
-    /**
-     * Hiển thị DatePickerDialog, gọi đệ quy để chọn ngày bắt đầu và ngày kết thúc.
-     * @param isSelectingStartDate True nếu đang chọn ngày bắt đầu, False nếu đang chọn ngày kết thúc.
-     */
-    private void showDatePickerDialog(boolean isSelectingStartDate) {
-        LocalDate initialDate = isSelectingStartDate ? selectedStartDate : selectedEndDate;
+    private void setupStatusSpinnerLogic() { // Đổi tên để tránh nhầm lẫn
+        initializeStatusOptions();
+
+        // spinnerStatus đã được ánh xạ trong initViews()
+        ArrayAdapter<SpinnerItem> adapter = new ArrayAdapter<>(
+                getContext(),
+                R.layout.spinner_item,
+                statusOptions
+        );
+        adapter.setDropDownViewResource(R.layout.spinner_dropdown_item);
+        spinnerStatus.setAdapter(adapter);
+        spinnerStatus.setSelection(0);
+    }
+
+    private List<String> getSelectedStatuses() {
+        SpinnerItem selectedItem = (SpinnerItem) spinnerStatus.getSelectedItem();
+        String apiValue = selectedItem.getApiValue();
+
+        if (apiValue == null) {
+            return null;
+        }
+        return Arrays.asList(apiValue);
+    }
+
+    private void setDefaultFilters() {
+        createdAtStart = LocalDate.now();
+        createdAtEnd = LocalDate.now();
+        completedAtStart = null;
+        completedAtEnd = null;
+
+        updateDateDisplay(true);
+        updateDateDisplay(false);
+    }
+
+    private void updateDateDisplay(boolean isCreatedAt) {
+        if (isCreatedAt) {
+            tvCreatedAtStart.setText(createdAtStart != null ? createdAtStart.format(uiFormatter) : "Chọn ngày");
+            tvCreatedAtEnd.setText(createdAtEnd != null ? createdAtEnd.format(uiFormatter) : "Chọn ngày");
+        } else {
+            tvCompletedAtStart.setText(completedAtStart != null ? completedAtStart.format(uiFormatter) : "Không lọc");
+            tvCompletedAtEnd.setText(completedAtEnd != null ? completedAtEnd.format(uiFormatter) : "Không lọc");
+        }
+    }
+
+    private void showDatePickerDialog(boolean isCreatedDate, boolean isSelectingStartDate) {
+        // Logic chọn ngày (giữ nguyên)
+        LocalDate currentStart = isCreatedDate ? createdAtStart : completedAtStart;
+        LocalDate currentEnd = isCreatedDate ? createdAtEnd : completedAtEnd;
+
+        LocalDate initialDate = isSelectingStartDate ? currentStart : currentEnd;
         String title = isSelectingStartDate ? "Chọn Ngày Bắt Đầu" : "Chọn Ngày Kết Thúc";
+        if (initialDate == null) initialDate = LocalDate.now();
 
         DatePickerDialog dialog = new DatePickerDialog(
                 getContext(),
@@ -117,24 +198,33 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
                     LocalDate chosenDate = LocalDate.of(year, month + 1, dayOfMonth);
 
                     if (isSelectingStartDate) {
-                        selectedStartDate = chosenDate;
-                        // Sau khi chọn ngày bắt đầu, chuyển sang chọn ngày kết thúc
-                        // Đảm bảo ngày kết thúc tối thiểu bằng ngày bắt đầu
-                        if (selectedEndDate.isBefore(selectedStartDate)) {
-                            selectedEndDate = selectedStartDate;
+                        if (isCreatedDate) {
+                            createdAtStart = chosenDate;
+                            if (createdAtEnd != null && createdAtEnd.isBefore(createdAtStart)) {
+                                createdAtEnd = createdAtStart;
+                            }
+                        } else {
+                            completedAtStart = chosenDate;
+                            if (completedAtEnd != null && completedAtEnd.isBefore(completedAtStart)) {
+                                completedAtEnd = completedAtStart;
+                            }
                         }
-                        showDatePickerDialog(false); // Gọi lại để chọn ngày kết thúc
+                        showDatePickerDialog(isCreatedDate, false);
                     } else {
-                        // Đang chọn ngày kết thúc
-                        if (chosenDate.isBefore(selectedStartDate)) {
+                        LocalDate finalStart = isCreatedDate ? createdAtStart : completedAtStart;
+                        if (chosenDate.isBefore(finalStart)) {
                             Toast.makeText(getContext(), "Ngày kết thúc không được trước ngày bắt đầu.", Toast.LENGTH_LONG).show();
-                            showDatePickerDialog(false); // Mở lại dialog để chọn lại ngày kết thúc
+                            showDatePickerDialog(isCreatedDate, false);
                             return;
                         }
-                        selectedEndDate = chosenDate;
 
-                        updateDateDisplay();
-                        fetchTasksByDateRange(selectedStartDate, selectedEndDate);
+                        if (isCreatedDate) {
+                            createdAtEnd = chosenDate;
+                        } else {
+                            completedAtEnd = chosenDate;
+                        }
+
+                        updateDateDisplay(isCreatedDate);
                     }
                 },
                 initialDate.getYear(),
@@ -147,49 +237,103 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         dialog.show();
     }
 
-    public void fetchTasksByDateRange(LocalDate startDate, LocalDate endDate) {
+    private void resetPaginationAndFetchTasks() {
+        currentPage = 0;
+        isLastPage = false;
+        allTasks.clear();
+        adapter.notifyDataSetChanged();
+        calculateSummary(new ArrayList<>());
+        fetchTasks(currentPage);
+    }
+
+    public void fetchTasks(int page) {
+        if (isLoading || isLastPage) return;
+
+        isLoading = true;
         tvEmptyState.setVisibility(View.GONE);
+        // ... (Hiển thị loading)
 
         Retrofit retrofit = RetrofitClient.getSessionRetrofitInstance();
         SessionClient service = retrofit.create(SessionClient.class);
 
-        String start = startDate.format(apiFormatter);
-        String end = endDate.format(apiFormatter);
+        String createdStartStr = createdAtStart != null ? createdAtStart.format(apiFormatter) : null;
+        String createdEndStr = createdAtEnd != null ? createdAtEnd.format(apiFormatter) : null;
+        String completedStartStr = completedAtStart != null ? completedAtStart.format(apiFormatter) : null;
+        String completedEndStr = completedAtEnd != null ? completedAtEnd.format(apiFormatter) : null;
+        List<String> statuses = getSelectedStatuses();
 
-        // Gọi API với hai tham số start và end
-        Call<List<DeliveryAssignment>> call = service.getTasksIn(DRIVER_ID, start, end);
+        Call<PageResponse<DeliveryAssignment>> call = service.getTasks(
+                DRIVER_ID,
+                statuses,
+                createdStartStr,
+                createdEndStr,
+                completedStartStr,
+                completedEndStr,
+                page,
+                pageSize
+        );
 
-        call.enqueue(new Callback<List<DeliveryAssignment>>() {
+        call.enqueue(new Callback<PageResponse<DeliveryAssignment>>() {
             @Override
-            public void onResponse(Call<List<DeliveryAssignment>> call, Response<List<DeliveryAssignment>> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    List<DeliveryAssignment> newTasks = response.body();
+            public void onResponse(Call<PageResponse<DeliveryAssignment>> call, Response<PageResponse<DeliveryAssignment>> response) {
+                isLoading = false;
+                // ... (Ẩn loading)
 
-                    completedTasks.clear();
-                    // Lọc chỉ giữ lại các đơn đã xử lý (hoàn thành/thất bại)
-                    for (DeliveryAssignment task : newTasks) {
-                        if ("COMPLETED".equals(task.getStatus()) || "FAILED".equals(task.getStatus())) {
-                            completedTasks.add(task);
-                        }
+                if (response.isSuccessful() && response.body() != null) {
+                    PageResponse<DeliveryAssignment> pageResponse = response.body();
+                    List<DeliveryAssignment> newTasks = pageResponse.content();
+
+                    isLastPage = pageResponse.last();
+
+                    if (page == 0) {
+                        allTasks.clear();
+                        calculateSummary(newTasks);
                     }
 
-                    adapter.updateTasks(completedTasks);
-                    calculateSummary(completedTasks);
+                    allTasks.addAll(newTasks);
+                    adapter.notifyDataSetChanged();
+
+                    if (allTasks.isEmpty()) {
+                        tvEmptyState.setVisibility(View.VISIBLE);
+                    } else {
+                        tvEmptyState.setVisibility(View.GONE);
+                    }
+
+                    currentPage++;
 
                 } else {
-                    Log.e(TAG, "Response unsuccessful: " + response.code());
-                    Toast.makeText(getContext(), "Lỗi tải lịch sử đơn hàng: " + response.code(), Toast.LENGTH_SHORT).show();
-                    calculateSummary(new ArrayList<>());
+                    Log.e(TAG, "Response unsuccessful: " + response.code() + " - " + response.errorBody());
                 }
             }
             @Override
-            public void onFailure(Call<List<DeliveryAssignment>> call, Throwable t) {
+            public void onFailure(Call<PageResponse<DeliveryAssignment>> call, Throwable t) {
+                isLoading = false;
                 Log.e(TAG, "Network error: " + t.getMessage());
-                Toast.makeText(getContext(), "Lỗi kết nối mạng.", Toast.LENGTH_LONG).show();
-                calculateSummary(new ArrayList<>());
             }
         });
     }
+
+    private void setupPaginationScrollListener() {
+        rvActivities.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+
+                int visibleItemCount = layoutManager.getChildCount();
+                int totalItemCount = layoutManager.getItemCount();
+                int firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition();
+
+                if (!isLoading && !isLastPage) {
+                    if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount
+                            && firstVisibleItemPosition >= 0
+                            && totalItemCount >= pageSize) {
+                        fetchTasks(currentPage);
+                    }
+                }
+            }
+        });
+    }
+
 
     private void calculateSummary(List<DeliveryAssignment> tasks) {
         double totalDistanceM = 0;
@@ -202,18 +346,17 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
             completedCount++;
         }
 
-        if (completedCount == 0) {
+        if (completedCount == 0 && currentPage == 0) {
             tvEmptyState.setVisibility(View.VISIBLE);
         } else {
             tvEmptyState.setVisibility(View.GONE);
         }
 
-        // Hiển thị tổng hợp
         tvDistance.setText("Tổng quãng đường: " + formatDistanceM(totalDistanceM));
         tvOrdersCount.setText("Tổng đơn đã xử lý: " + completedCount);
         tvTime.setText("Tổng thời gian: " + formatDurationS(totalDurationS));
     }
-    // Triển khai phương thức click
+
     @Override
     public void onOrderClick(DeliveryAssignment task) {
         Intent intent = new Intent(getActivity(), TaskDetailActivity.class);

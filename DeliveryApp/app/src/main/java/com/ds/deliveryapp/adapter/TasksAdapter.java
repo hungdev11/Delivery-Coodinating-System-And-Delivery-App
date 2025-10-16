@@ -90,7 +90,7 @@ public class TasksAdapter extends RecyclerView.Adapter<TasksAdapter.TaskViewHold
     private String mapStatus (String status) {
         return switch (status) {
             case "PROCESSING" -> "ĐANG XỬ LÝ";
-            case "COMPLETED" -> "ĐÃ HOÀN THÀNH";
+            case "SUCCESS" -> "ĐÃ HOÀN THÀNH";
             case "FAILED" -> "THẤT BẠI";
             default -> throw new IllegalStateException("Unexpected value: " + status);
         };

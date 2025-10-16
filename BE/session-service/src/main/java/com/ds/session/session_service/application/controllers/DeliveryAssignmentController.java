@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
+import com.ds.session.session_service.common.entities.dto.response.PageResponse;
 import com.ds.session.session_service.common.interfaces.IDeliveryAssignmentService;
 import com.ds.session.session_service.common.utils.Utility;
 
@@ -53,21 +54,35 @@ public class DeliveryAssignmentController {
     }
 
     @GetMapping("/today/{deliveryManId}")
-    public ResponseEntity<List<DeliveryAssignmentResponse>> getDailyTasks(@PathVariable UUID deliveryManId) {
-        return ResponseEntity.ok(deliveryAssignmentService.getDailyTasks(deliveryManId));
+    public ResponseEntity<PageResponse<DeliveryAssignmentResponse>> getDailyTasks(
+        @PathVariable UUID deliveryManId,
+        @RequestParam(required = false) List<String> status,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(deliveryAssignmentService.getDailyTasks(deliveryManId, status, page, size));
     }
 
     @GetMapping("/{deliveryManId}")
-    public ResponseEntity<List<DeliveryAssignmentResponse>> getDailyTasks(
-        @PathVariable UUID deliveryManId, 
+    public ResponseEntity<PageResponse<DeliveryAssignmentResponse>> getTasks( 
+        @PathVariable UUID deliveryManId,
+        @RequestParam(required = false) List<String> status, // Thêm filter theo list status
         @RequestParam(required = false) 
         @DateTimeFormat(pattern = "dd/MM/yyyy")
-        LocalDate start, 
-
+        LocalDate createdAtStart, 
         @RequestParam(required = false) 
         @DateTimeFormat(pattern = "dd/MM/yyyy")
-        LocalDate end
+        LocalDate createdAtEnd,
+        @RequestParam(required = false) 
+        @DateTimeFormat(pattern = "dd/MM/yyyy")
+        LocalDate completedAtStart, 
+        @RequestParam(required = false) 
+        @DateTimeFormat(pattern = "dd/MM/yyyy")
+        LocalDate completedAtEnd,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size
     ){
-        return ResponseEntity.ok(deliveryAssignmentService.getTasksBetween(deliveryManId, start, end));
+        return ResponseEntity.ok(deliveryAssignmentService.getTasks(deliveryManId, status, createdAtStart, createdAtEnd, completedAtStart, completedAtEnd, page, size) );
     }
+
+    // api trả đơn khi hết phiên hoặc kết thúc ngày còn processing thì tự sang failed
 }
