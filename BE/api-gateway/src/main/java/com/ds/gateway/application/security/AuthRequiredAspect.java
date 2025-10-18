@@ -1,6 +1,7 @@
 package com.ds.gateway.application.security;
 
 import com.ds.gateway.annotations.AuthRequired;
+import com.ds.gateway.annotations.PublicRoute;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -23,6 +24,12 @@ public class AuthRequiredAspect {
     @Around("@annotation(authRequired)")
     public Object checkAuthRequired(ProceedingJoinPoint joinPoint, AuthRequired authRequired) throws Throwable {
         log.debug("🔐 AUTH REQUIRED CHECK - Method: {}", joinPoint.getSignature().getName());
+        
+        // Check if method is marked as public route (overrides auth requirement)
+        if (hasPublicRouteAnnotation(joinPoint)) {
+            log.debug("✅ AUTH REQUIRED CHECK - Method marked as public route, skipping authentication");
+            return joinPoint.proceed();
+        }
         
         // Check authentication
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -59,5 +66,27 @@ public class AuthRequiredAspect {
         
         log.warn("❌ AUTH REQUIRED CHECK - Invalid authentication principal type");
         throw new org.springframework.security.access.AccessDeniedException("Access denied: Invalid authentication");
+    }
+    
+    /**
+     * Check if the method has @PublicRoute annotation
+     */
+    private boolean hasPublicRouteAnnotation(ProceedingJoinPoint joinPoint) {
+        try {
+            // Get method signature and check for PublicRoute annotation
+            String methodName = joinPoint.getSignature().getName();
+            Class<?> targetClass = joinPoint.getTarget().getClass();
+            java.lang.reflect.Method[] methods = targetClass.getMethods();
+            
+            for (java.lang.reflect.Method method : methods) {
+                if (method.getName().equals(methodName) && method.isAnnotationPresent(PublicRoute.class)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            log.debug("Error checking for PublicRoute annotation: {}", e.getMessage());
+            return false;
+        }
     }
 }

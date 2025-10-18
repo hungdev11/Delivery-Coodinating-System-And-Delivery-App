@@ -5,7 +5,7 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import com.ds.user.app_context.models.User;
+import com.ds.user.common.entities.base.User;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByPhone(String phone);

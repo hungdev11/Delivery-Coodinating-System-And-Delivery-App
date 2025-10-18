@@ -1,6 +1,6 @@
 package com.ds.user.application.controllers.v1;
 
-import com.ds.user.app_context.models.User;
+import com.ds.user.common.entities.base.User;
 import com.ds.user.common.entities.dto.auth.SyncUserRequest;
 import com.ds.user.common.interfaces.IUserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -91,4 +91,3 @@ class UserControllerTest {
                 .andExpect(status().isBadRequest());
     }
 }
-

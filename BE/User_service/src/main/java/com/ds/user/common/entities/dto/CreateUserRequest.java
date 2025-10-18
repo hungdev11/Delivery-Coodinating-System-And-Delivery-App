@@ -1,6 +1,6 @@
 package com.ds.user.common.entities.dto;
 
-import com.ds.user.app_context.models.User;
+import com.ds.user.common.entities.base.User;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;

@@ -1,10 +1,12 @@
 package com.ds.user.business.v1.services;
 
-import com.ds.user.app_context.models.User;
+import com.ds.user.common.entities.base.User;
 import com.ds.user.app_context.repositories.UserRepository;
 import com.ds.user.common.interfaces.IUserService;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import com.ds.user.common.entities.dto.common.PagedData;
+import com.ds.user.common.entities.dto.common.PagingRequest;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -47,6 +49,39 @@ public class UserService implements IUserService {
     @Override
     public List<User> listUsers() {
         return userRepository.findAll();
+    }
+
+    @Override
+    public PagedData<User> listUsers(PagingRequest pagingRequest) {
+        // Get total count
+        long totalElements = userRepository.count();
+        
+        // Calculate pagination
+        int totalPages = (int) Math.ceil((double) totalElements / pagingRequest.getSize());
+        
+        // Get the requested page of data
+        List<User> allUsers = userRepository.findAll();
+        int startIndex = pagingRequest.getPage() * pagingRequest.getSize();
+        int endIndex = Math.min(startIndex + pagingRequest.getSize(), allUsers.size());
+        
+        List<User> pageData = allUsers.subList(startIndex, endIndex);
+        
+        // Create Paging object
+        var paging = com.ds.user.common.entities.dto.common.Paging.<String>builder()
+                .page(pagingRequest.getPage())
+                .size(pagingRequest.getSize())
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .filters(pagingRequest.getFilters() != null ? pagingRequest.getFilters() : List.of())
+                .sorts(pagingRequest.getSorts() != null ? pagingRequest.getSorts() : List.of())
+                .selected(pagingRequest.getSelected())
+                .build();
+        
+        // Create PagedData
+        return PagedData.<User>builder()
+                .data(pageData)
+                .page(paging)
+                .build();
     }
 
     @Override

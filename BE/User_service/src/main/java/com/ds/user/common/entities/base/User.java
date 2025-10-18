@@ -1,4 +1,4 @@
-package com.ds.user.app_context.models;
+package com.ds.user.common.entities.base;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -15,7 +15,10 @@ import java.util.UUID;
 @Entity
 @Table(
     name = "users",
-    uniqueConstraints = {@UniqueConstraint(columnNames = {"email", "keycloak_id", "username"})}
+    uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"email", "keycloak_id", "username"}),
+        @UniqueConstraint(columnNames = {"username"})
+    }
 )
 @Getter
 @Setter
@@ -54,6 +57,7 @@ public class User {
     private String address;
     private String identityNumber;
 
+    @Column(unique = true, nullable = false)
     private String username;
 
     @Enumerated(EnumType.ORDINAL)

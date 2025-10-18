@@ -28,20 +28,4 @@ public class PagedData<T> {
      */
     private Paging<String> page;
     
-    /**
-     * Create PagedData from Spring Data Page
-     */
-    public static <T> PagedData<T> of(org.springframework.data.domain.Page<T> springPage) {
-        return PagedData.<T>builder()
-                .data(springPage.getContent())
-                .page(Paging.<String>builder()
-                        .page(springPage.getNumber())
-                        .size(springPage.getSize())
-                        .totalElements(springPage.getTotalElements())
-                        .totalPages(springPage.getTotalPages())
-                        .filters(List.of())
-                        .sorts(List.of())
-                        .build())
-                .build();
-    }
 }

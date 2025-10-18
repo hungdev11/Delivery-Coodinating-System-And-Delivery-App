@@ -1,6 +1,7 @@
 package com.ds.gateway.business.v1.services;
 
 import com.ds.gateway.common.entities.dto.common.BaseResponse;
+import com.ds.gateway.common.entities.dto.common.PagedData;
 import com.ds.gateway.common.entities.dto.user.CreateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UpdateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UserDto;
@@ -102,8 +103,25 @@ public class UserServiceClient implements IUserServiceClient {
         return userServiceWebClient.get()
             .uri("/api/v1/users")
             .retrieve()
-            .bodyToMono(new ParameterizedTypeReference<BaseResponse<List<UserDto>>>() {})
-            .map(BaseResponse::getResult)
+            .bodyToMono(new ParameterizedTypeReference<BaseResponse<PagedData<UserDto>>>() {})
+            .map(response -> response.getResult().getData()) // Extract data from PagedData
+            .onErrorMap(ex -> new ServiceUnavailableException("User service unavailable: " + ex.getMessage(), ex))
+            .toFuture();
+    }
+    
+    @Override
+    public CompletableFuture<PagedData<UserDto>> listUsers(int page, int size) {
+        log.debug("Listing users with pagination via REST: page={}, size={}", page, size);
+        
+        return userServiceWebClient.get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/api/v1/users")
+                .queryParam("page", page)
+                .queryParam("size", size)
+                .build())
+            .retrieve()
+            .bodyToMono(new ParameterizedTypeReference<BaseResponse<PagedData<UserDto>>>() {})
+            .map(BaseResponse::getResult) // Return full PagedData response
             .onErrorMap(ex -> new ServiceUnavailableException("User service unavailable: " + ex.getMessage(), ex))
             .toFuture();
     }

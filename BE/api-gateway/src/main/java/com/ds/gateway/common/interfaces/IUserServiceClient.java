@@ -1,5 +1,6 @@
 package com.ds.gateway.common.interfaces;
 
+import com.ds.gateway.common.entities.dto.common.PagedData;
 import com.ds.gateway.common.entities.dto.user.CreateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UpdateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UserDto;
@@ -42,6 +43,11 @@ public interface IUserServiceClient {
      * List all users
      */
     CompletableFuture<List<UserDto>> listUsers();
+    
+    /**
+     * List users with pagination
+     */
+    CompletableFuture<PagedData<UserDto>> listUsers(int page, int size);
     
     /**
      * Sync user by Keycloak ID (create or update)

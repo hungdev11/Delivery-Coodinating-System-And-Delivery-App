@@ -52,9 +52,9 @@
             <div class="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
               <span class="text-base font-medium text-white">
                 {{
-                  currentUser?.user?.firstName && currentUser?.user?.lastName
-                    ? currentUser?.user?.firstName.charAt(0) + currentUser?.user?.lastName.charAt(0)
-                    : '!'
+                  currentUser?.firstName && currentUser?.lastName
+                    ? currentUser.firstName.charAt(0) + currentUser.lastName.charAt(0)
+                    : currentUser?.username?.charAt(0)?.toUpperCase() || 'U'
                 }}
               </span>
             </div>
@@ -62,12 +62,12 @@
           <div v-if="!isCollapsed" class="ml-4 flex-1">
             <p class="text-sm font-medium text-gray-900">
               {{
-                currentUser?.user?.firstName && currentUser?.user?.lastName
-                  ? currentUser?.user?.firstName + ' ' + currentUser?.user?.lastName
-                  : 'Not Found'
+                currentUser?.firstName && currentUser?.lastName
+                  ? currentUser.firstName + ' ' + currentUser.lastName
+                  : currentUser?.username || 'Guest User'
               }}
             </p>
-            <p class="text-xs text-gray-500">{{ currentUser?.user.email || 'Not Found' }}</p>
+            <p class="text-xs text-gray-500">{{ currentUser?.email || 'No email' }}</p>
           </div>
         </div>
       </div>
@@ -120,29 +120,36 @@ const { toggleSidebar } = sidebarStore
 const navigationItems = ref<NavigationMenuItem[][]>([
   [
     {
-      label: 'Trang Chủ',
+      label: 'Dashboard',
       to: '/',
       icon: 'i-heroicons-home',
     },
     {
-      label: 'Đơn Hàng',
-      to: '/orders',
-      icon: 'i-heroicons-shopping-cart',
+      label: 'Users',
+      to: '/users',
+      icon: 'i-heroicons-user-group',
     },
     {
-      label: 'Báo Cáo',
-      to: '/reports',
-      icon: 'i-heroicons-chart-bar',
+      label: 'Zones',
+      to: '/zones',
+      icon: 'i-heroicons-map',
     },
     {
-      label: 'Cài Đặt',
+      label: 'Settings',
       to: '/settings',
       icon: 'i-heroicons-cog-6-tooth',
     },
   ],
 ])
 
-const currentUser = computed(() => getCurrentUser())
+const currentUser = computed(() => {
+  try {
+    return getCurrentUser()
+  } catch (error) {
+    console.warn('Error getting current user:', error)
+    return null
+  }
+})
 </script>
 
 <style scoped>

@@ -1,0 +1,29 @@
+# Production-specific configuration for User Service
+# This profile is used for production deployment
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate  # Only validate schema in production (SAFE)
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        hbm2ddl:
+          auto: validate
+        generate_statistics: false
+        naming:
+          physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        jdbc:
+          batch_size: 50  # Larger batch size for production
+        order_inserts: true
+        order_updates: true
+  # Disable Flyway - let Hibernate handle schema management
+  flyway:
+    enabled: false
+
+# Minimal logging for production
+logging:
+  level:
+    org.hibernate.SQL: WARN
+    com.ds.user: INFO

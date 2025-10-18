@@ -1,0 +1,29 @@
+# Docker-specific configuration for User Service
+# This profile is used when running in Docker containers
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update  # Auto-migrate schema in Docker
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        hbm2ddl:
+          auto: update
+        generate_statistics: false
+        naming:
+          physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+  # Disable Flyway - let Hibernate handle schema management
+  flyway:
+    enabled: false
+
+# Logging for Docker environment
+logging:
+  level:
+    org.hibernate.SQL: INFO  # Show SQL in Docker for debugging
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # Show parameter values

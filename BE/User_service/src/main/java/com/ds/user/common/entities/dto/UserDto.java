@@ -1,6 +1,6 @@
 package com.ds.user.common.entities.dto;
 
-import com.ds.user.app_context.models.User;
+import com.ds.user.common.entities.base.User;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,7 +17,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class UserDto {
-    private UUID id;
+    private String id;
     private String keycloakId;
     private String firstName;
     private String lastName;
@@ -37,7 +37,7 @@ public class UserDto {
         if (user == null) return null;
         
         return UserDto.builder()
-                .id(user.getId())
+                .id(user.getId() != null ? user.getId().toString() : null)
                 .keycloakId(user.getKeycloakId())
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
