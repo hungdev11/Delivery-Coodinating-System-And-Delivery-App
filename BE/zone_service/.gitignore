@@ -31,10 +31,8 @@ lerna-debug.log*
 *.osm.pbf
 
 # Raw Data Files (Large datasets)
-raw_data/*
 !raw_data/.gitkeep
 !raw_data/*/.gitkeep
-*.poly
 *.pbf
 *.cell_metrics
 *.cells

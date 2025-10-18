@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     // File Layout
-    "rootDir": "./src",
     "outDir": "./dist",
     "baseUrl": ".",
     "paths": {
@@ -45,7 +44,8 @@
     "skipLibCheck": true
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "utils/**/*"
   ],
   "exclude": [
     "node_modules",

@@ -25,6 +25,7 @@ model traffic_conditions {
   created_at            DateTime     @default(now())
   expires_at            DateTime     // When this data becomes stale
 
+  @@unique([segment_id, source])
   @@index([segment_id])
   @@index([source_timestamp])
   @@index([expires_at])

@@ -11,7 +11,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { OSMParser, calculateLineLength } from '../utils/osm-parser.js';
+import { OSMParser, calculateLineLength, findLatestVietnamPBF } from '../utils/osm-parser.js';
 import { findIntersections, generateSegments } from '../utils/intersection-finder.js';
 import { calculateBaseWeight } from '../utils/weight-calculator.js';
 import { join } from 'path';
@@ -32,8 +32,8 @@ async function seedRoads() {
     // Step 1: Parse OSM PBF file
     console.log('Step 1: Parsing OSM PBF file...');
     const rawDataDir = join(process.cwd(), './raw_data');
-    const pbfPath = join(rawDataDir, 'new_hochiminh_city/hochiminh_city.osm.pbf');
-    const thuDucPoly = join(rawDataDir, 'old_thuduc_city/thuduc_cu.poly');
+    const pbfPath = findLatestVietnamPBF(rawDataDir);
+    const thuDucPoly = join(rawDataDir, 'poly/thuduc_cu.poly');
 
     const parser = new OSMParser();
     const osmData = await parser.parsePBF(pbfPath, thuDucPoly);
@@ -52,8 +52,25 @@ async function seedRoads() {
 
     // Step 4: Prepare roads for batch insert
     console.log('Step 4: Preparing roads data...');
-    const roadsToCreate = [];
-    const roadsArray = [];
+    const roadsToCreate: Array<{
+      osm_id: string;
+      name: string;
+      name_en: string | undefined;
+      road_type: any;
+      max_speed: number | undefined;
+      avg_speed: number | undefined;
+      one_way: boolean;
+      lanes: number | undefined;
+      surface: string | undefined;
+      geometry: any;
+      zone_id: string | null;
+    }> = [];
+    const roadsArray: Array<{
+      osmId: string;
+      name: string;
+      coordinates: Array<[number, number]>;
+      nodeIds: string[];
+    }> = [];
     let skipCount = 0;
 
     for (const way of roadWays) {
@@ -175,7 +192,13 @@ async function seedRoads() {
 
     // Step 12: Prepare nodes for batch insert
     console.log('Step 12: Preparing nodes data...');
-    const nodesToCreate = [];
+    const nodesToCreate: Array<{
+      osm_id: string;
+      lat: number;
+      lon: number;
+      node_type: any;
+      zone_id: string | null;
+    }> = [];
 
     for (const osmNodeId of usedNodeIds) {
       const osmNode = osmData.nodes.get(osmNodeId);
@@ -226,7 +249,22 @@ async function seedRoads() {
 
     // Step 16: Prepare segments for batch insert
     console.log('Step 16: Preparing segments data...');
-    const segmentsToCreate = [];
+    const segmentsToCreate: Array<{
+      from_node_id: string;
+      to_node_id: string;
+      road_id: string;
+      geometry: any;
+      length_meters: number;
+      name: string;
+      road_type: any;
+      max_speed: number | null;
+      avg_speed: number | null;
+      one_way: boolean;
+      base_weight: number;
+      current_weight: number;
+      delta_weight: number;
+      zone_id: string | null;
+    }> = [];
     let skippedCount = 0;
 
     for (const segment of segments) {

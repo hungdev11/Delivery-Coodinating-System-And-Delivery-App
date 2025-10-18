@@ -23,6 +23,8 @@ end
 function process_way(profile, way, result, relations)
   local highway = way:get_value_by_key("highway")
   local custom_weight = tonumber(way:get_value_by_key("custom_weight"))
+  local traffic_level = way:get_value_by_key("traffic_level")
+  local congestion_score = tonumber(way:get_value_by_key("congestion_score"))
 
   if not highway then
     return
@@ -45,6 +47,30 @@ function process_way(profile, way, result, relations)
     speed = maxspeed
   end
 
+  -- Apply traffic-based speed reduction
+  if traffic_level then
+    local traffic_multiplier = 1.0
+    if traffic_level == "FREE_FLOW" then
+      traffic_multiplier = 1.1  -- Slightly faster
+    elseif traffic_level == "NORMAL" then
+      traffic_multiplier = 1.0  -- Normal speed
+    elseif traffic_level == "SLOW" then
+      traffic_multiplier = 0.7  -- 30% slower
+    elseif traffic_level == "CONGESTED" then
+      traffic_multiplier = 0.4  -- 60% slower
+    elseif traffic_level == "BLOCKED" then
+      traffic_multiplier = 0.1  -- 90% slower
+    end
+    
+    -- Apply congestion score if available
+    if congestion_score and congestion_score > 0 then
+      local congestion_multiplier = math.max(0.1, 1.0 - (congestion_score / 100))
+      traffic_multiplier = traffic_multiplier * congestion_multiplier
+    end
+    
+    speed = speed * traffic_multiplier
+  end
+
   -- Handle oneway
   local oneway = way:get_value_by_key("oneway")
   if oneway == "yes" then
@@ -59,7 +85,7 @@ function process_way(profile, way, result, relations)
   result.forward_speed = speed
   result.backward_speed = speed
 
-  -- Apply custom weight
+  -- Apply custom weight (includes traffic conditions)
   if custom_weight and custom_weight > 0 then
     result.forward_rate = 60.0 / custom_weight
     result.backward_rate = 60.0 / custom_weight

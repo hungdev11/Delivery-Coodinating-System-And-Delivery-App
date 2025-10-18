@@ -13,6 +13,7 @@ import { writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { TomTomTrafficService } from '../services/tomtom-traffic-service.js';
 
 const execAsync = promisify(exec);
 const prisma = new PrismaClient();
@@ -30,20 +31,42 @@ async function exportToOSMXML(instanceName: string): Promise<string> {
 
   const osmFilePath = join(outputDir, 'network.osm.xml');
 
-  // Fetch all roads, nodes, and segments
+  // Fetch all roads, nodes, segments, and traffic conditions
   console.log('   Fetching data from database...');
-  const [roads, nodes, segments] = await Promise.all([
+  const [roads, nodes, segments, trafficConditions] = await Promise.all([
     prisma.roads.findMany(),
     prisma.road_nodes.findMany(),
     prisma.road_segments.findMany({
       include: {
         from_node: true,
         to_node: true,
+        traffic_conditions: {
+          where: {
+            expires_at: {
+              gte: new Date() // Only get non-expired traffic data
+            }
+          },
+          orderBy: {
+            source_timestamp: 'desc' // Get latest traffic data
+          },
+          take: 1 // Only the most recent per segment
+        }
       },
     }),
+    prisma.traffic_conditions.findMany({
+      where: {
+        expires_at: {
+          gte: new Date()
+        }
+      },
+      include: {
+        road_segment: true
+      }
+    })
   ]);
 
   console.log(`   Found ${roads.length} roads, ${nodes.length} nodes, ${segments.length} segments`);
+  console.log(`   Found ${trafficConditions.length} active traffic conditions`);
 
   // Create mapping from string IDs to numeric IDs
   console.log('   Creating ID mappings...');
@@ -133,9 +156,21 @@ async function exportToOSMXML(instanceName: string): Promise<string> {
       xml += `    <tag k="lanes" v="${road.lanes}"/>\n`;
     }
 
-    // Add custom weight tag (average from segments)
-    const avgWeight = calculateAverageWeight(roadSegments);
+    // Add custom weight tag (average from segments with traffic conditions)
+    const avgWeight = calculateAverageWeightWithTraffic(roadSegments);
     xml += `    <tag k="custom_weight" v="${avgWeight.toFixed(2)}"/>\n`;
+    
+    // Add traffic level tag (most common traffic level for this road)
+    const trafficLevel = getMostCommonTrafficLevel(roadSegments);
+    if (trafficLevel) {
+      xml += `    <tag k="traffic_level" v="${trafficLevel}"/>\n`;
+    }
+    
+    // Add congestion score tag
+    const congestionScore = getAverageCongestionScore(roadSegments);
+    if (congestionScore > 0) {
+      xml += `    <tag k="congestion_score" v="${congestionScore.toFixed(1)}"/>\n`;
+    }
 
     xml += `  </way>\n`;
   }
@@ -183,6 +218,8 @@ end
 function process_way(profile, way, result, relations)
   local highway = way:get_value_by_key("highway")
   local custom_weight = tonumber(way:get_value_by_key("custom_weight"))
+  local traffic_level = way:get_value_by_key("traffic_level")
+  local congestion_score = tonumber(way:get_value_by_key("congestion_score"))
 
   if not highway then
     return
@@ -205,6 +242,30 @@ function process_way(profile, way, result, relations)
     speed = maxspeed
   end
 
+  -- Apply traffic-based speed reduction
+  if traffic_level then
+    local traffic_multiplier = 1.0
+    if traffic_level == "FREE_FLOW" then
+      traffic_multiplier = 1.1  -- Slightly faster
+    elseif traffic_level == "NORMAL" then
+      traffic_multiplier = 1.0  -- Normal speed
+    elseif traffic_level == "SLOW" then
+      traffic_multiplier = 0.7  -- 30% slower
+    elseif traffic_level == "CONGESTED" then
+      traffic_multiplier = 0.4  -- 60% slower
+    elseif traffic_level == "BLOCKED" then
+      traffic_multiplier = 0.1  -- 90% slower
+    end
+    
+    -- Apply congestion score if available
+    if congestion_score and congestion_score > 0 then
+      local congestion_multiplier = math.max(0.1, 1.0 - (congestion_score / 100))
+      traffic_multiplier = traffic_multiplier * congestion_multiplier
+    end
+    
+    speed = speed * traffic_multiplier
+  end
+
   -- Handle oneway
   local oneway = way:get_value_by_key("oneway")
   if oneway == "yes" then
@@ -219,7 +280,7 @@ function process_way(profile, way, result, relations)
   result.forward_speed = speed
   result.backward_speed = speed
 
-  -- Apply custom weight
+  -- Apply custom weight (includes traffic conditions)
   if custom_weight and custom_weight > 0 then
     result.forward_rate = 60.0 / custom_weight
     result.backward_rate = 60.0 / custom_weight
@@ -343,10 +404,51 @@ function escapeXML(text: string): string {
     .replace(/'/g, '&apos;');
 }
 
-function calculateAverageWeight(segments: any[]): number {
+function calculateAverageWeightWithTraffic(segments: any[]): number {
   if (segments.length === 0) return 1.0;
-  const sum = segments.reduce((acc, s) => acc + (s.current_weight || s.base_weight || 1.0), 0);
+  
+  const sum = segments.reduce((acc, segment) => {
+    // Use current_weight (includes traffic adjustments) if available
+    let weight = segment.current_weight || segment.base_weight || 1.0;
+    
+    // Apply traffic condition multiplier if available
+    if (segment.traffic_conditions && segment.traffic_conditions.length > 0) {
+      const traffic = segment.traffic_conditions[0];
+      weight *= traffic.weight_multiplier || 1.0;
+    }
+    
+    return acc + weight;
+  }, 0);
+  
   return sum / segments.length;
+}
+
+function getMostCommonTrafficLevel(segments: any[]): string | null {
+  const trafficLevels = segments
+    .filter(s => s.traffic_conditions && s.traffic_conditions.length > 0)
+    .map(s => s.traffic_conditions[0].traffic_level);
+    
+  if (trafficLevels.length === 0) return null;
+  
+  // Count occurrences
+  const counts: Record<string, number> = {};
+  trafficLevels.forEach(level => {
+    counts[level] = (counts[level] || 0) + 1;
+  });
+  
+  // Return most common
+  return Object.entries(counts)
+    .sort(([,a], [,b]) => b - a)[0]?.[0] || null;
+}
+
+function getAverageCongestionScore(segments: any[]): number {
+  const scores = segments
+    .filter(s => s.traffic_conditions && s.traffic_conditions.length > 0)
+    .map(s => s.traffic_conditions[0].congestion_score);
+    
+  if (scores.length === 0) return 0;
+  
+  return scores.reduce((sum, score) => sum + score, 0) / scores.length;
 }
 
 /**
@@ -354,12 +456,33 @@ function calculateAverageWeight(segments: any[]): number {
  */
 async function main() {
   console.log('='.repeat(70));
-  console.log('🚀 OSRM Data Generator');
+  console.log('🚀 OSRM Data Generator with Real-time Traffic');
   console.log('='.repeat(70));
 
   const instances = ['osrm-instance-1', 'osrm-instance-2'];
 
   try {
+    // Step 0: Fetch and update traffic data
+    console.log('\n🌐 Step 0: Fetching real-time traffic data...');
+    console.log('─'.repeat(70));
+    
+    try {
+      const trafficService = new TomTomTrafficService();
+      
+      // Clean up expired conditions first
+      await trafficService.cleanupExpiredConditions();
+      
+      // Fetch fresh traffic data for Thu Duc area
+      const boundingBox = '10.3,106.3,11.2,107.0'; // Thu Duc area
+      await trafficService.fetchAndUpdateTrafficData(boundingBox);
+      
+      console.log('✅ Traffic data updated successfully');
+    } catch (error) {
+      console.error('❌ Failed to fetch traffic data:', error);
+      console.log('⚠️  Continuing with base weights only');
+    }
+
+    // Step 1-3: Generate OSRM data for each instance
     for (const instance of instances) {
       console.log(`\n${'─'.repeat(70)}`);
       console.log(`Processing ${instance}`);

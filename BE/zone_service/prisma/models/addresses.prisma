@@ -10,16 +10,23 @@ model addresses {
   // Location
   lat                   Float
   lon                   Float
+  geohash               String?  // Geohash for fast proximity searches (precision 7-8)
 
-  // Association with road segment
+  // Association with road segment (parent curve)
   segment_id            String?
   road_segment          road_segments? @relation(fields: [segment_id], references: [segment_id])
 
-  // Zone and ward information
+  // Projection onto road segment curve
+  segment_position      Float?   // Position along segment (0.0 = start, 1.0 = end)
+  distance_to_segment   Float?   // Perpendicular distance from address to segment (meters)
+  projected_lat         Float?   // Projected point on segment
+  projected_lon         Float?   // Projected point on segment
+
+  // Zone and administrative information
   zone_id               String?
   zones                 zones?   @relation(fields: [zone_id], references: [zone_id])
-  ward_name             String?  // e.g., "Tăng Nhơn Phú"
-  district_name         String?  // e.g., "Thủ Đức"
+  ward_name             String?  // Smaller unit: Phường/Xã (e.g., "Phường Tăng Nhơn Phú")
+  district_name         String?  // District: Quận/Huyện (e.g., "Thủ Đức", "Quận 1")
 
   // Address type
   address_type          AddressType @default(GENERAL)
@@ -31,6 +38,8 @@ model addresses {
   @@index([segment_id])
   @@index([zone_id])
   @@index([name])
+  @@index([geohash])  // Fast proximity pre-filtering
+  @@index([lat, lon]) // Fallback spatial index
 }
 
 enum AddressType {

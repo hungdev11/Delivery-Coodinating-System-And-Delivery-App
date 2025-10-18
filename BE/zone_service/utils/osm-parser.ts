@@ -3,8 +3,8 @@
  * Uses osmium-tool for efficient PBF parsing
  */
 
-import { readFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
-import { join, dirname } from 'path';
+import { existsSync, mkdirSync, readdirSync } from 'fs';
+import { join } from 'path';
 import { tmpdir } from 'os';
 import { OsmiumWrapper, parseOsmiumGeoJson } from './osmium-wrapper.js';
 
@@ -126,6 +126,105 @@ export class OSMParser {
       for (const feature of geoJson.features) {
         if (feature.geometry.type === 'LineString') {
           // This is a way (road)
+          const way = this.parseWayFromGeoJson(feature);
+          if (way) {
+            this.ways.push(way);
+          }
+        } else if (feature.geometry.type === 'Point') {
+          // This is a node
+          const node = this.parseNodeFromGeoJson(feature);
+          if (node) {
+            this.nodes.set(node.id, node);
+          }
+        }
+      }
+
+      console.log(`✓ Parsed ${this.nodes.size} nodes and ${this.ways.length} ways`);
+
+      return {
+        nodes: this.nodes,
+        ways: this.ways,
+      };
+    } finally {
+      // Clean up temp directory
+      try {
+        const { rmSync } = await import('fs');
+        if (existsSync(tempDir)) {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      } catch (error) {
+        // Cleanup is best effort
+        if (this.verbose) {
+          console.warn('Failed to clean up temp directory:', tempDir);
+        }
+      }
+    }
+  }
+
+  /**
+   * Parse ALL OSM features (not just roads) for POI extraction
+   * @param filePath - Path to OSM PBF file
+   * @param polyFile - Optional poly file to filter by boundary
+   */
+  async parseAllFeatures(filePath: string, polyFile?: string): Promise<RoadData> {
+    console.log(`Parsing ALL OSM features from: ${filePath}`);
+    if (polyFile) {
+      console.log(`Filtering by polygon: ${polyFile}`);
+    }
+
+    // Check if osmium is installed
+    const isInstalled = await this.osmium.checkInstallation();
+    if (!isInstalled) {
+      throw new Error('osmium-tool is required but not installed');
+    }
+
+    // Check if input file exists
+    if (!existsSync(filePath)) {
+      throw new Error(`Input file not found: ${filePath}`);
+    }
+
+    // Check if poly file exists
+    if (polyFile && !existsSync(polyFile)) {
+      throw new Error(`Poly file not found: ${polyFile}`);
+    }
+
+    // Create temporary directory for processing
+    const tempDir = join(tmpdir(), 'osmium-parse-all-' + Date.now());
+    if (!existsSync(tempDir)) {
+      mkdirSync(tempDir, { recursive: true });
+    }
+
+    try {
+      let currentPbf = filePath;
+
+      // Step 1: Filter by polygon if provided
+      if (polyFile) {
+        console.log('Step 1: Filtering by polygon boundary...');
+        const polyFilteredPbf = join(tempDir, 'poly-filtered.osm.pbf');
+        await this.osmium.extractByPoly(filePath, polyFilteredPbf, polyFile);
+        currentPbf = polyFilteredPbf;
+        console.log('✓ Polygon filtered');
+      }
+
+      // Step 2: Convert to GeoJSON (NO ROAD FILTERING!)
+      console.log('Step 2: Converting ALL features to GeoJSON...');
+      const geoJsonFile = join(tempDir, 'all-features.geojson');
+      await this.osmium.extractToJson(currentPbf, geoJsonFile);
+      console.log('✓ Converted to GeoJSON');
+
+      // Step 3: Parse GeoJSON
+      console.log('Step 3: Parsing GeoJSON...');
+      const geoJson = await parseOsmiumGeoJson(geoJsonFile);
+
+      // GeoJSON FeatureCollection from osmium export
+      if (geoJson.type !== 'FeatureCollection') {
+        throw new Error('Expected GeoJSON FeatureCollection');
+      }
+
+      // Process features
+      for (const feature of geoJson.features) {
+        if (feature.geometry.type === 'LineString' || feature.geometry.type === 'Polygon') {
+          // This is a way (could be building, road, etc.)
           const way = this.parseWayFromGeoJson(feature);
           if (way) {
             this.ways.push(way);
@@ -389,4 +488,41 @@ export function calculateLineLength(coordinates: Array<[number, number]>): numbe
   }
 
   return totalLength;
+}
+
+/**
+ * Find the latest Vietnam OSM PBF file in the raw_data/vietnam directory
+ * Searches for files matching pattern: vietnam-*.osm.pbf
+ * Returns the newest file based on filename sorting (assumes YYMMDD format)
+ * 
+ * @param rawDataDir - Base raw_data directory path
+ * @returns Full path to the latest Vietnam PBF file
+ * @throws Error if no Vietnam PBF file is found
+ */
+export function findLatestVietnamPBF(rawDataDir: string): string {
+  const vietnamDir = join(rawDataDir, 'vietnam');
+  
+  if (!existsSync(vietnamDir)) {
+    throw new Error(`Vietnam data directory not found: ${vietnamDir}`);
+  }
+
+  // Read all files in the directory
+  const files = readdirSync(vietnamDir);
+
+  // Filter for vietnam-*.osm.pbf files
+  const pbfFiles = files.filter((file: string) => 
+    file.startsWith('vietnam-') && file.endsWith('.osm.pbf')
+  );
+
+  if (pbfFiles.length === 0) {
+    throw new Error(`No Vietnam PBF files found in ${vietnamDir}`);
+  }
+
+  // Sort descending to get the newest file (assumes YYMMDD format in filename)
+  pbfFiles.sort((a: string, b: string) => b.localeCompare(a));
+
+  const latestFile = pbfFiles[0];
+  console.log(`Found latest Vietnam PBF: ${latestFile}`);
+
+  return join(vietnamDir, latestFile);
 }

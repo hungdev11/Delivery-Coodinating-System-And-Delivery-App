@@ -104,7 +104,7 @@ export function getTrafficMultiplier(trafficLevel: string, congestionScore: numb
   // Add up to 50% more impact based on score
   const scoreImpact = (congestionScore / 100) * 0.5;
 
-  return baseMultiplier + scoreImpact;
+  return Math.max(baseMultiplier + scoreImpact, 0.1); // Minimum 0.1x speed
 }
 
 /**
