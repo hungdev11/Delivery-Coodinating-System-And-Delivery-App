@@ -1,8 +1,9 @@
 generator client {
     provider        = "prisma-client-js"
+    previewFeatures = ["prismaSchemaFolder"]
 }
 
 datasource db {
-    provider = "mysql"
+    provider = "postgresql"
     url      = env("ZONE_DB_CONNECTION")
 }

@@ -14,3 +14,36 @@ README.md
 coverage
 .nyc_output
 
+
+# OSRM Data Files (Exclude all OSRM build files)
+osrm_data/*
+!osrm_data/.gitkeep
+
+# Raw Data Files (Large datasets) - Keep these for OSM files
+# *.pbf files are needed for OSRM building
+# *.cell_metrics
+# *.cells
+# *.cnbg
+# *.cnbg_to_ebg
+# *.datasource_names
+# *.ebg
+# *.ebg_nodes
+# *.edges
+# *.enw
+# *.fileIndex
+# *.geometry
+# *.icd
+# *.maneuver_overrides
+# *.mldgr
+# *.names
+# *.nbg_nodes
+# *.partition
+# *.properties
+# *.ramIndex
+# *.restrictions
+# *.timestamp
+# *.tld
+# *.tls
+# *.turn_duration_penalties
+# *.turn_penalties_index
+# *.turn_weight_penalties

@@ -1,0 +1,43 @@
+// OSRM model rebuild tracking (for alternating OSRM instances)
+model osrm_builds {
+  build_id              String   @id @default(uuid())
+
+  // Build information
+  instance_name         String   // "osrm-instance-1" or "osrm-instance-2"
+  build_number          Int      @default(autoincrement())
+  status                OsrmBuildStatus @default(PENDING)
+
+  // Data snapshot
+  data_snapshot_time    DateTime // When the weight data was captured
+  total_segments        Int
+  avg_weight            Float?
+
+  // Build process
+  started_at            DateTime?
+  completed_at          DateTime?
+  deployed_at           DateTime?
+  error_message         String?
+
+  // File information
+  pbf_file_path         String?
+  osrm_output_path      String?
+  lua_script_version    String?  // Version of weight calculation script
+
+  // Metadata
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@index([instance_name])
+  @@index([status])
+  @@index([created_at])
+}
+
+enum OsrmBuildStatus {
+  PENDING       // Chờ build
+  BUILDING      // Đang build
+  TESTING       // Đang test
+  READY         // Sẵn sàng deploy
+  DEPLOYED      // Đã deploy
+  FAILED        // Thất bại
+  DEPRECATED    // Đã cũ
+}

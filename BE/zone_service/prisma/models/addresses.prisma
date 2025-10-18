@@ -1,0 +1,58 @@
+// Points of Interest and addresses along road segments
+model addresses {
+  address_id            String   @id @default(uuid())
+
+  // Address information
+  name                  String   // e.g., "Học viện Công nghệ Bưu chính Viễn thông"
+  name_en               String?
+  address_text          String?  // Full address text
+
+  // Location
+  lat                   Float
+  lon                   Float
+  geohash               String?  // Geohash for fast proximity searches (precision 7-8)
+
+  // Association with road segment (parent curve)
+  segment_id            String?
+  road_segment          road_segments? @relation(fields: [segment_id], references: [segment_id])
+
+  // Projection onto road segment curve
+  segment_position      Float?   // Position along segment (0.0 = start, 1.0 = end)
+  distance_to_segment   Float?   // Perpendicular distance from address to segment (meters)
+  projected_lat         Float?   // Projected point on segment
+  projected_lon         Float?   // Projected point on segment
+
+  // Zone and administrative information
+  zone_id               String?
+  zones                 zones?   @relation(fields: [zone_id], references: [zone_id])
+  ward_name             String?  // Smaller unit: Phường/Xã (e.g., "Phường Tăng Nhơn Phú")
+  district_name         String?  // District: Quận/Huyện (e.g., "Thủ Đức", "Quận 1")
+
+  // Address type
+  address_type          AddressType @default(GENERAL)
+
+  // Metadata
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@index([segment_id])
+  @@index([zone_id])
+  @@index([name])
+  @@index([geohash])  // Fast proximity pre-filtering
+  @@index([lat, lon]) // Fallback spatial index
+}
+
+enum AddressType {
+  GENERAL           // General address
+  SCHOOL            // Trường học
+  HOSPITAL          // Bệnh viện
+  GOVERNMENT        // Cơ quan chính phủ
+  SHOPPING          // Trung tâm mua sắm
+  RESTAURANT        // Nhà hàng
+  HOTEL             // Khách sạn
+  BANK              // Ngân hàng
+  GAS_STATION       // Trạm xăng
+  PARKING           // Bãi đậu xe
+  BUS_STOP          // Trạm xe buýt
+  LANDMARK          // Địa danh nổi tiếng
+}

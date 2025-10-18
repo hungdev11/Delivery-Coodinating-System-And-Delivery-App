@@ -1,0 +1,3 @@
+# This file ensures the parsers directory is tracked by git
+# The actual parsed data files are ignored but the directory structure is preserved
+# for data processing scripts
