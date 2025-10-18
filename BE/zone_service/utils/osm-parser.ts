@@ -345,7 +345,8 @@ export class OSMParser {
       'living_street', 'pedestrian', 'track', 'road'
     ];
 
-    return way.tags.highway && highwayTypes.includes(way.tags.highway);
+    const highway = way.tags.highway;
+    return !!highway && typeof highway === 'string' && highwayTypes.includes(highway);
   }
 
   /**
@@ -353,6 +354,8 @@ export class OSMParser {
    */
   static getRoadType(tags: Record<string, string>): string {
     const highway = tags.highway?.toUpperCase();
+
+    if (!highway) return 'UNCLASSIFIED';
 
     const typeMapping: Record<string, string> = {
       'MOTORWAY': 'MOTORWAY',
@@ -392,7 +395,11 @@ export class OSMParser {
     // Estimate average speed based on road type if not specified
     const avgSpeed = maxSpeed ? maxSpeed * 0.7 : this.estimateAvgSpeed(tags.highway);
 
-    return { maxSpeed, avgSpeed };
+    const result: { maxSpeed?: number; avgSpeed?: number } = { avgSpeed };
+    if (maxSpeed !== undefined) {
+      result.maxSpeed = maxSpeed;
+    }
+    return result;
   }
 
   /**
@@ -445,10 +452,19 @@ export class OSMParser {
    * Get road name in Vietnamese
    */
   static getRoadName(tags: Record<string, string>): { name?: string; nameEn?: string } {
-    return {
-      name: tags.name || tags['name:vi'],
-      nameEn: tags['name:en'],
-    };
+    const result: { name?: string; nameEn?: string } = {};
+
+    const name = tags.name || tags['name:vi'];
+    if (name) {
+      result.name = name;
+    }
+
+    const nameEn = tags['name:en'];
+    if (nameEn) {
+      result.nameEn = nameEn;
+    }
+
+    return result;
   }
 }
 
@@ -482,8 +498,11 @@ export function calculateLineLength(coordinates: Array<[number, number]>): numbe
   let totalLength = 0;
 
   for (let i = 1; i < coordinates.length; i++) {
-    const [lon1, lat1] = coordinates[i - 1];
-    const [lon2, lat2] = coordinates[i];
+    const coord1 = coordinates[i - 1];
+    const coord2 = coordinates[i];
+    if (!coord1 || !coord2) continue;
+    const [lon1, lat1] = coord1;
+    const [lon2, lat2] = coord2;
     totalLength += calculateDistance(lat1, lon1, lat2, lon2);
   }
 
@@ -522,6 +541,10 @@ export function findLatestVietnamPBF(rawDataDir: string): string {
   pbfFiles.sort((a: string, b: string) => b.localeCompare(a));
 
   const latestFile = pbfFiles[0];
+  if (!latestFile) {
+    throw new Error(`No valid PBF files found in ${vietnamDir}`);
+  }
+
   console.log(`Found latest Vietnam PBF: ${latestFile}`);
 
   return join(vietnamDir, latestFile);

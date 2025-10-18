@@ -193,7 +193,7 @@ export class OSRMRouterService {
     if (optimize && priorities && priorities.length === stops.length) {
       // Sort by priority (descending)
       const indexed = stops.map((stop, i) => ({ stop, priority: priorities[i] }));
-      indexed.sort((a, b) => b.priority - a.priority);
+      indexed.sort((a, b) => (b.priority || 0) - (a.priority || 0));
       orderedStops = indexed.map(item => item.stop);
 
       logger.info(`Optimized stop order by priority: ${priorities.join(', ')}`);
@@ -416,7 +416,7 @@ export class OSRMRouterService {
       });
 
       if (deployedBuilds.length > 0) {
-        const instanceName = deployedBuilds[0].instance_name;
+        const instanceName = deployedBuilds[0]?.instance_name;
         this.activeInstance = instanceName === 'osrm-instance-1' ? 1 : 2;
         logger.info(`Loaded active instance from database: ${this.activeInstance}`);
       }

@@ -1,27 +1,27 @@
 services:
   # Keycloak
-  keycloak:
-    image: quay.io/keycloak/keycloak:24.0.2
-    container_name: dss-keycloak
-    restart: on-failure
-    env_file:
-      - .env
-    environment:
-      KEYCLOAK_ADMIN: dev
-      KEYCLOAK_ADMIN_PASSWORD: dev
-      KC_DB: mysql
-      KC_DB_URL: ${KEYCLOAK_DB_URL}
-      KC_DB_USERNAME: dev
-      KC_DB_PASSWORD: dev
-    ports:
-      - "8080:8080"
-    command: start-dev
-    healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080;echo -e 'GET /health/ready HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;"] 
-      interval: 10s
-      timeout: 10s
-      retries: 120
-      start_period: 30s
+  # keycloak:
+  #   image: quay.io/keycloak/keycloak:24.0.2
+  #   container_name: dss-keycloak
+  #   restart: on-failure
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     KEYCLOAK_ADMIN: dev
+  #     KEYCLOAK_ADMIN_PASSWORD: dev
+  #     KC_DB: mysql
+  #     KC_DB_URL: ${KEYCLOAK_DB_URL}
+  #     KC_DB_USERNAME: dev
+  #     KC_DB_PASSWORD: dev
+  #   ports:
+  #     - "8080:8080"
+  #   command: start-dev
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080;echo -e 'GET /health/ready HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;"] 
+  #     interval: 10s
+  #     timeout: 10s
+  #     retries: 120
+  #     start_period: 30s
 
   # Settings Service
   settings-service:
@@ -75,8 +75,8 @@ services:
     ports:
       - "21501:21501"
     depends_on:
-      keycloak:
-        condition: service_healthy
+      # keycloak:
+      #   condition: service_healthy
       settings-service:
         condition: service_healthy
     healthcheck:
@@ -97,10 +97,10 @@ services:
     container_name: dss-zone-service
     environment:
       NODE_ENV: production
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: ${DB_HOST} # not using
+      DB_PORT: ${DB_PORT} # not using
+      DB_USERNAME: ${DB_USERNAME} # not using
+      DB_PASSWORD: ${DB_PASSWORD} # not using
       ZONE_DB_CONNECTION: ${ZONE_DB_CONNECTION}
       SETTINGS_SERVICE_URL: http://settings-service:21502
       OSRM_INSTANCE_1_URL: http://osrm-instance-1:5000

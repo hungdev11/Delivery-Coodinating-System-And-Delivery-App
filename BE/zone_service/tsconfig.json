@@ -45,8 +45,10 @@
   },
   "include": [
     "src/**/*",
-    "utils/**/*"
+    "utils/**/*",
+    "index.ts"
   ],
+  "rootDir": ".",
   "exclude": [
     "node_modules",
     "dist",

@@ -33,7 +33,9 @@ export function findIntersections(roads: Road[]): Intersection[] {
   for (const road of roads) {
     for (let i = 0; i < road.nodeIds.length; i++) {
       const nodeId = road.nodeIds[i];
-      const [lon, lat] = road.coordinates[i];
+      const coord = road.coordinates[i];
+      if (!nodeId || !coord) continue;
+      const [lon, lat] = coord;
 
       if (!nodeMap.has(nodeId)) {
         nodeMap.set(nodeId, {
@@ -96,24 +98,31 @@ export function generateSegments(roads: Road[], intersections: Intersection[]): 
 
   for (const road of roads) {
     let segmentStart = 0;
-    let segmentCoords: Array<[number, number]> = [road.coordinates[0]];
+    const firstCoord = road.coordinates[0];
+    if (!firstCoord) continue;
+    let segmentCoords: Array<[number, number]> = [firstCoord];
 
     for (let i = 1; i < road.nodeIds.length; i++) {
       const nodeId = road.nodeIds[i];
-      segmentCoords.push(road.coordinates[i]);
+      const coord = road.coordinates[i];
+      if (!nodeId || !coord) continue;
+      segmentCoords.push(coord);
 
       // Create segment when we hit an intersection or end of road
       if (intersectionNodeIds.has(nodeId) || i === road.nodeIds.length - 1) {
+        const fromNodeId = road.nodeIds[segmentStart];
+        if (!fromNodeId) continue;
+
         segments.push({
           roadId: road.roadId,
-          fromNodeId: road.nodeIds[segmentStart],
+          fromNodeId,
           toNodeId: nodeId,
           coordinates: [...segmentCoords],
         });
 
         // Start new segment
         segmentStart = i;
-        segmentCoords = [road.coordinates[i]];
+        segmentCoords = [coord];
       }
     }
   }
@@ -192,7 +201,7 @@ export function mergeConnectedRoads(roads: Road[], thresholdMeters: number = 50)
   const mergedRoads: Road[] = [];
   const processedIds = new Set<string>();
 
-  for (const [name, roadGroup] of duplicateGroups.entries()) {
+  for (const [_name, roadGroup] of duplicateGroups.entries()) {
     // Try to merge roads in this group
     const merged = mergeRoadGroup(roadGroup, thresholdMeters);
     mergedRoads.push(...merged);
@@ -240,7 +249,7 @@ function mergeRoadGroup(roads: Road[], thresholdMeters: number): Road[] {
         const currentEnd = currentRoad.coordinates[currentRoad.coordinates.length - 1];
         const otherStart = otherRoad.coordinates[0];
 
-        if (areSegmentsConnected(currentEnd, otherStart, thresholdMeters)) {
+        if (currentEnd && otherStart && areSegmentsConnected(currentEnd, otherStart, thresholdMeters)) {
           // Merge them
           currentRoad = {
             ...currentRoad,

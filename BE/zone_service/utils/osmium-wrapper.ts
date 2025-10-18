@@ -197,7 +197,7 @@ export class OsmiumWrapper {
   async extractRoads(
     inputPbf: string,
     outputPbf: string,
-    options: OsmiumOptions = {}
+    _options: OsmiumOptions = {}
   ): Promise<void> {
     if (!existsSync(inputPbf)) {
       throw new Error(`Input file not found: ${inputPbf}`);

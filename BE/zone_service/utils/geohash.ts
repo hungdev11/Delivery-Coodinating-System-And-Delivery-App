@@ -83,6 +83,9 @@ export function decode(geohash: string): {
 
   for (let i = 0; i < geohash.length; i++) {
     const chr = geohash[i]
+    if (!chr) {
+      throw new Error(`Invalid geohash character at position ${i}`)
+    }
     const idx = BASE32.indexOf(chr)
 
     if (idx === -1) {
@@ -128,16 +131,21 @@ export function decode(geohash: string): {
  * @returns Array of 9 geohashes (center + 8 neighbors)
  */
 export function getNeighbors(geohash: string): string[] {
+  const n = neighbor(geohash, 'n')
+  const s = neighbor(geohash, 's')
+  const e = neighbor(geohash, 'e')
+  const w = neighbor(geohash, 'w')
+
   const neighbors = [
     geohash, // Center
-    neighbor(geohash, 'n'),  // North
-    neighbor(geohash, 's'),  // South
-    neighbor(geohash, 'e'),  // East
-    neighbor(geohash, 'w'),  // West
-    neighbor(neighbor(geohash, 'n'), 'e'), // NE
-    neighbor(neighbor(geohash, 'n'), 'w'), // NW
-    neighbor(neighbor(geohash, 's'), 'e'), // SE
-    neighbor(neighbor(geohash, 's'), 'w')  // SW
+    n,  // North
+    s,  // South
+    e,  // East
+    w,  // West
+    n ? neighbor(n, 'e') : null, // NE
+    n ? neighbor(n, 'w') : null, // NW
+    s ? neighbor(s, 'e') : null, // SE
+    s ? neighbor(s, 'w') : null  // SW
   ]
 
   return neighbors.filter(Boolean) as string[]
@@ -180,8 +188,12 @@ function neighbor(geohash: string, direction: 'n' | 's' | 'e' | 'w'): string | n
     w: { even: '0145hjnp', odd: '028b' }
   }
 
-  const border = borders[direction][type]
-  const neighborChars = neighbors[direction][type]
+  const border = borders[direction]?.[type]
+  const neighborChars = neighbors[direction]?.[type]
+
+  if (!border || !neighborChars) {
+    return null
+  }
 
   if (border.includes(lastChar) && parent) {
     const parentNeighbor = neighbor(parent, direction)

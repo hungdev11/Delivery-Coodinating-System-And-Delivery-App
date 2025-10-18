@@ -142,7 +142,10 @@ export function projectPointToPolyline(
 
   // Calculate segment lengths first
   for (let i = 0; i < polyline.length - 1; i++) {
-    const length = haversineDistance(polyline[i], polyline[i + 1])
+    const p1 = polyline[i]
+    const p2 = polyline[i + 1]
+    if (!p1 || !p2) continue
+    const length = haversineDistance(p1, p2)
     segmentLengths.push(length)
     totalLength += length
   }
@@ -151,9 +154,13 @@ export function projectPointToPolyline(
 
   // Find closest segment
   for (let i = 0; i < polyline.length - 1; i++) {
+    const start = polyline[i]
+    const end = polyline[i + 1]
+    if (!start || !end) continue
+
     const segment: LineSegment = {
-      start: polyline[i],
-      end: polyline[i + 1]
+      start,
+      end
     }
 
     const result = projectPointToSegment(point, segment)
@@ -162,8 +169,9 @@ export function projectPointToPolyline(
       minDistance = result.distance
 
       // Calculate position along entire polyline
-      const positionInSegment = result.position * segmentLengths[i]
-      const totalPosition = (cumulativeLength + positionInSegment) / totalLength
+      const segLength = segmentLengths[i]
+      const positionInSegment = segLength ? result.position * segLength : 0
+      const totalPosition = totalLength > 0 ? (cumulativeLength + positionInSegment) / totalLength : 0
 
       bestResult = {
         closestPoint: result.closestPoint,
@@ -174,7 +182,10 @@ export function projectPointToPolyline(
       }
     }
 
-    cumulativeLength += segmentLengths[i]
+    const segLength = segmentLengths[i]
+    if (segLength) {
+      cumulativeLength += segLength
+    }
   }
 
   return bestResult

@@ -22,12 +22,13 @@ export function parsePolyFile(filePath: string): Polygon {
   }
 
   // First non-empty line is the polygon name
-  const name = lines[0].trim();
+  const name = lines[0]?.trim() || '';
   let currentPolygon: number[][] = [];
   const allPolygons: number[][][] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
+    if (!line) continue;
     const trimmed = line.trim();
 
     // Skip empty lines
@@ -39,7 +40,7 @@ export function parsePolyFile(filePath: string): Polygon {
         // Close the polygon
         const first = currentPolygon[0];
         const last = currentPolygon[currentPolygon.length - 1];
-        if (first[0] !== last[0] || first[1] !== last[1]) {
+        if (first && last && (first[0] !== last[0] || first[1] !== last[1])) {
           currentPolygon.push([...first]);
         }
         allPolygons.push(currentPolygon);
@@ -51,8 +52,12 @@ export function parsePolyFile(filePath: string): Polygon {
     // Try to parse as coordinates (two numbers separated by spaces)
     const parts = trimmed.split(/\s+/);
     if (parts.length >= 2) {
-      const num1 = parseFloat(parts[0]);
-      const num2 = parseFloat(parts[1]);
+      const part0 = parts[0];
+      const part1 = parts[1];
+      if (!part0 || !part1) continue;
+
+      const num1 = parseFloat(part0);
+      const num2 = parseFloat(part1);
 
       // If both are valid numbers, treat as coordinates
       if (!isNaN(num1) && !isNaN(num2)) {
@@ -66,7 +71,7 @@ export function parsePolyFile(filePath: string): Polygon {
   if (currentPolygon.length > 0) {
     const first = currentPolygon[0];
     const last = currentPolygon[currentPolygon.length - 1];
-    if (first[0] !== last[0] || first[1] !== last[1]) {
+    if (first && last && (first[0] !== last[0] || first[1] !== last[1])) {
       currentPolygon.push([...first]);
     }
     allPolygons.push(currentPolygon);
@@ -104,9 +109,18 @@ export function calculateCentroid(coordinates: number[][]): { lat: number; lon: 
   let count = 0;
 
   for (const coord of coordinates) {
-    sumLon += coord[0];
-    sumLat += coord[1];
-    count++;
+    if (!coord || coord.length < 2) continue;
+    const lon = coord[0];
+    const lat = coord[1];
+    if (lon !== undefined && lat !== undefined) {
+      sumLon += lon;
+      sumLat += lat;
+      count++;
+    }
+  }
+
+  if (count === 0) {
+    return { lat: 0, lon: 0 };
   }
 
   return {
@@ -135,6 +149,7 @@ export function parseMultiPolyFile(filePath: string): NamedPolygon[] {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (!line) continue;
     const trimmed = line.trim();
 
     // Skip empty lines
@@ -146,15 +161,15 @@ export function parseMultiPolyFile(filePath: string): NamedPolygon[] {
         // Close the polygon
         const first = currentPolygon[0];
         const last = currentPolygon[currentPolygon.length - 1];
-        if (first[0] !== last[0] || first[1] !== last[1]) {
+        if (first && last && (first[0] !== last[0] || first[1] !== last[1])) {
           currentPolygon.push([...first]);
         }
-        
+
         polygons.push({
           name: currentName,
           coordinates: currentPolygon,
         });
-        
+
         currentPolygon = [];
         inPolygon = false;
       }
@@ -164,8 +179,12 @@ export function parseMultiPolyFile(filePath: string): NamedPolygon[] {
     // Try to parse as coordinates (two numbers separated by spaces)
     const parts = trimmed.split(/\s+/);
     if (parts.length >= 2) {
-      const num1 = parseFloat(parts[0]);
-      const num2 = parseFloat(parts[1]);
+      const part0 = parts[0];
+      const part1 = parts[1];
+      if (!part0 || !part1) continue;
+
+      const num1 = parseFloat(part0);
+      const num2 = parseFloat(part1);
 
       // If both are valid numbers, treat as coordinates
       if (!isNaN(num1) && !isNaN(num2)) {
@@ -188,7 +207,7 @@ export function parseMultiPolyFile(filePath: string): NamedPolygon[] {
   if (currentPolygon.length > 0 && currentName) {
     const first = currentPolygon[0];
     const last = currentPolygon[currentPolygon.length - 1];
-    if (first[0] !== last[0] || first[1] !== last[1]) {
+    if (first && last && (first[0] !== last[0] || first[1] !== last[1])) {
       currentPolygon.push([...first]);
     }
     polygons.push({
@@ -223,10 +242,12 @@ export function unionPolygons(polygons: NamedPolygon[]): number[][] {
   let maxLat = -Infinity;
 
   for (const [lon, lat] of allPoints) {
-    minLon = Math.min(minLon, lon);
-    maxLon = Math.max(maxLon, lon);
-    minLat = Math.min(minLat, lat);
-    maxLat = Math.max(maxLat, lat);
+    if (lon !== undefined && lat !== undefined) {
+      minLon = Math.min(minLon, lon);
+      maxLon = Math.max(maxLon, lon);
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat);
+    }
   }
 
   // Create a simple rectangular boundary
@@ -272,7 +293,10 @@ export function generateZoneCode(name: string): string {
 
   // If code is too short, pad or use first few chars of first word
   if (code.length < 2 && words.length > 0) {
-    code = words[0].substring(0, 2).toUpperCase();
+    const firstWord = words[0];
+    if (firstWord) {
+      code = firstWord.substring(0, 2).toUpperCase();
+    }
   }
 
   return code;

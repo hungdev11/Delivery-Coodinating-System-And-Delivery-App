@@ -84,7 +84,7 @@ export class RoutingController {
   /**
    * Get OSRM status (which instance is active, health checks)
    */
-  public static async getOSRMStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+  public static async getOSRMStatus(_req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const status = await RoutingService.getOSRMStatus();
       res.json(BaseResponse.success(status));
