@@ -48,8 +48,9 @@ public class DeliveryAssignmentController {
     public ResponseEntity<DeliveryAssignmentResponse> deliveryFailed(@PathVariable String parcelId,
                                                               @RequestParam String deliveryManId,
                                                               @RequestParam String reason,
+                                                              @RequestParam boolean flag, // recognize case delivery success but, parcel false cuz customer reject
                                                               @RequestBody RouteInfo routeInfo) {
-        return ResponseEntity.ok(deliveryAssignmentService.deliveryFailed(Utility.toUUID(parcelId), Utility.toUUID(deliveryManId), reason, routeInfo));
+        return ResponseEntity.ok(deliveryAssignmentService.deliveryFailed(Utility.toUUID(parcelId), Utility.toUUID(deliveryManId), flag, reason, routeInfo));
     }
 
     @GetMapping("/today/{deliveryManId}")
