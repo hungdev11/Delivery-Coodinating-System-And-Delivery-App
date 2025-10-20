@@ -1,21 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    tools:context=".MapFragment">
 
-    <FrameLayout
-        android:id="@+id/mapContainer"
+    <org.osmdroid.views.MapView
+        android:id="@+id/map_view_osm"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        tilesource="Mapnik"/>
 
-    <Button
-        android:id="@+id/btnStartTrip"
-        android:layout_width="match_parent"
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_list_tasks"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
+        android:layout_gravity="top|start"
         android:layout_margin="16dp"
-        android:backgroundTint="#4C84FF"
-        android:text="Bắt đầu chuyến đi"
-        android:textColor="#FFFFFF"
-        android:textStyle="bold" />
-</RelativeLayout>
+        android:src="@drawable/ic_list"
+        app:fabSize="mini"
+        app:backgroundTint="@color/material_dynamic_neutral99"
+        android:contentDescription="Show Task List"/>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
