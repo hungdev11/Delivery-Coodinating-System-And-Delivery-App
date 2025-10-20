@@ -1,6 +1,13 @@
 {
     "configurations": [
         {
+            "name": "Launch Edge",
+            "request": "launch",
+            "type": "msedge",
+            "url": "http://localhost:5173",
+            "webRoot": "${workspaceFolder}/ManagementSystem"
+        },
+        {
             "type": "java",
             "name": "UserServiceApplication",
             "request": "launch",
