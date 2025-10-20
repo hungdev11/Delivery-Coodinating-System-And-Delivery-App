@@ -23,6 +23,13 @@ public class SettingsProxyController {
     @Value("${services.settings.base-url}")
     private String settingsServiceUrl;
 
+    @PostMapping
+    public ResponseEntity<?> listSettings(@RequestBody Object query) {
+        log.info("POST /api/v1/settings - Proxying to Settings Service (list)");
+        String url = settingsServiceUrl + "/api/v1/settings";
+        return ResponseEntity.ok(restTemplate.postForObject(url, query, Object.class));
+    }
+
     /**
      * Get all settings by group (service identifier)
      */

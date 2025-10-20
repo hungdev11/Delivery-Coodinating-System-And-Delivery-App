@@ -14,18 +14,15 @@ import type {
   UpdateUserResponse,
   DeleteUserResponse,
 } from './model.type'
+import type { QueryPayload } from '@/common/types/filter'
 
 const apiClient = new AxiosHttpClient(import.meta.env.VITE_API_URL)
 
 /**
- * Get list of users (paginated)
+ * Get list of users (paginated) - Legacy endpoint
  */
-export const getUsers = async (params?: {
-  page?: number
-  size?: number
-  search?: string
-}): Promise<GetUsersResponse> => {
-  return apiClient.get<GetUsersResponse>('/v1/users', { params })
+export const getUsers = async (params: QueryPayload): Promise<GetUsersResponse> => {
+  return apiClient.post<GetUsersResponse, QueryPayload>('/v1/users', params)
 }
 
 /**

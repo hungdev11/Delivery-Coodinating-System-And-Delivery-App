@@ -1,4 +1,4 @@
-package com.ds.user.common.entities.dto;
+package com.ds.user.common.entities.dto.user;
 
 import com.ds.user.common.entities.base.User;
 import jakarta.validation.constraints.Email;

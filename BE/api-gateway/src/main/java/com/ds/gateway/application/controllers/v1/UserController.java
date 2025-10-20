@@ -2,6 +2,7 @@ package com.ds.gateway.application.controllers.v1;
 
 import com.ds.gateway.common.entities.dto.common.BaseResponse;
 import com.ds.gateway.common.entities.dto.common.PagedData;
+import com.ds.gateway.common.entities.dto.common.PagingRequest;
 import com.ds.gateway.common.entities.dto.user.CreateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UpdateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UserDto;
@@ -44,19 +45,17 @@ public class UserController {
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to get user: " + ex.getMessage()));
             });
     }
-    
-    @GetMapping
+
+    @PostMapping
     @AuthRequired({"ADMIN", "MANAGER"})
-    public CompletableFuture<ResponseEntity<BaseResponse<PagedData<UserDto>>>> listUsers(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        log.info("List users with pagination: page={}, size={}", page, size);
-        
-        return userServiceClient.listUsers(page, size)
+    public CompletableFuture<ResponseEntity<BaseResponse<PagedData<UserDto>>>> getUsers(
+            @RequestBody PagingRequest query) {
+        log.info("Get users (POST) with query");
+        return userServiceClient.getUsers(query)
             .thenApply(pagedUsers -> ResponseEntity.ok(BaseResponse.success(pagedUsers)))
             .exceptionally(ex -> {
-                log.error("Failed to list users: {}", ex.getMessage());
-                return ResponseEntity.badRequest().body(BaseResponse.error("Failed to list users: " + ex.getMessage()));
+                log.error("Failed to get users: {}", ex.getMessage());
+                return ResponseEntity.badRequest().body(BaseResponse.error("Failed to get users: " + ex.getMessage()));
             });
     }
     
@@ -84,7 +83,7 @@ public class UserController {
             });
     }
     
-    @PostMapping
+    @PostMapping("/create")
     @AuthRequired({"ADMIN"})
     public CompletableFuture<ResponseEntity<BaseResponse<UserDto>>> createUser(
             @Valid @RequestBody CreateUserRequestDto request) {

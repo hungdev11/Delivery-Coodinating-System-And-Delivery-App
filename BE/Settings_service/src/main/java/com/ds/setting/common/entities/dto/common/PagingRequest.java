@@ -1,62 +1,65 @@
 package com.ds.setting.common.entities.dto.common;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 
 import java.util.List;
+import java.util.Optional;
 
-/**
- * Paging request parameters for query strings
- * Follows the standard defined in RESTFUL.md
- */
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class PagingRequest {
-    /**
-     * Page number (0-based), default 0
-     */
+    
+    @JsonProperty("filters")
     @Builder.Default
-    private int page = 0;
+    private Optional<FilterGroup> filters = Optional.empty();
     
-    /**
-     * Items per page, default 10
-     */
+    @JsonProperty("sorts")
     @Builder.Default
-    private int size = 10;
+    private Optional<List<SortConfig>> sorts = Optional.empty();
     
-    /**
-     * Applied filters (optional)
-     */
-    private List<Object> filters;
+    @JsonProperty("page")
+    @Builder.Default
+    private Optional<Integer> page = Optional.empty();
     
-    /**
-     * Sort configuration (optional)
-     */
-    private List<Object> sorts;
+    @JsonProperty("size")
+    @Builder.Default
+    private Optional<Integer> size = Optional.empty();
     
-    /**
-     * Selected item IDs (optional)
-     */
-    private List<String> selected;
+    @JsonProperty("search")
+    @Builder.Default
+    private Optional<String> search = Optional.empty();
     
-    /**
-     * Convert to Spring Pageable
-     */
-    public Pageable toPageable() {
-        return PageRequest.of(page, size);
+    @JsonProperty("selected")
+    @Builder.Default
+    private Optional<List<String>> selected = Optional.empty();
+    
+    public FilterGroup getFiltersOrEmpty() {
+        return filters.orElse(FilterGroup.builder().logic("AND").conditions(List.of()).build());
     }
     
-    /**
-     * Convert to Spring Pageable with sort
-     */
-    public Pageable toPageable(Sort sort) {
-        return PageRequest.of(page, size, sort);
+    public List<SortConfig> getSortsOrEmpty() {
+        return sorts.orElse(List.of());
+    }
+    
+    public int getPageOrDefault() {
+        return page.orElse(0);
+    }
+    
+    public int getSizeOrDefault() {
+        return size.orElse(10);
+    }
+    
+    public String getSearchOrEmpty() {
+        return search.orElse("");
+    }
+    
+    public List<String> getSelectedOrEmpty() {
+        return selected.orElse(List.of());
     }
 }

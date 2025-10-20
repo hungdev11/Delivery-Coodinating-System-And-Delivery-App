@@ -1,17 +1,30 @@
 <template>
-  <UButton
-    :variant="config.variant"
-    :label="config.label"
-    :class="config.class"
-    :color="isSorted ? config.activeColor : config.inactiveColor"
-    :icon="sortIcon"
-    @click="handleSort"
-  />
+  <div class="flex items-center gap-1">
+    <!-- Sort Button -->
+    <UButton
+      :variant="config.variant"
+      :label="config.label"
+      :class="config.class"
+      :color="isSorted ? config.activeColor : config.inactiveColor"
+      :icon="sortIcon"
+      @click="handleSort"
+    />
+
+    <!-- Filter Button (if column is filterable) -->
+    <ColumnFilter
+      v-if="isFilterable"
+      :column="filterableColumn"
+      :active-filters="activeFilters"
+      @update:filters="handleFilterUpdate"
+    />
+  </div>
 </template>
 
 <script setup lang="ts" generic="TData">
 import { computed } from 'vue'
 import type { Column, RowData } from '@tanstack/table-core'
+import type { FilterableColumn, FilterCondition } from '@/common/types/filter'
+import ColumnFilter from './filters/ColumnFilter.vue'
 
 interface Props<TData extends RowData> {
   column: Column<TData>
@@ -22,19 +35,34 @@ interface Props<TData extends RowData> {
     activeColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
     inactiveColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
   }
+  filterableColumn?: FilterableColumn
+  activeFilters?: FilterCondition[] | undefined
+}
+
+interface Emits {
+  (e: 'update:filters', filters: FilterCondition[]): void
 }
 
 const props = defineProps<Props<TData>>()
+const emit = defineEmits<Emits>()
 
 // Computed properties for sort state
 const isSorted = computed(() => props.column.getIsSorted())
 
 // Computed sort icon
 const sortIcon = computed(() => {
-  console.log(isSorted.value)
   if (isSorted.value === 'asc') return 'i-lucide-arrow-up-narrow-wide'
   if (isSorted.value === 'desc') return 'i-lucide-arrow-down-wide-narrow'
   return 'i-lucide-arrow-up-down'
+})
+
+// Filter-related computed properties
+const isFilterable = computed(() => {
+  return !!props.filterableColumn && (props.filterableColumn.filterable !== false)
+})
+
+const activeFilters = computed(() => {
+  return props.activeFilters || undefined
 })
 
 // Handle sort click
@@ -46,5 +74,10 @@ const handleSort = () => {
   } else {
     props.column.toggleSorting(false, true)
   }
+}
+
+// Handle filter update
+const handleFilterUpdate = (filters: FilterCondition[]) => {
+  emit('update:filters', filters)
 }
 </script>

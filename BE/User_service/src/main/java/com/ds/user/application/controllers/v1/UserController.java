@@ -1,11 +1,13 @@
 package com.ds.user.application.controllers.v1;
 
 import com.ds.user.common.entities.base.User;
-import com.ds.user.common.entities.dto.*;
+import com.ds.user.common.entities.common.BaseResponse;
+import com.ds.user.common.entities.common.PagingRequest;
+import com.ds.user.common.entities.common.paging.PagedData;
 import com.ds.user.common.entities.dto.auth.SyncUserRequest;
-import com.ds.user.common.entities.dto.common.BaseResponse;
-import com.ds.user.common.entities.dto.common.PagedData;
-import com.ds.user.common.entities.dto.common.PagingRequest;
+import com.ds.user.common.entities.dto.user.CreateUserRequest;
+import com.ds.user.common.entities.dto.user.UpdateUserRequest;
+import com.ds.user.common.entities.dto.user.UserDto;
 import com.ds.user.common.interfaces.IUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,10 +34,10 @@ public class UserController {
 
     private final IUserService userService;
 
-    @PostMapping
+    @PostMapping("/create")
     @Operation(summary = "Create a new user")
     public ResponseEntity<BaseResponse<UserDto>> createUser(@Valid @RequestBody CreateUserRequest request) {
-        log.info("POST /api/v1/users - Create user: username={}", request.getUsername());
+        log.info("POST /api/v1/users/create - Create user: username={}", request.getUsername());
         
         User user = User.builder()
                 .keycloakId(request.getKeycloakId())
@@ -110,58 +112,37 @@ public class UserController {
                         .body(BaseResponse.error("User not found")));
     }
 
-    @GetMapping
-    @Operation(summary = "Get all users with pagination")
-    public ResponseEntity<BaseResponse<PagedData<UserDto>>> listUsers(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) List<Object> filters,
-            @RequestParam(required = false) List<Object> sorts,
-            @RequestParam(required = false) List<String> selected) {
-        log.info("GET /api/v1/users - Get all users with pagination: page={}, size={}", page, size);
-        
-        PagingRequest pagingRequest = PagingRequest.builder()
-                .page(page)
-                .size(size)
-                .filters(filters)
-                .sorts(sorts)
-                .selected(selected)
-                .build();
-        
-        var userPagedData = userService.listUsers(pagingRequest);
-        
-        // Convert to PagedData<UserDto>
-        PagedData<UserDto> pagedData = PagedData.<UserDto>builder()
-                .data(userPagedData.getData().stream().map(UserDto::from).toList())
-                .page(userPagedData.getPage())
-                .build();
-        
-        return ResponseEntity.ok(BaseResponse.success(pagedData));
-    }
-
-    @GetMapping("/debug/all")
-    @Operation(summary = "Debug: Get all users (for debugging)")
-    public ResponseEntity<BaseResponse<List<UserDto>>> debugGetAllUsers() {
-        log.info("DEBUG: Getting all users for debugging");
+    @PostMapping
+    @Operation(summary = "Get all users with advanced filtering and sorting")
+    public ResponseEntity<BaseResponse<PagedData<UserDto>>> getUsers(@Valid @RequestBody PagingRequest query) {
+        log.info("POST /api/v1/users - Get users with advanced filtering and sorting");
+        log.debug("Query payload: {}", query);
         
         try {
-            List<User> users = userService.listUsers();
-            List<UserDto> userDtos = users.stream()
-                    .map(user -> {
-                        log.info("DEBUG: User found - ID: {}, Username: {}, Type: {}", 
-                                user.getId(), user.getUsername(), user.getId().getClass().getSimpleName());
-                        return UserDto.from(user);
-                    })
+            // Get users using the service
+            PagedData<User> userPage = userService.getUsers(query);
+            
+            // Convert to PagedData<UserDto>
+            List<UserDto> userDtos = userPage.getData().stream()
+                    .map(UserDto::from)
                     .toList();
             
-            return ResponseEntity.ok(BaseResponse.success(userDtos, "Debug: All users retrieved"));
+            // Use the existing paging from userPage
+            PagedData<UserDto> pagedData = PagedData.<UserDto>builder()
+                    .data(userDtos)
+                    .page(userPage.getPage())
+                    .build();
+            
+            return ResponseEntity.ok(BaseResponse.success(pagedData));
+            
         } catch (Exception e) {
-            log.error("DEBUG: Error getting all users: {}", e.getMessage(), e);
+            log.error("Error searching users: {}", e.getMessage(), e);
             return ResponseEntity
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(BaseResponse.error("Debug error: " + e.getMessage()));
+                    .body(BaseResponse.error("Search failed: " + e.getMessage()));
         }
     }
+
 
     @PutMapping("/{id}")
     @Operation(summary = "Update a user")

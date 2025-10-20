@@ -1,4 +1,4 @@
-package com.ds.user.common.entities.dto.common;
+package com.ds.user.common.entities.common.paging;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

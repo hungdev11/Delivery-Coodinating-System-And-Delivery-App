@@ -10,17 +10,36 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${keycloak.backend.issuer-uri}
-          jwk-set-uri: ${keycloak.backend.jwk-set-uri}
+          issuer-uri: ${keycloak.backend.issuer-uri:${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}}
+          jwk-set-uri: ${keycloak.backend.jwk-set-uri:${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}/protocol/openid-connect/certs}
 
 # Keycloak Configuration (reusing admin credentials from User Service)
 keycloak:
- 
+  auth-server-url: ${KEYCLOAK_URL:http://localhost:8080}
+  realm: ${KEYCLOAK_REALM:delivery-system}
+  resource: ${KEYCLOAK_CLIENT_ID:frontend-client}
+  credentials:
+    username: ${KEYCLOAK_ADMIN_USERNAME:dev}
+    password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
+    secret: ${KEYCLOAK_CLIENT_SECRET:}
+  
+  # Multi-realm configuration for different login types
+  backend:
+    realm: ${KEYCLOAK_REALM:delivery-system}
+    issuer-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}
+    jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}/protocol/openid-connect/certs
+    client-id: backend-client
+  client:
+    realm: ${KEYCLOAK_CLIENT_REALM:delivery-system}
+    issuer-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_CLIENT_REALM:delivery-system}
+    jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_CLIENT_REALM:delivery-system}/protocol/openid-connect/certs
+    client-id: frontend-client
   
   # Default login configuration (from Settings Service)
   default:
     realm: ${KEYCLOAK_DEFAULT_REALM:delivery-system}
     client-id: ${KEYCLOAK_DEFAULT_CLIENT_ID:frontend-client}
+
 
 # External Services Configuration
 # Default to localhost for local development, override via env for Docker

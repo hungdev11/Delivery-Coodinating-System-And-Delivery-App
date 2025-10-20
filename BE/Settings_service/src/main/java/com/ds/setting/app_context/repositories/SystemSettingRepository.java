@@ -14,7 +14,7 @@ import java.util.Optional;
  * Repository for SystemSetting entity
  */
 @Repository
-public interface SystemSettingRepository extends JpaRepository<SystemSetting, String> {
+public interface SystemSettingRepository extends JpaRepository<SystemSetting, String>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<SystemSetting> {
 
     /**
      * Find settings by group

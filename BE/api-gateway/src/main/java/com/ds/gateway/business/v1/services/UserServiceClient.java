@@ -2,6 +2,7 @@ package com.ds.gateway.business.v1.services;
 
 import com.ds.gateway.common.entities.dto.common.BaseResponse;
 import com.ds.gateway.common.entities.dto.common.PagedData;
+import com.ds.gateway.common.entities.dto.common.PagingRequest;
 import com.ds.gateway.common.entities.dto.user.CreateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UpdateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UserDto;
@@ -15,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -35,7 +35,7 @@ public class UserServiceClient implements IUserServiceClient {
         log.debug("Creating user via REST: {}", request.getUsername());
         
         return userServiceWebClient.post()
-            .uri("/api/v1/users")
+            .uri("/api/v1/users/create")
             .bodyValue(request)
             .retrieve()
             .bodyToMono(new ParameterizedTypeReference<BaseResponse<UserDto>>() {})
@@ -96,32 +96,17 @@ public class UserServiceClient implements IUserServiceClient {
             .toFuture();
     }
     
+
     @Override
-    public CompletableFuture<List<UserDto>> listUsers() {
-        log.debug("Listing all users via REST");
-        
-        return userServiceWebClient.get()
+    public CompletableFuture<PagedData<UserDto>> getUsers(PagingRequest query) {
+        log.debug("Getting users via POST with filters/sorts/paging");
+
+        return userServiceWebClient.post()
             .uri("/api/v1/users")
+            .bodyValue(query)
             .retrieve()
             .bodyToMono(new ParameterizedTypeReference<BaseResponse<PagedData<UserDto>>>() {})
-            .map(response -> response.getResult().getData()) // Extract data from PagedData
-            .onErrorMap(ex -> new ServiceUnavailableException("User service unavailable: " + ex.getMessage(), ex))
-            .toFuture();
-    }
-    
-    @Override
-    public CompletableFuture<PagedData<UserDto>> listUsers(int page, int size) {
-        log.debug("Listing users with pagination via REST: page={}, size={}", page, size);
-        
-        return userServiceWebClient.get()
-            .uri(uriBuilder -> uriBuilder
-                .path("/api/v1/users")
-                .queryParam("page", page)
-                .queryParam("size", size)
-                .build())
-            .retrieve()
-            .bodyToMono(new ParameterizedTypeReference<BaseResponse<PagedData<UserDto>>>() {})
-            .map(BaseResponse::getResult) // Return full PagedData response
+            .map(BaseResponse::getResult)
             .onErrorMap(ex -> new ServiceUnavailableException("User service unavailable: " + ex.getMessage(), ex))
             .toFuture();
     }

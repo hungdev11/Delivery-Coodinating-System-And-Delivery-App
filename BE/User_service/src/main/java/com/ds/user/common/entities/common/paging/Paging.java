@@ -1,4 +1,4 @@
-package com.ds.user.common.entities.dto.common;
+package com.ds.user.common.entities.common.paging;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -6,6 +6,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+
+import com.ds.user.common.entities.common.filter.FilterGroup;
+import com.ds.user.common.entities.common.sort.SortConfig;
 
 /**
  * Pagination information
@@ -39,16 +42,15 @@ public class Paging<TKey> {
     private int totalPages;
     
     /**
-     * Applied filters (optional)
+     * Applied filters (optional) - Updated to support FilterGroup
      */
-    @Builder.Default
-    private List<Object> filters = List.of();
+    private FilterGroup filters;
     
     /**
-     * Sort configuration (optional)
+     * Sort configuration (optional) - Updated to support SortConfig
      */
     @Builder.Default
-    private List<Object> sorts = List.of();
+    private List<SortConfig> sorts = List.of();
     
     /**
      * Selected item IDs (optional)
