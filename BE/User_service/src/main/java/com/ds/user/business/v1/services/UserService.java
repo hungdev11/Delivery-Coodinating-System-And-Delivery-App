@@ -1,10 +1,17 @@
 package com.ds.user.business.v1.services;
 
-import com.ds.user.app_context.models.User;
+import com.ds.user.common.entities.base.User;
+import com.ds.user.common.entities.common.PagingRequest;
+import com.ds.user.common.entities.common.paging.PagedData;
+import com.ds.user.common.helper.FilterableFieldRegistry;
+import com.ds.user.common.helper.GenericQueryService;
 import com.ds.user.app_context.repositories.UserRepository;
 import com.ds.user.common.interfaces.IUserService;
 
 import org.springframework.beans.factory.annotation.Autowired;
+
+import com.ds.user.common.utils.EnhancedQueryParser;
+
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -16,6 +23,9 @@ public class UserService implements IUserService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private FilterableFieldRegistry fieldRegistry;
 
     @Override
     public User createUser(User user) {
@@ -45,8 +55,17 @@ public class UserService implements IUserService {
     }
 
     @Override
-    public List<User> listUsers() {
-        return userRepository.findAll();
+    public PagedData<User> getUsers(PagingRequest query) {
+        // Initialize field registry for User entity if not already done
+        if (fieldRegistry.getFilterableFields(User.class).isEmpty()) {
+            fieldRegistry.autoDiscoverFields(User.class);
+        }
+
+        // Set the field registry for enhanced query parser
+        EnhancedQueryParser.setFieldRegistry(fieldRegistry);
+
+        // Use GenericQueryService for consistent query handling
+        return GenericQueryService.executeQuery(userRepository, query, User.class);
     }
 
     @Override
@@ -60,7 +79,8 @@ public class UserService implements IUserService {
     }
 
     @Override
-    public User upsertByKeycloakId(String keycloakId, String username, String email, String firstName, String lastName) {
+    public User upsertByKeycloakId(String keycloakId, String username, String email, String firstName,
+            String lastName) {
         Optional<User> existingOpt = userRepository.findByKeycloakId(keycloakId);
         if (existingOpt.isPresent()) {
             User existing = existingOpt.get();
@@ -81,4 +101,5 @@ public class UserService implements IUserService {
                 .build();
         return userRepository.save(user);
     }
+
 }

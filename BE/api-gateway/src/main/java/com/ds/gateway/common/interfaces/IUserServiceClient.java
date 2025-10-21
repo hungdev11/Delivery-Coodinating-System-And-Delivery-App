@@ -1,5 +1,7 @@
 package com.ds.gateway.common.interfaces;
 
+import com.ds.gateway.common.entities.dto.common.PagedData;
+import com.ds.gateway.common.entities.dto.common.PagingRequest;
 import com.ds.gateway.common.entities.dto.user.CreateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UpdateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UserDto;
@@ -37,11 +39,11 @@ public interface IUserServiceClient {
      * Delete user
      */
     CompletableFuture<Void> deleteUser(String userId);
-    
+
     /**
-     * List all users
+     * Get users with filtering/sorting/paging (POST)
      */
-    CompletableFuture<List<UserDto>> listUsers();
+    CompletableFuture<PagedData<UserDto>> getUsers(PagingRequest query);
     
     /**
      * Sync user by Keycloak ID (create or update)

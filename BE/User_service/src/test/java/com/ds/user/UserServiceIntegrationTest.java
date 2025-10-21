@@ -1,6 +1,6 @@
 package com.ds.user;
 
-import com.ds.user.app_context.models.User;
+import com.ds.user.common.entities.base.User;
 import com.ds.user.app_context.repositories.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.*;

@@ -12,6 +12,13 @@ import '@/assets/styles/main.css'
 ;(async function initApp() {
   const app = createApp(App)
 
+  // Global error handler for unhandled errors
+  app.config.errorHandler = (err, instance, info) => {
+    console.error('Vue error:', err, info)
+    // Prevent the error from propagating further
+    return false
+  }
+
   app.use(createPinia())
   await initializeStores()
   app.use(ui)

@@ -1,7 +1,12 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios'
 import type { IApiResponse } from '../types'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
+import { useCookies } from '@vueuse/integrations/useCookies'
+import { isTokenExpired } from './jwtDecode/jwtDecode.util'
+import { removeToken, shouldRefreshToken } from '../guards/roleGuard.guard'
+
 const toast = useToast()
+const cookie = useCookies(['token'])
 
 export interface IHttpConfig {
   headers?: Record<string, string>
@@ -30,9 +35,22 @@ export class AxiosHttpClient {
     // Request interceptor
     this.client.interceptors.request.use(
       (config) => {
-        // Add auth token if available
-        const token = localStorage.getItem('auth_token')
+        // Add auth token if available and not expired
+        const token = cookie.get('jwt_token')
         if (token) {
+          // Check if token is expired before sending request
+          if (isTokenExpired(token)) {
+            console.warn('Token is expired, logging out user')
+            removeToken()
+            return Promise.reject(new Error('Token expired'))
+          }
+
+          // Check if token needs refresh (optional warning)
+          if (shouldRefreshToken()) {
+            console.warn('Token will expire soon, consider refreshing')
+            // You could trigger a token refresh here if needed
+          }
+
           config.headers.Authorization = `Bearer ${token}`
         }
         return config
@@ -48,6 +66,13 @@ export class AxiosHttpClient {
         return response.data
       },
       (error) => {
+        // Handle 401 Unauthorized responses (token expired on server)
+        if (error.response?.status === 401) {
+          console.warn('Received 401 Unauthorized, token may be expired')
+          removeToken()
+          return Promise.reject(new Error('Authentication failed'))
+        }
+
         const apiError: IApiResponse<null> = {
           message: error.response?.data?.message || error.message,
         }

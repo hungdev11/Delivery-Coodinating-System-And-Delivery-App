@@ -1,6 +1,6 @@
 package com.ds.user.app_context.repositories;
 
-import com.ds.user.app_context.models.User;
+import com.ds.user.common.entities.base.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

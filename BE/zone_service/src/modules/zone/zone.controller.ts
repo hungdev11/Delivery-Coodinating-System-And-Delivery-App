@@ -1,136 +1,241 @@
 /**
- * Zone Controller
- * Handles HTTP requests for zone management
+ * Zone Controller with advanced filtering and sorting
  */
 
-import { Request, Response, NextFunction } from 'express';
-import { plainToClass } from 'class-transformer';
-import { ZoneService } from './zone.service';
-import { CreateZoneDto, UpdateZoneDto, ZonePagingRequest } from './zone.model';
-import { BaseResponse } from '../../common/types/restful';
+import { Request, Response } from 'express';
+import { ZoneService } from '../../common/services/zone-service';
+import { PagingRequest, BaseResponse } from '../../common/types/filter';
 
 export class ZoneController {
+  constructor(private zoneService: ZoneService) {}
+
   /**
-   * Get all zones with pagination
+   * Get zones with advanced filtering and sorting
+   * POST /api/v1/zones
    */
-  public static async getAllZones(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async getZones(req: Request, res: Response) {
     try {
-      const request = plainToClass(ZonePagingRequest, req.query);
-      const result = await ZoneService.getAllZones(request);
-      res.json(BaseResponse.success(result));
+      const request: PagingRequest = req.body;
+      
+      console.log('Received getZones request:', request);
+      
+      const result = await this.zoneService.getZones(request);
+      
+      const response: BaseResponse<typeof result> = {
+        result
+      };
+      
+      res.json(response);
+      
     } catch (error) {
-      next(error);
+      console.error('Error in getZones:', error);
+      
+      const response: BaseResponse<null> = {
+        message: 'Failed to get zones'
+      };
+      
+      res.status(500).json(response);
     }
   }
 
   /**
    * Get zone by ID
+   * GET /api/v1/zones/:id
    */
-  public static async getZoneById(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async getZoneById(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      if (!id) {
-        res.status(400).json(BaseResponse.error('ID is required'));
-        return;
-      }
-      const result = await ZoneService.getZoneById(id);
       
-      if (!result) {
-        res.status(404).json(BaseResponse.error('Zone not found'));
+      if (!id) {
+        const response: BaseResponse<null> = {
+          message: 'Zone ID is required'
+        };
+        res.status(400).json(response);
         return;
       }
-
-      res.json(BaseResponse.success(result));
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  /**
-   * Get zone by code
-   */
-  public static async getZoneByCode(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const { code } = req.params;
-      if (!code) {
-        res.status(400).json(BaseResponse.error('Code is required'));
-        return;
-      }
-      const result = await ZoneService.getZoneByCode(code);
       
-      if (!result) {
-        res.status(404).json(BaseResponse.error('Zone not found'));
+      console.log('Received getZoneById request:', id);
+      
+      const zone = await this.zoneService.getZoneById(id);
+      
+      if (!zone) {
+        const response: BaseResponse<null> = {
+          message: 'Zone not found'
+        };
+        res.status(404).json(response);
         return;
       }
-
-      res.json(BaseResponse.success(result));
+      
+      const response: BaseResponse<typeof zone> = {
+        result: zone
+      };
+      
+      res.json(response);
+      
     } catch (error) {
-      next(error);
+      console.error('Error in getZoneById:', error);
+      
+      const response: BaseResponse<null> = {
+        message: 'Failed to get zone'
+      };
+      
+      res.status(500).json(response);
     }
   }
 
   /**
-   * Get zones by center ID
+   * Create zone
+   * POST /api/v1/zones/create
    */
-  public static async getZonesByCenterId(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async createZone(req: Request, res: Response) {
     try {
-      const { centerId } = req.params;
-      if (!centerId) {
-        res.status(400).json(BaseResponse.error('Center ID is required'));
-        return;
-      }
-      const result = await ZoneService.getZonesByCenterId(centerId);
-      res.json(BaseResponse.success(result));
+      const zoneData = req.body;
+      
+      console.log('Received createZone request');
+      
+      const zone = await this.zoneService.createZone(zoneData);
+      
+      const response: BaseResponse<typeof zone> = {
+        result: zone,
+        message: 'Zone created successfully'
+      };
+      
+      res.status(201).json(response);
+      
     } catch (error) {
-      next(error);
+      console.error('Error in createZone:', error);
+      
+      const response: BaseResponse<null> = {
+        message: 'Failed to create zone'
+      };
+      
+      res.status(500).json(response);
     }
   }
 
   /**
-   * Create a new zone
+   * Update zone
+   * PUT /api/v1/zones/:id
    */
-  public static async createZone(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const data = plainToClass(CreateZoneDto, req.body);
-      const result = await ZoneService.createZone(data);
-      res.status(201).json(BaseResponse.success(result, 'Zone created successfully'));
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  /**
-   * Update a zone
-   */
-  public static async updateZone(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async updateZone(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
+      const zoneData = req.body;
+      
       if (!id) {
-        res.status(400).json(BaseResponse.error('ID is required'));
+        const response: BaseResponse<null> = {
+          message: 'Zone ID is required'
+        };
+        res.status(400).json(response);
         return;
       }
-      const data = plainToClass(UpdateZoneDto, req.body);
-      const result = await ZoneService.updateZone(id, data);
-      res.json(BaseResponse.success(result, 'Zone updated successfully'));
+      
+      console.log('Received updateZone request:', id);
+      
+      const zone = await this.zoneService.updateZone(id, zoneData);
+      
+      const response: BaseResponse<typeof zone> = {
+        result: zone,
+        message: 'Zone updated successfully'
+      };
+      
+      res.json(response);
+      
     } catch (error) {
-      next(error);
+      console.error('Error in updateZone:', error);
+      
+      const response: BaseResponse<null> = {
+        message: 'Failed to update zone'
+      };
+      
+      res.status(500).json(response);
     }
   }
 
   /**
-   * Delete a zone
+   * Delete zone
+   * DELETE /api/v1/zones/:id
    */
-  public static async deleteZone(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async deleteZone(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
+      
       if (!id) {
-        res.status(400).json(BaseResponse.error('ID is required'));
+        const response: BaseResponse<null> = {
+          message: 'Zone ID is required'
+        };
+        res.status(400).json(response);
         return;
       }
-      await ZoneService.deleteZone(id);
-      res.json(BaseResponse.success(null, 'Zone deleted successfully'));
+      
+      console.log('Received deleteZone request:', id);
+      
+      await this.zoneService.deleteZone(id);
+      
+      const response: BaseResponse<null> = {
+        message: 'Zone deleted successfully'
+      };
+      
+      res.json(response);
+      
     } catch (error) {
-      next(error);
+      console.error('Error in deleteZone:', error);
+      
+      const response: BaseResponse<null> = {
+        message: 'Failed to delete zone'
+      };
+      
+      res.status(500).json(response);
+    }
+  }
+
+  /**
+   * Get filterable fields
+   * GET /api/v1/zones/filterable-fields
+   */
+  async getFilterableFields(_req: Request, res: Response): Promise<void> {
+    try {
+      const fields = this.zoneService.getFilterableFields();
+      
+      const response: BaseResponse<string[]> = {
+        result: fields
+      };
+      
+      res.json(response);
+      
+    } catch (error) {
+      console.error('Error in getFilterableFields:', error);
+      
+      const response: BaseResponse<null> = {
+        message: 'Failed to get filterable fields'
+      };
+      
+      res.status(500).json(response);
+    }
+  }
+
+  /**
+   * Get sortable fields
+   * GET /api/v1/zones/sortable-fields
+   */
+  async getSortableFields(_req: Request, res: Response): Promise<void> {
+    try {
+      const fields = this.zoneService.getSortableFields();
+      
+      const response: BaseResponse<string[]> = {
+        result: fields
+      };
+      
+      res.json(response);
+      
+    } catch (error) {
+      console.error('Error in getSortableFields:', error);
+      
+      const response: BaseResponse<null> = {
+        message: 'Failed to get sortable fields'
+      };
+      
+      res.status(500).json(response);
     }
   }
 }

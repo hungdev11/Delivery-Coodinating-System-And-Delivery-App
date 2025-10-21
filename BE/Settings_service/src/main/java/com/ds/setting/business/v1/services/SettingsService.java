@@ -6,15 +6,27 @@ import com.ds.setting.app_context.repositories.SystemSettingRepository;
 import com.ds.setting.common.entities.dto.CreateSettingRequest;
 import com.ds.setting.common.entities.dto.SystemSettingDto;
 import com.ds.setting.common.entities.dto.UpdateSettingRequest;
+import com.ds.setting.common.entities.dto.common.PagedData;
+import com.ds.setting.common.entities.dto.common.PagingRequest;
+import com.ds.setting.common.entities.dto.common.FilterGroup;
+import com.ds.setting.common.entities.dto.common.FilterCondition;
+import com.ds.setting.common.entities.dto.common.SortConfig;
 import com.ds.setting.common.exceptions.SettingNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.criteria.Predicate;
+
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -26,6 +38,102 @@ import java.util.stream.Collectors;
 public class SettingsService {
 
     private final SystemSettingRepository settingRepository;
+
+    public PagedData<SystemSettingDto> getSettings(PagingRequest query) {
+        int page = query.getPageOrDefault();
+        int size = query.getSizeOrDefault();
+
+        Specification<SystemSetting> spec = buildSpecification(query.getFiltersOrEmpty());
+        Sort sort = buildSort(query.getSortsOrEmpty());
+
+        var pageable = PageRequest.of(page, size, sort);
+        var result = settingRepository.findAll(spec, pageable);
+
+        List<SystemSettingDto> data = result.getContent().stream().map(this::toDto).toList();
+
+        PagedData.Paging paging = PagedData.Paging.builder()
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .filters(query.getFiltersOrEmpty())
+                .sorts(query.getSortsOrEmpty())
+                .selected(query.getSelectedOrEmpty())
+                .build();
+
+        return PagedData.<SystemSettingDto>builder()
+                .data(data)
+                .page(paging)
+                .build();
+    }
+
+    private Specification<SystemSetting> buildSpecification(FilterGroup filterGroup) {
+        return (root, cq, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            for (Object node : filterGroup.getConditions()) {
+                if (node instanceof FilterGroup nested) {
+                    Predicate p = buildSpecification(nested).toPredicate(root, cq, cb);
+                    if (p != null) predicates.add(p);
+                } else if (node instanceof FilterCondition condition) {
+                    Predicate p = buildPredicate(cb, root.get(condition.getField()), condition);
+                    if (p != null) predicates.add(p);
+                }
+            }
+            if (predicates.isEmpty()) return null;
+            if (Objects.equals(filterGroup.getLogic(), "OR")) {
+                return cb.or(predicates.toArray(new Predicate[0]));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    private Predicate buildPredicate(jakarta.persistence.criteria.CriteriaBuilder cb,
+                                     jakarta.persistence.criteria.Path<?> path,
+                                     FilterCondition condition) {
+        Object value = condition.getValue();
+        switch (condition.getOperator()) {
+            case "eq":
+                return cb.equal(path, value);
+            case "ne":
+                return cb.notEqual(path, value);
+            case "gt":
+                return cb.greaterThan((jakarta.persistence.criteria.Path<Comparable>) path, (Comparable) value);
+            case "gte":
+                return cb.greaterThanOrEqualTo((jakarta.persistence.criteria.Path<Comparable>) path, (Comparable) value);
+            case "lt":
+                return cb.lessThan((jakarta.persistence.criteria.Path<Comparable>) path, (Comparable) value);
+            case "lte":
+                return cb.lessThanOrEqualTo((jakarta.persistence.criteria.Path<Comparable>) path, (Comparable) value);
+            case "between":
+                if (value instanceof List<?> list && list.size() >= 2) {
+                    return cb.between((jakarta.persistence.criteria.Path<Comparable>) path,
+                            (Comparable) list.get(0), (Comparable) list.get(1));
+                }
+                return null;
+            case "contains":
+                return cb.like(cb.lower((jakarta.persistence.criteria.Expression<String>) path), "%" + String.valueOf(value).toLowerCase() + "%");
+            case "startsWith":
+                return cb.like(cb.lower((jakarta.persistence.criteria.Expression<String>) path), String.valueOf(value).toLowerCase() + "%");
+            case "endsWith":
+                return cb.like(cb.lower((jakarta.persistence.criteria.Expression<String>) path), "%" + String.valueOf(value).toLowerCase());
+            case "isNull":
+                return cb.isNull(path);
+            case "isNotNull":
+                return cb.isNotNull(path);
+            default:
+                return null;
+        }
+    }
+
+    private Sort buildSort(List<SortConfig> sorts) {
+        if (sorts == null || sorts.isEmpty()) return Sort.unsorted();
+        List<Sort.Order> orders = new ArrayList<>();
+        for (SortConfig s : sorts) {
+            Sort.Direction dir = "desc".equalsIgnoreCase(s.getDirection()) ? Sort.Direction.DESC : Sort.Direction.ASC;
+            orders.add(new Sort.Order(dir, s.getField()));
+        }
+        return Sort.by(orders);
+    }
 
     /**
      * Get setting by key

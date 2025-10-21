@@ -4,6 +4,8 @@ import com.ds.setting.business.v1.services.SettingsService;
 import com.ds.setting.common.entities.dto.CreateSettingRequest;
 import com.ds.setting.common.entities.dto.SystemSettingDto;
 import com.ds.setting.common.entities.dto.common.BaseResponse;
+import com.ds.setting.common.entities.dto.common.PagedData;
+import com.ds.setting.common.entities.dto.common.PagingRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -26,6 +28,14 @@ import java.util.List;
 public class SettingsController {
 
     private final SettingsService settingsService;
+
+    @PostMapping
+    @Operation(summary = "List settings with filtering/sorting/paging (POST)")
+    public ResponseEntity<BaseResponse<PagedData<SystemSettingDto>>> getSettings(@RequestBody PagingRequest query) {
+        log.info("POST /api/v1/settings - List settings with query: {}", query);
+        PagedData<SystemSettingDto> page = settingsService.getSettings(query);
+        return ResponseEntity.ok(BaseResponse.success(page));
+    }
 
     @GetMapping("/{group}")
     @Operation(summary = "Get all settings by group (service identifier)")

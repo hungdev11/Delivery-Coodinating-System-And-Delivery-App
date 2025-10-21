@@ -30,3 +30,6 @@ build/
 !**/src/test/**/build/
 
 .env
+
+.claude
+**/.claude
