@@ -18,7 +18,7 @@ import java.util.Locale;
 public class TasksAdapter extends RecyclerView.Adapter<TasksAdapter.TaskViewHolder> {
 
     public interface OnTaskClickListener {
-        void onOrderClick(DeliveryAssignment task);
+        void onTaskClick(DeliveryAssignment task);
     }
 
     private List<DeliveryAssignment> taskList;
@@ -50,7 +50,7 @@ public class TasksAdapter extends RecyclerView.Adapter<TasksAdapter.TaskViewHold
         holder.tvStatus.setText(task.getStatus() != null ? mapStatus(task.getStatus().toUpperCase()) : "MỚI");
 
         holder.itemView.setOnClickListener(v -> {
-            if (listener != null) listener.onOrderClick(task);
+            if (listener != null) listener.onTaskClick(task);
         });
     }
 
@@ -90,7 +90,7 @@ public class TasksAdapter extends RecyclerView.Adapter<TasksAdapter.TaskViewHold
     private String mapStatus (String status) {
         return switch (status) {
             case "PROCESSING" -> "ĐANG XỬ LÝ";
-            case "COMPLETED" -> "ĐÃ HOÀN THÀNH";
+            case "SUCCESS" -> "ĐÃ HOÀN THÀNH";
             case "FAILED" -> "THẤT BẠI";
             default -> throw new IllegalStateException("Unexpected value: " + status);
         };

@@ -13,8 +13,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
-
+        android:padding="16dp"
+        android:background="@drawable/bg_card">
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -41,7 +41,7 @@
         </LinearLayout>
 
         <LinearLayout style="@style/DetailRowStyle">
-            <TextView style="@style/DetailLabelStyle" android:text="ID Đơn Hàng Nội Bộ:" />
+            <TextView style="@style/DetailLabelStyle" android:text="Mã đơn hàng:" />
             <TextView
                 android:id="@+id/tv_parcel_id"
                 style="@style/DetailValueStyle"

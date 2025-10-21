@@ -6,11 +6,21 @@ import java.util.UUID;
 
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
+import com.ds.session.session_service.common.entities.dto.response.PageResponse;
 
 public interface IDeliveryAssignmentService {
     boolean acceptTask(UUID parcelId, UUID deliveryManId);
     DeliveryAssignmentResponse completeTask(UUID parcelId, UUID deliveryManId, RouteInfo routeInfo);
-    DeliveryAssignmentResponse deliveryFailed(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
-    List<DeliveryAssignmentResponse> getDailyTasks(UUID deliveryManId);
-    List<DeliveryAssignmentResponse> getTasksBetween(UUID deliveryManId, LocalDate start, LocalDate end);
+    PageResponse<DeliveryAssignmentResponse> getDailyTasks(UUID deliveryManId, List<String> status, int page, int size);
+    PageResponse<DeliveryAssignmentResponse> getTasks(
+        UUID deliveryManId, 
+        List<String> status, 
+        LocalDate createdAtStart, 
+        LocalDate createdAtEnd, 
+        LocalDate completedAtStart, 
+        LocalDate completedAtEnd,
+        int page,
+        int size
+    );
+    DeliveryAssignmentResponse deliveryFailed(UUID parcelId, UUID deliveryManId, boolean flag, String reason, RouteInfo routeInfo);
 }
