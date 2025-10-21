@@ -215,7 +215,7 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
     }
     // Triển khai phương thức click
     @Override
-    public void onOrderClick(DeliveryAssignment task) {
+    public void onTaskClick(DeliveryAssignment task) {
         Intent intent = new Intent(getActivity(), TaskDetailActivity.class);
         intent.putExtra("TASK_DETAIL", task);
         startActivity(intent);
