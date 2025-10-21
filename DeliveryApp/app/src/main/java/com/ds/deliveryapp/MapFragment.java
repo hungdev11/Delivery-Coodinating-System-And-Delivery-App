@@ -18,6 +18,7 @@ import androidx.annotation.Nullable;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.fragment.app.Fragment;
 import com.ds.deliveryapp.clients.SessionClient;
+import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.DeliveryAssignment;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
@@ -95,6 +96,7 @@ public class MapFragment extends Fragment {
     private void displayTaskOnMap(DeliveryAssignment assignment) {
         if (mapView == null || assignment == null) return;
 
+        //Call zone service, update driver location continually
         // 💡 ĐIỂM 1: Vị trí Bắt đầu (Giả định vị trí tài xế hiện tại)
         GeoPoint startPoint = new GeoPoint(10.775843, 106.697412); // Ví dụ: Quận 1, TP.HCM
 
@@ -119,6 +121,7 @@ public class MapFragment extends Fragment {
         mapView.getOverlays().add(endMarker);
 
         // 3. Gọi Task vẽ đường đi (Hàm này cũng sẽ xóa Polyline cũ)
+        // Call routing service
         drawRouteBetweenPoints(startPoint, endPoint);
 
         mapView.invalidate();
@@ -286,26 +289,18 @@ public class MapFragment extends Fragment {
     }
 
     public void fetchTodayTasks(String driverId) {
-        Retrofit retrofit = RetrofitClient.getSessionRetrofitInstance();
+        Retrofit retrofit = RetrofitClient.getRetrofitInstance();
         SessionClient service = retrofit.create(SessionClient.class);
 
-        // API này trả về List<DeliveryAssignment>
-        // ⚠️ Nếu API của bạn có thể lọc theo status, bạn nên sửa lại gọi API ở đây
-        // Ví dụ: service.getTasksToday(driverId, Arrays.asList("PROCESSING"));
-        Call<List<DeliveryAssignment>> call = service.getTasksToday(driverId);
+        Call<PageResponse<DeliveryAssignment>> call = service.getTasksToday(driverId, List.of("PROCESSING"), 0, 10);
 
-        call.enqueue(new Callback<List<DeliveryAssignment>>() {
+        call.enqueue(new Callback<PageResponse<DeliveryAssignment>>() {
             @Override
-            public void onResponse(Call<List<DeliveryAssignment>> call, Response<List<DeliveryAssignment>> response) {
+            public void onResponse(Call<PageResponse<DeliveryAssignment>> call, Response<PageResponse<DeliveryAssignment>> response) {
                 if (response.isSuccessful() && response.body() != null) {
-                    // 💡 LOGIC LỌC: CHỈ GIỮ LẠI NHIỆM VỤ CÓ STATUS = "PROCESSING"
                     tasks.clear();
 
-                    for (DeliveryAssignment assignment : response.body()) {
-                        if ("PROCESSING".equals(assignment.getStatus())) {
-                            tasks.add(assignment);
-                        }
-                    }
+                    tasks.addAll(response.body().content());
 
                     if (!tasks.isEmpty()) {
                         // Lấy nhiệm vụ PROCESSING đầu tiên
@@ -325,7 +320,7 @@ public class MapFragment extends Fragment {
                 }
             }
             @Override
-            public void onFailure(Call<List<DeliveryAssignment>> call, Throwable t) {
+            public void onFailure(Call<PageResponse<DeliveryAssignment>> call, Throwable t) {
                 Log.e(TAG, "Network error: " + t.getMessage());
                 // Xử lý lỗi mạng
                 currentAssignment = null;

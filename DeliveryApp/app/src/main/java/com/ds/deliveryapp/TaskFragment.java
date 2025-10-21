@@ -6,7 +6,6 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.Spinner;
@@ -23,10 +22,8 @@ import com.ds.deliveryapp.clients.SessionClient;
 import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.DeliveryAssignment;
-import com.ds.deliveryapp.utils.SpinnerItem;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import retrofit2.Call;
@@ -119,7 +116,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             progressBar.setVisibility(View.VISIBLE);
         }
 
-        Retrofit retrofit = RetrofitClient.getSessionRetrofitInstance();
+        Retrofit retrofit = RetrofitClient.getRetrofitInstance();
         SessionClient service = retrofit.create(SessionClient.class);
 
         // Giả sử ta muốn tải tất cả trạng thái, truyền null hoặc List rỗng

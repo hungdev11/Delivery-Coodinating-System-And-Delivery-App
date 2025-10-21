@@ -46,7 +46,7 @@
                     android:textColor="@android:color/black"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Trạng thái (Status):"
+                    android:text="Trạng thái nhiệm vụ:"
                     android:textSize="14sp"
                     android:layout_marginTop="8dp"/>
 
@@ -60,7 +60,7 @@
                     android:textColor="@android:color/black"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Ngày Tạo (Created At):"
+                    android:text="Ngày nhận:"
                     android:textSize="14sp"
                     android:layout_marginTop="8dp"/>
 
@@ -113,7 +113,7 @@
                     android:textColor="@android:color/black"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Ngày Hoàn Thành (Completed At):"
+                    android:text="Ngày hoàn thành:"
                     android:textSize="14sp"
                     android:layout_marginTop="12dp"/>
 

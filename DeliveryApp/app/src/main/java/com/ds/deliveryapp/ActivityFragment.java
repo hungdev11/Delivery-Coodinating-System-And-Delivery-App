@@ -253,7 +253,7 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         tvEmptyState.setVisibility(View.GONE);
         // ... (Hiển thị loading)
 
-        Retrofit retrofit = RetrofitClient.getSessionRetrofitInstance();
+        Retrofit retrofit = RetrofitClient.getRetrofitInstance();
         SessionClient service = retrofit.create(SessionClient.class);
 
         String createdStartStr = createdAtStart != null ? createdAtStart.format(apiFormatter) : null;

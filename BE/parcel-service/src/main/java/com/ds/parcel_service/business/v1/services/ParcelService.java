@@ -3,6 +3,7 @@ package com.ds.parcel_service.business.v1.services;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -116,6 +117,9 @@ public class ParcelService implements IParcelService{
                             .build();
 
         // [Logic: Call zone service, create destination, get receiver info...]
+        // find exiting destination from address text, if not found create new one
+        // map relationship between parcel and destination
+        // call to user service to get receiver/sender info
 
         Parcel savedParcel = parcelRepository.save(parcel);
         return toDto(savedParcel);

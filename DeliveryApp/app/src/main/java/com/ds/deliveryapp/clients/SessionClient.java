@@ -15,13 +15,13 @@ import retrofit2.http.Path;
 import retrofit2.http.Query;
 
 public interface SessionClient {
-    @GET("assignments/today/{id}")
-    Call<PageResponse<DeliveryAssignment>> getTasksToday(@Path("id") String driverId,
+    @GET("session/delivery-man/{deliveryManId}/tasks/today")
+    Call<PageResponse<DeliveryAssignment>> getTasksToday(@Path("deliveryManId") String driverId,
                                                  @Query("status") List<String> status,
                                                  @Query("page") int page,
                                                  @Query("size") int size);
 
-    @GET("assignments/{id}")
+    @GET("session/delivery-man/{deliveryManId}/tasks")
     Call<PageResponse<DeliveryAssignment>> getTasks(
             @Path("id") String driverId,
             @Query("status") List<String> status,
@@ -34,17 +34,17 @@ public interface SessionClient {
             @Query("size") int size
     );
 
-    @POST("assignments/{parcelId}/accept")
+    @POST("session/tasks/{parcelId}/accept")
     Call<Boolean> acceptTask(@Path("parcelId") String parcelId,
                              @Query("deliveryManId") String deliveryManId);
 
-    @PUT("assignments/{parcelId}/complete")
+    @PUT("session/tasks/{parcelId}/complete")
     Call<DeliveryAssignment> completeTask(@Path("parcelId") String parcelId,
                               @Query("deliveryManId") String deliveryManId,
                              @Body RouteInfo routeInfo
     );
 
-    @PUT("assignments/{parcelId}/fail")
+    @PUT("session/tasks/{parcelId}/fail")
     Call<DeliveryAssignment> failTask(@Path("parcelId") String parcelId,
                                @Query("deliveryManId") String deliveryManId,
                                 @Query("flag") boolean flag,

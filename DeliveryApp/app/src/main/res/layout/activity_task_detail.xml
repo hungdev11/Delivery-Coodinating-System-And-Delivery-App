@@ -12,12 +12,12 @@
         android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior"
         android:paddingTop="12dp"
-        android:layout_marginBottom="90dp"> <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="8dp">
-
+        android:layout_marginBottom="90dp">
+            <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="8dp">
         <androidx.cardview.widget.CardView
             android:id="@+id/card_financial_info_detail"
             android:layout_width="match_parent"
@@ -66,7 +66,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="16dp"
+                android:background="@drawable/bg_card">
 
                 <TextView
                     android:id="@+id/tv_receiver_name_detail"

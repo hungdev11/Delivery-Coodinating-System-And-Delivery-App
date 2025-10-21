@@ -1,7 +1,7 @@
 package com.ds.session.session_service.common.utils;
 
 import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,15 +27,20 @@ public class AssignmentSpecification {
 
     public static Specification<DeliveryAssignment> isCreatedAtBetween(LocalDate start, LocalDate end) {
         return (root, query, criteriaBuilder) -> {
-            if (start == null || end == null) {
-                return criteriaBuilder.conjunction();
-            }
-            return criteriaBuilder.between(
-                root.get("scanedAt"),
-                start.atStartOfDay(),
-                end.atTime(LocalTime.MAX)
-            );
-        };
+        if (start == null || end == null) {
+            return criteriaBuilder.conjunction();
+        }
+
+        LocalDateTime startDateTime = start.atStartOfDay();
+        
+        LocalDateTime endDateTimeExclusive = end.plusDays(1).atStartOfDay(); 
+
+        return criteriaBuilder.and(
+            criteriaBuilder.greaterThanOrEqualTo(root.get("scanedAt"), startDateTime), // >= 15/10 00:00:00
+            criteriaBuilder.lessThan(root.get("scanedAt"), endDateTimeExclusive)        // < 16/10 00:00:00
+        );
+
+    };
     }
 
     public static Specification<DeliveryAssignment> isCompletedAtBetween(LocalDate start, LocalDate end) {
@@ -43,11 +48,15 @@ public class AssignmentSpecification {
             if (start == null || end == null) {
                 return criteriaBuilder.conjunction();
             }
-            return criteriaBuilder.between(
-                root.get("completedAt"),
-                start.atStartOfDay(),
-                end.atTime(LocalTime.MAX)
-            );
+            LocalDateTime startDateTime = start.atStartOfDay();
+        
+        LocalDateTime endDateTimeExclusive = end.plusDays(1).atStartOfDay(); 
+
+        return criteriaBuilder.and(
+            criteriaBuilder.greaterThanOrEqualTo(root.get("updatedAt"), startDateTime), // >= 15/10 00:00:00
+            criteriaBuilder.lessThan(root.get("updatedAt"), endDateTimeExclusive)        // < 16/10 00:00:00
+        );
+
         };
     }
 }
