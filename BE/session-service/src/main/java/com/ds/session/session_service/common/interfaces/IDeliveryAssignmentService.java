@@ -11,7 +11,6 @@ import com.ds.session.session_service.common.entities.dto.response.PageResponse;
 public interface IDeliveryAssignmentService {
     boolean acceptTask(UUID parcelId, UUID deliveryManId);
     DeliveryAssignmentResponse completeTask(UUID parcelId, UUID deliveryManId, RouteInfo routeInfo);
-    DeliveryAssignmentResponse deliveryFailed(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
     PageResponse<DeliveryAssignmentResponse> getDailyTasks(UUID deliveryManId, List<String> status, int page, int size);
     PageResponse<DeliveryAssignmentResponse> getTasks(
         UUID deliveryManId, 
@@ -23,4 +22,5 @@ public interface IDeliveryAssignmentService {
         int page,
         int size
     );
+    DeliveryAssignmentResponse deliveryFailed(UUID parcelId, UUID deliveryManId, boolean flag, String reason, RouteInfo routeInfo);
 }

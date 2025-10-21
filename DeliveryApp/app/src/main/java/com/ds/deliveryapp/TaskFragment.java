@@ -203,7 +203,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
 
     // Triển khai phương thức click từ TasksAdapter.OnTaskClickListener
     @Override
-    public void onOrderClick(DeliveryAssignment task) {
+    public void onTaskClick(DeliveryAssignment task) {
         // Giả sử TaskDetailActivity tồn tại
         Intent intent = new Intent(getActivity(), TaskDetailActivity.class);
 

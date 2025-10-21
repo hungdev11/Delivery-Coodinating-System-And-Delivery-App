@@ -93,6 +93,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         insertRouteInfo(assignment, routeInfo);
         
         ParcelInfo parcel = updateParcelStatusAndMap(parcelId, ParcelEvent.DELIVERY_SUCCESSFUL);
+
         assignment.setStatus(AssignmentStatus.SUCCESS);
 
         assignment.setFailReason(null); 
@@ -103,18 +104,29 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     }
 
     @Override
-    public DeliveryAssignmentResponse deliveryFailed(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo) {
+    public DeliveryAssignmentResponse deliveryFailed(UUID parcelId, UUID deliveryManId, boolean flag, String reason, RouteInfo routeInfo) {
         DeliveryAssignment assignment = getAssignmentOrFail(parcelId.toString(), deliveryManId.toString());
 
         ensureStatusIsProcessing(assignment);
         
         insertRouteInfo(assignment, routeInfo);
+
+        if (flag) {
+            updateParcelStatusAndMap(parcelId, ParcelEvent.DELIVERY_SUCCESSFUL);
+            ParcelInfo parcel1 = updateParcelStatusAndMap(parcelId, ParcelEvent.CUSTOMER_REJECT);
+            assignment.setStatus(AssignmentStatus.SUCCESS);
+            assignment.setFailReason(null); 
+            deliveryAssignmentRepository.save(assignment);
+            log.info(reason + "" + flag);
+            return DeliveryAssignmentResponse.from(assignment, parcel1, "Phan Phi Hung", "Maria Akamoto");
+        }
         
         ParcelInfo parcel = updateParcelStatusAndMap(parcelId, ParcelEvent.CAN_NOT_DELIVERY);
         assignment.setStatus(AssignmentStatus.FAILED);
         assignment.setFailReason(reason);
 
         deliveryAssignmentRepository.save(assignment);
+        log.info(reason);
         return DeliveryAssignmentResponse.from(assignment, parcel, "Phan Phi Hung", "Maria Akamoto");
     }
 

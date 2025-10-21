@@ -1,5 +1,6 @@
 package com.ds.deliveryapp;
 
+import static android.view.View.GONE;
 import static com.ds.deliveryapp.utils.FormaterUtil.formatDistanceM;
 import static com.ds.deliveryapp.utils.FormaterUtil.formatDurationS;
 import static com.ds.deliveryapp.utils.FormaterUtil.formatWeight;
@@ -18,22 +19,25 @@ import android.widget.Toast;
 
 import com.ds.deliveryapp.enums.DeliveryType;
 import com.ds.deliveryapp.model.DeliveryAssignment;
+import com.ds.deliveryapp.model.IssueReason;
 import com.ds.deliveryapp.utils.FormaterUtil;
+import com.ds.deliveryapp.utils.TaskActionHandler;
 
 import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
-public class TaskDetailActivity extends AppCompatActivity {
-    private TextView tvParcelCode, tvStatus, tvReceiverName, tvReceiverPhone, tvDeliveryLocation;
-    private Button btnCallReceiver, btnOpenMap, btnMainAction;
+public class TaskDetailActivity extends AppCompatActivity implements TaskActionHandler.TaskUpdateListener{
+    private TextView tvParcelCode, tvStatus, tvReceiverName, tvDeliveryLocation;
+    private Button btnCallReceiver, btnMainAction, btnFailAction;
     private TextView tvParcelValue;
-
     // View từ card_details_and_route_info.xml (included)
     private TextView tvDeliveryType, tvWeight, tvParcelId;
     private TextView tvCreatedAt, tvCompletedAt, tvFailReason;
     private LinearLayout layoutCompletedAt, layoutFailReason;
-
     private DeliveryAssignment currentTask;
+    private TaskActionHandler actionHandler;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,6 +51,9 @@ public class TaskDetailActivity extends AppCompatActivity {
             currentTask = (DeliveryAssignment) intent.getSerializableExtra("TASK_DETAIL");
 
             if (currentTask != null) {
+                // 💡 KHỞI TẠO HANDLER
+                actionHandler = new TaskActionHandler(this, this);
+
                 displayData(currentTask);
                 setupEventListeners(currentTask);
             } else {
@@ -67,7 +74,7 @@ public class TaskDetailActivity extends AppCompatActivity {
         tvParcelValue = findViewById(R.id.tv_parcel_value_detail);
 
         btnCallReceiver = findViewById(R.id.btn_call_receiver_detail);
-        btnOpenMap = findViewById(R.id.btn_open_map_detail);
+        btnFailAction = findViewById(R.id.btn_fail_action);
         btnMainAction = findViewById(R.id.btn_main_action);
 
         // Ánh xạ View từ card_details_and_route_info.xml
@@ -81,8 +88,8 @@ public class TaskDetailActivity extends AppCompatActivity {
         layoutFailReason = findViewById(R.id.layout_fail_reason);
 
         // Đặt trạng thái ban đầu
-        layoutCompletedAt.setVisibility(View.GONE);
-        layoutFailReason.setVisibility(View.GONE);
+        layoutCompletedAt.setVisibility(GONE);
+        layoutFailReason.setVisibility(GONE);
     }
 
     private void displayData(DeliveryAssignment task) {
@@ -90,7 +97,6 @@ public class TaskDetailActivity extends AppCompatActivity {
         if (tvParcelCode != null) tvParcelCode.setText(task.getParcelCode());
         if (tvStatus != null) tvStatus.setText(task.getStatus() != null ? task.getStatus().toUpperCase() : "N/A");
         if (tvReceiverName != null) tvReceiverName.setText(task.getReceiverName() != null ? task.getReceiverName() : "Khách hàng");
-        if (tvReceiverPhone != null) tvReceiverPhone.setText(task.getReceiverPhone());
         if (tvDeliveryLocation != null) tvDeliveryLocation.setText("Địa chỉ: " + task.getDeliveryLocation());
 
         // CARD 2: COD
@@ -109,7 +115,7 @@ public class TaskDetailActivity extends AppCompatActivity {
                 layoutCompletedAt.setVisibility(View.VISIBLE);
                 if (tvCompletedAt != null) tvCompletedAt.setText(task.getCompletedAt());
             } else {
-                layoutCompletedAt.setVisibility(View.GONE);
+                layoutCompletedAt.setVisibility(GONE);
             }
         }
 
@@ -118,7 +124,7 @@ public class TaskDetailActivity extends AppCompatActivity {
                 layoutFailReason.setVisibility(View.VISIBLE);
                 if (tvFailReason != null) tvFailReason.setText(task.getFailReason());
             } else {
-                layoutFailReason.setVisibility(View.GONE);
+                layoutFailReason.setVisibility(GONE);
             }
         }
 
@@ -126,7 +132,7 @@ public class TaskDetailActivity extends AppCompatActivity {
         updateMainActionButton(task.getStatus());
     }
 
-    private void updateMainActionButton(String status) {
+     private void updateMainActionButton(String status) {
         int green = getResources().getColor(android.R.color.holo_green_dark);
         int gray = getResources().getColor(android.R.color.darker_gray);
 
@@ -137,15 +143,14 @@ public class TaskDetailActivity extends AppCompatActivity {
                 btnMainAction.setText("HOÀN TẤT GIAO HÀNG");
                 btnMainAction.setBackgroundTintList(android.content.res.ColorStateList.valueOf(green));
                 break;
-            case "COMPLETED":
+            case "SUCCESS":
             case "FAILED":
                 btnMainAction.setText("ĐÃ HOÀN TẤT");
                 btnMainAction.setEnabled(false);
+                btnFailAction.setVisibility(GONE);
                 btnMainAction.setBackgroundTintList(android.content.res.ColorStateList.valueOf(gray));
                 break;
             default:
-                btnMainAction.setText("HÀNH ĐỘNG");
-                btnMainAction.setBackgroundTintList(android.content.res.ColorStateList.valueOf(gray));
                 break;
         }
     }
@@ -165,47 +170,26 @@ public class TaskDetailActivity extends AppCompatActivity {
             });
         }
 
-        // Nút Chỉ Đường
-        if (btnOpenMap != null) {
-            btnOpenMap.setOnClickListener(v -> {
-                String location = task.getDeliveryLocation();
-                if (location != null && !location.isEmpty()) {
-                    Uri gmmIntentUri = Uri.parse("geo:0,0?q=" + Uri.encode(location));
-                    Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
-                    mapIntent.setPackage("com.google.android.apps.maps");
-                    if (mapIntent.resolveActivity(getPackageManager()) != null) {
-                        startActivity(mapIntent);
-                    } else {
-                        Toast.makeText(this, "Không tìm thấy ứng dụng bản đồ Google Maps", Toast.LENGTH_SHORT).show();
-                    }
+        if (btnFailAction != null) {
+            btnFailAction.setOnClickListener(v -> {
+                if (currentTask != null) {
+                    actionHandler.startFailureFlow(currentTask);
                 }
             });
         }
 
-
-        // Nút hành động chính (Đã đến / Hoàn thành)
         if (btnMainAction != null) {
             btnMainAction.setOnClickListener(v -> {
                 if (currentTask != null && btnMainAction.isEnabled()) {
-                    String newStatus = getNextStatus(currentTask.getStatus());
-                    if (newStatus != null) {
-                        Toast.makeText(this, "Yêu cầu cập nhật trạng thái lên: " + newStatus, Toast.LENGTH_SHORT).show();
-                        currentTask.setStatus(newStatus);
-                        updateMainActionButton(newStatus);
-                    } else {
-                        Toast.makeText(this, "Không có hành động tiếp theo cho trạng thái này.", Toast.LENGTH_SHORT).show();
-                    }
+                    actionHandler.startCompletionFlow(currentTask);
                 }
             });
         }
     }
 
-    private String getNextStatus(String currentStatus) {
-        switch (currentStatus) {
-            case "IN_TRANSIT":
-                return "COMPLETED";
-            default:
-                return null;
-        }
+    @Override
+    public void onStatusUpdated(String newStatus) {
+        currentTask.setStatus(newStatus);
+        updateMainActionButton(newStatus);
     }
 }
