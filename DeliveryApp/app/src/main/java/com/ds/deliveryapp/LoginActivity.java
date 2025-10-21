@@ -15,6 +15,6 @@ public class LoginActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_login);
-
+        // add login logic, dialog allow location permission, save login data (token), save driver id
     }
 }

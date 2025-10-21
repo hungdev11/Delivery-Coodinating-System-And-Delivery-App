@@ -8,7 +8,6 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 
-import com.ds.deliveryapp.ParcelDetailActivity;
 import com.ds.deliveryapp.clients.SessionClient;
 import com.ds.deliveryapp.clients.req.RouteInfo;
 import com.ds.deliveryapp.configs.RetrofitClient;
@@ -51,6 +50,7 @@ public class TaskActionHandler {
         reasons.add(new IssueReason("Khách hàng không liên lạc được/ Địa chỉ không tìm thấy", "CAN_NOT_DELIVERY"));
         reasons.add(new IssueReason("Xe bị hỏng/sự cố giao thông", "ACCIDENT"));
         reasons.add(new IssueReason("Khách hàng từ chối nhận hàng", "CUSTOMER_REFUSED"));
+        reasons.add(new IssueReason("Hết phiên giao", "SESSION_TIMEOUT"));
         return reasons;
     }
 
@@ -130,7 +130,7 @@ public class TaskActionHandler {
             Log.e(TAG, "NOT APPROPRIATE PARCEL AND CURRENT TASK");
             return;
         }
-        Retrofit retrofit = RetrofitClient.getSessionRetrofitInstance();
+        Retrofit retrofit = RetrofitClient.getRetrofitInstance();
 
         SessionClient service = retrofit.create(SessionClient.class);
 
@@ -158,7 +158,7 @@ public class TaskActionHandler {
     }
 
     private void sendFailureEvent(DeliveryAssignment assignment, IssueReason reason) {
-        Retrofit retrofit = RetrofitClient.getSessionRetrofitInstance();
+        Retrofit retrofit = RetrofitClient.getRetrofitInstance();
 
         SessionClient service = retrofit.create(SessionClient.class);
 

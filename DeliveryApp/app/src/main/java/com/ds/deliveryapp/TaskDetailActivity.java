@@ -1,6 +1,7 @@
 package com.ds.deliveryapp;
 
 import static android.view.View.GONE;
+import static android.view.View.VISIBLE;
 import static com.ds.deliveryapp.utils.FormaterUtil.formatDistanceM;
 import static com.ds.deliveryapp.utils.FormaterUtil.formatDurationS;
 import static com.ds.deliveryapp.utils.FormaterUtil.formatWeight;
@@ -105,15 +106,23 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         // CARD 3/4: CHI TIẾT & VẬN HÀNH
         if (tvDeliveryType != null) tvDeliveryType.setText(DeliveryType.NORMAL.equals(task.getDeliveryType()) ? "Giao Hàng Tiêu Chuẩn" : "Giao Hàng Nhanh");
         if (tvWeight != null) tvWeight.setText(formatWeight(task.getWeight()));
-        if (tvParcelId != null) tvParcelId.setText(task.getParcelId());
+        if (tvParcelId != null) tvParcelId.setText(task.getParcelCode());
 
-        if (tvCreatedAt != null) tvCreatedAt.setText(task.getCreatedAt());
+        String formatCreatedAt = FormaterUtil.formatDateTime(task.getCreatedAt());
+        String formatCompletedAt = FormaterUtil.formatDateTime(task.getCompletedAt());
 
-        // HIỂN THỊ CÓ ĐIỀU KIỆN
+        if (tvCreatedAt != null) tvCreatedAt.setText(formatCreatedAt);
+
         if (layoutCompletedAt != null) {
-            if (task.getCompletedAt() != null && !task.getCompletedAt().isEmpty()) {
-                layoutCompletedAt.setVisibility(View.VISIBLE);
-                if (tvCompletedAt != null) tvCompletedAt.setText(task.getCompletedAt());
+            boolean isCompleted = formatCompletedAt != null &&
+                    !formatCompletedAt.isEmpty() &&
+                    !formatCompletedAt.equals(formatCreatedAt);
+
+            if (isCompleted) {
+                layoutCompletedAt.setVisibility(VISIBLE);
+                if (tvCompletedAt != null) {
+                    tvCompletedAt.setText(formatCompletedAt);
+                }
             } else {
                 layoutCompletedAt.setVisibility(GONE);
             }
@@ -121,7 +130,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
 
         if (layoutFailReason != null) {
             if (task.getFailReason() != null && !task.getFailReason().isEmpty()) {
-                layoutFailReason.setVisibility(View.VISIBLE);
+                layoutFailReason.setVisibility(VISIBLE);
                 if (tvFailReason != null) tvFailReason.setText(task.getFailReason());
             } else {
                 layoutFailReason.setVisibility(GONE);

@@ -6,6 +6,9 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,11 +18,14 @@ import com.ds.session.session_service.application.client.parcelclient.ParcelServ
 import com.ds.session.session_service.application.client.parcelclient.response.ParcelResponse;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
+import com.ds.session.session_service.common.entities.dto.response.PageResponse;
 import com.ds.session.session_service.common.enums.AssignmentStatus;
 import com.ds.session.session_service.common.enums.ParcelEvent;
 import com.ds.session.session_service.common.exceptions.ResourceNotFound;
 import com.ds.session.session_service.common.interfaces.IDeliveryAssignmentService;
 import com.ds.session.session_service.common.mapper.ParcelMapper;
+import com.ds.session.session_service.common.utils.AssignmentSpecification;
+import com.ds.session.session_service.common.utils.PageUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper; 
 
@@ -125,39 +131,41 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     }
 
     @Override
-    public List<DeliveryAssignmentResponse> getDailyTasks(UUID deliveryManId) {
-        List<DeliveryAssignment> tasks = deliveryAssignmentRepository.findAllByDeliveryManIdAndScanedAtBetween(
-            deliveryManId.toString(), 
-            getStartOfToday(), 
-            getEndOfToday()
-        );
-        List<DeliveryAssignmentResponse> res = tasks.stream().map(t -> {
-            ParcelResponse response = parcelServiceClient.fetchParcelResponse(UUID.fromString(t.getParcelId()));
-            ParcelInfo parcelInfo = parcelMapper.toParcelInfo(response);
-            return DeliveryAssignmentResponse.from(t, parcelInfo, "0935960974", "Maria Akamoto");
-        }).toList();
-
-        return res;
+    public PageResponse<DeliveryAssignmentResponse> getDailyTasks(UUID deliveryManId, List<String> status, int page, int size) {
+        return getTasks(
+            deliveryManId, 
+            status, 
+            getStartOfToday().toLocalDate(), 
+            getEndOfToday().toLocalDate(), 
+            null, null, 
+            page, size);
     }
 
     @Override
-    public List<DeliveryAssignmentResponse> getTasksBetween(UUID deliveryManId, LocalDate start, LocalDate end) {
-        List<DeliveryAssignment> tasks;
-        if (start == null || end == null) {
-            tasks = deliveryAssignmentRepository.findAllByDeliveryManId(deliveryManId.toString());
-        } else {
-            tasks = deliveryAssignmentRepository.findAllByDeliveryManIdAndScanedAtBetween(
-                deliveryManId.toString(), 
-                start.atStartOfDay(),
-                end.atTime(LocalTime.MAX));
-        }
-        List<DeliveryAssignmentResponse> res = tasks.stream().map(t -> {
+    public PageResponse<DeliveryAssignmentResponse> getTasks(
+        UUID deliveryManId, 
+        List<String> status, 
+        LocalDate createdAtStart, 
+        LocalDate createdAtEnd, 
+        LocalDate completedAtStart, 
+        LocalDate completedAtEnd,
+        int page,
+        int size
+    ) {
+        Specification<DeliveryAssignment> spec = Specification
+            .where(AssignmentSpecification.byDeliveryManId(deliveryManId))
+            .and(AssignmentSpecification.hasStatusIn(status))
+            .and(AssignmentSpecification.isCreatedAtBetween(createdAtStart, createdAtEnd))
+            .and(AssignmentSpecification.isCompletedAtBetween(completedAtStart, completedAtEnd));
+
+        Pageable pageable = PageUtil.build(page, size, "createdAt", "asc", DeliveryAssignment.class);
+        Page<DeliveryAssignment> taskPage = deliveryAssignmentRepository.findAll(spec, pageable);
+
+        return PageResponse.from(taskPage.map(t -> {
             ParcelResponse response = parcelServiceClient.fetchParcelResponse(UUID.fromString(t.getParcelId()));
             ParcelInfo parcelInfo = parcelMapper.toParcelInfo(response);
             return DeliveryAssignmentResponse.from(t, parcelInfo, "0935960974", "Maria Akamoto");
-        }).toList();
-
-        return res;
+        }));
     }
 
     // --- UTILITY METHODS ---

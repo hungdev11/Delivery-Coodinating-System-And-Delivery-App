@@ -13,6 +13,7 @@
         android:text="Danh Sách Nhiệm Vụ (5 đơn)"
         android:textSize="18sp"
         android:textStyle="bold"
+        android:textColor="@android:color/black"
         android:layout_marginBottom="8dp"/>
 
     <androidx.recyclerview.widget.RecyclerView
@@ -35,7 +36,8 @@
         android:text="Chi Tiết Đơn Hàng Hiện Tại"
         android:textSize="16sp"
         android:textStyle="bold"
-        android:layout_marginBottom="8dp"/>
+        android:layout_marginBottom="8dp"
+        android:textColor="@android:color/black"/>
 
     <LinearLayout
         android:id="@+id/layout_task_details_and_actions"
@@ -48,7 +50,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Địa chỉ: 45 Lê Lợi, TP. Đà Nẵng"
-            android:textSize="14sp"/>
+            android:textSize="14sp"
+            android:textColor="@android:color/black"/>
 
         <Button
             android:id="@+id/btn_complete_task"
@@ -56,6 +59,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="Hoàn Thành Giao Hàng"
+            android:textColor="@android:color/black"
             style="@style/Widget.AppCompat.Button.Colored"/>
 
         <Button
@@ -64,7 +68,8 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="Báo Cáo Vấn Đề"
-            style="@style/Widget.AppCompat.Button.Borderless.Colored"/>
+            android:textColor="@android:color/black"
+            style="@style/Widget.AppCompat.Button.Colored"/>
 
     </LinearLayout>
 
