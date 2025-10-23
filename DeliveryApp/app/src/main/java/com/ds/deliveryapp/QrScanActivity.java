@@ -55,7 +55,7 @@ public class QrScanActivity extends AppCompatActivity {
     }
 
     private void handleScannedCode(String scannedCode) {
-        Retrofit retrofit = RetrofitClient.getRetrofitInstance();
+        Retrofit retrofit = RetrofitClient.getRetrofitInstance(this);
         ParcelClient service = retrofit.create(ParcelClient.class);
         Log.e(TAG, retrofit.baseUrl().toString());
 

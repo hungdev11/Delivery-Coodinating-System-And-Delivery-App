@@ -116,7 +116,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             progressBar.setVisibility(View.VISIBLE);
         }
 
-        Retrofit retrofit = RetrofitClient.getRetrofitInstance();
+        Retrofit retrofit = RetrofitClient.getRetrofitInstance(getContext());
         SessionClient service = retrofit.create(SessionClient.class);
 
         // Giả sử ta muốn tải tất cả trạng thái, truyền null hoặc List rỗng

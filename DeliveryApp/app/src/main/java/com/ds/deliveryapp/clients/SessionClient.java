@@ -23,7 +23,7 @@ public interface SessionClient {
 
     @GET("session/delivery-man/{deliveryManId}/tasks")
     Call<PageResponse<DeliveryAssignment>> getTasks(
-            @Path("id") String driverId,
+            @Path("deliveryManId") String driverId,
             @Query("status") List<String> status,
             // Sửa kiểu dữ liệu từ LocalDate sang String
             @Query("createdAtStart") String createdAtStart,

@@ -135,7 +135,7 @@ public class ParcelDetailActivity extends AppCompatActivity {
     }
 
     private void handleAcceptTask(String parcelId) {
-        Retrofit retrofit = RetrofitClient.getRetrofitInstance();
+        Retrofit retrofit = RetrofitClient.getRetrofitInstance(this);
 
         SessionClient service = retrofit.create(SessionClient.class);
 
