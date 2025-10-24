@@ -13,7 +13,6 @@ import {
   watch,
   resolveComponent,
   h,
-  reactive,
 } from 'vue'
 import { useRouter } from 'vue-router'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
@@ -21,13 +20,10 @@ import { useUsers, useUserExport } from './composables'
 import type { UserDto, UserStatus } from './model.type'
 import { useTemplateRef } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
-import TableHeaderCell from '@/common/components/TableHeaderCell.vue'
-import FilterBar from '@/common/components/filters/FilterBar.vue'
-import type { Column, SortingState } from '@tanstack/table-core'
-import type { FilterableColumn, FilterCondition } from '@/common/types/filter'
-import { createSortConfig } from '@/common/utils/query-builder'
-
-const sorting2 = reactive<SortingState>([])
+import AdvancedFilterDrawer from '../../common/components/filters/AdvancedFilterDrawer.vue'
+import type { SortingState } from '@tanstack/table-core'
+import type { FilterCondition, FilterGroup } from '../../common/types/filter'
+import { createSortConfig } from '../../common/utils/query-builder'
 
 // Dynamic imports to avoid TypeScript issues
 const PageHeader = defineAsyncComponent(() => import('../../common/components/PageHeader.vue'))
@@ -43,43 +39,6 @@ const router = useRouter()
 const overlay = useOverlay()
 const table = useTemplateRef('table')
 
-const setupHeader = ({
-  column,
-  config,
-  filterableColumn,
-  activeFilters,
-}: {
-  column: Column<UserDto>
-  config: {
-    variant: 'ghost' | 'solid' | 'outline' | 'soft' | 'link'
-    label: string
-    class: string
-    activeColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
-    inactiveColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
-  }
-  filterableColumn?: FilterableColumn
-  activeFilters?: FilterCondition[]
-}) =>
-  h(TableHeaderCell<UserDto>, {
-    column,
-    config,
-    filterableColumn,
-    activeFilters,
-    onUpdateFilters: (newFilters: FilterCondition[]) => {
-      // Handle filter updates for this column
-      const field = filterableColumn?.field
-      if (field) {
-        const otherFilters = filters.value.conditions.filter(
-          (f) => 'field' in f && f.field !== field,
-        ) as FilterCondition[]
-        const allFilters = [...otherFilters, ...newFilters]
-        updateFilters({
-          logic: 'AND',
-          conditions: allFilters,
-        })
-      }
-    },
-  })
 
 // Composables
 const {
@@ -90,7 +49,6 @@ const {
   total,
   filters,
   sorts,
-  useAdvancedSearch,
   loadUsers,
   create,
   update,
@@ -100,7 +58,6 @@ const {
   updateFilters,
   updateSorts,
   clearFilters,
-  toggleAdvancedSearch,
   getFilterableColumns,
 } = useUsers()
 
@@ -118,23 +75,70 @@ const statusFilter = ref<UserStatus | ''>('')
 const showAdvancedFilters = ref(false)
 const filterableColumns = computed(() => getFilterableColumns())
 
-// Helper function to get active filters for a specific field
-const getActiveFiltersForField = (field: string): FilterCondition[] | undefined => {
-  const fieldFilters = filters.value.conditions.filter(
-    (c) => 'field' in c && c.field === field,
-  ) as FilterCondition[]
-  return fieldFilters.length > 0 ? fieldFilters : undefined
-}
-
 // Helper function to get all active filters
 const getAllActiveFilters = (): FilterCondition[] | undefined => {
-  const allFilters = filters.value.conditions.filter((c) => 'field' in c) as FilterCondition[]
+  if (!filters.value || !filters.value.conditions) return undefined
+
+  // Extract all conditions from the filter group structure
+  const extractConditions = (item: FilterCondition | FilterGroup): FilterCondition[] => {
+    if ('field' in item) {
+      // It's a FilterCondition
+      return [item as FilterCondition]
+    } else if ('conditions' in item) {
+      // It's a FilterGroup
+      return item.conditions.flatMap(extractConditions)
+    }
+    return []
+  }
+
+  const allFilters = filters.value.conditions.flatMap(extractConditions)
   return allFilters.length > 0 ? allFilters : undefined
 }
 
-// Helper function to get filterable column for a specific field
-const getFilterableColumnForField = (field: string): FilterableColumn | undefined => {
-  return filterableColumns.value.find((col) => col.field === field && col.filterable !== false)
+// Helper function to get filter structure for display
+const getFilterStructure = (): string => {
+  if (!filters.value || !filters.value.conditions) return ''
+
+  const formatItem = (item: FilterCondition | FilterGroup): string => {
+    if ('field' in item) {
+      // It's a FilterCondition
+      const condition = item as FilterCondition
+      return `${getColumnLabel(condition.field)} ${getOperatorLabel(condition.operator)} ${condition.value}`
+    } else if ('conditions' in item) {
+      // It's a FilterGroup
+      const group = item as FilterGroup
+      const groupContent = group.conditions.map((subItem, subIndex) => {
+        const itemStr = formatItem(subItem)
+        // Add logic operator between items (except first item)
+        return subIndex > 0 && subItem.logic ? `${subItem.logic} ${itemStr}` : itemStr
+      }).join(' ')
+      return `(${groupContent})`
+    }
+    return ''
+  }
+
+  return filters.value.conditions.map((item, index) => {
+    const itemStr = formatItem(item)
+    // Add logic operator between items (except first item)
+    return index > 0 && item.logic ? `${item.logic} ${itemStr}` : itemStr
+  }).join(' ')
+}
+
+// Helper function to get active filter group
+const getActiveFilterGroup = (): FilterGroup | undefined => {
+  if (!filters.value || !filters.value.conditions) return undefined
+  return filters.value
+}
+
+// Advanced filter handlers
+const handleAdvancedFilterApply = (filterGroup: FilterGroup) => {
+  updateFilters(filterGroup)
+  showAdvancedFilters.value = false
+}
+
+const handleAdvancedFilterClear = () => {
+  clearFilters()
+  showAdvancedFilters.value = false
 }
 
 // Table columns configuration
@@ -159,81 +163,23 @@ const columns: TableColumn<UserDto>[] = [
   },
   {
     accessorKey: 'username',
-    header: ({ column }) =>
-      setupHeader({
-        column,
-        config: {
-          variant: 'ghost',
-          label: 'Username',
-          class: '-mx-2.5',
-          activeColor: 'primary',
-          inactiveColor: 'neutral',
-        },
-        filterableColumn: getFilterableColumnForField('username'),
-        activeFilters: getActiveFiltersForField('username'),
-      }),
+    header: 'Username',
   },
   {
     accessorKey: 'fullName',
-    header: ({ column }) =>
-      setupHeader({
-        column,
-        config: {
-          variant: 'ghost',
-          label: 'Fullname',
-          class: '-mx-2.5',
-          activeColor: 'primary',
-          inactiveColor: 'neutral',
-        },
-      }),
+    header: 'Full Name',
   },
   {
     accessorKey: 'email',
-    header: ({ column }) =>
-      setupHeader({
-        column,
-        config: {
-          variant: 'ghost',
-          label: 'Email',
-          class: '-mx-2.5',
-          activeColor: 'primary',
-          inactiveColor: 'neutral',
-        },
-        filterableColumn: getFilterableColumnForField('email'),
-        activeFilters: getActiveFiltersForField('email'),
-      }),
+    header: 'Email',
   },
   {
     accessorKey: 'phone',
-    header: ({ column }) =>
-      setupHeader({
-        column,
-        config: {
-          variant: 'ghost',
-          label: 'Phone',
-          class: '-mx-2.5',
-          activeColor: 'primary',
-          inactiveColor: 'neutral',
-        },
-        filterableColumn: getFilterableColumnForField('phone'),
-        activeFilters: getActiveFiltersForField('phone'),
-      }),
+    header: 'Phone',
   },
   {
     accessorKey: 'status',
-    header: ({ column }) =>
-      setupHeader({
-        column,
-        config: {
-          variant: 'ghost',
-          label: 'Status',
-          class: '-mx-2.5',
-          activeColor: 'primary',
-          inactiveColor: 'neutral',
-        },
-        filterableColumn: getFilterableColumnForField('status'),
-        activeFilters: getActiveFiltersForField('status'),
-      }),
+    header: 'Status',
     cell: ({ row }) => {
       const status = row.getValue('status') as UserStatus
       const color = getStatusColor(status)
@@ -243,19 +189,7 @@ const columns: TableColumn<UserDto>[] = [
   },
   {
     accessorKey: 'id',
-    header: ({ column }) =>
-      setupHeader({
-        column,
-        config: {
-          variant: 'ghost',
-          label: 'ID',
-          class: '-mx-2.5',
-          activeColor: 'primary',
-          inactiveColor: 'neutral',
-        },
-        filterableColumn: getFilterableColumnForField('id'),
-        activeFilters: getActiveFiltersForField('id'),
-      }),
+    header: 'ID',
   },
   {
     accessorKey: 'actions',
@@ -290,14 +224,8 @@ const columns: TableColumn<UserDto>[] = [
   },
 ]
 
-// For simple mode, we still need client-side filtering
+// Client-side filtering for simple mode
 const filteredUsers = computed(() => {
-  if (useAdvancedSearch.value) {
-    // Server-side filtering - return users as-is
-    return users.value
-  }
-
-  // Client-side filtering for simple mode
   let filtered = [...users.value]
 
   // Apply search filter
@@ -446,6 +374,26 @@ const getColumnLabel = (columnId: string): string => {
   return labelMap[columnId] || columnId
 }
 
+/**
+ * Get operator label for display
+ */
+const getOperatorLabel = (operator: string): string => {
+  const operatorMap: Record<string, string> = {
+    eq: '=',
+    ne: '!=',
+    contains: 'contains',
+    startsWith: 'starts with',
+    endsWith: 'ends with',
+    gt: '>',
+    gte: '>=',
+    lt: '<',
+    lte: '<=',
+    in: 'in',
+    notIn: 'not in',
+  }
+  return operatorMap[operator] || operator
+}
+
 // Load users on mount
 onMounted(async () => {
   await loadUsers()
@@ -466,17 +414,15 @@ const onSortingChange = (newSorting: SortingState): void => {
   sorting.value = newSorting
 }
 
-// Watch for sorts changes and sync with sorting (only when not in advanced mode)
+// Watch for sorts changes and sync with sorting
 watch(
   sorts,
   (newSorts) => {
-    if (!useAdvancedSearch.value) {
-      const newSorting = newSorts.map((sort) => ({
-        id: sort.field,
-        desc: sort.direction === 'desc',
-      }))
-      sorting.value = newSorting
-    }
+    const newSorting = newSorts.map((sort) => ({
+      id: sort.field,
+      desc: sort.direction === 'desc',
+    }))
+    sorting.value = newSorting
   },
   { deep: true },
 )
@@ -492,17 +438,8 @@ watch(
 
     <!-- Filters and Search -->
     <div class="mb-6 space-y-4">
-      <!-- Advanced Filter Bar -->
-      <FilterBar
-        v-if="useAdvancedSearch"
-        :columns="filterableColumns"
-        :active-filters="getAllActiveFilters()"
-        :show-advanced="showAdvancedFilters"
-        @update:filters="updateFilters"
-      />
-
-      <!-- Simple Search (when not using advanced mode) -->
-      <div v-else class="flex flex-col sm:flex-row gap-4">
+      <!-- Simple Search -->
+      <div class="flex flex-col sm:flex-row gap-4">
         <!-- Search Input -->
         <div class="flex-1">
           <UInput
@@ -512,38 +449,41 @@ watch(
             size="lg"
           />
         </div>
+      </div>
 
-        <!-- Status Filter -->
-        <div class="w-full sm:w-48">
-          <USelect
-            v-model="statusFilter"
-            :options="statusOptions"
-            placeholder="Filter by status"
-            size="lg"
+      <!-- Advanced Filters Button -->
+      <div class="flex justify-between items-center">
+        <!-- Active Filters Display -->
+        <div v-if="getAllActiveFilters() && getAllActiveFilters()!.length > 0" class="flex items-center gap-2">
+          <span class="text-sm text-gray-600 dark:text-gray-400">Active filters:</span>
+          <div class="flex items-center gap-1">
+            <UBadge
+              color="primary"
+              variant="soft"
+              size="sm"
+              class="max-w-md"
+            >
+              {{ getFilterStructure() }}
+            </UBadge>
+          </div>
+          <UButton
+            variant="ghost"
+            size="xs"
+            color="neutral"
+            icon="i-heroicons-x-mark"
+            @click="handleAdvancedFilterClear"
+            title="Clear all filters"
           />
         </div>
 
-        <!-- Clear Filters -->
+        <!-- Advanced Filters Button -->
         <UButton
           variant="soft"
-          color="neutral"
-          icon="i-heroicons-x-mark"
-          @click="clearFilters"
-          :disabled="!searchValue && !statusFilter"
+          color="primary"
+          icon="i-heroicons-cog-6-tooth"
+          @click="showAdvancedFilters = true"
         >
-          Clear
-        </UButton>
-      </div>
-
-      <!-- Toggle Advanced Mode -->
-      <div class="flex justify-end">
-        <UButton
-          :variant="useAdvancedSearch ? 'solid' : 'soft'"
-          :color="useAdvancedSearch ? 'primary' : 'neutral'"
-          :icon="useAdvancedSearch ? 'i-heroicons-funnel' : 'i-heroicons-funnel-simple'"
-          @click="toggleAdvancedSearch"
-        >
-          {{ useAdvancedSearch ? 'Advanced Mode' : 'Simple Mode' }}
+          Advanced Filters
         </UButton>
       </div>
 
@@ -583,13 +523,13 @@ watch(
 
     <!-- Bulk Actions -->
     <div
-      v-if="table && table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length > 0"
+      v-if="table && table?.tableApi?.getFilteredSelectedRowModel()?.rows && (table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0) > 0"
       class="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
     >
       <div class="flex items-center justify-between">
         <span class="text-sm text-gray-600 dark:text-gray-400">
-          {{ table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length }} of
-          {{ table?.tableApi?.getFilteredRowModel()?.rows?.length }} row(s) selected.
+          {{ table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0 }} of
+          {{ table?.tableApi?.getFilteredRowModel()?.rows?.length || 0 }} row(s) selected.
         </span>
         <div class="flex space-x-2">
           <UButton
@@ -618,7 +558,7 @@ watch(
       <UTable
         ref="table"
         :sorting="sorting"
-        :data="useAdvancedSearch ? users : filteredUsers"
+        :data="filteredUsers"
         :columns="columns"
         :loading="loading"
         :manual-sorting="true"
@@ -626,7 +566,7 @@ watch(
       />
 
       <!-- Empty State -->
-      <template v-if="!loading && (useAdvancedSearch ? users : filteredUsers).length === 0">
+      <template v-if="!loading && filteredUsers.length === 0">
         <div class="text-center py-12">
           <div class="mx-auto h-12 w-12 text-gray-400">
             <UIcon name="i-heroicons-users" class="h-12 w-12" />
@@ -655,7 +595,7 @@ watch(
 
     <!-- Pagination -->
     <div
-      v-if="!loading && (useAdvancedSearch ? users : filteredUsers).length > 0"
+      v-if="!loading && filteredUsers.length > 0"
       class="mt-6 flex items-center justify-between"
     >
       <div class="text-sm text-gray-700 dark:text-gray-300">
@@ -664,5 +604,16 @@ watch(
       </div>
       <UPagination v-model="page" :items-per-page="pageSize" :total="total" />
     </div>
+
+    <!-- Advanced Filter Drawer -->
+    <AdvancedFilterDrawer
+      :show="showAdvancedFilters"
+      :columns="filterableColumns"
+      :active-filters="getAllActiveFilters()"
+      :active-filter-group="getActiveFilterGroup()"
+      @apply="handleAdvancedFilterApply"
+      @clear="handleAdvancedFilterClear"
+      @update:show="showAdvancedFilters = $event"
+    />
   </div>
 </template>
