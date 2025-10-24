@@ -130,7 +130,7 @@ public class TaskActionHandler {
             Log.e(TAG, "NOT APPROPRIATE PARCEL AND CURRENT TASK");
             return;
         }
-        Retrofit retrofit = RetrofitClient.getRetrofitInstance();
+        Retrofit retrofit = RetrofitClient.getRetrofitInstance(activity.getApplicationContext());
 
         SessionClient service = retrofit.create(SessionClient.class);
 
@@ -158,7 +158,7 @@ public class TaskActionHandler {
     }
 
     private void sendFailureEvent(DeliveryAssignment assignment, IssueReason reason) {
-        Retrofit retrofit = RetrofitClient.getRetrofitInstance();
+        Retrofit retrofit = RetrofitClient.getRetrofitInstance(activity.getApplicationContext());
 
         SessionClient service = retrofit.create(SessionClient.class);
 

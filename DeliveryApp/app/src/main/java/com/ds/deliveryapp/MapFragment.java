@@ -289,7 +289,7 @@ public class MapFragment extends Fragment {
     }
 
     public void fetchTodayTasks(String driverId) {
-        Retrofit retrofit = RetrofitClient.getRetrofitInstance();
+        Retrofit retrofit = RetrofitClient.getRetrofitInstance(getContext());
         SessionClient service = retrofit.create(SessionClient.class);
 
         Call<PageResponse<DeliveryAssignment>> call = service.getTasksToday(driverId, List.of("PROCESSING"), 0, 10);
