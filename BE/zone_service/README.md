@@ -4,7 +4,7 @@
 
 [![Node.js](https://img.shields.io/badge/Node.js-20%2B-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9%2B-blue.svg)](https://www.typescriptlang.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%2B-blue.svg)](https://www.postgresql.org/)
+[![MySQL](https://img.shields.io/badge/MySQL-8%2B-blue.svg)](https://www.mysql.com/)
 [![OSRM](https://img.shields.io/badge/OSRM-5.x-orange.svg)](http://project-osrm.org/)
 
 ## Table of Contents
@@ -90,7 +90,7 @@ Unlike commercial routing APIs (Google Maps, Mapbox), this service:
 ```bash
 # Required
 - Node.js 20+
-- PostgreSQL 15+
+- MySQL 8+
 - Docker & Docker Compose
 - osmium-tool (for data processing)
 
@@ -375,7 +375,7 @@ npx tsx test-osrm-hard-routes.ts  # Test OSRM routing (stress test)
 
 ```bash
 # Database
-DATABASE_URL="postgresql://user:password@localhost:5432/zone_db"
+DATABASE_URL="mysql://user:password@localhost:3306/zone_db"
 
 # Server
 PORT=21503
@@ -492,8 +492,8 @@ docker-compose restart osrm-instance-1 osrm-instance-2
 #### Database connection failed
 
 ```bash
-# Check PostgreSQL is running
-docker ps | grep postgres
+# Check MySQL is running
+docker ps | grep mysql
 
 # Test connection
 psql $DATABASE_URL -c "SELECT 1"
@@ -598,7 +598,7 @@ docker-compose restart osrm-instance-1 osrm-instance-2
 | **Runtime** | Node.js 20+ | JavaScript runtime |
 | **Language** | TypeScript 5.9+ | Type safety |
 | **Framework** | Express.js 5 | Web server |
-| **Database** | PostgreSQL 15+ | Data storage |
+| **Database** | MySQL 8+ | Data storage |
 | **ORM** | Prisma 6+ | Database toolkit |
 | **Routing** | OSRM 5.x | Route calculations |
 | **Geo Data** | OpenStreetMap | Road network |

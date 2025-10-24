@@ -4,7 +4,7 @@ model osrm_builds {
 
   // Build information
   instance_name         String   // "osrm-instance-1" or "osrm-instance-2"
-  build_number          Int      @default(autoincrement())
+  build_number          Int      @default(autoincrement()) @unique
   status                OsrmBuildStatus @default(PENDING)
 
   // Data snapshot
