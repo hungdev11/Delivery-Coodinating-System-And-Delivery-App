@@ -5,7 +5,7 @@
 
 import { prisma } from '../../common/database/prisma.client';
 import { logger } from '../../common/logger/logger.service';
-import { PagedData, Paging } from '../../common/types/restful';
+import { PagedData, Paging as RestfulPaging } from '../../common/types/restful';
 import { createError } from '../../common/middleware/error.middleware';
 import { CreateZoneDto, UpdateZoneDto, ZoneDto, ZonePagingRequest } from './zone.model';
 import { PagingRequest } from '../../common/types/filter';
@@ -17,7 +17,11 @@ export class ZoneService {
    */
   public static async getZones(request: PagingRequest): Promise<PagedData<any>> {
     try {
+      console.log('Parsing request:', JSON.stringify(request, null, 2));
+      
       const { skip, take, where, orderBy } = QueryParser.parsePagingRequest(request);
+      
+      console.log('Parsed query params:', { skip, take, where, orderBy });
       
       // Add global search if provided
       const globalSearch = request.search ? QueryParser.buildGlobalSearch(request.search) : {};
@@ -41,12 +45,12 @@ export class ZoneService {
 
       const totalPages = Math.ceil(totalElements / take);
 
-      const paging = new Paging<any>();
+      const paging = new RestfulPaging<any>();
       paging.page = request.page || 0;
       paging.size = request.size || 10;
       paging.totalElements = totalElements;
       paging.totalPages = totalPages;
-      paging.filters = request.filters ? [request.filters] : [];
+      paging.filters = request.filters;
       paging.sorts = request.sorts || [];
       paging.selected = request.selected || [];
 

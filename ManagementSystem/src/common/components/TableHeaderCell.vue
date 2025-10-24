@@ -13,8 +13,8 @@
     <!-- Filter Button (if column is filterable) -->
     <ColumnFilter
       v-if="isFilterable"
-      :column="filterableColumn"
-      :active-filters="activeFilters"
+      :column="currentFilterableColumn"
+      :active-filters="currentColumnFilters"
       @update:filters="handleFilterUpdate"
     />
   </div>
@@ -34,8 +34,9 @@ interface Props<TData extends RowData> {
     class: string
     activeColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
     inactiveColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+    filterable?: boolean
   }
-  filterableColumn?: FilterableColumn
+  filterableColumns?: FilterableColumn[]
   activeFilters?: FilterCondition[] | undefined
 }
 
@@ -58,11 +59,19 @@ const sortIcon = computed(() => {
 
 // Filter-related computed properties
 const isFilterable = computed(() => {
-  return !!props.filterableColumn && (props.filterableColumn.filterable !== false)
+  return props.config.filterable !== false && !!props.filterableColumns
 })
 
-const activeFilters = computed(() => {
-  return props.activeFilters || undefined
+// Get the filterable column config for current column
+const currentFilterableColumn = computed(() => {
+  if (!props.filterableColumns) return undefined
+  return props.filterableColumns.find(col => col.field === props.column.id)
+})
+
+// Get filters for current column only
+const currentColumnFilters = computed(() => {
+  if (!props.activeFilters) return undefined
+  return props.activeFilters.filter(filter => filter.field === props.column.id)
 })
 
 // Handle sort click

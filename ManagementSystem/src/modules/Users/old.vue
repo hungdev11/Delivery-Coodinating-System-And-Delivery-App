@@ -5,27 +5,15 @@
  * Main view for managing users with UTable and Nuxt UI v3 best practices
  */
 
-import {
-  onMounted,
-  defineAsyncComponent,
-  ref,
-  computed,
-  watch,
-  resolveComponent,
-  h,
-} from 'vue'
+import { onMounted, defineAsyncComponent, ref, computed, watch, resolveComponent, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
 import { useUsers, useUserExport } from './composables'
 import type { UserDto, UserStatus } from './model.type'
 import { useTemplateRef } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
-import AdvancedFilterDrawer from '../../common/components/filters/AdvancedFilterDrawer.vue'
-import type { SortingState } from '@tanstack/table-core'
-import type { FilterCondition, FilterGroup, FilterableColumn } from '../../common/types/filter'
-import { createSortConfig } from '../../common/utils/query-builder'
-import TableHeaderCell from '../../common/components/TableHeaderCell.vue'
-import ColumnFilter from '../../common/components/filters/ColumnFilter.vue'
+import TableHeaderCell from '@/common/components/TableHeaderCell.vue'
+import type { Column } from '@tanstack/table-core'
 
 // Dynamic imports to avoid TypeScript issues
 const PageHeader = defineAsyncComponent(() => import('../../common/components/PageHeader.vue'))
@@ -41,6 +29,19 @@ const router = useRouter()
 const overlay = useOverlay()
 const table = useTemplateRef('table')
 
+const setupHeader = ({
+  column,
+  config,
+}: {
+  column: Column<UserDto>
+  config: {
+    variant: 'ghost' | 'solid' | 'outline' | 'soft' | 'link'
+    label: string
+    class: string
+    activeColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+    inactiveColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+  }
+}) => h(TableHeaderCell<UserDto>, { column, config })
 
 // Composables
 const {
@@ -49,18 +50,12 @@ const {
   page,
   pageSize,
   total,
-  filters,
-  sorts,
   loadUsers,
   create,
   update,
   remove,
   bulkDelete,
   handleSearch,
-  updateFilters,
-  updateSorts,
-  clearFilters,
-  getFilterableColumns,
 } = useUsers()
 
 const { exportUsers } = useUserExport()
@@ -68,113 +63,10 @@ const { exportUsers } = useUserExport()
 // Table state
 const selected = ref<UserDto[]>([])
 const sorting = ref<Array<{ id: string; desc: boolean }>>([])
-const activeFilters = ref<FilterCondition[]>([])
 
 // Search and filter state
 const searchValue = ref('')
 const statusFilter = ref<UserStatus | ''>('')
-
-// Advanced filter state
-const showAdvancedFilters = ref(false)
-const filterableColumns = computed(() => getFilterableColumns())
-
-/**
- * Setup header component for table columns
- */
-const setupHeader = ({
-  column,
-  config,
-}: {
-  column: any
-  config: {
-    variant?: string
-    label: string
-    class?: string
-    activeColor?: string
-    inactiveColor?: string
-    filterable?: boolean
-  }
-}) => h(TableHeaderCell<UserDto>, {
-  column,
-  config,
-  filterableColumns: filterableColumns.value,
-  activeFilters: activeFilters.value,
-  'onUpdate:filters': handleFiltersUpdate
-})
-
-// Helper function to get all active filters
-const getAllActiveFilters = (): FilterCondition[] | undefined => {
-  if (!filters.value || !filters.value.conditions) return undefined
-
-  // Extract all conditions from the filter group structure
-  const extractConditions = (item: FilterCondition | FilterGroup): FilterCondition[] => {
-    if ('field' in item) {
-      // It's a FilterCondition
-      return [item as FilterCondition]
-    } else if ('conditions' in item) {
-      // It's a FilterGroup
-      return item.conditions.flatMap(extractConditions)
-    }
-    return []
-  }
-
-  const allFilters = filters.value.conditions.flatMap(extractConditions)
-  return allFilters.length > 0 ? allFilters : undefined
-}
-
-// Helper function to get filter structure for display
-const getFilterStructure = (): string => {
-  if (!filters.value || !filters.value.conditions) return ''
-
-  const formatItem = (item: FilterCondition | FilterGroup): string => {
-    if ('field' in item) {
-      // It's a FilterCondition
-      const condition = item as FilterCondition
-      return `${getColumnLabel(condition.field)} ${getOperatorLabel(condition.operator)} ${condition.value}`
-    } else if ('conditions' in item) {
-      // It's a FilterGroup
-      const group = item as FilterGroup
-      const groupContent = group.conditions.map((subItem, subIndex) => {
-        const itemStr = formatItem(subItem)
-        // Add logic operator between items (except first item)
-        return subIndex > 0 && subItem.logic ? `${subItem.logic} ${itemStr}` : itemStr
-      }).join(' ')
-      return `(${groupContent})`
-    }
-    return ''
-  }
-
-  return filters.value.conditions.map((item, index) => {
-    const itemStr = formatItem(item)
-    // Add logic operator between items (except first item)
-    return index > 0 && item.logic ? `${item.logic} ${itemStr}` : itemStr
-  }).join(' ')
-}
-
-// Helper function to get active filter group
-const getActiveFilterGroup = (): FilterGroup | undefined => {
-  if (!filters.value || !filters.value.conditions) return undefined
-  return filters.value
-}
-
-// Advanced filter handlers
-const handleAdvancedFilterApply = (filterGroup: FilterGroup) => {
-  updateFilters(filterGroup)
-  showAdvancedFilters.value = false
-}
-
-const handleAdvancedFilterClear = () => {
-  clearFilters()
-  showAdvancedFilters.value = false
-}
-
-/**
- * Handle filters update from column filters
- */
-const handleFiltersUpdate = (filters: FilterCondition[]) => {
-  activeFilters.value = filters
-  console.log('Filters updated:', filters)
-}
 
 // Table columns configuration
 const columns: TableColumn<UserDto>[] = [
@@ -207,7 +99,6 @@ const columns: TableColumn<UserDto>[] = [
           class: '-mx-2.5',
           activeColor: 'primary',
           inactiveColor: 'neutral',
-          filterable: true,
         },
       }),
   },
@@ -218,11 +109,10 @@ const columns: TableColumn<UserDto>[] = [
         column,
         config: {
           variant: 'ghost',
-          label: 'Full Name',
+          label: 'Fullname',
           class: '-mx-2.5',
           activeColor: 'primary',
           inactiveColor: 'neutral',
-          filterable: true,
         },
       }),
   },
@@ -237,7 +127,6 @@ const columns: TableColumn<UserDto>[] = [
           class: '-mx-2.5',
           activeColor: 'primary',
           inactiveColor: 'neutral',
-          filterable: true,
         },
       }),
   },
@@ -252,7 +141,6 @@ const columns: TableColumn<UserDto>[] = [
           class: '-mx-2.5',
           activeColor: 'primary',
           inactiveColor: 'neutral',
-          filterable: true,
         },
       }),
   },
@@ -267,7 +155,6 @@ const columns: TableColumn<UserDto>[] = [
           class: '-mx-2.5',
           activeColor: 'primary',
           inactiveColor: 'neutral',
-          filterable: true,
         },
       }),
     cell: ({ row }) => {
@@ -276,10 +163,6 @@ const columns: TableColumn<UserDto>[] = [
       const displayStatus = getDisplayStatus(status)
       return h(UBadge, { class: 'capitalize', variant: 'soft', color }, () => displayStatus)
     },
-  },
-  {
-    accessorKey: 'id',
-    header: 'ID',
   },
   {
     accessorKey: 'actions',
@@ -314,7 +197,7 @@ const columns: TableColumn<UserDto>[] = [
   },
 ]
 
-// Client-side filtering for simple mode
+// Computed table rows with filtering
 const filteredUsers = computed(() => {
   let filtered = [...users.value]
 
@@ -465,23 +348,19 @@ const getColumnLabel = (columnId: string): string => {
 }
 
 /**
- * Get operator label for display
+ * Handle search trigger
  */
-const getOperatorLabel = (operator: string): string => {
-  const operatorMap: Record<string, string> = {
-    eq: '=',
-    ne: '!=',
-    contains: 'contains',
-    startsWith: 'starts with',
-    endsWith: 'ends with',
-    gt: '>',
-    gte: '>=',
-    lt: '<',
-    lte: '<=',
-    in: 'in',
-    notIn: 'not in',
-  }
-  return operatorMap[operator] || operator
+const triggerSearch = () => {
+  handleSearch(searchValue.value)
+}
+
+/**
+ * Clear filters
+ */
+const clearFilters = () => {
+  searchValue.value = ''
+  statusFilter.value = ''
+  handleSearch('')
 }
 
 // Load users on mount
@@ -497,25 +376,6 @@ watch(searchValue, (newValue) => {
     handleSearch(newValue)
   }, 300)
 })
-
-const onSortingChange = (newSorting: SortingState): void => {
-  const newSorts = newSorting.map((sort) => createSortConfig(sort.id, sort.desc ? 'desc' : 'asc'))
-  updateSorts(newSorts)
-  sorting.value = newSorting
-}
-
-// Watch for sorts changes and sync with sorting
-watch(
-  sorts,
-  (newSorts) => {
-    const newSorting = newSorts.map((sort) => ({
-      id: sort.field,
-      desc: sort.direction === 'desc',
-    }))
-    sorting.value = newSorting
-  },
-  { deep: true },
-)
 </script>
 
 <template>
@@ -528,7 +388,6 @@ watch(
 
     <!-- Filters and Search -->
     <div class="mb-6 space-y-4">
-      <!-- Simple Search -->
       <div class="flex flex-col sm:flex-row gap-4">
         <!-- Search Input -->
         <div class="flex-1">
@@ -539,41 +398,26 @@ watch(
             size="lg"
           />
         </div>
-      </div>
 
-      <!-- Advanced Filters Button -->
-      <div class="flex justify-between items-center">
-        <!-- Active Filters Display -->
-        <div v-if="getAllActiveFilters() && getAllActiveFilters()!.length > 0" class="flex items-center gap-2">
-          <span class="text-sm text-gray-600 dark:text-gray-400">Active filters:</span>
-          <div class="flex items-center gap-1">
-            <UBadge
-              color="primary"
-              variant="soft"
-              size="sm"
-              class="max-w-md"
-            >
-              {{ getFilterStructure() }}
-            </UBadge>
-          </div>
-          <UButton
-            variant="ghost"
-            size="xs"
-            color="neutral"
-            icon="i-heroicons-x-mark"
-            @click="handleAdvancedFilterClear"
-            title="Clear all filters"
+        <!-- Status Filter -->
+        <div class="w-full sm:w-48">
+          <USelect
+            v-model="statusFilter"
+            :options="statusOptions"
+            placeholder="Filter by status"
+            size="lg"
           />
         </div>
 
-        <!-- Advanced Filters Button -->
+        <!-- Clear Filters -->
         <UButton
           variant="soft"
-          color="primary"
-          icon="i-heroicons-cog-6-tooth"
-          @click="showAdvancedFilters = true"
+          color="neutral"
+          icon="i-heroicons-x-mark"
+          @click="clearFilters"
+          :disabled="!searchValue && !statusFilter"
         >
-          Advanced Filters
+          Clear
         </UButton>
       </div>
 
@@ -613,13 +457,13 @@ watch(
 
     <!-- Bulk Actions -->
     <div
-      v-if="table && table?.tableApi?.getFilteredSelectedRowModel()?.rows && (table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0) > 0"
+      v-if="table && table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length > 0"
       class="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
     >
       <div class="flex items-center justify-between">
         <span class="text-sm text-gray-600 dark:text-gray-400">
-          {{ table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0 }} of
-          {{ table?.tableApi?.getFilteredRowModel()?.rows?.length || 0 }} row(s) selected.
+          {{ table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length }} of
+          {{ table?.tableApi?.getFilteredRowModel()?.rows?.length }} row(s) selected.
         </span>
         <div class="flex space-x-2">
           <UButton
@@ -651,9 +495,7 @@ watch(
         :data="filteredUsers"
         :columns="columns"
         :loading="loading"
-        :manual-sorting="true"
         enable-multi-sort
-        @update:sorting="onSortingChange($event)"
       />
 
       <!-- Empty State -->
@@ -685,26 +527,12 @@ watch(
     </UCard>
 
     <!-- Pagination -->
-    <div
-      v-if="!loading && filteredUsers.length > 0"
-      class="mt-6 flex items-center justify-between"
-    >
+    <div v-if="!loading && filteredUsers.length > 0" class="mt-6 flex items-center justify-between">
       <div class="text-sm text-gray-700 dark:text-gray-300">
         Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
         {{ total }} results
       </div>
       <UPagination v-model="page" :items-per-page="pageSize" :total="total" />
     </div>
-
-    <!-- Advanced Filter Drawer -->
-    <AdvancedFilterDrawer
-      :show="showAdvancedFilters"
-      :columns="filterableColumns"
-      :active-filters="getAllActiveFilters()"
-      :active-filter-group="getActiveFilterGroup()"
-      @apply="handleAdvancedFilterApply"
-      @clear="handleAdvancedFilterClear"
-      @update:show="showAdvancedFilters = $event"
-    />
   </div>
 </template>

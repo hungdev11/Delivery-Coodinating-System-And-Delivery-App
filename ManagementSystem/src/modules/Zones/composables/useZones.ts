@@ -9,6 +9,7 @@ import { defineStore } from 'pinia'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { getZones, createZone, updateZone, deleteZone, getCenters } from '../api'
 import { ZoneDto, CenterDto, CreateZoneRequest, UpdateZoneRequest } from '../model.type'
+import type { FilterGroup } from '../../common/types/filter'
 
 export const useZonesStore = defineStore('zones', () => {
   const toast = useToast()
@@ -26,7 +27,7 @@ export const useZonesStore = defineStore('zones', () => {
   /**
    * Load zones
    */
-  const loadZones = async () => {
+  const loadZones = async (query?: { filters?: FilterGroup; sorts?: any[] }) => {
     loading.value = true
     error.value = null
     try {
@@ -35,6 +36,8 @@ export const useZonesStore = defineStore('zones', () => {
         size: pageSize.value,
         search: searchQuery.value || undefined,
         centerId: selectedCenterId.value,
+        filters: query?.filters,
+        sorts: query?.sorts,
       })
       console.log('response', response)
       if (response?.data) {

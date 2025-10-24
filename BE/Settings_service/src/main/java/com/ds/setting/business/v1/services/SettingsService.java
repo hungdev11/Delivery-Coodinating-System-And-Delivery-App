@@ -70,7 +70,14 @@ public class SettingsService {
     private Specification<SystemSetting> buildSpecification(FilterGroup filterGroup) {
         return (root, cq, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
-            for (Object node : filterGroup.getConditions()) {
+            
+            // Handle null conditions
+            List<Object> conditions = filterGroup.getConditions();
+            if (conditions == null || conditions.isEmpty()) {
+                return null;
+            }
+            
+            for (Object node : conditions) {
                 if (node instanceof FilterGroup nested) {
                     Predicate p = buildSpecification(nested).toPredicate(root, cq, cb);
                     if (p != null) predicates.add(p);

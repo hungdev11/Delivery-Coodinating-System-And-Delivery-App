@@ -12,7 +12,7 @@ export type SettingType = 'STRING' | 'INTEGER' | 'BOOLEAN' | 'DOUBLE' | 'JSON'
 /**
  * Display Mode
  */
-export type DisplayMode = 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'SELECT' | 'TEXTAREA' | 'JSON'
+export type DisplayMode = 'TEXT' | 'PASSWORD' | 'CODE' | 'NUMBER' | 'TOGGLE' | 'TEXTAREA' | 'URL' | 'EMAIL'
 
 /**
  * System Setting DTO
@@ -81,7 +81,15 @@ export class UpsertSettingRequest {
 /**
  * Settings API Responses
  */
-export type GetSettingsResponse = IApiResponse<SystemSettingDto[]>
+export type GetSettingsResponse = IApiResponse<{
+  data: SystemSettingDto[]
+  page: {
+    page: number
+    size: number
+    totalElements: number
+    totalPages: number
+  }
+}>
 export type GetSettingResponse = IApiResponse<SystemSettingDto>
 export type UpsertSettingResponse = IApiResponse<SystemSettingDto>
 export type DeleteSettingResponse = IApiResponse<null>
