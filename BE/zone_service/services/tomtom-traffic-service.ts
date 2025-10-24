@@ -482,12 +482,17 @@ class TomTomTrafficService {
         })
       );
 
-      // Execute in batches of 100 to avoid overwhelming the database
-      const batchSize = 100;
+      // Execute in smaller batches to avoid connection pool exhaustion
+      const batchSize = 20; // Reduced from 100 to 20
       for (let i = 0; i < segmentUpdatePromises.length; i += batchSize) {
         const batch = segmentUpdatePromises.slice(i, i + batchSize);
         await Promise.all(batch);
         console.log(`   📊 Updated batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(segmentUpdatePromises.length / batchSize)}`);
+        
+        // Add small delay between batches to prevent connection pool exhaustion
+        if (i + batchSize < segmentUpdatePromises.length) {
+          await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+        }
       }
 
       console.log(`\n✅ Batch operations completed:`);

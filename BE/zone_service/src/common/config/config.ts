@@ -13,7 +13,7 @@ export const config = {
   // Database Configuration
   database: {
     url: process.env.ZONE_DB_CONNECTION || 
-         `postgresql://${process.env.DB_USERNAME || 'dev'}:${process.env.DB_PASSWORD || 'dev'}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${process.env.ZONE_DB_NAME || 'dszoneservice'}`,
+         `mysql://${process.env.DB_USERNAME || 'dev'}:${process.env.DB_PASSWORD || 'dev'}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '3306'}/${process.env.ZONE_DB_NAME || 'dszoneservice'}`,
   },
 
   // Settings Service Configuration
@@ -53,8 +53,8 @@ export function validateConfig() {
   const errors: string[] = [];
 
   // Validate database URL format
-  if (!config.database.url.startsWith('postgresql://') && !config.database.url.startsWith('postgres://')) {
-    errors.push('ZONE_DB_CONNECTION must be a valid PostgreSQL connection string');
+  if (!config.database.url.startsWith('mysql://')) {
+    errors.push('ZONE_DB_CONNECTION must be a valid MySQL connection string');
   }
 
   // Validate port

@@ -25,7 +25,7 @@ async function seedZones() {
     // Step 0: Debug database connection
     console.log('Step 0: Checking database connection...');
     const dbUrl = process.env.ZONE_DB_CONNECTION;
-    console.log(`Database URL: ${dbUrl ? dbUrl.substring(0, 20) + '...' : 'NOT SET'}`);
+    console.log(`Database URL: ${dbUrl ? dbUrl + '...' : 'NOT SET'}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     
     try {

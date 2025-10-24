@@ -4,6 +4,6 @@ generator client {
 }
 
 datasource db {
-    provider = "postgresql"
+    provider = "mysql"
     url      = env("ZONE_DB_CONNECTION")
 }
