@@ -167,8 +167,8 @@ export class QueryParser {
 
     return {
       OR: [
-        { name: { contains: searchTerm, mode: 'insensitive' } },
-        { code: { contains: searchTerm, mode: 'insensitive' } }
+        { name: { contains: searchTerm } },
+        { code: { contains: searchTerm } }
       ]
     };
   }
