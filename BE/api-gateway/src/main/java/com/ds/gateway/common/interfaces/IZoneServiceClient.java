@@ -8,13 +8,15 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface IZoneServiceClient {
     // Zone endpoints
-    CompletableFuture<Object> listZones(Map<String, String> queryParams);
+    CompletableFuture<Object> listZones(Object requestBody);
     CompletableFuture<Object> getZoneById(String id);
     CompletableFuture<Object> getZoneByCode(String code);
     CompletableFuture<Object> getZonesByCenter(String centerId);
     CompletableFuture<Object> createZone(Object requestBody);
     CompletableFuture<Void> updateZone(String id, Object requestBody);
     CompletableFuture<Void> deleteZone(String id);
+    CompletableFuture<Object> getFilterableFields();
+    CompletableFuture<Object> getSortableFields();
     
     // Center endpoints
     CompletableFuture<Object> listCenters(Map<String, String> queryParams);

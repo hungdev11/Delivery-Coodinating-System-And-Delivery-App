@@ -34,10 +34,31 @@ export function useMap() {
     container: string | HTMLElement,
     config: Partial<MapConfig> = {},
   ): Promise<Map> => {
-    // Default config for Vietnam/HCMC area
+    // Default config for Vietnam/HCMC area with fallback
     const defaultConfig: MapConfig = {
       container,
-      style: 'https://tiles.track-asia.com/tiles/v3/style.json',
+      style: {
+        version: 8,
+        sources: {
+          'osm-tiles': {
+            type: 'raster',
+            tiles: [
+              'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+            ],
+            tileSize: 256,
+            attribution: '© OpenStreetMap contributors'
+          }
+        },
+        layers: [
+          {
+            id: 'osm-tiles',
+            type: 'raster',
+            source: 'osm-tiles',
+            minzoom: 0,
+            maxzoom: 19
+          }
+        ]
+      },
       center: [106.6297, 10.8231], // Ho Chi Minh City
       zoom: 12,
       minZoom: 5,

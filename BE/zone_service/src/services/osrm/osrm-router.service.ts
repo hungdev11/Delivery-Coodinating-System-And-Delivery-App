@@ -5,6 +5,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../common/database/prisma.client';
 import { logger } from '../../common/logger/logger.service';
 import axios, { AxiosInstance } from 'axios';
 
@@ -94,7 +95,7 @@ export class OSRMRouterService {
   private instance2Url: string;
 
   constructor() {
-    this.prisma = new PrismaClient();
+    this.prisma = prisma;
 
     // Get OSRM instance URLs from environment
     this.instance1Url = process.env.OSRM_INSTANCE_1_URL || 'http://localhost:5000';

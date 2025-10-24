@@ -13,4 +13,5 @@ Welcome to the API Gateway documentation.
 
 - All APIs follow the BaseResponse<T> contract.
 - API Gateway handles authentication and authorization via Keycloak.
+- **NEW**: Zone endpoints now support POST with advanced filtering (see zones.md).
 - See global RESTful standards at `../../RESTFUL.md`.

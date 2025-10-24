@@ -26,7 +26,7 @@ export interface GeoJSONPoint {
  * Zone Data Transfer Object
  */
 export class ZoneDto {
-  id: string
+  zone_id: string
   code: string
   name: string
   polygon: GeoJSONPolygon | null
@@ -34,14 +34,15 @@ export class ZoneDto {
   centerCode?: string
   centerName?: string
 
-  constructor(data: ZoneDto) {
-    this.id = data.id
+  constructor(data: any) {
+    // Map API response fields to DTO fields
+    this.zone_id = data.zone_id
     this.code = data.code
     this.name = data.name
     this.polygon = data.polygon
-    this.centerId = data.centerId
-    this.centerCode = data.centerCode
-    this.centerName = data.centerName
+    this.centerId = data.center_id || data.centerId
+    this.centerCode = data.center_code || data.centerCode
+    this.centerName = data.center_name || data.centerName
   }
 
   get displayName(): string {
@@ -61,14 +62,14 @@ export class ZoneDto {
  * Center Data Transfer Object
  */
 export class CenterDto {
-  id: string
+  center_id: string
   code: string
   name: string
   address?: string
   location?: GeoJSONPoint
 
   constructor(data: CenterDto) {
-    this.id = data.id
+    this.center_id = data.center_id
     this.code = data.code
     this.name = data.name
     this.address = data.address
@@ -128,7 +129,7 @@ export interface Paging {
 }
 
 /**
- * Paginated Zones Response
+ * Paginated Zones Response (Updated for new API)
  */
 export interface PagedZonesResponse {
   data: ZoneDto[]

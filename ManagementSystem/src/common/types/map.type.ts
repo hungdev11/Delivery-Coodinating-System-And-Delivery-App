@@ -49,8 +49,10 @@ export interface RouteData {
 export interface MapMarker {
   id: string
   coordinates: [number, number]
-  type?: 'center' | 'delivery' | 'warehouse' | 'custom'
+  type?: 'center' | 'delivery' | 'warehouse' | 'custom' | 'zone-center'
   label?: string
+  title?: string
+  description?: string
   icon?: string
   color?: string
   popup?: string
@@ -67,6 +69,7 @@ export interface ZonePolygon {
   color?: string
   fillColor?: string
   fillOpacity?: number
+  opacity?: number
   strokeColor?: string
   strokeWidth?: number
   properties?: Record<string, any>

@@ -37,11 +37,10 @@ public class ZoneProxyController {
         return zoneServiceClient.health().thenApply(ResponseEntity::ok).join();
     }
 
-    @GetMapping("/zones")
-    public ResponseEntity<?> listZones(HttpServletRequest request) {
-        Map<String, String> params = extractQueryParams(request);
-        log.info("GET /api/v1/zones with params: {}", params);
-        return zoneServiceClient.listZones(params).thenApply(ResponseEntity::ok).join();
+    @PostMapping("/zones")
+    public ResponseEntity<?> listZones(@RequestBody Object requestBody) {
+        log.info("POST /api/v1/zones");
+        return zoneServiceClient.listZones(requestBody).thenApply(ResponseEntity::ok).join();
     }
 
     @GetMapping("/zones/{id}")
@@ -62,9 +61,9 @@ public class ZoneProxyController {
         return zoneServiceClient.getZonesByCenter(centerId).thenApply(ResponseEntity::ok).join();
     }
 
-    @PostMapping("/zones")
+    @PostMapping("/zones/create")
     public ResponseEntity<?> createZone(@RequestBody Object requestBody) {
-        log.info("POST /api/v1/zones");
+        log.info("POST /api/v1/zones/create");
         return zoneServiceClient.createZone(requestBody).thenApply(ResponseEntity::ok).join();
     }
 
@@ -80,6 +79,18 @@ public class ZoneProxyController {
         log.info("DELETE /api/v1/zones/{}", id);
         zoneServiceClient.deleteZone(id).join();
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/zones/filterable-fields")
+    public ResponseEntity<?> getFilterableFields() {
+        log.info("GET /api/v1/zones/filterable-fields");
+        return zoneServiceClient.getFilterableFields().thenApply(ResponseEntity::ok).join();
+    }
+
+    @GetMapping("/zones/sortable-fields")
+    public ResponseEntity<?> getSortableFields() {
+        log.info("GET /api/v1/zones/sortable-fields");
+        return zoneServiceClient.getSortableFields().thenApply(ResponseEntity::ok).join();
     }
 
     // Center endpoints

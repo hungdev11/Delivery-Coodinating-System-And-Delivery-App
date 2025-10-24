@@ -1,20 +1,22 @@
 /**
- * useZones Composable
+ * useZonesStore Pinia Store
  *
  * Business logic for zone management
  */
 
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { defineStore } from 'pinia'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { getZones, createZone, updateZone, deleteZone, getCenters } from '../api'
 import { ZoneDto, CenterDto, CreateZoneRequest, UpdateZoneRequest } from '../model.type'
 
-export function useZones() {
+export const useZonesStore = defineStore('zones', () => {
   const toast = useToast()
 
   const zones = ref<ZoneDto[]>([])
   const centers = ref<CenterDto[]>([])
   const loading = ref(false)
+  const error = ref<string | null>(null)
   const page = ref(0)
   const pageSize = ref(10)
   const total = ref(0)
@@ -26,6 +28,7 @@ export function useZones() {
    */
   const loadZones = async () => {
     loading.value = true
+    error.value = null
     try {
       const response = await getZones({
         page: page.value,
@@ -33,13 +36,14 @@ export function useZones() {
         search: searchQuery.value || undefined,
         centerId: selectedCenterId.value,
       })
-
-      if (response.result) {
-        zones.value = response.result.data.map((z) => new ZoneDto(z))
-        total.value = response.result.page.totalElements
+      console.log('response', response)
+      if (response?.data) {
+        zones.value = response.data
+        total.value = response.page.totalElements
       }
-    } catch (error) {
-      console.error('Failed to load zones:', error)
+    } catch (err) {
+      console.error('Failed to load zones:', err)
+      error.value = err instanceof Error ? err.message : 'Failed to load zones'
       toast.add({
         title: 'Error',
         description: 'Failed to load zones',
@@ -57,7 +61,7 @@ export function useZones() {
     try {
       const response = await getCenters()
       if (response.result) {
-        centers.value = response.result.map((c) => new CenterDto(c))
+        centers.value = response.result.data.map((c) => new CenterDto(c))
       }
     } catch (error) {
       console.error('Failed to load centers:', error)
@@ -180,6 +184,7 @@ export function useZones() {
     zones,
     centers,
     loading,
+    error,
     page,
     pageSize,
     total,
@@ -195,4 +200,4 @@ export function useZones() {
     handleSearch,
     filterByCenter,
   }
-}
+})

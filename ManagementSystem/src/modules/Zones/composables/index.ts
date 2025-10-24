@@ -2,4 +2,4 @@
  * Composables Index
  */
 
-export { useZones } from './useZones'
+export { useZonesStore } from './useZones'

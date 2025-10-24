@@ -12,6 +12,9 @@ This module handles zone management functionality including CRUD operations and 
 - Delete zones
 - Bulk delete multiple zones
 - View zone details with map visualization
+- **Interactive map view with zone management**
+- **Zone selection with detailed drawer**
+- **Visual zone representation with colors**
 - Define zone boundaries using polygons
 
 ## File Structure
@@ -20,7 +23,8 @@ This module handles zone management functionality including CRUD operations and 
 Zones/
 ├── components/
 │   ├── ZoneFormModal.vue      # Create/Edit modal
-│   └── ZoneDeleteModal.vue    # Delete confirmation
+│   ├── ZoneDeleteModal.vue    # Delete confirmation
+│   └── ZoneMapView.vue        # Interactive map view
 ├── composables/
 │   └── useZones.ts            # Zone CRUD logic
 ├── api.ts                     # API client functions
@@ -235,6 +239,14 @@ All endpoints require authentication via JWT token in the Authorization header.
 
 All API errors are handled by the global axios interceptor and displayed via toast notifications.
 
+## Routes
+
+The module provides the following routes:
+
+- `/zones` - Zone list view with table and filters
+- `/zones/map` - Interactive map view with zone management
+- `/zones/:id` - Zone detail view with map visualization
+
 ## Future Enhancements
 
 - ✅ Polygon drawing tool on map
@@ -242,6 +254,8 @@ All API errors are handled by the global axios interceptor and displayed via toa
 - ✅ Delivery address clustering
 - ✅ Zone capacity management
 - ✅ Auto-assignment rules
+- ✅ Interactive map view with drawer
+- ✅ Zone color coding and legend
 - ✅ Zone overlap detection
 - ✅ Import zones from file
 - ✅ Export zone boundaries to GeoJSON

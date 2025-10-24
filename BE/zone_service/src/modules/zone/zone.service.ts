@@ -5,11 +5,61 @@
 
 import { prisma } from '../../common/database/prisma.client';
 import { logger } from '../../common/logger/logger.service';
-import { PagedData } from '../../common/types/restful';
+import { PagedData, Paging } from '../../common/types/restful';
 import { createError } from '../../common/middleware/error.middleware';
 import { CreateZoneDto, UpdateZoneDto, ZoneDto, ZonePagingRequest } from './zone.model';
+import { PagingRequest } from '../../common/types/filter';
+import { QueryParser } from '../../common/utils/query-parser';
 
 export class ZoneService {
+  /**
+   * Get zones with advanced filtering and sorting
+   */
+  public static async getZones(request: PagingRequest): Promise<PagedData<any>> {
+    try {
+      const { skip, take, where, orderBy } = QueryParser.parsePagingRequest(request);
+      
+      // Add global search if provided
+      const globalSearch = request.search ? QueryParser.buildGlobalSearch(request.search) : {};
+      const finalWhere = request.search ? { ...where, ...globalSearch } : where;
+
+      // Get total count
+      const totalElements = await prisma.zones.count({
+        where: finalWhere
+      });
+
+      // Get paginated data
+      const data = await prisma.zones.findMany({
+        where: finalWhere,
+        orderBy,
+        skip,
+        take,
+        include: {
+          centers: true,
+        }
+      });
+
+      const totalPages = Math.ceil(totalElements / take);
+
+      const paging = new Paging<any>();
+      paging.page = request.page || 0;
+      paging.size = request.size || 10;
+      paging.totalElements = totalElements;
+      paging.totalPages = totalPages;
+      paging.filters = request.filters ? [request.filters] : [];
+      paging.sorts = request.sorts || [];
+      paging.selected = request.selected || [];
+
+      return {
+        data,
+        page: paging
+      };
+    } catch (error) {
+      logger.error('Failed to get zones with advanced filtering', { error });
+      throw createError('Failed to get zones', 500);
+    }
+  }
+
   /**
    * Get all zones with pagination
    */
@@ -256,6 +306,31 @@ export class ZoneService {
       logger.error('Failed to check zone existence', { code, error });
       return false;
     }
+  }
+
+  /**
+   * Get filterable fields for frontend
+   */
+  public static getFilterableFields(): string[] {
+    return [
+      'zone_id',
+      'code',
+      'name',
+      'polygon',
+      'center_id'
+    ];
+  }
+
+  /**
+   * Get sortable fields for frontend
+   */
+  public static getSortableFields(): string[] {
+    return [
+      'zone_id',
+      'code',
+      'name',
+      'center_id'
+    ];
   }
 
   /**

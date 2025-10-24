@@ -8,9 +8,9 @@
 import { computed, onMounted, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
-import { PageHeader, DataTable } from '@/common/components'
-import { useZones } from './composables'
+import { useZonesStore } from './composables'
 import type { ZoneDto } from './model.type'
+import { storeToRefs } from 'pinia'
 
 // Lazy load modals
 const LazyZoneFormModal = defineAsyncComponent(() => import('./components/ZoneFormModal.vue'))
@@ -21,9 +21,6 @@ const overlay = useOverlay()
 
 // Composables
 const {
-  zones,
-  centers,
-  loading,
   page,
   pageSize,
   total,
@@ -37,7 +34,13 @@ const {
   handlePageChange,
   handleSearch,
   filterByCenter,
-} = useZones()
+} = useZonesStore()
+
+const {
+  zones,
+  centers,
+  loading,
+} = storeToRefs(useZonesStore())
 
 // Table columns
 const columns = [
@@ -130,6 +133,14 @@ onMounted(() => {
   <div class="container mx-auto px-4 py-6">
     <PageHeader title="Zones" description="Manage delivery zones and distribution areas">
       <template #actions>
+        <UButton
+          color="primary"
+          variant="outline"
+          icon="i-heroicons-map"
+          @click="router.push('/zones/map')"
+        >
+          Map View
+        </UButton>
         <UButton icon="i-heroicons-plus" @click="openCreateModal"> Add Zone </UButton>
       </template>
     </PageHeader>
