@@ -3,7 +3,7 @@ package com.ds.parcel_service.common.parcelstates;
 import com.ds.parcel_service.common.enums.ParcelEvent;
 import com.ds.parcel_service.common.enums.ParcelStatus;
 
-public class SuccessedState implements IParcelState{
+public class SuccededState implements IParcelState{
 
     @Override
     public ParcelStatus handleTransition(ParcelEvent event) {
@@ -12,7 +12,7 @@ public class SuccessedState implements IParcelState{
 
     @Override
     public ParcelStatus getParcelStatus() {
-        return ParcelStatus.SUCCESSED;
+        return ParcelStatus.SUCCEEDED;
     }
 
 }
