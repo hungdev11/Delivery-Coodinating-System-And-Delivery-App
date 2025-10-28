@@ -79,7 +79,7 @@ const mapMarkers = computed((): MapMarker[] => {
     markers.push({
       id: 'start-point',
       coordinates: [startPoint.value.lon, startPoint.value.lat],
-      type: 'start',
+      type: 'custom',
       title: 'Start Point',
       color: '#22c55e',
       label: 'Start',
@@ -92,9 +92,9 @@ const mapMarkers = computed((): MapMarker[] => {
       markers.push({
         id: `waypoint-${group.priority}-${index}`,
         coordinates: [waypoint.lon, waypoint.lat],
-        type: 'waypoint',
-        title: `${getPriorityLabel(group.priority)} - ${index + 1}`,
-        color: getPriorityColor(group.priority),
+        type: 'custom',
+        title: `${getPriorityLabel(group.priority as PriorityLevelType)} - ${index + 1}`,
+        color: getPriorityColor(group.priority as PriorityLevelType),
         label: `${index + 1}`,
       })
     })
@@ -112,11 +112,14 @@ const mapRoutes = computed((): RouteData[] => {
 
   return [
     {
-      id: 'demo-route',
       coordinates: geometry,
-      color: '#3b82f6',
-      width: 4,
-      opacity: 0.8,
+      distance: routeResult.value.route.distance,
+      duration: routeResult.value.route.duration,
+      properties: {
+        color: '#3b82f6',
+        width: 4,
+        opacity: 0.8,
+      },
     },
   ]
 })
@@ -247,7 +250,7 @@ onMounted(() => {
               :key="group.priority"
               class="flex items-center justify-between"
             >
-              <span class="text-sm font-medium">{{ getPriorityLabel(group.priority) }}</span>
+              <span class="text-sm font-medium">{{ getPriorityLabel(group.priority as PriorityLevelType) }}</span>
               <div class="flex items-center gap-2">
                 <UBadge :color="group.waypoints.length > 0 ? 'primary' : 'neutral'">
                   {{ group.waypoints.length }}
@@ -258,7 +261,7 @@ onMounted(() => {
                   variant="ghost"
                   size="xs"
                   icon="i-heroicons-x-mark"
-                  @click="clearPriorityGroup(group.priority)"
+                  @click="clearPriorityGroup(group.priority as PriorityLevelType)"
                 />
               </div>
             </div>

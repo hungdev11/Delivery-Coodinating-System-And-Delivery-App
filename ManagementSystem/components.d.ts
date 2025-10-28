@@ -26,6 +26,7 @@ declare module 'vue' {
     UNavigationMenu: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/NavigationMenu.vue')['default']
     UPagination: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Pagination.vue')['default']
     UPopover: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Popover.vue')['default']
+    URadioGroup: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/RadioGroup.vue')['default']
     USelect: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Select.vue')['default']
     UTable: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Table.vue')['default']
     UTextarea: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Textarea.vue')['default']
