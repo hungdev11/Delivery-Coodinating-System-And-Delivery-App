@@ -93,8 +93,8 @@ const mapMarkers = computed((): MapMarker[] => {
         id: `waypoint-${group.priority}-${index}`,
         coordinates: [waypoint.lon, waypoint.lat],
         type: 'custom',
-        title: `${getPriorityLabel(group.priority as PriorityLevelType)} - ${index + 1}`,
-        color: getPriorityColor(group.priority as PriorityLevelType),
+        title: `${getPriorityLabel(group.priority)} - ${index + 1}`,
+        color: getPriorityColor(group.priority),
         label: `${index + 1}`,
       })
     })
@@ -250,7 +250,7 @@ onMounted(() => {
               :key="group.priority"
               class="flex items-center justify-between"
             >
-              <span class="text-sm font-medium">{{ getPriorityLabel(group.priority as PriorityLevelType) }}</span>
+              <span class="text-sm font-medium">{{ getPriorityLabel(group.priority) }}</span>
               <div class="flex items-center gap-2">
                 <UBadge :color="group.waypoints.length > 0 ? 'primary' : 'neutral'">
                   {{ group.waypoints.length }}
@@ -261,7 +261,7 @@ onMounted(() => {
                   variant="ghost"
                   size="xs"
                   icon="i-heroicons-x-mark"
-                  @click="clearPriorityGroup(group.priority as PriorityLevelType)"
+                  @click="clearPriorityGroup(group.priority)"
                 />
               </div>
             </div>

@@ -10,7 +10,7 @@ export interface Waypoint {
 }
 
 export interface PriorityGroup {
-  priority: number // 1 = express, 2 = fast, 3 = normal, 4 = economy
+  priority: PriorityLevelType // 1 = express, 2 = fast, 3 = normal, 4 = economy
   waypoints: Waypoint[]
 }
 
