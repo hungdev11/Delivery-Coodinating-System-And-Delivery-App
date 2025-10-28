@@ -171,7 +171,9 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
                 String phone = "0935960974";
 //                        task.getReceiverPhone();
                 if (phone != null && !phone.isEmpty()) {
-                    Intent dialIntent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phone));
+                    String anonymousPhone = "#31#" + phone;
+
+                    Intent dialIntent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + anonymousPhone));
                     startActivity(dialIntent);
                 } else {
                     Toast.makeText(this, "Không có số điện thoại khách hàng", Toast.LENGTH_SHORT).show();
