@@ -37,3 +37,10 @@ routingRouter.get('/status', RoutingController.getOSRMStatus);
  * Switch active OSRM instance (admin endpoint)
  */
 routingRouter.post('/switch-instance', RoutingController.switchOSRMInstance);
+
+/**
+ * POST /routing/demo-route
+ * Calculate demo route with priority-based ordering
+ * For demo/testing page with express/fast/normal/economy priority groups
+ */
+routingRouter.post('/demo-route', RoutingController.calculateDemoRoute);

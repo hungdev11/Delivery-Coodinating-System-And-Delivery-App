@@ -13,6 +13,9 @@ import {
   RouteStepDto,
   RouteLegDto,
   RouteDto,
+  DemoRouteRequestDto,
+  DemoRouteResponseDto,
+  WaypointDto,
 } from './routing.model';
 
 export class RoutingService {
@@ -268,5 +271,107 @@ export class RoutingService {
 
     const key = modifier ? `${type}-${modifier}` : type;
     return instructions[key || 'continue'] || `Continue on ${name}`;
+  }
+
+  /**
+   * Calculate demo route with priority-based waypoint ordering
+   * Input: startPoint + priorityGroups (express, fast, normal, economy)
+   * Output: optimized route visiting higher priority points first
+   */
+  public static async calculateDemoRoute(request: DemoRouteRequestDto): Promise<DemoRouteResponseDto> {
+    try {
+      logger.info('Calculating demo route with priority-based ordering');
+
+      // Priority labels mapping
+      const priorityLabels: Record<number, string> = {
+        1: 'express',
+        2: 'fast',
+        3: 'normal',
+        4: 'economy',
+      };
+
+      // Flatten and sort waypoints by priority
+      const allWaypoints: Array<{ waypoint: WaypointDto; priority: number; index: number }> = [];
+      let waypointIndex = 0;
+
+      for (const group of request.priorityGroups) {
+        for (const waypoint of group.waypoints) {
+          allWaypoints.push({
+            waypoint,
+            priority: group.priority,
+            index: waypointIndex++,
+          });
+        }
+      }
+
+      // Sort by priority (lower number = higher priority)
+      allWaypoints.sort((a, b) => a.priority - b.priority);
+
+      // Build ordered route: start point + sorted waypoints
+      const orderedWaypoints = [
+        request.startPoint,
+        ...allWaypoints.map((w) => w.waypoint),
+      ];
+
+      // Calculate route using OSRM
+      const osrmResponse = await this.osrmRouter.getRoute(orderedWaypoints, {
+        steps: request.steps !== false,
+        annotations: request.annotations !== false,
+        overview: 'full',
+        geometries: 'geojson',
+      });
+
+      if (osrmResponse.code !== 'Ok' || !osrmResponse.routes || osrmResponse.routes.length === 0) {
+        throw createError(`OSRM error: ${osrmResponse.message || osrmResponse.code}`, 503);
+      }
+
+      // Enrich the first route
+      const enrichedResponse = await this.enrichRouteData(osrmResponse, {
+        waypoints: orderedWaypoints,
+        steps: request.steps,
+        annotations: request.annotations,
+      } as RouteRequestDto);
+
+      const route = enrichedResponse.routes[0];
+      if (!route) {
+        throw createError('No route found', 500);
+      }
+
+      // Build visit order information
+      const visitOrder = allWaypoints.map((w) => ({
+        index: w.index,
+        priority: w.priority,
+        priorityLabel: priorityLabels[w.priority] || 'unknown',
+        waypoint: w.waypoint,
+      }));
+
+      // Calculate priority counts
+      const priorityCounts: Record<string, number> = {};
+      for (const group of request.priorityGroups) {
+        const label = priorityLabels[group.priority] || 'unknown';
+        priorityCounts[label] = group.waypoints.length;
+      }
+
+      // Build summary
+      const summary = {
+        totalDistance: route.distance,
+        totalDuration: route.duration,
+        totalWaypoints: allWaypoints.length,
+        priorityCounts,
+      };
+
+      return {
+        code: 'Ok',
+        route,
+        visitOrder,
+        summary,
+      };
+    } catch (error) {
+      logger.error('Demo route calculation failed', { error });
+      if (error instanceof Error && error.message.includes('OSRM error')) {
+        throw error;
+      }
+      throw createError('Failed to calculate demo route', 500);
+    }
   }
 }

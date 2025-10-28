@@ -102,3 +102,60 @@ export interface RouteResponseDto {
   code: string;
   routes: RouteDto[];
 }
+
+/**
+ * Priority Group DTO for Demo Routing
+ */
+export class PriorityGroupDto {
+  @IsNumber()
+  priority!: number; // 1 = express, 2 = fast, 3 = normal, 4 = economy
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WaypointDto)
+  waypoints!: WaypointDto[];
+}
+
+/**
+ * Demo Route Request DTO
+ * Input: starting point + priority-grouped waypoints
+ */
+export class DemoRouteRequestDto {
+  @ValidateNested()
+  @Type(() => WaypointDto)
+  startPoint!: WaypointDto;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PriorityGroupDto)
+  priorityGroups!: PriorityGroupDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  steps?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  annotations?: boolean;
+}
+
+/**
+ * Demo Route Response DTO
+ * Output: optimized route with priority ordering
+ */
+export interface DemoRouteResponseDto {
+  code: string;
+  route: RouteDto;
+  visitOrder: Array<{
+    index: number;
+    priority: number;
+    priorityLabel: string;
+    waypoint: WaypointDto;
+  }>;
+  summary: {
+    totalDistance: number;
+    totalDuration: number;
+    totalWaypoints: number;
+    priorityCounts: Record<string, number>;
+  };
+}
