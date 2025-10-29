@@ -17,6 +17,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class DeliveryAssignmentResponse {
+    private String sessionId;
     private String parcelId;
     private String parcelCode;
     private String deliveryType;
@@ -46,6 +47,7 @@ public class DeliveryAssignmentResponse {
                 .receiverPhone(parcel.getReceiverPhoneNumber())
                 .deliveryLocation(parcel.getTargetDestination()) // Mapping targetDestination as deliveryLocation
                 .value(parcel.getValue())
+                .sessionId(session.getId().toString())
                 .weight(parcel.getWeight())
                 .createdAt(assignment.getScanedAt())
                 .completedAt(assignment.getUpdatedAt()) // Assuming completedAt is the last updated time

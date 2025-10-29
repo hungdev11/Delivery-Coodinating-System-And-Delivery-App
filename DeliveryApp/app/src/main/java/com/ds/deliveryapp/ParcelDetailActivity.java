@@ -13,8 +13,11 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-// Sửa đổi cần thiết: Import đúng SessionClient và RetrofitClient
 import com.ds.deliveryapp.clients.SessionClient;
+// SỬA LỖI 1: Import DTO Request và Model Response
+import com.ds.deliveryapp.clients.req.ScanParcelRequest;
+import com.ds.deliveryapp.model.DeliveryAssignment;
+// ---
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.Parcel;
 
@@ -26,6 +29,9 @@ import retrofit2.Callback;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 
+/**
+ * Màn hình Chi tiết Bưu kiện (khi quét QR).
+ */
 public class ParcelDetailActivity extends AppCompatActivity {
 
     private TextView tvParcelCode, tvStatus, tvDeliveryType, tvReceiveFrom,
@@ -60,7 +66,6 @@ public class ParcelDetailActivity extends AppCompatActivity {
         tvReceiverPhone = findViewById(R.id.tvReceiverPhone);
         tvWeight = findViewById(R.id.tvWeight);
         tvValue = findViewById(R.id.tvValue);
-
         btnClose = findViewById(R.id.btnClose);
         btnAcceptTask = findViewById(R.id.btnAcceptTask);
     }
@@ -87,33 +92,25 @@ public class ParcelDetailActivity extends AppCompatActivity {
         }
 
         String code = parcel.getCode();
-        parcelId = parcel.getId();
+        parcelId = parcel.getId(); // Lấy ID
         String deliveryType = parcel.getDeliveryType() != null ? parcel.getDeliveryType().toString() : "N/A";
         String status = parcel.getStatus() != null ? parcel.getStatus().toString() : "N/A";
         String windowStart = parcel.getWindowStart() != null ? parcel.getWindowStart().toString() : "N/A";
         String windowEnd = parcel.getWindowEnd() != null ? parcel.getWindowEnd().toString() : "N/A";
-
         BigDecimal value = parcel.getValue();
 
         tvParcelCode.setText("Mã bưu kiện: #" + (code != null ? code : "N/A"));
         tvStatus.setText("Trạng thái: " + status);
         tvDeliveryType.setText("Loại giao hàng: " + deliveryType);
-
         tvReceiveFrom.setText("Từ: " + (parcel.getReceiveFrom() != null ? parcel.getReceiveFrom() : "N/A"));
         tvTargetDestination.setText("Đến: " + (parcel.getTargetDestination() != null ? parcel.getTargetDestination() : "N/A"));
-
         tvDeliveryWindow.setText("Thời gian giao: " + windowStart + " - " + windowEnd);
-
         tvReceiverName.setText("Người nhận (ID): " + (parcel.getReceiverId() != null ? parcel.getReceiverId() : "N/A"));
         tvReceiverPhone.setText("SĐT: " + (parcel.getReceiverPhoneNumber() != null ? parcel.getReceiverPhoneNumber() : "N/A"));
-
         tvWeight.setText("Khối lượng: " + String.format(Locale.getDefault(), "%.2f kg", parcel.getWeight()));
-
         tvValue.setText("Giá trị: " + formatCurrency(value));
-
         Log.d(TAG, "Parcel details loaded for code: " + code);
 
-        // Điều chỉnh nút "Nhận nhiệm vụ"
         if (parcel.getStatus() != null && !parcel.getStatus().toString().equals("IN_WAREHOUSE")) {
             btnAcceptTask.setText("KHÔNG THỂ NHẬN NHIỆM VỤ");
             btnAcceptTask.setEnabled(false);
@@ -122,52 +119,56 @@ public class ParcelDetailActivity extends AppCompatActivity {
 
 
     private void setupEventListeners() {
-        // Nút Thoát (Close Button)
         btnClose.setOnClickListener(v -> finish());
 
-        // Nút Nhận Nhiệm vụ (Accept Task Button)
         btnAcceptTask.setOnClickListener(v -> {
+            if (parcelId == null || parcelId.isEmpty()) {
+                Toast.makeText(this, "Lỗi: Không có Parcel ID.", Toast.LENGTH_SHORT).show();
+                return;
+            }
             btnAcceptTask.setEnabled(false);
             Toast.makeText(this, "Đang xử lý nhận nhiệm vụ...", Toast.LENGTH_SHORT).show();
 
+            // SỬA LỖI 1: Gọi hàm mới
             handleAcceptTask(parcelId);
         });
     }
 
-    private void handleAcceptTask(String parcelId) {
+    private void handleAcceptTask(String parcelIdToAccept) {
         Retrofit retrofit = RetrofitClient.getRetrofitInstance(this);
-
         SessionClient service = retrofit.create(SessionClient.class);
 
-        Call<Boolean> call = service.acceptTask(parcelId, DRIVER_ID);
+        // 1. Tạo Request DTO
+        ScanParcelRequest requestBody = new ScanParcelRequest(parcelIdToAccept);
 
-        call.enqueue(new Callback<Boolean>() {
+        // 2. Gọi API đúng (từ SessionController)
+        Call<DeliveryAssignment> call = service.acceptParcelToSession(DRIVER_ID, requestBody);
+
+        // 3. Sửa kiểu trả về (Callback<DeliveryAssignment>)
+        call.enqueue(new Callback<DeliveryAssignment>() {
             @Override
-            public void onResponse(Call<Boolean> call, Response<Boolean> response) {
-                boolean success = false;
-                if (response.isSuccessful() && response.body() != null) {
-                    success = response.body();
+            public void onResponse(Call<DeliveryAssignment> call, Response<DeliveryAssignment> response) {
 
-                    if (!success) {
-                        Toast.makeText(ParcelDetailActivity.this, "Nhận đơn thất bại.", Toast.LENGTH_LONG).show();
-                    } else {
-                        Toast.makeText(ParcelDetailActivity.this, "Nhận đơn thành công. Nhiệm vụ đã được thêm.", Toast.LENGTH_LONG).show();
-                    }
+                if (response.isSuccessful() && response.body() != null) {
+                    // Thành công, server trả về task (Assignment) vừa tạo
+                    Toast.makeText(ParcelDetailActivity.this, "Nhận đơn thành công. Nhiệm vụ đã được thêm.", Toast.LENGTH_LONG).show();
+
+                    setResult(RESULT_OK); // Báo cho TaskFragment tải lại
+                    finish();
+
                 } else {
+                    // Thất bại (ví dụ: 4xx, 5xx)
+                    // (Đơn này đã được nhận, hoặc server lỗi)
                     Log.e(TAG, "Response unsuccessful: " + response.code() + ". Message: " + response.message());
                     Toast.makeText(ParcelDetailActivity.this, "Lỗi nhận nhiệm vụ: " + response.code(), Toast.LENGTH_LONG).show();
-                }
 
-                if (success) {
-                    setResult(RESULT_OK);
-                } else {
                     setResult(RESULT_CANCELED);
+                    finish();
                 }
-                finish();
             }
 
             @Override
-            public void onFailure(Call<Boolean> call, Throwable t) {
+            public void onFailure(Call<DeliveryAssignment> call, Throwable t) {
                 Log.e(TAG, "Network error: " + t.getMessage());
                 Toast.makeText(ParcelDetailActivity.this, "Lỗi kết nối mạng khi nhận nhiệm vụ.", Toast.LENGTH_LONG).show();
                 setResult(RESULT_CANCELED);

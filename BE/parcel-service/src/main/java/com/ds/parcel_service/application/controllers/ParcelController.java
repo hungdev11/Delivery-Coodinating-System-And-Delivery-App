@@ -97,15 +97,6 @@ public class ParcelController {
         return ResponseEntity.noContent().build();
     }
 
-    @PutMapping("/change-status/{parcelId}")
-    public ParcelResponse changeParcelStatus(@PathVariable String parcelId, 
-                                @RequestParam 
-                                @NotNull(message = "event must not be null")
-                                @EnumValue(name = "event", enumClass = ParcelEvent.class, message = "event must be a valid enum value") String event
-    ) {
-        return parcelService.changeParcelStatus(UUID.fromString(parcelId), ParcelEvent.valueOf(event));
-    }
-
     // --- CÁC API CHUYỂN TRẠNG THÁI ---
 
     /**
@@ -113,8 +104,11 @@ public class ParcelController {
      * @return ParcelResponse với trạng thái mới
      */
     @PutMapping("/change-status/{parcelId}")
-    public ResponseEntity<ParcelResponse> changeParcelStatus(@PathVariable UUID parcelId,
-                                @EnumValue(name = "event", enumClass = ParcelEvent.class, message = "event must be a valid enum value") String event
+    public ResponseEntity<ParcelResponse> changeParcelStatus(
+            @PathVariable UUID parcelId,
+            @RequestParam 
+            @EnumValue(name = "event", enumClass = ParcelEvent.class, message = "event must be a valid enum value") 
+            String event
     ) {
         ParcelResponse response = parcelService.changeParcelStatus(parcelId, ParcelEvent.valueOf(event));
         return ResponseEntity.ok(response);
@@ -206,7 +200,7 @@ public class ParcelController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/bulk")
+    @PostMapping("/bulk")
     ResponseEntity<Map<String, ParcelResponse>> fetchParcelsBulk(@RequestBody List<UUID> parcelIds) {
         return ResponseEntity.ok(parcelService.fetchParcelsBulk(parcelIds));
     }

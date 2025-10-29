@@ -162,7 +162,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
 
         Specification<DeliveryAssignment> spec = Specification
             .where(AssignmentSpecification.byDeliveryManId(deliveryManId))
-            .and(AssignmentSpecification.bySessionStatusIn(terminalStatuses)) // Lọc theo trạng thái Session
+            //.and(AssignmentSpecification.bySessionStatusIn(terminalStatuses)) // Lọc theo trạng thái Session
             .and(AssignmentSpecification.hasAssignmentStatusIn(status)) // Lọc theo trạng thái Task
             .and(AssignmentSpecification.isCreatedAtBetween(createdAtStart, createdAtEnd)) // Lọc theo ngày tạo task
             .and(AssignmentSpecification.isCompletedAtBetween(completedAtStart, completedAtEnd)); // Lọc theo ngày hoàn thành

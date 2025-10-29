@@ -17,10 +17,6 @@ import retrofit2.http.POST;
 import retrofit2.http.Path;
 import retrofit2.http.Query;
 
-/**
- * Interface Retrofit Client, ánh xạ chính xác tới các API
- * từ SessionController và DeliveryAssignmentController.
- */
 public interface SessionClient {
     /**
      * API Quét-để-thêm-task (Scan-to-add).
@@ -59,7 +55,6 @@ public interface SessionClient {
     /**
      * Lấy các task của phiên đang hoạt động (phân trang).
      * Ánh xạ tới: DeliveryAssignmentController.getDailyTasks
-     * (Đường dẫn của bạn đã đúng)
      */
     @GET("/api/v1/assignments/session/delivery-man/{deliveryManId}/tasks/today")
     Call<PageResponse<DeliveryAssignment>> getTasksToday(
@@ -72,7 +67,6 @@ public interface SessionClient {
     /**
      * Lấy lịch sử task (các phiên đã đóng) với bộ lọc.
      * Ánh xạ tới: DeliveryAssignmentController.getTasksHistory
-     * (Đường dẫn của bạn đã đúng)
      */
     @GET("/api/v1/assignments/session/delivery-man/{deliveryManId}/tasks")
     Call<PageResponse<DeliveryAssignment>> getTasks(
@@ -89,7 +83,6 @@ public interface SessionClient {
     /**
      * Shipper báo giao hàng THÀNH CÔNG.
      * Ánh xạ tới: DeliveryAssignmentController.completeTask
-     * (Sửa: POST, Path, Path)
      */
     @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/complete")
     Call<DeliveryAssignment> completeTask(
@@ -101,7 +94,6 @@ public interface SessionClient {
     /**
      * Shipper báo giao hàng THẤT BẠI.
      * Ánh xạ tới: DeliveryAssignmentController.failTask
-     * (Sửa: POST, Path, Path, Body)
      */
     @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/fail")
     Call<DeliveryAssignment> failTask(
@@ -113,7 +105,6 @@ public interface SessionClient {
     /**
      * Shipper báo khách TỪ CHỐI nhận hàng.
      * Ánh xạ tới: DeliveryAssignmentController.refuseTask
-     * (Sửa: POST, Path, Path, Body)
      */
     @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/refuse")
     Call<DeliveryAssignment> refuseTask(

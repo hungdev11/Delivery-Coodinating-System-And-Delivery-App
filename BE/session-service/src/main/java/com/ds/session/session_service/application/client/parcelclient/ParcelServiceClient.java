@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -25,6 +26,6 @@ public interface ParcelServiceClient {
     @PutMapping("/api/v1/parcels/change-status/{parcelId}")
     ParcelResponse changeParcelStatus(@PathVariable String parcelId, @RequestParam ParcelEvent event);
     
-    @GetMapping("/api/v1/parcels/bulk")
+    @PostMapping("/api/v1/parcels/bulk")
     Map<String, ParcelResponse> fetchParcelsBulk(@RequestBody List<UUID> parcelIds);
 }
