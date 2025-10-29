@@ -1,8 +1,10 @@
 package com.ds.parcel_service.business.v1.services;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -198,6 +200,22 @@ public class ParcelService implements IParcelService{
         return parcelRepository.findById(id).orElseThrow(()->{
             return new ResourceNotFound("Parcel not found");
         });
+    }
+
+    @Override
+    public Map<String, ParcelResponse> fetchParcelsBulk(List<UUID> parcelIds) {
+        return parcelIds.stream()
+            .collect(Collectors.toMap(
+                UUID::toString,
+                parcelId -> {
+                    try {
+                        return getParcelById(parcelId);
+                    } catch (Exception e) {
+                        log.error("Failed to fetch parcel info for {}: {}", parcelId, e.getMessage());
+                        return null; // Bỏ qua parcel lỗi
+                    }
+                }
+            ));
     }
 
     //update address

@@ -1,5 +1,7 @@
 package com.ds.parcel_service.application.controllers;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -202,5 +204,10 @@ public class ParcelController {
         log.info("Admin resolving dispute for parcel {} as FAULT_DISPUTE (marking as LOST)", parcelId);
         ParcelResponse response = parcelService.changeParcelStatus(parcelId, ParcelEvent.FAULT_DISPUTE);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/bulk")
+    ResponseEntity<Map<String, ParcelResponse>> fetchParcelsBulk(@RequestBody List<UUID> parcelIds) {
+        return ResponseEntity.ok(parcelService.fetchParcelsBulk(parcelIds));
     }
 }

@@ -15,9 +15,12 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn; // Thêm import
+import jakarta.persistence.ManyToOne; // Thêm import
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
@@ -29,7 +32,8 @@ import lombok.Setter;
 @Entity
 @Table(
     name = "delivery_assignments", 
-    uniqueConstraints = {@UniqueConstraint(columnNames = {"delivery_man_id", "parcel_id", "scaned_at"})})
+    uniqueConstraints = {@UniqueConstraint(columnNames = {"session_id", "parcel_id"})}
+)
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
@@ -42,10 +46,18 @@ public class DeliveryAssignment {
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(length = 36, nullable = false, updatable = false)
     private UUID id;
-
-    // =====================================
-    @Column(name = "delivery_man_id", nullable = false, updatable = false)
-    private String deliveryManId;
+    
+    /**
+     * Phiên giao hàng mà lượt giao này thuộc về.
+     * - @ManyToOne: Nhiều Assignment thuộc 1 Session.
+     * - fetch = FetchType.LAZY: Chỉ tải thông tin Session khi
+     * ta gọi assignment.getSession().
+     * - @JoinColumn: Chỉ định tên cột khóa ngoại trong DB
+     * là "session_id".
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "session_id", nullable = false, updatable = false)
+    private DeliverySession session;
 
     @Column(name = "parcel_id", nullable = false, updatable = false)
     private String parcelId;
