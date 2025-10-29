@@ -115,4 +115,3 @@ public class DeliveryAssignmentController {
         return ResponseEntity.ok(response);
     }
 }
-

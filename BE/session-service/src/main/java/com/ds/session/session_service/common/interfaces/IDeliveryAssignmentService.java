@@ -14,4 +14,5 @@ public interface IDeliveryAssignmentService {
 
     List<DeliveryAssignmentResponse> getDailyTasks(UUID deliveryManId);
     List<DeliveryAssignmentResponse> getTasksBetween(UUID deliveryManId, LocalDate start, LocalDate end);
+
 }

@@ -11,15 +11,27 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: ${JPA_DDL_AUTO:validate}
-    show-sql: false
+      ddl-auto: ${JPA_DDL_AUTO:update}  # Options: create, create-drop, update, validate, none
+    show-sql: ${JPA_SHOW_SQL:false}
     properties:
       hibernate:
         format_sql: true
+        # Auto-migration settings
+        hbm2ddl:
+          auto: update
+        # Generate DDL on startup
+        generate_statistics: false
+        # Better naming strategy
+        naming:
+          physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        # Additional migration settings
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+  # Disable Flyway - let Hibernate handle schema management
   flyway:
-    enabled: true
-    baseline-on-migrate: true
-    locations: classpath:db/migration
+    enabled: false
 
 # Keycloak Configuration (from env.local)
 keycloak:

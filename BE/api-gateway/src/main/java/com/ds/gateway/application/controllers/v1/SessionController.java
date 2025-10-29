@@ -1,13 +1,16 @@
 package com.ds.gateway.application.controllers.v1;
 
-import org.eclipse.microprofile.openapi.annotations.parameters.RequestBody;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,106 +30,93 @@ public class SessionController {
     @Value("${services.session.base-url}")
     private String sessionServiceUrl;
 
-
-    @PostMapping("/tasks")
-    public ResponseEntity<?> createTask(@RequestBody Object body) {
-        String url = sessionServiceUrl + "/api/v1/tasks";
-        return ResponseEntity.ok(restTemplate.postForObject(url, body, Object.class));
-    }
-
-    @PutMapping("/tasks/{taskId}")
-    public ResponseEntity<?> updateTask(@PathVariable String taskId, @RequestBody Object body) {
-        String url = sessionServiceUrl + "/api/v1/tasks/" + taskId;
-        restTemplate.put(url, body);
-        return ResponseEntity.noContent().build();
-    }
-
-    @DeleteMapping("/tasks/{taskId}")
-    public ResponseEntity<?> deleteTask(@PathVariable String taskId) {
-        String url = sessionServiceUrl + "/api/v1/tasks/" + taskId;
-        restTemplate.delete(url);
-        return ResponseEntity.noContent().build();
-    }
-
-    /**
-     * Proxy API qua session-service để lấy thông tin Task theo ID
-     */
-    @GetMapping("/tasks/{taskId}")
-    public ResponseEntity<?> getTaskById(@PathVariable String taskId) {
-        log.info("Gateway proxy -> session-service: GET /api/v1/tasks/{}", taskId);
-
-        String url = sessionServiceUrl + "/api/v1/tasks/" + taskId;
-
-        Object response = restTemplate.getForObject(url, Object.class);
-
-        return ResponseEntity.ok(response);
-    }
-
-    /**
-     * Proxy API qua session-service để lấy danh sách tất cả Task
-     */
-    @GetMapping("/tasks")
-    public ResponseEntity<?> getAllTasks() {
-        log.info("Gateway proxy -> session-service: GET /api/v1/tasks");
-
-        String url = sessionServiceUrl + "/api/v1/tasks";
-
-        Object response = restTemplate.getForObject(url, Object.class);
-
-        return ResponseEntity.ok(response);
-    }
-
-
-    @PostMapping("/{taskId}/accept")
-    public ResponseEntity<?> acceptTask(@PathVariable String taskId, @RequestParam String deliveryManId) {
-        String url = sessionServiceUrl + "/api/v1/tasks/" + taskId + "/accept?deliveryManId=" + deliveryManId;
+    @PostMapping("/tasks/{parcelId}/accept")
+    public ResponseEntity<?> acceptTask(@PathVariable("parcelId") String parcelId, @RequestParam String deliveryManId) {
+        String url = sessionServiceUrl + "/api/v1/assignments/" + parcelId + "/accept?deliveryManId=" + deliveryManId;
         return ResponseEntity.ok(restTemplate.postForObject(url, null, Object.class));
     }
 
-    @PostMapping("/{taskId}/complete")
-    public ResponseEntity<?> completeTask(@PathVariable String taskId, @RequestParam String deliveryManId, @RequestBody Object body) {
-        String url = sessionServiceUrl + "/api/v1/tasks/" + taskId + "/complete?deliveryManId=" + deliveryManId;
-        return ResponseEntity.ok(restTemplate.postForObject(url, body, Object.class));
+    @PostMapping("/tasks/{taskId}/complete") // Gateway keeps POST mapping for compatibility
+    public ResponseEntity<?> completeTask(@PathVariable("taskId") String taskId, @RequestParam String deliveryManId, @RequestBody Object body) {
+        // Service expects: PUT /api/v1/assignments/{taskId}/complete
+        String url = sessionServiceUrl + "/api/v1/assignments/" + taskId + "/complete?deliveryManId=" + deliveryManId;
+        
+        HttpEntity<Object> requestEntity = new HttpEntity<>(body);
+
+        ResponseEntity<Object> response = restTemplate.exchange(
+            url, 
+            HttpMethod.PUT, 
+            requestEntity, 
+            Object.class
+        );
+        return ResponseEntity.ok(response.getBody());
     }
 
-    @PostMapping("/{taskId}/fail")
-    public ResponseEntity<?> deliveryFailed(@PathVariable String taskId, @RequestParam String deliveryManId, @RequestBody Object body) {
-        String url = sessionServiceUrl + "/api/v1/tasks/" + taskId + "/fail?deliveryManId=" + deliveryManId;
-        return ResponseEntity.ok(restTemplate.postForObject(url, body, Object.class));
-    }
-
-    @PutMapping("/{taskId}/time-window")
-    public ResponseEntity<?> changeTimeWindow(@PathVariable String taskId, @RequestParam String deliveryManId, @RequestBody Object body) {
-        String url = sessionServiceUrl + "/api/v1/tasks/" + taskId + "/time-window?deliveryManId=" + deliveryManId;
-        restTemplate.put(url, body);
-        return ResponseEntity.noContent().build();
-    }
-
-    @GetMapping("/delivery-man/{deliveryManId}/tasks")
-    public ResponseEntity<?> getTasksOfDeliveryMan(@PathVariable String deliveryManId,
-                                                   @RequestParam(required = false) String beginTime,
-                                                   @RequestParam(required = false) String endTime,
-                                                   @RequestParam(defaultValue = "0") int page,
-                                                   @RequestParam(defaultValue = "10") int size,
-                                                   @RequestParam(defaultValue = "createdAt") String sortBy,
-                                                   @RequestParam(defaultValue = "DESC") String direction) {
+    @PostMapping("/tasks/{taskId}/fail") // Gateway keeps POST mapping for compatibility
+    public ResponseEntity<?> deliveryFailed(@PathVariable("taskId") String taskId, 
+                                            @RequestParam String deliveryManId, 
+                                            @RequestParam String reason, 
+                                            @RequestParam boolean flag, 
+                                            @RequestBody Object body) {
+        
+        // Service expects: PUT /api/v1/assignments/{taskId}/fail?deliveryManId={id}&reason={r}&flag={f}
         String url = String.format(
-            "%s/api/v1/tasks/delivery-man/%s/tasks?beginTime=%s&endTime=%s&page=%d&size=%d&sortBy=%s&direction=%s",
-            sessionServiceUrl, deliveryManId, beginTime, endTime, page, size, sortBy, direction);
-        return ResponseEntity.ok(restTemplate.getForObject(url, Object.class));
+            "%s/api/v1/assignments/%s/fail?deliveryManId=%s&reason=%s&flag=%b",
+            sessionServiceUrl, taskId, deliveryManId, reason, flag);
+            
+        HttpEntity<Object> requestEntity = new HttpEntity<>(body);
+
+        ResponseEntity<Object> response = restTemplate.exchange(
+            url, 
+            HttpMethod.PUT, 
+            requestEntity, 
+            Object.class
+        );
+        return ResponseEntity.ok(response.getBody());
     }
 
     @GetMapping("/delivery-man/{deliveryManId}/tasks/today")
     public ResponseEntity<?> getTasksTodayOfDeliveryMan(@PathVariable String deliveryManId,
+                                                        @RequestParam(required = false) List<String> status,
                                                         @RequestParam(defaultValue = "0") int page,
-                                                        @RequestParam(defaultValue = "10") int size,
-                                                        @RequestParam(defaultValue = "createdAt") String sortBy,
-                                                        @RequestParam(defaultValue = "DESC") String direction) {
+                                                        @RequestParam(defaultValue = "10") int size) {
+        
         String url = String.format(
-            "%s/api/v1/tasks/delivery-man/%s/tasks/today?page=%d&size=%d&sortBy=%s&direction=%s",
-            sessionServiceUrl, deliveryManId, page, size, sortBy, direction);
+            "%s/api/v1/assignments/today/%s?page=%d&size=%d",
+            sessionServiceUrl, deliveryManId, page, size);
+        
+        if (status != null && !status.isEmpty()) {
+             String statusQuery = status.stream().collect(Collectors.joining("&status="));
+             url += "&status=" + statusQuery;
+        }
+
+        return ResponseEntity.ok(restTemplate.getForObject(url, Object.class));
+    }
+
+    @GetMapping("/delivery-man/{deliveryManId}/tasks")
+    public ResponseEntity<?> getTasksOfDeliveryMan(@PathVariable String deliveryManId,
+                                                   @RequestParam(required = false) List<String> status, 
+                                                   @RequestParam(required = false) String createdAtStart,
+                                                   @RequestParam(required = false) String createdAtEnd,
+                                                   @RequestParam(required = false) String completedAtStart,
+                                                   @RequestParam(required = false) String completedAtEnd,
+                                                   @RequestParam(defaultValue = "0") int page,
+                                                   @RequestParam(defaultValue = "10") int size) {
+
+        String url = String.format(
+            "%s/api/v1/assignments/%s?createdAtStart=%s&createdAtEnd=%s&completedAtStart=%s&completedAtEnd=%s&page=%d&size=%d",
+            sessionServiceUrl, deliveryManId, 
+            createdAtStart == null ? "" : createdAtStart,
+            createdAtEnd == null ? "" : createdAtEnd,
+            completedAtStart == null ? "" : completedAtStart, 
+            completedAtEnd == null ? "" : completedAtEnd, 
+            page, size);
+        
+        if (status != null && !status.isEmpty()) {
+             String statusQuery = status.stream().collect(Collectors.joining("&status="));
+             url += "&status=" + statusQuery;
+        }
+
         return ResponseEntity.ok(restTemplate.getForObject(url, Object.class));
     }
 }
-
-

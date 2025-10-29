@@ -8,6 +8,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,12 +22,15 @@ import com.ds.session.session_service.application.client.parcelclient.ParcelServ
 import com.ds.session.session_service.application.client.parcelclient.response.ParcelResponse;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
+import com.ds.session.session_service.common.entities.dto.response.PageResponse;
 import com.ds.session.session_service.common.enums.AssignmentStatus;
 import com.ds.session.session_service.common.enums.ParcelEvent;
 import com.ds.session.session_service.common.enums.SessionStatus; 
 import com.ds.session.session_service.common.exceptions.ResourceNotFound;
 import com.ds.session.session_service.common.interfaces.IDeliveryAssignmentService;
 import com.ds.session.session_service.common.mapper.ParcelMapper;
+import com.ds.session.session_service.common.utils.AssignmentSpecification;
+import com.ds.session.session_service.common.utils.PageUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper; 
 

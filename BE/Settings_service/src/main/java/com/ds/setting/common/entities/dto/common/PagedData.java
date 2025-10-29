@@ -1,5 +1,6 @@
 package com.ds.setting.common.entities.dto.common;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,40 +9,46 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * Paginated data wrapper
- * Follows the standard defined in RESTFUL.md
- * 
- * @param <T> The type of items in the data list
+ * Paged data response DTO for Settings Service
+ * Wraps paginated data with metadata
  */
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class PagedData<T> {
-    /**
-     * List of items for the current page
-     */
+    
+    @JsonProperty("data")
     private List<T> data;
     
-    /**
-     * Pagination information
-     */
-    private Paging<String> page;
+    @JsonProperty("page")
+    private Paging page;
     
-    /**
-     * Create PagedData from Spring Data Page
-     */
-    public static <T> PagedData<T> of(org.springframework.data.domain.Page<T> springPage) {
-        return PagedData.<T>builder()
-                .data(springPage.getContent())
-                .page(Paging.<String>builder()
-                        .page(springPage.getNumber())
-                        .size(springPage.getSize())
-                        .totalElements(springPage.getTotalElements())
-                        .totalPages(springPage.getTotalPages())
-                        .filters(List.of())
-                        .sorts(List.of())
-                        .build())
-                .build();
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Paging {
+        
+        @JsonProperty("page")
+        private Integer page;
+        
+        @JsonProperty("size")
+        private Integer size;
+        
+        @JsonProperty("totalElements")
+        private Long totalElements;
+        
+        @JsonProperty("totalPages")
+        private Integer totalPages;
+        
+        @JsonProperty("filters")
+        private FilterGroup filters;
+        
+        @JsonProperty("sorts")
+        private List<SortConfig> sorts;
+        
+        @JsonProperty("selected")
+        private List<String> selected;
     }
 }

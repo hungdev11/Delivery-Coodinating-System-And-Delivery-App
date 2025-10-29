@@ -1,6 +1,8 @@
 package com.ds.gateway.application.controllers.v1;
 
 import com.ds.gateway.common.entities.dto.common.BaseResponse;
+import com.ds.gateway.common.entities.dto.common.PagedData;
+import com.ds.gateway.common.entities.dto.common.PagingRequest;
 import com.ds.gateway.common.entities.dto.user.CreateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UpdateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UserDto;
@@ -14,7 +16,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -44,17 +45,17 @@ public class UserController {
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to get user: " + ex.getMessage()));
             });
     }
-    
-    @GetMapping
+
+    @PostMapping
     @AuthRequired({"ADMIN", "MANAGER"})
-    public CompletableFuture<ResponseEntity<BaseResponse<List<UserDto>>>> listUsers() {
-        log.info("List all users");
-        
-        return userServiceClient.listUsers()
-            .thenApply(users -> ResponseEntity.ok(BaseResponse.success(users)))
+    public CompletableFuture<ResponseEntity<BaseResponse<PagedData<UserDto>>>> getUsers(
+            @RequestBody PagingRequest query) {
+        log.info("Get users (POST) with query");
+        return userServiceClient.getUsers(query)
+            .thenApply(pagedUsers -> ResponseEntity.ok(BaseResponse.success(pagedUsers)))
             .exceptionally(ex -> {
-                log.error("Failed to list users: {}", ex.getMessage());
-                return ResponseEntity.badRequest().body(BaseResponse.error("Failed to list users: " + ex.getMessage()));
+                log.error("Failed to get users: {}", ex.getMessage());
+                return ResponseEntity.badRequest().body(BaseResponse.error("Failed to get users: " + ex.getMessage()));
             });
     }
     
@@ -70,7 +71,19 @@ public class UserController {
             });
     }
     
-    @PostMapping
+    @GetMapping("/username/{username}")
+    public CompletableFuture<ResponseEntity<BaseResponse<UserDto>>> getUserByUsername(@PathVariable String username) {
+        log.info("Get user by username: {}", username);
+        
+        return userServiceClient.getUserByUsername(username)
+            .thenApply(user -> ResponseEntity.ok(BaseResponse.success(user)))
+            .exceptionally(ex -> {
+                log.error("Failed to get user by username: {}", ex.getMessage());
+                return ResponseEntity.badRequest().body(BaseResponse.error("Failed to get user: " + ex.getMessage()));
+            });
+    }
+    
+    @PostMapping("/create")
     @AuthRequired({"ADMIN"})
     public CompletableFuture<ResponseEntity<BaseResponse<UserDto>>> createUser(
             @Valid @RequestBody CreateUserRequestDto request) {

@@ -119,6 +119,9 @@ public class ParcelService implements IParcelService{
                             .build();
 
         // [Logic: Call zone service, create destination, get receiver info...]
+        // find exiting destination from address text, if not found create new one
+        // map relationship between parcel and destination
+        // call to user service to get receiver/sender info
 
         Parcel savedParcel = parcelRepository.save(parcel);
         return toDto(savedParcel);

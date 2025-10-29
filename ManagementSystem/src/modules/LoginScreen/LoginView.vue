@@ -10,14 +10,14 @@
 
       <form @submit.prevent="login" class="space-y-6">
         <div class="space-y-2">
-          <label for="email" class="block text-sm font-medium text-gray-700"
-            >Email / Tên đăng nhập</label
+          <label for="username" class="block text-sm font-medium text-gray-700"
+            >Username / Tên đăng nhập</label
           >
           <input
-            id="email"
-            v-model="loginForm.email"
+            id="username"
+            v-model="loginForm.username"
             type="text"
-            placeholder="Nhập email hoặc tên đăng nhập"
+            placeholder="Nhập username hoặc tên đăng nhập"
             required
             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none"
           />
@@ -79,7 +79,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { setToken, getCurrentUser } from '@/common/guards/roleGuard.guard'
+import { setToken, setUser, setUserRoles } from '@/common/guards/roleGuard.guard'
 import { login as loginAPI } from './api'
 import { LoginForm } from './model.type'
 import { Info, Warn, ErrorLog, DebugContexts } from '@/common/utils/debug'
@@ -90,7 +90,7 @@ const isLoading = ref(false)
 
 // Form data
 const loginForm = ref({
-  email: '',
+  username: '',
   password: '',
   rememberMe: false,
 })
@@ -103,7 +103,7 @@ const login = async () => {
     Info(
       'User Login Attempt started',
       {
-        email: loginForm.value.email,
+        username: loginForm.value.username,
         hasPassword: !!loginForm.value.password,
         rememberMe: loginForm.value.rememberMe,
       },
@@ -111,9 +111,9 @@ const login = async () => {
     ),
   )
 
-  if (!loginForm.value.email.trim()) {
-    console.log(Warn('Login failed - no email provided', {}, DebugContexts.AUTH))
-    error.value = 'Vui lòng nhập email hoặc tên đăng nhập'
+  if (!loginForm.value.username.trim()) {
+    console.log(Warn('Login failed - no username provided', {}, DebugContexts.AUTH))
+    error.value = 'Vui lòng nhập username hoặc tên đăng nhập'
     return
   }
 
@@ -129,7 +129,7 @@ const login = async () => {
   try {
     // Create LoginForm instance
     const loginFormData = new LoginForm(
-      loginForm.value.email,
+      loginForm.value.username,
       loginForm.value.password,
       loginForm.value.rememberMe,
     )
@@ -137,15 +137,27 @@ const login = async () => {
     // Call API
     const response = await loginAPI(loginFormData)
 
-    // Use rememberMe to determine storage type (session vs local)
-    setToken(response.result?.token ?? '')
+    // Store token and user information
+    setToken(response.result?.accessToken ?? '')
+
+    if (response.result?.user) {
+      setUser(response.result.user)
+
+      // Set default roles based on user status or extract from token
+      // For now, we'll set a default role based on user status
+      const defaultRoles = response.result.user.status === 'ACTIVE' ? ['USER'] : []
+      setUserRoles(defaultRoles)
+    }
 
     console.log(
       Info(
         'Login successful',
         {
           user: response.result?.user.username,
-          roles: response.result?.roles,
+          email: response.result?.user.email,
+          status: response.result?.user.status,
+          tokenType: response.result?.tokenType,
+          expiresIn: response.result?.expiresIn,
         },
         DebugContexts.AUTH,
       ),
@@ -169,12 +181,31 @@ const useFakeToken = () => {
 
   try {
     setToken(sampleToken)
+
+    // Create fake user data for development
+    const fakeUser = {
+      id: '1234567890',
+      keycloakId: '1234567890',
+      username: 'admin',
+      email: 'admin@delivery-system.com',
+      firstName: 'Admin',
+      lastName: 'User',
+      phone: '+1234567890',
+      address: '123 Admin Street',
+      identityNumber: '123456789',
+      status: 'ACTIVE' as const,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+
+    setUser(fakeUser, ['ADMIN'])
+
     console.log(
       Info(
         'Fake token login successful',
         {
-          user: getCurrentUser()?.name,
-          roles: getCurrentUser()?.role,
+          user: fakeUser.username,
+          roles: ['ADMIN'],
         },
         DebugContexts.AUTH,
       ),

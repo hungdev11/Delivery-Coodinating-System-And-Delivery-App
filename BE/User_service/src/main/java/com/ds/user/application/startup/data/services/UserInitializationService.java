@@ -1,6 +1,6 @@
 package com.ds.user.application.startup.data.services;
 
-import com.ds.user.app_context.models.User;
+import com.ds.user.common.entities.base.User;
 import com.ds.user.app_context.repositories.UserRepository;
 import com.ds.user.application.startup.data.KeycloakInitConfig;
 import jakarta.ws.rs.NotFoundException;

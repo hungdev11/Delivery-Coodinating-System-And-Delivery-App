@@ -1,0 +1,40 @@
+// Traffic conditions for road segments (from tracking-asia or other sources)
+model traffic_conditions {
+  traffic_condition_id  String   @id @default(uuid())
+
+  // Associated road segment
+  segment_id            String
+  road_segment          road_segments @relation(fields: [segment_id], references: [segment_id])
+
+  // Traffic level
+  traffic_level         TrafficLevel @default(NORMAL)
+  congestion_score      Float        @default(0) // 0-100, higher means more congestion
+
+  // Speed information
+  current_speed         Float?       // Current average speed (km/h)
+  speed_ratio           Float?       // current_speed / normal_speed (0-1)
+
+  // Impact on routing
+  weight_multiplier     Float        @default(1) // Multiplier for base_weight
+
+  // Data source
+  source                String       @default("tracking-asia")
+  source_timestamp      DateTime     // When the traffic data was collected
+
+  // Metadata
+  created_at            DateTime     @default(now())
+  expires_at            DateTime     // When this data becomes stale
+
+  @@unique([segment_id, source])
+  @@index([segment_id])
+  @@index([source_timestamp])
+  @@index([expires_at])
+}
+
+enum TrafficLevel {
+  FREE_FLOW       // Thông thoáng (green)
+  NORMAL          // Bình thường (yellow)
+  SLOW            // Chậm (orange)
+  CONGESTED       // Ùn tắc (red)
+  BLOCKED         // Tắc nghẽn hoàn toàn (dark red)
+}

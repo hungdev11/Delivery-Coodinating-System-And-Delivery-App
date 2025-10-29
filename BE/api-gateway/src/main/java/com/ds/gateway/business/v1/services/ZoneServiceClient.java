@@ -106,6 +106,326 @@ public class ZoneServiceClient implements IZoneServiceClient {
                 .toFuture();
     }
 
+    // Center endpoints
+    @Override
+    public CompletableFuture<Object> listCenters(Map<String, String> queryParams) {
+        log.debug("Listing centers with params: {}", queryParams);
+        WebClient.RequestHeadersUriSpec<?> req = zoneServiceWebClient.get();
+        WebClient.RequestHeadersSpec<?> spec = req.uri(uriBuilder -> {
+            var builder = uriBuilder.path("/api/v1/centers");
+            if (queryParams != null) {
+                queryParams.forEach(builder::queryParam);
+            }
+            return builder.build();
+        });
+        return spec.retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getCenterById(String id) {
+        return zoneServiceWebClient.get()
+                .uri("/api/v1/centers/{id}", id)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getCenterByCode(String code) {
+        return zoneServiceWebClient.get()
+                .uri("/api/v1/centers/code/{code}", code)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> createCenter(Object requestBody) {
+        return zoneServiceWebClient.post()
+                .uri("/api/v1/centers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromValue(requestBody))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Void> updateCenter(String id, Object requestBody) {
+        return zoneServiceWebClient.put()
+                .uri("/api/v1/centers/{id}", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromValue(requestBody))
+                .retrieve()
+                .bodyToMono(Void.class)
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Void> deleteCenter(String id) {
+        return zoneServiceWebClient.delete()
+                .uri("/api/v1/centers/{id}", id)
+                .retrieve()
+                .bodyToMono(Void.class)
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    // Routing endpoints
+    @Override
+    public CompletableFuture<Object> calculateRoute(Object requestBody) {
+        return zoneServiceWebClient.post()
+                .uri("/api/v1/routing/route")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromValue(requestBody))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getOsrmStatus() {
+        return zoneServiceWebClient.get()
+                .uri("/api/v1/routing/osrm-status")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    // Address endpoints
+    @Override
+    public CompletableFuture<Object> listAddresses(Map<String, String> queryParams) {
+        log.debug("Listing addresses with params: {}", queryParams);
+        WebClient.RequestHeadersUriSpec<?> req = zoneServiceWebClient.get();
+        WebClient.RequestHeadersSpec<?> spec = req.uri(uriBuilder -> {
+            var builder = uriBuilder.path("/api/v1/addresses");
+            if (queryParams != null) {
+                queryParams.forEach(builder::queryParam);
+            }
+            return builder.build();
+        });
+        return spec.retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getAddressById(String id) {
+        return zoneServiceWebClient.get()
+                .uri("/api/v1/addresses/{id}", id)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getNearestAddresses(Map<String, String> queryParams) {
+        log.debug("Getting nearest addresses with params: {}", queryParams);
+        WebClient.RequestHeadersUriSpec<?> req = zoneServiceWebClient.get();
+        WebClient.RequestHeadersSpec<?> spec = req.uri(uriBuilder -> {
+            var builder = uriBuilder.path("/api/v1/addresses/nearest");
+            if (queryParams != null) {
+                queryParams.forEach(builder::queryParam);
+            }
+            return builder.build();
+        });
+        return spec.retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> createAddress(Object requestBody) {
+        return zoneServiceWebClient.post()
+                .uri("/api/v1/addresses")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromValue(requestBody))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> updateAddress(String id, Object requestBody) {
+        return zoneServiceWebClient.put()
+                .uri("/api/v1/addresses/{id}", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromValue(requestBody))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Void> deleteAddress(String id) {
+        return zoneServiceWebClient.delete()
+                .uri("/api/v1/addresses/{id}", id)
+                .retrieve()
+                .bodyToMono(Void.class)
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> batchImportAddresses(Object requestBody) {
+        return zoneServiceWebClient.post()
+                .uri("/api/v1/addresses/batch")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromValue(requestBody))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getAddressesBySegment(String segmentId, Map<String, String> queryParams) {
+        log.debug("Getting addresses by segment {} with params: {}", segmentId, queryParams);
+        return zoneServiceWebClient.get()
+                .uri(uriBuilder -> {
+                    var builder = uriBuilder.path("/api/v1/addresses/segments/{segmentId}");
+                    if (queryParams != null) {
+                        queryParams.forEach(builder::queryParam);
+                    }
+                    return builder.build(segmentId);
+                })
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getAddressesByZone(String zoneId, Map<String, String> queryParams) {
+        log.debug("Getting addresses by zone {} with params: {}", zoneId, queryParams);
+        return zoneServiceWebClient.get()
+                .uri(uriBuilder -> {
+                    var builder = uriBuilder.path("/api/v1/addresses/zones/{zoneId}");
+                    if (queryParams != null) {
+                        queryParams.forEach(builder::queryParam);
+                    }
+                    return builder.build(zoneId);
+                })
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    // OSRM Data Management endpoints
+    @Override
+    public CompletableFuture<Object> buildOSRMInstance(String instanceId) {
+        log.debug("Building OSRM instance: {}", instanceId);
+        return zoneServiceWebClient.post()
+                .uri("/osrm/build/{instanceId}", instanceId)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> buildAllOSRMInstances() {
+        log.debug("Building all OSRM instances");
+        return zoneServiceWebClient.post()
+                .uri("/osrm/build-all")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> startOSRMInstance(String instanceId) {
+        log.debug("Starting OSRM instance: {}", instanceId);
+        return zoneServiceWebClient.post()
+                .uri("/osrm/start/{instanceId}", instanceId)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> stopOSRMInstance(String instanceId) {
+        log.debug("Stopping OSRM instance: {}", instanceId);
+        return zoneServiceWebClient.post()
+                .uri("/osrm/stop/{instanceId}", instanceId)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> rollingRestartOSRM() {
+        log.debug("Performing rolling restart of OSRM instances");
+        return zoneServiceWebClient.post()
+                .uri("/osrm/rolling-restart")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getOSRMInstanceStatus(String instanceId) {
+        log.debug("Getting OSRM instance status: {}", instanceId);
+        return zoneServiceWebClient.get()
+                .uri("/osrm/status/{instanceId}", instanceId)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getAllOSRMInstancesStatus() {
+        log.debug("Getting all OSRM instances status");
+        return zoneServiceWebClient.get()
+                .uri("/osrm/status")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getOSRMHealthCheck() {
+        log.debug("Getting OSRM health check");
+        return zoneServiceWebClient.get()
+                .uri("/osrm/health")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> validateOSRMData(String instanceId) {
+        log.debug("Validating OSRM data for instance: {}", instanceId);
+        return zoneServiceWebClient.get()
+                .uri("/osrm/validate/{instanceId}", instanceId)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
     @Override
     public CompletableFuture<Object> health() {
         return zoneServiceWebClient.get()

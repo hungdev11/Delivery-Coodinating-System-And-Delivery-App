@@ -13,7 +13,7 @@ export const config = {
   // Database Configuration
   database: {
     url: process.env.ZONE_DB_CONNECTION || 
-         `mysql://${process.env.DB_USERNAME || 'root'}:${process.env.DB_PASSWORD || 'root'}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '3306'}/${process.env.ZONE_DB_NAME || 'ds_zone_service'}`,
+         `mysql://${process.env.DB_USERNAME || 'dev'}:${process.env.DB_PASSWORD || 'dev'}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '3306'}/${process.env.ZONE_DB_NAME || 'dszoneservice'}`,
   },
 
   // Settings Service Configuration

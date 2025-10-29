@@ -1,10 +1,12 @@
+import type { FilterGroup, SortConfig } from './filter'
+
 export interface IPaginationParams {
   page: number
   size: number
   totalElements: number
   totalPages: number
-  filters: string
-  sorts: string
+  filters: FilterGroup | null
+  sorts: SortConfig[]
 }
 
 export interface IPagedData<TData, TPage extends IPaginationParams> {

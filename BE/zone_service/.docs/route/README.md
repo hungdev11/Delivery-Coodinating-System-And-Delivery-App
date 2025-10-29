@@ -7,14 +7,18 @@ Base URL: `http://localhost:21503/api/v1`
 - [Health Routes](./health.md)
 - [Center Routes](./centers.md)
 - [Zone Routes](./zones.md)
+- [Routing Routes](./routing.md)
+- [Address Routes](./addresses.md) ⭐ NEW
 
 ## Summary Table
 
-| Prefix           | Module  | Description                     | Doc Link         |
-|------------------|---------|---------------------------------|------------------|
-| `/health/*`      | health  | Service health and readiness    | [health.md](./health.md) |
-| `/centers/*`     | center  | Manage distribution centers     | [centers.md](./centers.md) |
-| `/zones/*`       | zone    | Manage delivery zones           | [zones.md](./zones.md) |
+| Prefix           | Module   | Description                     | Doc Link         |
+|------------------|----------|---------------------------------|------------------|
+| `/health/*`      | health   | Service health and readiness    | [health.md](./health.md) |
+| `/centers/*`     | center   | Manage distribution centers     | [centers.md](./centers.md) |
+| `/zones/*`       | zone     | Manage delivery zones           | [zones.md](./zones.md) |
+| `/routing/*`     | routing  | Route calculation & navigation  | [routing.md](./routing.md) |
+| `/addresses/*`   | address  | Manage addresses & POIs         | [addresses.md](./addresses.md) |
 
 ## Notes
 - All responses follow `BaseResponse<T>`.
