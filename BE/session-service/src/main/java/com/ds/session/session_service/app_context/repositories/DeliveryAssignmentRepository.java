@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -13,7 +14,7 @@ import com.ds.session.session_service.common.enums.AssignmentStatus;
 import com.ds.session.session_service.common.enums.SessionStatus;
 
 @Repository
-public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssignment, UUID> {
+public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssignment, UUID>, JpaSpecificationExecutor<DeliveryAssignment>{
 
     // --- Các phương thức này được yêu cầu bởi SessionService (mô hình Session-based) ---
 

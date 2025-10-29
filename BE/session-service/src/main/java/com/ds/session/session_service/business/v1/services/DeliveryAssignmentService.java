@@ -1,7 +1,6 @@
 package com.ds.session.session_service.business.v1.services;
 
-import java.time.LocalDate;
-import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -122,55 +121,65 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
      * getDailyTasks giờ sẽ trả về các task của SESSION ĐANG HOẠT ĐỘNG
      */
     @Override
-    public List<DeliveryAssignmentResponse> getDailyTasks(UUID deliveryManId) {
-        // 1. Tìm session đang hoạt động
-        DeliverySession activeSession = deliverySessionRepository
-            .findByDeliveryManIdAndStatus(deliveryManId.toString(), SessionStatus.IN_PROGRESS)
-            .orElse(null); // Không tìm thấy session nào
-            
-        if (activeSession == null || activeSession.getAssignments() == null) {
-            log.info("No active session found for delivery man {}", deliveryManId);
-            return Collections.emptyList();
-        }
+    @Transactional(readOnly = true) // Dùng readOnly cho các hàm GET
+    public PageResponse<DeliveryAssignmentResponse> getDailyTasks(
+        UUID deliveryManId, List<String> status, int page, int size
+    ) {
+        // 1. Xây dựng đối tượng phân trang
+        // (Mặc định sắp xếp theo thời gian quét (scanedAt) mới nhất)
+        Pageable pageable = PageUtil.build(page, size, "scanedAt", "desc", DeliveryAssignment.class);
 
-        // 2. Lấy danh sách task từ session
-        List<DeliveryAssignment> tasks = activeSession.getAssignments();
-        
-        // 3. xử lý bulk
-        return getEnrichedTasks(tasks);
+        // 2. Xây dựng Specification (Tiêu chí lọc)
+        Specification<DeliveryAssignment> spec = Specification
+            .where(AssignmentSpecification.byDeliveryManId(deliveryManId))
+            .and(AssignmentSpecification.bySessionStatus(SessionStatus.IN_PROGRESS))
+            .and(AssignmentSpecification.hasAssignmentStatusIn(status));
+
+        // 3. Gọi Repository
+        Page<DeliveryAssignment> tasksPage = deliveryAssignmentRepository.findAll(spec, pageable);
+
+        // 4. Ánh xạ kết quả sang DTO
+        return getEnrichedTasks(tasksPage);
     }
 
     /**
-     * getTasksBetween giờ sẽ tìm các SESSION đã hoàn thành trong khoảng thời gian
+     * VIẾT LẠI HÀM: Sử dụng Specification và Pageable
      */
     @Override
-    public List<DeliveryAssignmentResponse> getTasksBetween(UUID deliveryManId, LocalDate start, LocalDate end) {
-        List<DeliverySession> sessions;
-        if (start == null || end == null) {
-            // Lấy tất cả session (đã xong) của shipper
-            sessions = deliverySessionRepository.findAllByDeliveryManIdAndStatus(
-                deliveryManId.toString(), SessionStatus.COMPLETED);
-        } else {
-            // Lấy các session đã xong trong khoảng thời gian
-            sessions = deliverySessionRepository.findAllByDeliveryManIdAndStatusAndEndTimeBetween(
-                deliveryManId.toString(), 
-                SessionStatus.COMPLETED,
-                start.atStartOfDay(),
-                end.atTime(LocalTime.MAX));
-        }
-        
-        // Lấy tất cả các task từ các session tìm được
-        List<DeliveryAssignment> tasks = sessions.stream()
-            .flatMap(session -> session.getAssignments().stream())
-            .toList();
+    @Transactional(readOnly = true)
+    public PageResponse<DeliveryAssignmentResponse> getTasksBetween(
+        UUID deliveryManId, List<String> status,
+        String createdAtStart, String createdAtEnd,
+        String completedAtStart, String completedAtEnd,
+        int page, int size
+    ) {
+        // 1. Phân trang
+        Pageable pageable = PageUtil.build(page, size, "scanedAt", "desc", DeliveryAssignment.class);
 
-        return getEnrichedTasks(tasks);
+        // 2. Xây dựng Specification
+        // Lọc các phiên đã KẾT THÚC (COMPLETED hoặc FAILED)
+        List<SessionStatus> terminalStatuses = Arrays.asList(SessionStatus.COMPLETED, SessionStatus.FAILED);
+
+        Specification<DeliveryAssignment> spec = Specification
+            .where(AssignmentSpecification.byDeliveryManId(deliveryManId))
+            .and(AssignmentSpecification.bySessionStatusIn(terminalStatuses)) // Lọc theo trạng thái Session
+            .and(AssignmentSpecification.hasAssignmentStatusIn(status)) // Lọc theo trạng thái Task
+            .and(AssignmentSpecification.isCreatedAtBetween(createdAtStart, createdAtEnd)) // Lọc theo ngày tạo task
+            .and(AssignmentSpecification.isCompletedAtBetween(completedAtStart, completedAtEnd)); // Lọc theo ngày hoàn thành
+
+        // 3. Gọi Repository
+        Page<DeliveryAssignment> tasksPage = deliveryAssignmentRepository.findAll(spec, pageable);
+        
+        // 4. Ánh xạ
+        return getEnrichedTasks(tasksPage);
     }
     
-    private List<DeliveryAssignmentResponse> getEnrichedTasks(List<DeliveryAssignment> tasks) {
-        if (tasks.isEmpty()) {
-            return Collections.emptyList();
+    private PageResponse<DeliveryAssignmentResponse> getEnrichedTasks(Page<DeliveryAssignment> tasksPage) {
+        if (tasksPage.isEmpty()) {
+            return PageResponse.from(tasksPage, Collections.emptyList());
         }
+
+        List<DeliveryAssignment> tasks = tasksPage.getContent();
 
         // 1. Thu thập tất cả các parcelId
         List<UUID> parcelIds = tasks.stream()
@@ -178,20 +187,13 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             .distinct()
             .toList();
 
-        Map<String, ParcelResponse> parcelResponseMap;
+        Map<String, ParcelResponse> parcelResponseMap = parcelServiceClient.fetchParcelsBulk(parcelIds);
         
-        try {
-            parcelResponseMap = parcelServiceClient.fetchParcelsBulk(parcelIds);
-        } catch (Exception e) {
-            log.error("Failed to fetch bulk parcel info: {}", e.getMessage());
-            parcelResponseMap = Collections.emptyMap(); // Trả về rỗng nếu lỗi
-        }
-
         Map<String, ParcelInfo> parcelInfoMap = parcelResponseMap.entrySet().stream()
-            .filter(entry -> entry.getValue() != null) // Lọc ra các entry bị lỗi (nếu có)
+            .filter(entry -> entry.getValue() != null)
             .collect(Collectors.toMap(
-                Map.Entry::getKey, // Key là parcelId (String)
-                entry -> parcelMapper.toParcelInfo(entry.getValue()) // Value là ParcelInfo đã map
+                Map.Entry::getKey, 
+                entry -> parcelMapper.toParcelInfo(entry.getValue())
             ));
         
         // 3. TODO: Lấy SĐT Shipper
@@ -201,18 +203,18 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         String receiverName = null; // Tạm thời
 
         // 5. Map dữ liệu
-        List<DeliveryAssignmentResponse> res = tasks.stream().map(t -> {
+        List<DeliveryAssignmentResponse> dtoList = tasks.stream().map(t -> {
             ParcelInfo parcelInfo = parcelInfoMap.get(t.getParcelId());
             if (parcelInfo == null) {
-                return null; // Bỏ qua nếu không lấy được thông tin
+                return null; 
             }
-            
             return DeliveryAssignmentResponse.from(t, parcelInfo, t.getSession(), deliveryManPhone, receiverName);
         
-        }).filter(response -> response != null) // Lọc ra các entry bị null
+        }).filter(response -> response != null)
           .toList();
 
-        return res;
+        // Trả về PageResponse (giữ nguyên thông tin phân trang)
+        return PageResponse.from(tasksPage, dtoList);
     }
 
     // --- UTILITY METHODS ---
