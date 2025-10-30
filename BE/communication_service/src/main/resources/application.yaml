@@ -1,0 +1,26 @@
+server:
+  port: 21511
+
+spring:
+  application:
+    name: communication_service
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${USER_DB_NAME:ds_communication_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    org:
+      springframework:
+        web: TRACE
+        messaging: DEBUG
+        security: DEBUG

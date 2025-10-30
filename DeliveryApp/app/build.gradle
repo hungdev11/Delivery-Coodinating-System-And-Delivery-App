@@ -53,12 +53,8 @@ dependencies {
 
     //Retrofit & Networking
     implementation libs.retrofit
-    // Converter (for JSON serialization/deserialization - GSON is common)
     implementation libs.converter.gson
     implementation libs.gson
-    implementation libs.gson.javatime.serialisers
-
-    // OkHttp (usually included by Retrofit, but good practice to define)
     implementation libs.okhttp
     implementation libs.gson.javatime.serialisers
 

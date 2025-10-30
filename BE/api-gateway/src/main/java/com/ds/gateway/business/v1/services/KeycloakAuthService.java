@@ -187,10 +187,10 @@ public class KeycloakAuthService implements IKeycloakAuthService {
             .roles(extractRoles(jwt))
             .realmAccess(jwt.getClaim("realm_access"))
             .resourceAccess(jwt.getClaim("resource_access"))
-            .exp(jwt.getClaim("exp"))
-            .iat(jwt.getClaim("iat"))
+            .exp(jwt.getExpiresAt() != null ? jwt.getExpiresAt().getEpochSecond() : null)
+            .iat(jwt.getIssuedAt() != null ? jwt.getIssuedAt().getEpochSecond() : null)
             .iss(jwt.getClaimAsString("iss"))
-            .aud(jwt.getClaim("aud"))
+            .aud(String.join(",", jwt.getClaimAsStringList("aud")))
             .build();
     }
     
