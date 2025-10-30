@@ -22,7 +22,7 @@ public class JobScheduler {
     private final ParcelRepository parcelRepository;
     private final ParcelService parcelService;
 
-    private static final int TIMEOUT_HOURS = 24;
+    private static final int TIMEOUT_HOURS = 48;
 
     /**
      * Job 1: Kiểm tra hết thời gian (Timeout) sau 24 giờ.

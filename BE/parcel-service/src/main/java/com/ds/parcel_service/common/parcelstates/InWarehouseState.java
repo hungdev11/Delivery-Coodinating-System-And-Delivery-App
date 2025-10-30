@@ -11,7 +11,7 @@ public class InWarehouseState implements IParcelState{
             case SCAN_QR:
                 yield ParcelStatus.ON_ROUTE;
             default:
-                throw new IllegalArgumentException("Invalid event at " + getParcelStatus().name() + ": " + event.name());
+                throw new IllegalStateException("Invalid event at " + getParcelStatus().name() + ": " + event.name());
         };
     }
 

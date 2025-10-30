@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import com.ds.session.session_service.app_context.models.DeliveryAssignment;
+import com.ds.session.session_service.app_context.models.DeliverySession;
 import com.ds.session.session_service.business.v1.services.ParcelInfo;
 
 import lombok.AllArgsConstructor;
@@ -31,18 +32,15 @@ public class DeliveryAssignmentResponse {
     private double weight;
     private LocalDateTime createdAt;
     private LocalDateTime completedAt;
-    private double routeDistanceM;
-    private long routeDurationS;
-    private String routeWaypoints;
     private String failReason;
     
-    public static DeliveryAssignmentResponse from(DeliveryAssignment assignment, ParcelInfo parcel, String deliveryManPhone, String receiverName) {
+    public static DeliveryAssignmentResponse from(DeliveryAssignment assignment, ParcelInfo parcel, DeliverySession session, String deliveryManPhone, String receiverName) {
         return DeliveryAssignmentResponse.builder()
                 .parcelId(assignment.getParcelId())
                 .parcelCode(parcel.getCode()) 
                 .deliveryType(parcel.getDeliveryType())
                 .status(assignment.getStatus().name())
-                .deliveryManAssignedId(assignment.getDeliveryManId())
+                .deliveryManAssignedId(session.getDeliveryManId())
                 .deliveryManPhone(deliveryManPhone) 
                 .receiverName(receiverName) 
                 .receiverPhone(parcel.getReceiverPhoneNumber())
@@ -51,9 +49,6 @@ public class DeliveryAssignmentResponse {
                 .weight(parcel.getWeight())
                 .createdAt(assignment.getScanedAt())
                 .completedAt(assignment.getUpdatedAt()) // Assuming completedAt is the last updated time
-                .routeDistanceM(assignment.getDistanceM())
-                .routeDurationS(assignment.getDurationS())
-                .routeWaypoints(assignment.getWaypoints())
                 .failReason(assignment.getFailReason())
                 .build();
     }

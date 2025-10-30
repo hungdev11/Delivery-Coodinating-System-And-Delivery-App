@@ -1,5 +1,7 @@
 package com.ds.parcel_service.common.interfaces;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.ds.parcel_service.common.entities.dto.request.ParcelCreateRequest;
@@ -23,4 +25,5 @@ public interface IParcelService {
         String sortBy,
         String direction
     );
+    Map<String, ParcelResponse> fetchParcelsBulk(List<UUID> parcelIds);
 }

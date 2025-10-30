@@ -3,19 +3,15 @@ package com.ds.parcel_service.common.parcelstates;
 import com.ds.parcel_service.common.enums.ParcelEvent;
 import com.ds.parcel_service.common.enums.ParcelStatus;
 
-public class DeliveredState implements IParcelState{
+public class DisputeState implements IParcelState{
 
     @Override
     public ParcelStatus handleTransition(ParcelEvent event) {
         return switch(event) {
-            case CONFIRM_REMINDER:
-                yield ParcelStatus.DELIVERED;
-            case CONFIRM_TIMEOUT, CUSTOMER_RECEIVED:
+            case MISSUNDERSTANDING_DISPUTE:
                 yield ParcelStatus.SUCCEEDED;
-            case CUSTOMER_REJECT:
-                yield ParcelStatus.FAILED;
-            case CUSTOMER_CONFIRM_NOT_RECEIVED:
-                yield ParcelStatus.DISPUTE;
+            case FAULT_DISPUTE:
+                yield ParcelStatus.LOST;
             default:
                 throw new IllegalStateException("Invalid event at " + getParcelStatus().name() + ": " + event.name());
         };
@@ -23,7 +19,6 @@ public class DeliveredState implements IParcelState{
 
     @Override
     public ParcelStatus getParcelStatus() {
-        return ParcelStatus.DELIVERED;
+        return ParcelStatus.DISPUTE;
     }
-
 }

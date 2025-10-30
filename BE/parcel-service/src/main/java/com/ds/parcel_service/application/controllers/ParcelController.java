@@ -1,5 +1,7 @@
 package com.ds.parcel_service.application.controllers;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -104,24 +106,108 @@ public class ParcelController {
         return parcelService.changeParcelStatus(UUID.fromString(parcelId), ParcelEvent.valueOf(event));
     }
 
+    // --- CÁC API CHUYỂN TRẠNG THÁI ---
+
+    /**
+     * API chung (generic) để thay đổi trạng thái bưu kiện.
+     * @return ParcelResponse với trạng thái mới
+     */
+    @PutMapping("/change-status/{parcelId}")
+    public ResponseEntity<ParcelResponse> changeParcelStatus(@PathVariable UUID parcelId,
+                                @EnumValue(name = "event", enumClass = ParcelEvent.class, message = "event must be a valid enum value") String event
+    ) {
+        ParcelResponse response = parcelService.changeParcelStatus(parcelId, ParcelEvent.valueOf(event));
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * API tắt (Shipper): Báo cáo đã giao hàng thành công (chuyển sang DELIVERED).
+     * Tương đương: change-status?event=DELIVERY_SUCCESSFUL
+     */
+    @PutMapping("/deliver/{parcelId}")
+    public ResponseEntity<ParcelResponse> deliverParcel(@PathVariable UUID parcelId) {
+        log.info("Shipper marking parcel {} as DELIVERY_SUCCESSFUL", parcelId);
+        ParcelResponse response = parcelService.changeParcelStatus(parcelId, ParcelEvent.DELIVERY_SUCCESSFUL);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * API tắt (Customer): Khách hàng xác nhận đã nhận hàng (chuyển sang SUCCEEDED).
+     * Tương đương: change-status?event=CUSTOMER_RECEIVED
+     */
     @PutMapping("/confirm/{parcelId}")
-    public ParcelResponse confirmParcelArrived(@PathVariable String parcelId) {
-        return parcelService.changeParcelStatus(UUID.fromString(parcelId), ParcelEvent.CUSTOMER_RECEIVED);
+    public ResponseEntity<ParcelResponse> confirmParcelArrived(@PathVariable UUID parcelId) {
+        ParcelResponse response = parcelService.changeParcelStatus(parcelId, ParcelEvent.CUSTOMER_RECEIVED);
+        return ResponseEntity.ok(response);
     }
 
-    @PutMapping("/broken-accident/{parcelId}")
-    public ParcelResponse notifyBrokenParcel(@PathVariable String parcelId) {
-        return parcelService.changeParcelStatus(UUID.fromString(parcelId), ParcelEvent.ACCIDENT);
+    /**
+     * API tắt (Shipper): Shipper báo cáo sự cố không thể giao hàng (vd: tai nạn).
+     * Tương đương: change-status?event=CAN_NOT_DELIVERY
+     */
+    @PutMapping("/accident/{parcelId}")
+    public ResponseEntity<ParcelResponse> notifyBrokenParcel(@PathVariable UUID parcelId) {
+        ParcelResponse response = parcelService.changeParcelStatus(parcelId, ParcelEvent.CAN_NOT_DELIVERY);
+        return ResponseEntity.ok(response);
     }
 
+    /**
+     * API tắt (Shipper/Customer): Khách hàng từ chối nhận hàng.
+     * Tương đương: change-status?event=CUSTOMER_REJECT
+     */
     @PutMapping("/refuse/{parcelId}")
-    public ParcelResponse refuseParcel(@PathVariable String parcelId) {
-        return parcelService.changeParcelStatus(UUID.fromString(parcelId), ParcelEvent.CUSTOMER_REJECT);
+    public ResponseEntity<ParcelResponse> refuseParcel(@PathVariable UUID parcelId) {
+        ParcelResponse response = parcelService.changeParcelStatus(parcelId, ParcelEvent.CUSTOMER_REJECT);
+        return ResponseEntity.ok(response);
     }
 
-    @PutMapping("/return-to-warehouse/{parcelId}")
-    public ParcelResponse returnParcelBacktoWareHouse(@PathVariable String parcelId) {
-        return parcelService.changeParcelStatus(UUID.fromString(parcelId), ParcelEvent.POSTPONE);
+    /**
+     * API tắt (Shipper): Shipper yêu cầu hoãn/trì hoãn đơn hàng (vd: khách hẹn lại).
+     * Tương đương: change-status?event=POSTPONE
+     */
+    @PutMapping("/postpone/{parcelId}") // Sửa: Đổi tên endpoint cho rõ nghĩa
+    public ResponseEntity<ParcelResponse> postponeParcel(@PathVariable UUID parcelId) {
+        ParcelResponse response = parcelService.changeParcelStatus(parcelId, ParcelEvent.POSTPONE);
+        return ResponseEntity.ok(response);
     }
 
+    // --- CÁC API XỬ LÝ KHIẾU NẠI (DISPUTE) ---
+
+    /**
+     * API tắt (Customer): Khách hàng báo cáo KHÔNG nhận được hàng (mở khiếu nại).
+     * Tương đương: change-status?event=CUSTOMER_CONFIRM_NOT_RECEIVED
+     */
+    @PutMapping("/dispute/{parcelId}")
+    public ResponseEntity<ParcelResponse> disputeParcel(@PathVariable UUID parcelId) {
+        log.info("Customer creating DISPUTE for parcel {} (CUSTOMER_CONFIRM_NOT_RECEIVED)", parcelId);
+        ParcelResponse response = parcelService.changeParcelStatus(parcelId, ParcelEvent.CUSTOMER_CONFIRM_NOT_RECEIVED);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * API tắt (Admin/Support): Giải quyết khiếu nại (lỗi do hiểu nhầm/khách sai).
+     * Tương đương: change-status?event=MISSUNDERSTANDING_DISPUTE
+     */
+    @PutMapping("/resolve-dispute/misunderstanding/{parcelId}")
+    public ResponseEntity<ParcelResponse> resolveDisputeAsMisunderstanding(@PathVariable UUID parcelId) {
+        log.info("Admin resolving dispute for parcel {} as MISSUNDERSTANDING_DISPUTE", parcelId);
+        ParcelResponse response = parcelService.changeParcelStatus(parcelId, ParcelEvent.MISSUNDERSTANDING_DISPUTE);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * API tắt (Admin/Support): Giải quyết khiếu nại (lỗi do shipper/làm mất hàng).
+     * Tương đương: change-status?event=FAULT_DISPUTE
+     */
+    @PutMapping("/resolve-dispute/fault/{parcelId}")
+    public ResponseEntity<ParcelResponse> resolveDisputeAsFault(@PathVariable UUID parcelId) {
+        log.info("Admin resolving dispute for parcel {} as FAULT_DISPUTE (marking as LOST)", parcelId);
+        ParcelResponse response = parcelService.changeParcelStatus(parcelId, ParcelEvent.FAULT_DISPUTE);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/bulk")
+    ResponseEntity<Map<String, ParcelResponse>> fetchParcelsBulk(@RequestBody List<UUID> parcelIds) {
+        return ResponseEntity.ok(parcelService.fetchParcelsBulk(parcelIds));
+    }
 }

@@ -1,8 +1,10 @@
 package com.ds.parcel_service.business.v1.services;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,12 +23,7 @@ import com.ds.parcel_service.common.enums.ParcelEvent;
 import com.ds.parcel_service.common.enums.ParcelStatus;
 import com.ds.parcel_service.common.exceptions.ResourceNotFound;
 import com.ds.parcel_service.common.interfaces.IParcelService;
-import com.ds.parcel_service.common.parcelstates.DeliveredState;
-import com.ds.parcel_service.common.parcelstates.FailedState;
-import com.ds.parcel_service.common.parcelstates.IParcelState;
-import com.ds.parcel_service.common.parcelstates.InWarehouseState;
-import com.ds.parcel_service.common.parcelstates.OnRouteState;
-import com.ds.parcel_service.common.parcelstates.SuccessedState;
+import com.ds.parcel_service.common.parcelstates.*;
 import com.ds.parcel_service.common.utils.PageUtil;
 import com.ds.parcel_service.common.utils.ParcelSpecification;
 
@@ -46,16 +43,21 @@ public class ParcelService implements IParcelService{
         ParcelStatus.ON_ROUTE, new OnRouteState(),
         ParcelStatus.DELIVERED, new DeliveredState(),
         ParcelStatus.FAILED, new FailedState(),
-        ParcelStatus.SUCCESSED, new SuccessedState()
+        ParcelStatus.SUCCEEDED, new SuccededState(),
+        ParcelStatus.DELAYED, new DelayedState(),
+        ParcelStatus.DISPUTE, new DisputeState(),
+        ParcelStatus.LOST, new LostState()
     );
 
     //Validate state transition path
     private boolean isTransitionValid(ParcelStatus current, ParcelStatus next) {
         return switch (current) {
             case IN_WAREHOUSE -> next == ParcelStatus.ON_ROUTE;
-            case ON_ROUTE -> next == ParcelStatus.DELIVERED || next == ParcelStatus.FAILED || next == ParcelStatus.IN_WAREHOUSE;
-            case DELIVERED -> next == ParcelStatus.SUCCESSED || next == ParcelStatus.FAILED;
-            case FAILED, SUCCESSED -> false; // Last state
+            case ON_ROUTE -> next == ParcelStatus.DELIVERED || next == ParcelStatus.FAILED || next == ParcelStatus.DELAYED;
+            case DELIVERED -> next == ParcelStatus.SUCCEEDED || next == ParcelStatus.FAILED || next == ParcelStatus.DISPUTE;
+            case DISPUTE -> next == ParcelStatus.SUCCEEDED || next == ParcelStatus.LOST;
+            case DELAYED -> next == ParcelStatus.IN_WAREHOUSE;
+            case FAILED, SUCCEEDED, LOST -> false; // Last state
             default -> false;
         };
     }
@@ -201,6 +203,22 @@ public class ParcelService implements IParcelService{
         return parcelRepository.findById(id).orElseThrow(()->{
             return new ResourceNotFound("Parcel not found");
         });
+    }
+
+    @Override
+    public Map<String, ParcelResponse> fetchParcelsBulk(List<UUID> parcelIds) {
+        return parcelIds.stream()
+            .collect(Collectors.toMap(
+                UUID::toString,
+                parcelId -> {
+                    try {
+                        return getParcelById(parcelId);
+                    } catch (Exception e) {
+                        log.error("Failed to fetch parcel info for {}: {}", parcelId, e.getMessage());
+                        return null; // Bỏ qua parcel lỗi
+                    }
+                }
+            ));
     }
 
     //update address
