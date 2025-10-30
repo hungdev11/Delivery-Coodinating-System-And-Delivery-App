@@ -1,8 +1,8 @@
-# Settings Service Documentation
+# Parcel Service Documentation
 
-Welcome to the documentation for the Settings Service.
+Welcome to the documentation for the Parcel Service.
 
-This service is responsible for managing system-wide and service-specific settings.
+This service is responsible for managing all aspects of parcels, including their creation, tracking, and status updates.
 
 ## 📚 Table of Contents
 
