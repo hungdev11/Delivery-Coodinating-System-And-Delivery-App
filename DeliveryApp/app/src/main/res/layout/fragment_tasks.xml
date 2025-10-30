@@ -7,23 +7,44 @@
     android:background="@color/material_grey_100"
     tools:context=".TaskFragment">
 
-    <LinearLayout
+    <!-- SỬA LẠI HEADER ĐỂ THÊM NÚT MENU -->
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/layout_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
         android:padding="12dp"
         android:background="@android:color/white"
         android:elevation="4dp"
         app:layout_constraintTop_toTopOf="parent">
+
         <TextView
-            android:layout_width="wrap_content"
+            android:id="@+id/tv_header_title"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="Nhiệm Vụ Giao Hàng Hôm Nay"
             android:textSize="20sp"
             android:textStyle="bold"
-            android:textColor="@color/black"/>
-    </LinearLayout>
+            android:textColor="@color/black"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/btn_session_menu"/>
+
+        <!-- NÚT MENU MỚI CHO SESSION -->
+        <ImageButton
+            android:id="@+id/btn_session_menu"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@android:drawable/ic_menu_more"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Menu Phiên"
+            android:visibility="gone"
+            tools:visibility="visible"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
     <LinearLayout
         android:id="@+id/sticky_button_container"
@@ -47,13 +68,15 @@
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerOrders"  android:layout_width="match_parent"
+        android:id="@+id/recyclerOrders"
+        android:layout_width="match_parent"
         android:layout_height="0dp"
         android:paddingTop="8dp"
         android:clipToPadding="false"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
         app:layout_constraintTop_toBottomOf="@id/layout_header"
-        app:layout_constraintBottom_toTopOf="@id/sticky_button_container" tools:listitem="@layout/item_task" />
+        app:layout_constraintBottom_toTopOf="@id/sticky_button_container"
+        tools:listitem="@layout/item_task" />
 
     <ProgressBar
         android:id="@+id/progress_bar"

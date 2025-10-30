@@ -45,4 +45,3 @@ rxjava2 = { module = "io.reactivex.rxjava2:rxjava", version.ref = "rxjava2" }
 rxandroid2 = { module = "io.reactivex.rxjava2:rxandroid", version.ref = "rxandroid2" }
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-

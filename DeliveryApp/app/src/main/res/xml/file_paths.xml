@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      Chỉ định thư mục mà chúng ta sẽ lưu ảnh tạm thời.
+      'name="my_images"' là tên logic.
+      'path="."' nghĩa là thư mục được định nghĩa trong TaskActionHandler
+      (ví dụ: getExternalFilesDir(Environment.DIRECTORY_PICTURES))
+    -->
+    <external-files-path
+        name="my_images"
+        path="Pictures" />
+</paths>

@@ -1,7 +1,11 @@
 package com.ds.deliveryapp.clients;
 
-import com.ds.deliveryapp.clients.res.PageResponse;
+import com.ds.deliveryapp.clients.req.ScanParcelRequest;
+import com.ds.deliveryapp.clients.req.SessionFailRequest;
+import com.ds.deliveryapp.clients.req.TaskFailRequest;
 import com.ds.deliveryapp.clients.req.RouteInfo;
+import com.ds.deliveryapp.clients.res.DeliverySession;
+import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.model.DeliveryAssignment;
 
 import java.util.List;
@@ -10,22 +14,64 @@ import retrofit2.Call;
 import retrofit2.http.Body;
 import retrofit2.http.GET;
 import retrofit2.http.POST;
-import retrofit2.http.PUT;
 import retrofit2.http.Path;
 import retrofit2.http.Query;
 
 public interface SessionClient {
-    @GET("session/delivery-man/{deliveryManId}/tasks/today")
-    Call<PageResponse<DeliveryAssignment>> getTasksToday(@Path("deliveryManId") String driverId,
-                                                 @Query("status") List<String> status,
-                                                 @Query("page") int page,
-                                                 @Query("size") int size);
+    /**
+     * API Quét-để-thêm-task (Scan-to-add).
+     * Ánh xạ tới: SessionController.acceptParcelToSession
+     */
+    @POST("/api/v1/sessions/drivers/{deliveryManId}/accept-parcel")
+    Call<DeliveryAssignment> acceptParcelToSession(
+            @Path("deliveryManId") String deliveryManId,
+            @Body ScanParcelRequest request
+    );
 
-    @GET("session/delivery-man/{deliveryManId}/tasks")
+    /**
+     * Lấy thông tin chi tiết một phiên.
+     * Ánh xạ tới: SessionController.getSessionById
+     */
+    @GET("/api/v1/sessions/{sessionId}")
+    Call<DeliverySession> getSessionById(@Path("sessionId") String sessionId);
+
+    /**
+     * Shipper chủ động hoàn thành phiên.
+     * Ánh xạ tới: SessionController.completeSession
+     */
+    @POST("/api/v1/sessions/{sessionId}/complete")
+    Call<DeliverySession> completeSession(@Path("sessionId") String sessionId);
+
+    /**
+     * Shipper báo cáo sự cố (hủy phiên).
+     * Ánh xạ tới: SessionController.failSession
+     */
+    @POST("/api/v1/sessions/{sessionId}/fail")
+    Call<DeliverySession> failSession(
+            @Path("sessionId") String sessionId,
+            @Body SessionFailRequest request
+    );
+
+    /**
+     * Lấy các task của phiên đang hoạt động (phân trang).
+     * Ánh xạ tới: DeliveryAssignmentController.getDailyTasks
+     */
+    @GET("/api/v1/assignments/session/delivery-man/{deliveryManId}/tasks/today")
+    Call<PageResponse<DeliveryAssignment>> getTasksToday(
+            @Path("deliveryManId") String driverId,
+            @Query("status") List<String> status,
+            @Query("page") int page,
+            @Query("size") int size
+    );
+
+    /**
+     * Lấy lịch sử task (các phiên đã đóng) với bộ lọc.
+     * Ánh xạ tới: DeliveryAssignmentController.getTasksHistory
+     */
+    @GET("/api/v1/assignments/session/delivery-man/{deliveryManId}/tasks")
     Call<PageResponse<DeliveryAssignment>> getTasks(
             @Path("deliveryManId") String driverId,
             @Query("status") List<String> status,
-            // Sửa kiểu dữ liệu từ LocalDate sang String
             @Query("createdAtStart") String createdAtStart,
             @Query("createdAtEnd") String createdAtEnd,
             @Query("completedAtStart") String completedAtStart,
@@ -34,22 +80,37 @@ public interface SessionClient {
             @Query("size") int size
     );
 
-    @POST("session/tasks/{parcelId}/accept")
-    Call<Boolean> acceptTask(@Path("parcelId") String parcelId,
-                             @Query("deliveryManId") String deliveryManId);
-
-    @PUT("session/tasks/{parcelId}/complete")
-    Call<DeliveryAssignment> completeTask(@Path("parcelId") String parcelId,
-                              @Query("deliveryManId") String deliveryManId,
-                             @Body RouteInfo routeInfo
+    /**
+     * Shipper báo giao hàng THÀNH CÔNG.
+     * Ánh xạ tới: DeliveryAssignmentController.completeTask
+     */
+    @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/complete")
+    Call<DeliveryAssignment> completeTask(
+            @Path("deliveryManId") String deliveryManId,
+            @Path("parcelId") String parcelId,
+            @Body RouteInfo routeInfo
     );
 
-    @PUT("session/tasks/{parcelId}/fail")
-    Call<DeliveryAssignment> failTask(@Path("parcelId") String parcelId,
-                               @Query("deliveryManId") String deliveryManId,
-                                @Query("flag") boolean flag,
-                               @Query("reason") String reason,
-                           @Body RouteInfo routeInfo
+    /**
+     * Shipper báo giao hàng THẤT BẠI.
+     * Ánh xạ tới: DeliveryAssignmentController.failTask
+     */
+    @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/fail")
+    Call<DeliveryAssignment> failTask(
+            @Path("deliveryManId") String deliveryManId,
+            @Path("parcelId") String parcelId,
+            @Body TaskFailRequest request // Body này chứa reason + routeInfo
+    );
+
+    /**
+     * Shipper báo khách TỪ CHỐI nhận hàng.
+     * Ánh xạ tới: DeliveryAssignmentController.refuseTask
+     */
+    @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/refuse")
+    Call<DeliveryAssignment> refuseTask(
+            @Path("deliveryManId") String deliveryManId,
+            @Path("parcelId") String parcelId,
+            @Body TaskFailRequest request // Body này chứa reason + routeInfo
     );
 
 }

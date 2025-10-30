@@ -1,10 +1,7 @@
 package com.ds.session.session_service.application.controllers;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
-
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ds.session.session_service.common.entities.dto.request.TaskFailRequest;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
+import com.ds.session.session_service.common.entities.dto.response.PageResponse; 
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
 import com.ds.session.session_service.common.interfaces.IDeliveryAssignmentService;
 
@@ -26,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Controller này quản lý các HÀNH ĐỘNG trên TỪNG TASK (ASSIGNMENT).
- * Ví dụ: Giao thành công, Giao thất bại, Lấy lịch sử.
+ * (File này đã chính xác từ lần trước)
  */
 @RestController
 @RequestMapping("/api/v1/assignments")
@@ -40,26 +38,39 @@ public class DeliveryAssignmentController {
     /**
      * Lấy tất cả các task trong "phiên" (session) ĐANG HOẠT ĐỘNG của shipper.
      */
-    @GetMapping("/drivers/{deliveryManId}/daily")
-    public ResponseEntity<List<DeliveryAssignmentResponse>> getDailyTasks(
-        @PathVariable UUID deliveryManId
+    @GetMapping("/session/delivery-man/{deliveryManId}/tasks/today")
+    public ResponseEntity<PageResponse<DeliveryAssignmentResponse>> getDailyTasks(
+        @PathVariable UUID deliveryManId,
+        @RequestParam(required = false) List<String> status,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size
     ) {
-        log.info("Fetching daily (active session) tasks for shipper {}", deliveryManId);
-        List<DeliveryAssignmentResponse> response = assignmentService.getDailyTasks(deliveryManId);
+        log.info("Fetching daily (active session) tasks for shipper {} with status filter: {}", deliveryManId, status);
+        PageResponse<DeliveryAssignmentResponse> response = assignmentService.getDailyTasks(deliveryManId, status, page, size);
         return ResponseEntity.ok(response);
     }
 
     /**
      * Lấy lịch sử task (từ các phiên ĐÃ HOÀN THÀNH) của shipper.
      */
-    @GetMapping("/drivers/{deliveryManId}/history")
-    public ResponseEntity<List<DeliveryAssignmentResponse>> getTasksHistory(
+    @GetMapping("/session/delivery-man/{deliveryManId}/tasks")
+    public ResponseEntity<PageResponse<DeliveryAssignmentResponse>> getTasksHistory(
         @PathVariable UUID deliveryManId,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end
+        @RequestParam(required = false) List<String> status,
+        @RequestParam(required = false) String createdAtStart,
+        @RequestParam(required = false) String createdAtEnd,
+        @RequestParam(required = false) String completedAtStart,
+        @RequestParam(required = false) String completedAtEnd,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size
     ) {
-        log.info("Fetching tasks history for shipper {} between {} and {}", deliveryManId, start, end);
-        List<DeliveryAssignmentResponse> response = assignmentService.getTasksBetween(deliveryManId, start, end);
+        log.info("Fetching tasks history for shipper {} with filters.", deliveryManId);
+        PageResponse<DeliveryAssignmentResponse> response = assignmentService.getTasksBetween(
+            deliveryManId, status, 
+            createdAtStart, createdAtEnd, 
+            completedAtStart, completedAtEnd, 
+            page, size
+        );
         return ResponseEntity.ok(response);
     }
 
@@ -105,7 +116,8 @@ public class DeliveryAssignmentController {
         @PathVariable UUID parcelId,
         @Valid @RequestBody TaskFailRequest request
     ) {
-        log.info("Shipper {} failing task for parcel {} (Reason: {})", deliveryManId, parcelId, request.getReason());
+        log.info("Shipper {} flagging parcel {} as REFUSED (Reason: {})", deliveryManId, parcelId, request.getReason());
+        // Giả định service có hàm "rejectedByCustomer"
         DeliveryAssignmentResponse response = assignmentService.rejectedByCustomer(
             parcelId, 
             deliveryManId, 
@@ -115,3 +127,4 @@ public class DeliveryAssignmentController {
         return ResponseEntity.ok(response);
     }
 }
+

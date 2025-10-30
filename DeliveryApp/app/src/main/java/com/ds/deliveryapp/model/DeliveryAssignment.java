@@ -18,6 +18,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Getter
 public class DeliveryAssignment implements Serializable {
+    private String sessionId;
     private String parcelId;
     private String parcelCode;
     private String deliveryType;
@@ -30,10 +31,6 @@ public class DeliveryAssignment implements Serializable {
     private BigDecimal value;
     private double weight;
     private String createdAt;
-
     private String completedAt;
-    private double routeDistanceM;
-    private long routeDurationS;
-    private String routeWaypoints;
     private String failReason;
 }
