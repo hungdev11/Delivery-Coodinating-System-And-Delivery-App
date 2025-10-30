@@ -34,30 +34,34 @@ dependencies {
     implementation libs.material
     implementation libs.activity
     implementation libs.constraintlayout
-    implementation libs.preference
+    implementation libs.preference.ktx
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
-    //Lombok lib
+
+    //Lombok
     compileOnly(libs.lombok)
     annotationProcessor(libs.lombok)
-    testCompileOnly(libs.lombok)
-    testAnnotationProcessor(libs.lombok)
-    //Scan code library
+
+    //Scan code
     implementation libs.zxing.android.embedded
-    //
+
+    //Retrofit & Networking
     implementation libs.retrofit
-    // Converter (for JSON serialization/deserialization - GSON is common)
     implementation libs.converter.gson
     implementation libs.gson
+    implementation libs.okhttp
     implementation libs.gson.javatime.serialisers
 
-    // OkHttp (usually included by Retrofit, but good practice to define)
-    implementation libs.okhttp
-
     // openstreet map
-    implementation 'org.osmdroid:osmdroid-android:6.1.18'
+    implementation 'org.osmdroid:osmdroid-android:6.1.20'
     implementation 'com.google.android.gms:play-services-location:21.0.1'
 
+    implementation libs.stomp
 
+    implementation libs.rxjava2
+    implementation libs.rxandroid2
+
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'de.hdodenhof:circleimageview:3.1.0'
 }

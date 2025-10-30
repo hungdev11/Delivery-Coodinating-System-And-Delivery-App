@@ -13,7 +13,9 @@ public class RetrofitClient {
     private static Retrofit sessionRetrofit;
     private static Retrofit authRetrofit;
 
+    private static Retrofit chatRetrofit;
     private static final String BASE_URL = "http://192.168.1.6";
+    private static final String CHAT_BASE_URL = BASE_URL + ":21511/api/v1/";
     private static final String GATEWAY_BASE_URL = BASE_URL + ":21500/api/v1/";
 
     public static Retrofit getRetrofitInstance(Context context) {
@@ -44,5 +46,18 @@ public class RetrofitClient {
                     .build();
         }
         return authRetrofit;
+    }
+
+    public static Retrofit getChatRetrofitInstance() {
+        if (chatRetrofit == null) {
+            OkHttpClient client = new OkHttpClient.Builder().build();
+
+            chatRetrofit = new Retrofit.Builder()
+                    .baseUrl(CHAT_BASE_URL)
+                    .client(client)
+                    .addConverterFactory(GsonConverterFactory.create())
+                    .build();
+        }
+        return chatRetrofit;
     }
 }
