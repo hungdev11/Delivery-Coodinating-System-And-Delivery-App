@@ -6,7 +6,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { plainToClass } from 'class-transformer';
 import { RoutingService } from './routing.service';
-import { RouteRequestDto } from './routing.model';
+import { RouteRequestDto, DemoRouteRequestDto } from './routing.model';
 import { BaseResponse } from '../../common/types/restful';
 
 export class RoutingController {
@@ -107,6 +107,39 @@ export class RoutingController {
 
       await RoutingService.switchOSRMInstance(instance);
       res.json(BaseResponse.success({ message: `Switched to instance ${instance}` }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Calculate demo route with priority-based ordering
+   * POST /routing/demo-route
+   */
+  public static async calculateDemoRoute(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const data = plainToClass(DemoRouteRequestDto, req.body);
+
+      if (!data.startPoint) {
+        res.status(400).json(BaseResponse.error('Start point is required'));
+        return;
+      }
+
+      if (!data.priorityGroups || data.priorityGroups.length === 0) {
+        res.status(400).json(BaseResponse.error('At least one priority group is required'));
+        return;
+      }
+
+      // Validate that each priority group has waypoints
+      for (const group of data.priorityGroups) {
+        if (!group.waypoints || group.waypoints.length === 0) {
+          res.status(400).json(BaseResponse.error('Each priority group must have at least one waypoint'));
+          return;
+        }
+      }
+
+      const result = await RoutingService.calculateDemoRoute(data);
+      res.json(BaseResponse.success(result));
     } catch (error) {
       next(error);
     }
