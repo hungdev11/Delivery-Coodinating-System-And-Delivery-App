@@ -1,133 +1,177 @@
-package com.ds.deliveryapp; // Ensure this matches your package
+package com.ds.deliveryapp;
 
+import android.app.DatePickerDialog;
+import android.app.TimePickerDialog;
+import android.content.Intent;
 import android.os.Bundle;
+import android.text.InputType;
 import android.util.Log;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.ds.deliveryapp.adapter.MessageAdapter;
-import com.ds.deliveryapp.auth.AuthManager; // Assuming you have this
+import com.ds.deliveryapp.auth.AuthManager;
 import com.ds.deliveryapp.clients.AuthClient;
 import com.ds.deliveryapp.clients.ChatClient;
-import com.ds.deliveryapp.clients.req.ChatMessagePayload; // Ensure this has senderId field
+import com.ds.deliveryapp.clients.req.ChatMessagePayload;
+import com.ds.deliveryapp.clients.req.CreateProposalDTO;
+import com.ds.deliveryapp.clients.req.ProposalResponseRequest;
+import com.ds.deliveryapp.clients.req.ProposalUpdateDTO;
 import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.Conversation;
 import com.ds.deliveryapp.clients.res.KeycloakUserInfoDto;
-import com.ds.deliveryapp.clients.res.Message; // DTO for message content
-import com.ds.deliveryapp.clients.res.PageResponse; // DTO for paginated results
-import com.ds.deliveryapp.configs.RetrofitClient; // Assuming you have this
-import com.ds.deliveryapp.enums.ContentType; // Ensure this enum exists
+import com.ds.deliveryapp.clients.res.Message;
+import com.ds.deliveryapp.clients.res.InteractiveProposal;
+import com.ds.deliveryapp.clients.res.PageResponse;
+import com.ds.deliveryapp.clients.res.ProposalTypeConfig;
+import com.ds.deliveryapp.configs.RetrofitClient;
+import com.ds.deliveryapp.enums.ContentType;
+import com.ds.deliveryapp.utils.ChatWebSocketListener;
+import com.ds.deliveryapp.utils.ChatWebSocketManager;
 import com.google.gson.Gson;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
+import java.util.UUID;
 
-import io.reactivex.disposables.CompositeDisposable;
-import io.reactivex.disposables.Disposable;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
-import ua.naiksoftware.stomp.Stomp;
-import ua.naiksoftware.stomp.StompClient;
-import ua.naiksoftware.stomp.dto.LifecycleEvent;
-import ua.naiksoftware.stomp.dto.StompHeader;
 
-public class ChatActivity extends AppCompatActivity {
+/**
+ * Activity này quản lý UI, gọi API (REST),
+ * và lắng nghe sự kiện từ ChatWebSocketManager.
+ */
+public class ChatActivity extends AppCompatActivity implements MessageAdapter.OnProposalActionListener, ChatWebSocketListener {
 
     private static final String TAG = "ChatActivity";
-    // Use your actual server IP or 10.0.2.2 for emulator localhost
-    private static final String SERVER_WEBSOCKET_URL = "ws://192.168.1.6:21511/ws"; // Base URL
+    private static final String SERVER_WEBSOCKET_URL = "ws://192.168.1.6:21511/ws";
 
     // Views
     private RecyclerView rvMessages;
     private EditText etMessage;
     private ImageButton btnSend;
+    private ImageButton btnAttach;
+    private ImageButton btnBack;
+    private ImageView ivAvatar;
+    private TextView tvRecipientName;
+    private TextView tvRecipientStatus;
 
     // Adapter & Data
     private MessageAdapter mAdapter;
+    private String mParcelCode;
+    private String mParcelId;
     private final List<Message> mMessages = new ArrayList<>();
+    private Calendar mSelectedStartTime;
 
     // Networking & Auth
-    private StompClient mStompClient;
+    private ChatWebSocketManager mWebSocketManager;
     private AuthClient mAuthClient;
     private ChatClient mChatClient;
     private final Gson mGson = new Gson();
-    private CompositeDisposable mComposite = new CompositeDisposable();
     private AuthManager mAuthManager;
 
     // State Data
     private String mJwtToken;
-    private String mCurrentUserId; // Fetched via API (/auth/me)
+    private String mCurrentUserId;
+    private List<String> mCurrentRoles = new ArrayList<>();
     private String mRecipientId;
     private String mRecipientName;
     private String mRecipientAvatarUrl;
-    private String mConversationId; // Fetched via API
+    private String mConversationId;
+    private List<ProposalTypeConfig> mAvailableProposals;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_chat);
+        setContentView(R.layout.activity_chat); // Giả định layout này có btn_attach
 
-        mAuthManager = new AuthManager(this); // Initialize AuthManager
-        mComposite = new CompositeDisposable(); // Initialize CompositeDisposable
+        mAuthManager = new AuthManager(this);
 
         initViews();
-        getInitialDataAndToken(); // Get token and set HARDCODED recipient
+        getInitialDataAndToken();
 
-        if (!validateInitialIntentData()) { // Validate token is present
-            return; // Exit if critical data missing
-        }
+        if (!validateInitialIntentData()) { return; }
 
         initRetrofitClients();
-        initRecyclerView(); // Init recycler view before fetching data
-
-        // Start chain: Get User -> Get Conv ID -> Load History & Connect WS
+        initRecyclerView();
         getUserInfoAndProceed();
-
         setupSendButton();
+        // (Không cần setupProposalButton nữa)
     }
 
     private void initViews() {
         rvMessages = findViewById(R.id.rv_messages);
         etMessage = findViewById(R.id.et_message);
         btnSend = findViewById(R.id.btn_send);
+
+        // --- ÁNH XẠ CÁC VIEW MỚI ---
+        btnBack = findViewById(R.id.btn_back);
+        ivAvatar = findViewById(R.id.iv_avatar);
+        tvRecipientName = findViewById(R.id.tv_recipient_name);
+        tvRecipientStatus = findViewById(R.id.tv_recipient_status);
+        btnAttach = findViewById(R.id.btn_attach); // <-- ÁNH XẠ NÚT +
+
+        btnBack.setOnClickListener(v -> finish());
+
+        // Gán listener cho nút +
+        btnAttach.setOnClickListener(v -> {
+            showProposalMenu();
+        });
     }
 
     private void getInitialDataAndToken() {
-        mJwtToken = mAuthManager.getAccessToken(); // Get stored token
+        mJwtToken = mAuthManager.getAccessToken();
 
         // --- HARDCODED RECIPIENT FOR TESTING ---
-        String customerId = "72d01198-4a4e-4743-8cb8-038a9de9ea98"; // Example customer
-        String shipperId = "62b08293-e714-45e1-9bec-a4a7e9e1bc71"; // Example shipper
-        mRecipientId = customerId; // Set the recipient to the shipper ID for this test
-        // --- END HARDCODED RECIPIENT ---
+        String customerId = "72d01198-4a4e-4743-8cb8-038a9de9ea98";
+        String shipperId = "62b08293-e714-45e1-9bec-a4a7e9e1bc71";
 
-        // mConversationId will be fetched later based on mCurrentUserId and mRecipientId
-        Log.d(TAG, "Initial Data - Recipient (Hardcoded): " + mRecipientId);
+        Log.d(TAG, "Reading data from Intent...");
+        Intent intent = getIntent();
+        //mRecipientId = shipperId;
+
+        mRecipientId = intent.getStringExtra("RECIPIENT_ID");
+        mRecipientName = intent.getStringExtra("RECIPIENT_NAME");
+        mParcelId = intent.getStringExtra("PARCEL_ID");
+
+        // (Lấy dữ liệu mới cho thanh tiêu đề)
+        mParcelCode = intent.getStringExtra("PARCEL_CODE");
+
+        if (mRecipientId == null || mRecipientId.isEmpty()) {
+            Log.e(TAG, "CRITICAL: RECIPIENT_ID is missing from Intent.");
+            handleFatalError("Missing Recipient ID.");
+        }
+
+        Log.d(TAG, "Initial Data - Recipient ID: " + mRecipientId);
+        Log.d(TAG, "Initial Data - Parcel Code: " + mParcelCode);
     }
 
     private boolean validateInitialIntentData() {
-        // Only validate essential startup data (Token must exist)
         if (mJwtToken == null || mJwtToken.isEmpty()) {
             Log.e(TAG, "Initial data validation failed: Token missing.");
             showErrorToastAndFinish("Authentication token not found. Please login.");
             return false;
         }
-        // Recipient is hardcoded, so no need to check Intent here
         return true;
     }
 
     private void initRecyclerView() {
-        mAdapter = new MessageAdapter(mMessages, mCurrentUserId); // userId will be updated after API call
+        mAdapter = new MessageAdapter(mMessages, mCurrentUserId);
+        mAdapter.setListener(this); // Gán listener là Activity này
         LinearLayoutManager lm = new LinearLayoutManager(this);
-        lm.setStackFromEnd(true); // New messages appear at the bottom
+        lm.setStackFromEnd(true);
         rvMessages.setLayoutManager(lm);
         rvMessages.setAdapter(mAdapter);
     }
@@ -138,10 +182,10 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     /**
-     * Fetches current user info using JWT, then proceeds to fetch conversation ID.
+     * Lấy thông tin user (gọi API /auth/me).
      */
     private void getUserInfoAndProceed() {
-        if (mJwtToken == null) return; // Already validated, but good practice
+        if (mJwtToken == null) return;
 
         Log.d(TAG, "Fetching user info...");
         String authorizationHeader = "Bearer " + mJwtToken;
@@ -153,26 +197,27 @@ public class ChatActivity extends AppCompatActivity {
                                    @NonNull Response<BaseResponse<KeycloakUserInfoDto>> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
                     KeycloakUserInfoDto user = response.body().getResult();
-                    mCurrentUserId = user.getSub(); // Get the Keycloak subject ID
-
+                    mCurrentUserId = user.getSub();
+                    if (user.getRoles() != null) {
+                        mCurrentRoles = user.getRoles();
+                    }
                     if (mCurrentUserId == null || mCurrentUserId.isEmpty()) {
                         handleFatalError("Failed to get User ID from token response.");
                         return;
                     }
-
                     Log.i(TAG, "✅ User info fetched. Current User ID: " + mCurrentUserId);
                     if (mAdapter != null) {
-                        mAdapter.setCurrentUserId(mCurrentUserId); // Update adapter
+                        mAdapter.setCurrentUserId(mCurrentUserId);
                     }
 
-                    // Now fetch the conversation ID using the fetched current user ID and hardcoded recipient
+                    // Bắt đầu chuỗi tải dữ liệu
                     fetchConversationIdAndConnect();
+                    loadAvailableProposals();
 
                 } else {
                     handleFatalError("Failed to fetch user info (API Error: " + response.code() + ")");
                 }
             }
-
             @Override
             public void onFailure(@NonNull Call<BaseResponse<KeycloakUserInfoDto>> call, @NonNull Throwable t) {
                 handleFatalError("Network error fetching user info: " + t.getMessage());
@@ -181,20 +226,15 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     /**
-     * Fetches the Conversation ID based on current user and (hardcoded) recipient,
-     * then loads history and connects WebSocket.
+     * Lấy ID cuộc trò chuyện (gọi API /conversations/find-by-users).
      */
     private void fetchConversationIdAndConnect() {
-        if (mCurrentUserId == null || mRecipientId == null || mJwtToken == null) {
-            Log.e(TAG, "Cannot fetch conversation ID: Missing user IDs or token.");
-            handleFatalError("Cannot proceed without user information."); // Be explicit
+        if (mCurrentUserId == null || mRecipientId == null) {
+            handleFatalError("Cannot proceed without user information.");
             return;
         }
         Log.d(TAG, "Fetching conversation ID between " + mCurrentUserId + " and " + mRecipientId);
-        String authorizationHeader = "Bearer " + mJwtToken;
 
-        // Ensure ChatClient has findConversationWithPartner
-        // Call<ConversationResponse> findConversationWithPartner(@Header("Authorization") String token, @Query("partnerId") String partnerId);
         Call<Conversation> call =
                 mChatClient.getConversationBy2Users(mCurrentUserId, mRecipientId);
 
@@ -206,202 +246,121 @@ public class ChatActivity extends AppCompatActivity {
                     mConversationId = conversation.getConversationId();
                     Log.i(TAG, "✅ Conversation ID fetched/found: " + mConversationId);
 
+                    //
                     mRecipientName = conversation.getPartnerName();
                     mRecipientAvatarUrl = conversation.getPartnerAvatar();
-
-                    // --- ĐIỀU CHỈNH QUAN TRỌNG: CẬP NHẬT ADAPTER ---
+                    //
                     if (mAdapter != null) {
                         mAdapter.setRecipientInfo(mRecipientAvatarUrl);
-                        Log.d(TAG, "Adapter updated with Recipient Avatar/Name.");
                     }
-                    // --------------------------------------------------
 
+                    // --- CẬP NHẬT APP BAR TÙY CHỈNH ---
                     runOnUiThread(() -> {
-                        if (getSupportActionBar() != null) {
-                            getSupportActionBar().setTitle(mRecipientName);
-                        } else {
-                            // ... (Xử lý Toolbar tùy chỉnh) ...
+                        if (tvRecipientName != null) {
+                            tvRecipientName.setText(mRecipientName);
                         }
+
+                        if (tvRecipientStatus != null) {
+                            if (mParcelCode != null && !mParcelCode.isEmpty()) {
+                                tvRecipientStatus.setText("Đơn hàng: " + mParcelCode);
+                            } else {
+                                tvRecipientStatus.setText("Đang hoạt động");
+                            }
+                        }
+                        // (Thêm code Glide/Picasso để tải ivAvatar tại đây)
                     });
 
                     loadChatHistory();
-                    connectWebSocket();
+                    connectWebSocket(); // Bắt đầu kết nối WebSocket
 
                 } else {
-                    // Handle API errors more gracefully, maybe show a message
-                    Log.e(TAG, "Failed to fetch conversation ID (API Error: " + response.code() + " - " + response.message());
+                    Log.e(TAG, "Failed to fetch conversation ID (API Error: " + response.code() + ")");
                     showErrorToast("Could not find or create conversation.");
-                    // Don't necessarily finish the activity, user might retry
-                    // handleFatalError("Failed to fetch conversation ID");
                 }
             }
-
             @Override
             public void onFailure(@NonNull Call<Conversation> call, @NonNull Throwable t) {
-                // Network errors are often temporary
                 Log.e(TAG, "Network error fetching conversation ID", t);
-                showErrorToast("Network error finding conversation. Please check connection.");
-                // handleFatalError("Network error fetching conversation ID: " + t.getMessage());
             }
         });
     }
 
     /**
-     * Loads message history for the fetched mConversationId.
+     * Tải lịch sử chat (gọi API /conversations/{id}/messages).
      */
     private void loadChatHistory() {
-        if (mConversationId == null || mJwtToken == null) {
-            Log.e(TAG,"Cannot load history: Conversation ID or Token is null.");
-            showErrorToast("Could not load history (missing info).");
-            return;
-        }
-        Log.d(TAG, "Loading history for Conversation ID: " + mConversationId);
-        String authorizationHeader = "Bearer " + mCurrentUserId;
-
-        // Ensure ChatClient.getChatHistory requires token header
+        if (mConversationId == null) return;
         Call<PageResponse<Message>> call =
-                mChatClient.getChatHistory(mConversationId, mCurrentUserId, 0, 50); // Load 50 initially
-
+                mChatClient.getChatHistory(mConversationId, mCurrentUserId, 0, 50);
         call.enqueue(new Callback<PageResponse<Message>>() {
             @Override
-            public void onResponse(@NonNull Call<PageResponse<Message>> call,
-                                   @NonNull Response<PageResponse<Message>> response) {
-
+            public void onResponse(@NonNull Call<PageResponse<Message>> call, @NonNull Response<PageResponse<Message>> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().content() != null) {
                     List<Message> history = response.body().content();
-                    Log.d(TAG, "Loaded " + history.size() + " messages.");
-                    Collections.reverse(history); // Reverse if API returns newest first
-
+                    Collections.reverse(history);
                     runOnUiThread(() -> {
-                        if (mAdapter != null) {
-                            mAdapter.setMessages(history);
-                            scrollToBottom();
-                        }
+                        if (mAdapter != null) mAdapter.setMessages(history);
+                        scrollToBottom();
                     });
-                } else {
-                    Log.e(TAG, "Error loading history API: " + response.code() + " " + response.message());
-                    showErrorToast("Could not load chat history.");
                 }
             }
-
             @Override
             public void onFailure(@NonNull Call<PageResponse<Message>> call, @NonNull Throwable t) {
                 Log.e(TAG, "Network error loading history", t);
-                showErrorToast("Network error loading history.");
             }
         });
     }
 
     /**
-     * Connects to the WebSocket server using the real JWT token.
+     * HÀM MỚI: Tải các loại proposal mà user này có thể TẠO.
+     */
+    private void loadAvailableProposals() {
+        Log.i(TAG, "in load config {}" + mCurrentRoles.get(0));
+        if (mJwtToken == null) return;
+        String authorizationHeader = "Bearer " + mJwtToken;
+
+        Call<List<ProposalTypeConfig>> call = mChatClient.getAvailableConfigs(mCurrentRoles);
+        call.enqueue(new Callback<List<ProposalTypeConfig>>() {
+            @Override
+            public void onResponse(@NonNull Call<List<ProposalTypeConfig>> call, @NonNull Response<List<ProposalTypeConfig>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Log.i(TAG, "Đã tải " + response.body().size() + " proposal khả dụng.");
+                    mAvailableProposals = response.body();
+                } else {
+                    Log.e(TAG, "Lỗi tải proposal configs: " + response.code());
+                    // Không crash, user chỉ không thể tạo proposal
+                }
+            }
+            @Override
+            public void onFailure(@NonNull Call<List<ProposalTypeConfig>> call, @NonNull Throwable t) {
+                Log.e(TAG, "Lỗi mạng khi tải proposal configs", t);
+            }
+        });
+    }
+
+    /**
+     * ĐÃ CẬP NHẬT: Kết nối bằng WebSocket Manager.
      */
     private void connectWebSocket() {
-        if (mJwtToken == null) {
-            Log.e(TAG, "Cannot connect WebSocket: Token is null.");
-            handleFatalError("Authentication token missing.");
-            return;
-        }
-        if (mStompClient != null && mStompClient.isConnected()) {
-            Log.w(TAG, "WebSocket connection attempt ignored: Already connecting or connected.");
+        if (mWebSocketManager != null && mWebSocketManager.isConnected()) {
+            Log.w(TAG, "WebSocket connection attempt ignored: Already connected.");
             return;
         }
 
-        Log.d(TAG, "Connecting WebSocket to " + SERVER_WEBSOCKET_URL + " with token.");
-        // Use the REAL JWT Token for authentication via Gateway/Interceptor
-        List<StompHeader> headers = new ArrayList<>();
-        headers.add(new StompHeader("Authorization", "Bearer " + mCurrentUserId));
-
-        mStompClient = Stomp.over(Stomp.ConnectionProvider.OKHTTP, SERVER_WEBSOCKET_URL);
-
-        // Add heartbeats
-        mStompClient.withClientHeartbeat(15000).withServerHeartbeat(15000);
-
-        mStompClient.connect(headers); // Connect with REAL token
-
-        // Manage lifecycle subscription
-        Disposable lifecycleDisposable = mStompClient.lifecycle()
-                .subscribe(
-                        lifecycleEvent -> {
-                            switch (lifecycleEvent.getType()) {
-                                case OPENED:
-                                    Log.i(TAG, "✅ STOMP Connection Opened");
-                                    subscribeToMessages(); // Subscribe after connection is open
-                                    break;
-                                case CLOSED:
-                                    Log.i(TAG, "🔌 STOMP Connection Closed");
-                                    // Consider cleanup or showing a disconnected status
-                                    break;
-                                case ERROR:
-                                    Log.e(TAG, "❌ STOMP Connection Error: ", lifecycleEvent.getException());
-                                    showErrorToast("Chat connection error.");
-                                    break;
-                            }
-                        },
-                        throwable -> {
-                            Log.e(TAG, "❌ STOMP Lifecycle Throwable!", throwable);
-                            showErrorToast("Chat connection failed.");
-                        }
-                );
-        mComposite.add(lifecycleDisposable);
+        Log.d(TAG, "Initializing WebSocket Manager...");
+        mWebSocketManager = new ChatWebSocketManager(SERVER_WEBSOCKET_URL, mCurrentUserId);
+        mWebSocketManager.setListener(this); // <-- Gán Activity này làm listener
+        mWebSocketManager.connect(); // Bắt đầu kết nối
     }
 
     /**
-     * Subscribes to the user-specific message queue.
-     */
-    private void subscribeToMessages() {
-        if (mStompClient == null || !mStompClient.isConnected()) {
-            Log.e(TAG, "Cannot subscribe: StompClient not connected.");
-            // Maybe attempt to reconnect? connectWebSocket();
-            return;
-        }
-        // Use the /user prefix which relies on the authenticated Principal on the server
-        String destination = "/user/queue/messages";
-        Log.d(TAG, "Subscribing to: " + destination);
-
-        // Manage topic subscription
-        Disposable topicDisposable = mStompClient.topic(destination)
-                .subscribe(
-                        stompMessage -> {
-                            Log.d(TAG, "<<< Received STOMP: " + stompMessage.getPayload());
-                            try {
-                                Message message = mGson.fromJson(stompMessage.getPayload(), Message.class);
-                                // Basic validation
-                                if (message != null && message.getSenderId() != null && message.getContent() != null) {
-                                    // Check if the message is from the intended recipient (optional but good)
-                                    // if (!message.getSenderId().equals(mRecipientId)) {
-                                    //      Log.w(TAG, "Received message from unexpected sender: " + message.getSenderId());
-                                    //      // Decide whether to display it or not
-                                    // }
-                                    runOnUiThread(() -> {
-                                        if (mAdapter != null) {
-                                            mAdapter.addMessage(message);
-                                            scrollToBottom();
-                                        }
-                                    });
-                                } else {
-                                    Log.w(TAG, "Received invalid message format from server.");
-                                }
-                            } catch (Exception e) {
-                                Log.e(TAG, "Error parsing received message JSON", e);
-                            }
-                        },
-                        throwable -> {
-                            Log.e(TAG, "Error on STOMP topic subscription", throwable);
-                            showErrorToast("Error receiving messages.");
-                            // Consider trying to resubscribe after a delay
-                        }
-                );
-        mComposite.add(topicDisposable);
-    }
-
-    /**
-     * Sets up the listener for the send button.
+     * Logic gửi tin nhắn TEXT (Chat cũ).
      */
     private void setupSendButton() {
         btnSend.setOnClickListener(v -> {
             String content = etMessage.getText().toString().trim();
             if (!content.isEmpty()) {
-                if (mStompClient != null && mStompClient.isConnected()) {
+                if (mWebSocketManager != null && mWebSocketManager.isConnected()) {
                     sendMessage(content);
                 } else {
                     showErrorToast("Not connected to chat. Please wait or try again.");
@@ -411,78 +370,447 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     /**
-     * Sends a message payload via STOMP, including the sender ID.
+     * ĐÃ CẬP NHẬT: Gửi tin nhắn bằng WebSocket Manager.
      */
     private void sendMessage(String content) {
         if (mCurrentUserId == null || mRecipientId == null) {
-            Log.e(TAG, "Cannot send message: User IDs missing.");
             showErrorToast("Cannot send: User info missing.");
             return;
         }
 
-        // --- INCLUDE SENDER ID IN PAYLOAD ---
         ChatMessagePayload payload = new ChatMessagePayload(content, mRecipientId);
-        String jsonPayload = mGson.toJson(payload);
-        String destination = "/app/chat.send"; // Matches @MessageMapping on the server
 
-        Log.d(TAG, ">>> Sending STOMP to " + destination);
-
-        // Manage send subscription
-        Disposable sendDisposable = mStompClient.send(destination, jsonPayload)
-                .subscribe(
-                        () -> { // onSuccess
-                            Log.d(TAG, "STOMP message sent successfully.");
-                            // Optimistic UI update
-                            Message selfMessage = new Message(
-                                    null, mCurrentUserId, content, null, ContentType.TEXT // Ensure ContentType exists
-                            );
-                            runOnUiThread(() -> {
-                                etMessage.setText(""); // Clear input field
-                                if (mAdapter != null) {
-                                    mAdapter.addMessage(selfMessage);
-                                    scrollToBottom();
-                                }
-                            });
-                        },
-                        throwable -> { // onError
-                            Log.e(TAG, "Error sending STOMP message", throwable);
-                            showErrorToast("Failed to send message.");
-                        }
+        mWebSocketManager.sendMessage(payload, new ChatWebSocketManager.SendMessageCallback() {
+            @Override
+            public void onSuccess() {
+                Log.d(TAG, "STOMP message sent successfully.");
+                Message selfMessage = new Message(
+                        null, mCurrentUserId, content, null, ContentType.TEXT, null
                 );
-        mComposite.add(sendDisposable);
+                runOnUiThread(() -> {
+                    etMessage.setText("");
+                    if (mAdapter != null) {
+                        mAdapter.addMessage(selfMessage);
+                        scrollToBottom();
+                    }
+                });
+            }
+            @Override
+            public void onError(Throwable throwable) {
+                Log.e(TAG, "Error sending STOMP message", throwable);
+                runOnUiThread(() -> showErrorToast("Failed to send message."));
+            }
+        });
     }
 
     /**
-     * Scrolls the RecyclerView to the last item smoothly.
+     * HÀM MỚI: Hiển thị menu khi bấm nút +
      */
+    private void showProposalMenu() {
+        if (mAvailableProposals == null || mAvailableProposals.isEmpty()) {
+            showErrorToast("Không có hành động nào.");
+            return;
+        }
+
+        CharSequence[] items = new CharSequence[mAvailableProposals.size()];
+        for(int i = 0; i < mAvailableProposals.size(); i++) {
+            items[i] = mAvailableProposals.get(i).getDescription();
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Chọn hành động")
+                .setItems(items, (dialog, which) -> {
+                    // Lấy config được chọn
+                    ProposalTypeConfig selectedConfig = mAvailableProposals.get(which);
+
+                    // Phân luồng dựa trên actionType của config
+                    String actionType = selectedConfig.getCreationActionType();
+                    if (actionType == null) return;
+                    if ("DATE_PICKER".equals(actionType)) {
+                        actionType = "POSTPONE_OPTIONS";
+                    }
+
+
+                    switch (actionType) {
+                        case "POSTPONE_OPTIONS": // (Đã đổi tên)
+                            // (Kịch bản: Khách yêu cầu hoãn đơn)
+                            showPostponeOptionsDialog(selectedConfig);
+                            break;
+                        case "TEXT_INPUT":
+                            // (Kịch bản: Shipper báo lý do)
+                            // Thu thập data TRƯỚC
+                            showTextInputDialog(selectedConfig);
+                            break;
+                        case "ACCEPT_DECLINE":
+                        default:
+                            // (Kịch bản: Không cần data, ví dụ: "Shipper đã đến")
+                            // Gửi luôn
+                            sendProposalRequest(selectedConfig.getType(), "{}", selectedConfig.getDescription() + " với mã đơn hàng: " + mParcelCode);
+                            break;
+                    }
+                })
+                .show();
+    }
+
+    /**
+     * HÀM MỚI (Layer 1): Hiển thị 3 lựa chọn hoãn đơn
+     */
+    private void showPostponeOptionsDialog(ProposalTypeConfig config) {
+        CharSequence[] postponeOptions = {
+                "Vào 1 thời điểm cụ thể",
+                "Trước 1 thời điểm",
+                "Sau 1 thời điểm",
+                "Trong 1 khoảng thời gian"
+        };
+
+        new AlertDialog.Builder(this)
+                .setTitle("Chọn kiểu hoãn đơn")
+                .setItems(postponeOptions, (dialog, which) -> {
+                    switch (which) {
+                        case 0: // "Vào 1 thời điểm cụ thể"
+                            // Dùng hàm chọn 1 thời điểm
+                            showSingleDateTimePickerDialog(config, "SPECIFIC");
+                            break;
+                        case 1: // "Trước 1 thời điểm"
+                            // Cũng dùng hàm chọn 1 thời điểm, nhưng logic data khác
+                            showSingleDateTimePickerDialog(config, "BEFORE");
+                            break;
+                        case 2: // "Sau 1 thời điểm"
+                            // Cũng dùng hàm chọn 1 thời điểm, nhưng logic data khác
+                            showSingleDateTimePickerDialog(config, "AFTER");
+                            break;
+                        case 3: // "Trong 1 khoảng thời gian"
+                            // Dùng hàm chọn 2 thời điểm
+                            showDateTimeRangePickerDialog(config);
+                            break;
+                    }
+                })
+                .show();
+    }
+
+    /**
+     * HÀM ĐÃ ĐỔI TÊN (Layer 2 - Option 1 & 2):
+     * Xử lý chọn 1 mốc Ngày & Giờ
+     */
+    private void showSingleDateTimePickerDialog(ProposalTypeConfig config, String postponeType) {
+        Calendar cal = Calendar.getInstance();
+        mSelectedStartTime = null; // Reset
+
+        // 1. Tạo DatePickerDialog
+        DatePickerDialog dpd = new DatePickerDialog(this,
+                // DateSetListener
+                (datePicker, year, month, day) -> {
+
+                    // --- Ngày đã được chọn, lưu lại và hiển thị TimePicker ---
+                    mSelectedStartTime = Calendar.getInstance();
+                    mSelectedStartTime.set(year, month, day);
+
+                    // 2. Tạo TimePickerDialog
+                    TimePickerDialog tpd = new TimePickerDialog(this,
+                            // TimeSetListener
+                            (timePicker, hour, minute) -> {
+                                mSelectedStartTime.set(Calendar.HOUR_OF_DAY, hour);
+                                mSelectedStartTime.set(Calendar.MINUTE, minute);
+
+                                // --- Giờ đã được chọn ---
+                                String readableDateTime = String.format("%02d:%02d ngày %02d/%02d/%d",
+                                        hour, minute, day, month + 1, year);
+
+                                // 3. Định dạng kết quả (ISO 8601 là tốt nhất)
+                                // ví dụ: "2025-10-30T14:30:00"
+                                String resultData = String.format("%d-%02d-%02dT%02d:%02d:00",
+                                        year, month + 1, day, hour, minute);
+
+                                // 4. Tạo JSON data
+                                String dataJson = "{}";
+                                String fallbackContent = "";
+
+                                if ("SPECIFIC".equals(postponeType)) {
+                                    dataJson = "{\"specific_datetime\":\"" + resultData + "\"}";
+                                    fallbackContent = config.getDescription() +  " với mã đơn hàng: " + mParcelCode + " vào " + readableDateTime;
+                                } else if ("AFTER".equals(postponeType)) { // "AFTER"
+                                    dataJson = "{\"after_datetime\":\"" + resultData + "\"}";
+                                    fallbackContent = config.getDescription() +  " với mã đơn hàng: " + mParcelCode + " sau " + readableDateTime;
+                                } else {
+                                    dataJson = "{\"after_datetime\":\"" + resultData + "\"}";
+                                    fallbackContent = config.getDescription() +  " với mã đơn hàng: " + mParcelCode + " trước " + readableDateTime;
+                                }
+
+                                // 5. Gửi proposal
+                                sendProposalRequest(config.getType(), dataJson, fallbackContent);
+                            },
+                            cal.get(Calendar.HOUR_OF_DAY),
+                            cal.get(Calendar.MINUTE),
+                            true // 24-hour format
+                    );
+                    tpd.setTitle("Chọn Giờ");
+                    tpd.show(); // Hiển thị TimePicker
+                },
+                cal.get(Calendar.YEAR),
+                cal.get(Calendar.MONTH),
+                cal.get(Calendar.DAY_OF_MONTH)
+        );
+        dpd.setTitle("Chọn Ngày");
+        dpd.show(); // Hiển thị DatePicker TRƯỚC
+    }
+
+    /**
+     * HÀM MỚI (Layer 2 - Option 3):
+     * Xử lý chọn 2 mốc Ngày & Giờ (Bắt đầu và Kết thúc)
+     */
+    private void showDateTimeRangePickerDialog(ProposalTypeConfig config) {
+        mSelectedStartTime = null; // Reset
+
+        // --- BƯỚC 1: CHỌN NGÀY BẮT ĐẦU ---
+        Calendar cal = Calendar.getInstance();
+        DatePickerDialog dpdStart = new DatePickerDialog(this, (dpdView, year, month, day) -> {
+            mSelectedStartTime = Calendar.getInstance();
+            mSelectedStartTime.set(year, month, day);
+
+            // --- BƯỚC 2: CHỌN GIỜ BẮT ĐẦU ---
+            TimePickerDialog tpdStart = new TimePickerDialog(this, (tpdView, hour, minute) -> {
+                mSelectedStartTime.set(Calendar.HOUR_OF_DAY, hour);
+                mSelectedStartTime.set(Calendar.MINUTE, minute);
+
+                // --- BƯỚC 3: CHỌN NGÀY KẾT THÚC ---
+                DatePickerDialog dpdEnd = new DatePickerDialog(this, (dpdView2, year2, month2, day2) -> {
+                    Calendar selectedEndTime = Calendar.getInstance();
+                    selectedEndTime.set(year2, month2, day2);
+
+                    // --- BƯỚC 4: CHỌN GIỜ KẾT THÚC ---
+                    TimePickerDialog tpdEnd = new TimePickerDialog(this, (tpdView2, hour2, minute2) -> {
+                        selectedEndTime.set(Calendar.HOUR_OF_DAY, hour2);
+                        selectedEndTime.set(Calendar.MINUTE, minute2);
+
+                        // (Kiểm tra logic EndTime > StartTime...)
+                        if (selectedEndTime.before(mSelectedStartTime)) {
+                            showErrorToast("Giờ kết thúc phải sau giờ bắt đầu.");
+                            return;
+                        }
+
+                        // --- BƯỚC 5: GỬI PROPOSAL ---
+                        String startTimeStr = String.format("%d-%02d-%02dT%02d:%02d:00",
+                                year, month + 1, day, hour, minute);
+                        String endTimeStr = String.format("%d-%02d-%02dT%02d:%02d:00",
+                                year2, month2 + 1, day2, hour2, minute2);
+
+                        String dataJson = "{\"start_datetime\":\"" + startTimeStr + "\", \"end_datetime\":\"" + endTimeStr + "\"}";
+                        String fallback = String.format("%s (Từ %02d:%02d %02d/%d đến %02d:%02d %02d/%d)",
+                                config.getDescription(),
+                                hour, minute, day, month+1,
+                                hour2, minute2, day2, month2+1);
+
+                        sendProposalRequest(config.getType(), dataJson, fallback);
+
+                    }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true);
+                    tpdEnd.setTitle("Chọn Giờ Kết Thúc");
+                    tpdEnd.show();
+
+                }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH));
+                dpdEnd.setTitle("Chọn Ngày Kết Thúc");
+                dpdEnd.show();
+
+            }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true);
+            tpdStart.setTitle("Chọn Giờ Bắt Đầu");
+            tpdStart.show();
+
+        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH));
+        dpdStart.setTitle("Chọn Ngày Bắt Đầu");
+        dpdStart.show();
+    }
+    /**
+     * HÀM MỚI: Hiển thị dialog nhập text (cho TEXT_INPUT)
+     */
+    private void showTextInputDialog(ProposalTypeConfig config) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(config.getDescription());
+        builder.setMessage("Vui lòng nhập lý do:");
+
+        // Tạo một EditText
+        final EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+
+        // Cần một layout để bọc EditText cho có padding
+        LinearLayout layout = new LinearLayout(this);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(50, 20, 50, 20); // (Left, Top, Right, Bottom)
+        input.setLayoutParams(params);
+        layout.addView(input);
+
+        builder.setView(layout);
+
+        builder.setPositiveButton("Gửi", (dialog, which) -> {
+            // 1. User đã nhập text
+            String resultData = input.getText().toString().trim();
+            if (resultData.isEmpty()) {
+                showErrorToast("Cần nhập lý do.");
+                return;
+            }
+            // 2. Tạo JSON data
+            String dataJson = "{\"reason\":\"" + resultData + "\"}";
+            // 3. Gửi proposal
+            sendProposalRequest(config.getType(), dataJson, config.getDescription());
+        });
+        builder.setNegativeButton("Hủy", (dialog, which) -> dialog.cancel());
+        builder.show();
+    }
+
+    /**
+     * Gọi API (REST) để tạo Proposal.
+     */
+    private void sendProposalRequest(String type, String data, String fallbackContent) {
+        if (mConversationId == null || mRecipientId == null || mJwtToken == null) {
+            showErrorToast("Không thể gửi yêu cầu: Thiếu thông tin.");
+            return;
+        }
+
+        if ("CONFIRM_REFUSAL".equals(type) && mParcelId != null) {
+            data = "{\"parcelId\":\"" + mParcelId + "\"}";
+        }
+
+        CreateProposalDTO payload = new CreateProposalDTO(
+                mConversationId, mRecipientId, type, data, fallbackContent,
+                mCurrentUserId, mCurrentRoles
+        );
+
+        String authorizationHeader = "Bearer " + mJwtToken;
+        Call<InteractiveProposal> call = mChatClient.createProposal(payload);
+
+        call.enqueue(new Callback<InteractiveProposal>() {
+            @Override
+            public void onResponse(@NonNull Call<InteractiveProposal> call, @NonNull Response<InteractiveProposal> response) {
+                if (response.isSuccessful()) {
+                    Log.i(TAG, "Gửi proposal thành công. Chờ WebSocket echo...");
+                    // Server sẽ tự động gửi Message (loại PROPOSAL)
+                    // qua kênh /user/queue/messages
+                    loadChatHistory();
+                } else {
+                    Log.e(TAG, "Gửi proposal thất bại: " + response.code());
+                    showErrorToast("Gửi yêu cầu thất bại.");
+                }
+            }
+            @Override
+            public void onFailure(@NonNull Call<InteractiveProposal> call, @NonNull Throwable t) {
+                Log.e(TAG, "Lỗi mạng khi gửi proposal", t);
+            }
+        });
+    }
+
+    /* --- IMPLEMENTS TỪ ADAPTER LISTENER (Khi bấm nút) --- */
+
+    /**
+     * Được gọi từ Adapter khi bấm bất kỳ nút phản hồi nào.
+     */
+    @Override
+    public void onProposalRespond(UUID proposalId, String resultData) {
+        Log.d(TAG, "Handling RESPOND for proposal: " + proposalId + " with data: " + resultData);
+        String authorizationHeader = "Bearer " + mJwtToken;
+
+        // 1. Tạo DTO payload mới
+        ProposalResponseRequest payload = new ProposalResponseRequest(resultData);
+
+        // 2. Gọi API /respond mới
+        Call<InteractiveProposal> call = mChatClient.respondToProposal(
+                proposalId,
+                mCurrentUserId,
+                payload // Gửi DTO trong body
+        );
+
+        call.enqueue(new Callback<InteractiveProposal>() {
+            @Override
+            public void onResponse(@NonNull Call<InteractiveProposal> call, @NonNull Response<InteractiveProposal> response) {
+                if (response.isSuccessful()) {
+                    Log.i(TAG, "Phản hồi proposal thành công. Chờ WebSocket update...");
+                    // Server sẽ gửi update qua /user/queue/proposal-update
+                    loadChatHistory();
+                } else {
+                    Log.e(TAG, "Phản hồi proposal thất bại: " + response.code());
+                    showErrorToast("Thao tác thất bại.");
+                }
+            }
+            @Override
+            public void onFailure(@NonNull Call<InteractiveProposal> call, @NonNull Throwable t) {
+                Log.e(TAG, "Lỗi mạng khi phản hồi proposal", t);
+                showErrorToast("Lỗi mạng: " + t.getMessage());
+            }
+        });
+    }
+
+    /* --- IMPLEMENTS TỪ WEBSOCKET LISTENER (Khi nhận sự kiện) --- */
+
+    @Override
+    public void onWebSocketOpened() {
+        runOnUiThread(() -> Log.i(TAG, "ChatActivity: WebSocket Opened."));
+    }
+
+    @Override
+    public void onWebSocketClosed() {
+        runOnUiThread(() -> {
+            Log.i(TAG, "ChatActivity: WebSocket Closed.");
+            showErrorToast("Chat connection closed.");
+        });
+    }
+
+    @Override
+    public void onWebSocketError(String error) {
+        runOnUiThread(() -> {
+            Log.e(TAG, "ChatActivity: WebSocket Error: " + error);
+            showErrorToast("Chat error. Please try again.");
+        });
+    }
+
+    @Override
+    public void onMessageReceived(Message message) {
+        runOnUiThread(() -> {
+            if (message != null && mAdapter != null && message.getSenderId() != null) {
+                mAdapter.addMessage(message);
+                scrollToBottom();
+            }
+        });
+    }
+
+    @Override
+    public void onProposalUpdateReceived(ProposalUpdateDTO update) {
+        runOnUiThread(() -> {
+            if (update != null && mAdapter != null && update.getProposalId() != null) {
+                Log.i(TAG, "Updating status for Proposal " + update.getProposalId() + " to " + update.getNewStatus());
+
+                // (Bạn cần cập nhật DTO ProposalUpdateDTO ở server và client
+                // để nó chứa cả 'resultData')
+                String resultData = update.getResultData(); // Giả sử DTO đã có
+
+                mAdapter.updateProposalStatus(
+                        update.getProposalId(),
+                        update.getNewStatus(),
+                        resultData // <-- Truyền cả kết quả
+                );
+            }
+        });
+    }
+
+    /* --- CÁC HÀM TIỆN ÍCH (Giữ nguyên) --- */
+
     private void scrollToBottom() {
         if (mAdapter != null && mAdapter.getItemCount() > 0) {
-            // Use post to ensure scrolling happens after layout updates
             rvMessages.post(() -> rvMessages.smoothScrollToPosition(mAdapter.getItemCount() - 1));
         }
     }
 
-    /**
-     * Handles fatal errors during setup by logging, showing a toast, and finishing the activity.
-     */
     private void handleFatalError(String message) {
         Log.e(TAG, "Fatal Setup Error: " + message);
         showErrorToastAndFinish("Critical error: " + message);
     }
 
-    /**
-     * Shows a long toast message and finishes the current activity. Must be called from any thread.
-     */
     private void showErrorToastAndFinish(String message){
         runOnUiThread(() -> {
             Toast.makeText(ChatActivity.this, message, Toast.LENGTH_LONG).show();
-            finish(); // Close activity on fatal error
+            finish();
         });
     }
 
-    /**
-     * Shows a long toast message. Must be called from any thread.
-     */
     private void showErrorToast(String message) {
         runOnUiThread(() -> Toast.makeText(ChatActivity.this, message, Toast.LENGTH_LONG).show());
     }
@@ -490,13 +818,10 @@ public class ChatActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        Log.d(TAG, "onDestroy: Disconnecting STOMP and disposing subscriptions.");
-        if (mStompClient != null) {
-            mStompClient.disconnect();
-            mStompClient = null; // Help GC
-        }
-        if (mComposite != null && !mComposite.isDisposed()) {
-            mComposite.dispose(); // Dispose all RxJava subscriptions
+        Log.d(TAG, "onDestroy: Disconnecting WebSocket Manager.");
+        if (mWebSocketManager != null) {
+            mWebSocketManager.disconnect();
+            mWebSocketManager = null;
         }
     }
 }

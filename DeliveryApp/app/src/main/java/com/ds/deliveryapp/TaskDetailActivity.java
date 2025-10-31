@@ -26,7 +26,7 @@ import com.ds.deliveryapp.utils.TaskActionHandler;
 
 public class TaskDetailActivity extends AppCompatActivity implements TaskActionHandler.TaskUpdateListener{
     private TextView tvParcelCode, tvStatus, tvReceiverName, tvDeliveryLocation;
-    private Button btnCallReceiver, btnMainAction, btnFailAction;
+    private Button btnCallReceiver, btnMainAction, btnFailAction, btnChatReceiver;
     private TextView tvParcelValue;
 
     // View từ card_details_and_route_info.xml (included)
@@ -70,6 +70,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         btnCallReceiver = findViewById(R.id.btn_call_receiver_detail);
         btnFailAction = findViewById(R.id.btn_fail_action);
         btnMainAction = findViewById(R.id.btn_main_action);
+        btnChatReceiver = findViewById(R.id.btn_chat_receiver_detail);
         tvDeliveryType = findViewById(R.id.tv_delivery_type);
         tvWeight = findViewById(R.id.tv_weight);
         tvParcelId = findViewById(R.id.tv_parcel_id);
@@ -123,12 +124,11 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         int gray = getResources().getColor(android.R.color.darker_gray);
         if (btnMainAction == null) return;
         switch (status) {
-            case "PROCESSING":
-            case "IN_PROGRESS": // (Thêm IN_PROGRESS cho chắc)
+            case "IN_PROGRESS":
                 btnMainAction.setText("HOÀN TẤT GIAO HÀNG");
                 btnMainAction.setBackgroundTintList(android.content.res.ColorStateList.valueOf(green));
                 break;
-            case "COMPLETED": // (Sửa từ SUCCESS)
+            case "COMPLETED":
             case "FAILED":
                 btnMainAction.setText("ĐÃ HOÀN TẤT");
                 btnMainAction.setEnabled(false);
@@ -170,6 +170,27 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
                 }
             });
         }
+
+        btnChatReceiver.setOnClickListener(v -> {
+            if (currentTask == null) {
+                // (Xử lý lỗi nếu data chưa sẵn sàng)
+                Toast.makeText(this, "Không tìm thấy thông tin người nhận", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // 1. Tạo Intent để mở ChatActivity
+            Intent chatIntent = new Intent(TaskDetailActivity.this, ChatActivity.class);
+
+            // 2. Đóng gói (put) dữ liệu được yêu cầu
+
+            chatIntent.putExtra("RECIPIENT_ID", currentTask.getReceiverId());
+            chatIntent.putExtra("RECIPIENT_NAME", currentTask.getReceiverName());
+            // Dữ liệu MỚI cho thanh tiêu đề (theo yêu cầu)
+            chatIntent.putExtra("PARCEL_CODE", currentTask.getParcelCode());
+            chatIntent.putExtra("PARCEL_ID", currentTask.getParcelId());
+            // 3. Khởi chạy ChatActivity
+            startActivity(chatIntent);
+        });
     }
 
     /**

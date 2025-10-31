@@ -252,6 +252,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
 
     private ParcelInfo updateParcelStatusAndMap(UUID parcelId, ParcelEvent event) {
         ParcelResponse response = parcelServiceClient.changeParcelStatus(parcelId.toString(), event);
+        log.info("parcel status: {}, event: {}", response.getStatus(), event);
         return parcelMapper.toParcelInfo(response);
     }
 }

@@ -16,6 +16,8 @@ import com.ds.deliveryapp.clients.req.LoginRequest;
 import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.LoginResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
+import com.ds.deliveryapp.utils.SessionManager;
+
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -81,10 +83,11 @@ public class LoginActivity extends AppCompatActivity {
                         LoginResponse loginResponse = baseResponse.getResult();
 
                         saveAuthData(loginResponse);
-
+                        SessionManager sessionManager = new SessionManager(getApplicationContext());
+                        sessionManager.saveDriverId(loginResponse.getUser().getKeycloakId());
                         Toast.makeText(LoginActivity.this, "Đăng nhập thành công!", Toast.LENGTH_SHORT).show();
 
-                        Intent intent = new Intent(LoginActivity.this, ChatActivity.class);
+                        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
                         startActivity(intent);
                         finish();
                     } else {

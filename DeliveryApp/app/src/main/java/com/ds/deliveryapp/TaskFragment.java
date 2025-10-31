@@ -28,6 +28,7 @@ import com.ds.deliveryapp.clients.res.DeliverySession;
 import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.DeliveryAssignment;
+import com.ds.deliveryapp.utils.SessionManager;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,7 +37,6 @@ import java.util.List;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
-import retrofit2.Retrofit;
 
 /**
  * Màn hình Nhiệm vụ hôm nay.
@@ -59,16 +59,22 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private LinearLayoutManager layoutManager;
 
     private String activeSessionId = null;
+    private String driverId; // động
 
     private static final int SCAN_REQUEST_CODE = 1001;
-    private static final String DRIVER_ID = "0bbfa6a6-1c0b-4e4f-9e6e-11e36c142ea5";
     private static final String TAG = "TaskFragment";
+
+    private SessionManager sessionManager;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_tasks, container, false);
+
+        // khởi tạo SessionManager và lấy driverId động
+        sessionManager = new SessionManager(requireContext());
+        driverId = sessionManager.getDriverId();
 
         tasks = new ArrayList<>();
         adapter = new TasksAdapter(tasks, this);
@@ -94,21 +100,17 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         return view;
     }
 
-    // Phương thức tiện ích để reset trạng thái phân trang
     private void resetAndFetchTasks() {
         currentPage = 0;
         isLastPage = false;
         tasks.clear();
         adapter.notifyDataSetChanged();
-        //Ẩn nút menu khi tải lại
-        if (btnSessionMenu != null) {
-            btnSessionMenu.setVisibility(View.GONE);
-        }
+
+        if (btnSessionMenu != null) btnSessionMenu.setVisibility(View.GONE);
         activeSessionId = null;
         fetchTodayTasks(currentPage);
     }
 
-    // Xử lý kết quả từ QrScanActivity
     @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -123,16 +125,13 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         if (isLoading || isLastPage) return;
 
         isLoading = true;
-        if (page == 0) {
-            progressBar.setVisibility(View.VISIBLE);
-        }
+        if (page == 0) progressBar.setVisibility(View.VISIBLE);
 
         SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
-
         List<String> statusFilter = Arrays.asList("IN_PROGRESS");
 
         Call<PageResponse<DeliveryAssignment>> call = service.getTasksToday(
-                DRIVER_ID,
+                driverId, // <-- thay DRIVER_ID tĩnh bằng biến driverId động
                 statusFilter,
                 page,
                 pageSize
@@ -150,27 +149,19 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
 
                     isLastPage = pageResponse.last();
 
-                    if (page == 0) {
-                        tasks.clear();
-                    }
+                    if (page == 0) tasks.clear();
 
                     tasks.addAll(newTasks);
                     adapter.updateTasks(tasks);
 
-                    // Thêm: Logic lưu Session ID và hiển thị nút menu
                     if (page == 0 && !tasks.isEmpty()) {
-                        // tất cả task trong "today" thuộc cùng 1 session
                         activeSessionId = tasks.get(0).getSessionId();
-                        if (btnSessionMenu != null) {
-                            btnSessionMenu.setVisibility(View.VISIBLE);
-                        }
+                        if (btnSessionMenu != null) btnSessionMenu.setVisibility(View.VISIBLE);
                     }
 
                     if (tasks.isEmpty() && page == 0) {
                         Toast.makeText(getContext(), "Không có nhiệm vụ nào.", Toast.LENGTH_SHORT).show();
-                        if (btnSessionMenu != null) {
-                            btnSessionMenu.setVisibility(View.GONE);
-                        }
+                        if (btnSessionMenu != null) btnSessionMenu.setVisibility(View.GONE);
                     } else {
                         Log.d(TAG, "Tasks loaded: Page " + page + ", Size " + newTasks.size());
                     }
@@ -182,6 +173,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     Toast.makeText(getContext(), "Lỗi tải đơn hàng: " + response.code(), Toast.LENGTH_SHORT).show();
                 }
             }
+
             @Override
             public void onFailure(Call<PageResponse<DeliveryAssignment>> call, Throwable t) {
                 isLoading = false;
@@ -213,8 +205,6 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         });
     }
 
-    // --- MENU PHIÊN (SESSION) ---
-
     private void setupSessionMenu() {
         btnSessionMenu.setOnClickListener(v -> {
             if (activeSessionId == null) {
@@ -240,7 +230,6 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         });
     }
 
-    // 1. Hoàn tất phiên
     private void showCompleteSessionDialog() {
         new AlertDialog.Builder(getContext())
                 .setTitle("Hoàn tất phiên")
@@ -261,11 +250,12 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             public void onResponse(Call<DeliverySession> call, Response<DeliverySession> response) {
                 if (response.isSuccessful()) {
                     Toast.makeText(getContext(), "Đã hoàn tất phiên.", Toast.LENGTH_LONG).show();
-                    resetAndFetchTasks(); // Tải lại (danh sách sẽ rỗng)
+                    resetAndFetchTasks();
                 } else {
                     Toast.makeText(getContext(), "Lỗi: " + response.code(), Toast.LENGTH_SHORT).show();
                 }
             }
+
             @Override
             public void onFailure(Call<DeliverySession> call, Throwable t) {
                 Toast.makeText(getContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
@@ -273,7 +263,6 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         });
     }
 
-    // 2. Hủy phiên (Sự cố)
     private void showFailSessionDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
         builder.setTitle("Báo cáo sự cố (Hủy phiên)");
@@ -306,11 +295,12 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             public void onResponse(Call<DeliverySession> call, Response<DeliverySession> response) {
                 if (response.isSuccessful()) {
                     Toast.makeText(getContext(), "Đã báo cáo sự cố. Phiên bị hủy.", Toast.LENGTH_LONG).show();
-                    resetAndFetchTasks(); // Tải lại (danh sách sẽ rỗng)
+                    resetAndFetchTasks();
                 } else {
                     Toast.makeText(getContext(), "Lỗi: " + response.code(), Toast.LENGTH_SHORT).show();
                 }
             }
+
             @Override
             public void onFailure(Call<DeliverySession> call, Throwable t) {
                 Toast.makeText(getContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
@@ -318,13 +308,10 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         });
     }
 
-    // Triển khai phương thức click
     @Override
     public void onTaskClick(DeliveryAssignment task) {
         Intent intent = new Intent(getActivity(), TaskDetailActivity.class);
         intent.putExtra("TASK_DETAIL", task);
-        // Sửa: Dùng startActivityForResult để TaskDetail có thể báo lại
-        startActivityForResult(intent, SCAN_REQUEST_CODE); // Tái sử dụng SCAN_REQUEST_CODE
+        startActivityForResult(intent, SCAN_REQUEST_CODE);
     }
 }
-
