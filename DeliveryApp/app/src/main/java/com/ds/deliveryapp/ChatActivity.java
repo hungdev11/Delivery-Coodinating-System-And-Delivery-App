@@ -20,15 +20,12 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.ds.deliveryapp.adapter.MessageAdapter;
 import com.ds.deliveryapp.auth.AuthManager;
-import com.ds.deliveryapp.clients.AuthClient;
 import com.ds.deliveryapp.clients.ChatClient;
 import com.ds.deliveryapp.clients.req.ChatMessagePayload;
 import com.ds.deliveryapp.clients.req.CreateProposalDTO;
 import com.ds.deliveryapp.clients.req.ProposalResponseRequest;
 import com.ds.deliveryapp.clients.req.ProposalUpdateDTO;
-import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.Conversation;
-import com.ds.deliveryapp.clients.res.KeycloakUserInfoDto;
 import com.ds.deliveryapp.clients.res.Message;
 import com.ds.deliveryapp.clients.res.InteractiveProposal;
 import com.ds.deliveryapp.clients.res.PageResponse;
@@ -77,11 +74,8 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
 
     // Networking & Auth
     private ChatWebSocketManager mWebSocketManager;
-    private AuthClient mAuthClient;
     private ChatClient mChatClient;
-    private final Gson mGson = new Gson();
     private AuthManager mAuthManager;
-
     // State Data
     private String mJwtToken;
     private String mCurrentUserId;
@@ -95,58 +89,69 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_chat); // Giả định layout này có btn_attach
+        setContentView(R.layout.activity_chat);
 
         mAuthManager = new AuthManager(this);
 
         initViews();
+
+        // 1. Lấy tất cả dữ liệu (Token, UserID, Roles) từ AuthManager
         getInitialDataAndToken();
 
         if (!validateInitialIntentData()) { return; }
 
         initRetrofitClients();
         initRecyclerView();
-        getUserInfoAndProceed();
+
+        // 2. Cập nhật Adapter với UserID
+        if (mAdapter != null) {
+            mAdapter.setCurrentUserId(mCurrentUserId);
+        }
+
+        // 3. Bắt đầu chuỗi tải dữ liệu ngay lập tức
+        // (Không cần gọi getUserInfoAndProceed() nữa)
+        fetchConversationIdAndConnect();
+        loadAvailableProposals();
+
         setupSendButton();
-        // (Không cần setupProposalButton nữa)
     }
 
     private void initViews() {
         rvMessages = findViewById(R.id.rv_messages);
         etMessage = findViewById(R.id.et_message);
         btnSend = findViewById(R.id.btn_send);
-
-        // --- ÁNH XẠ CÁC VIEW MỚI ---
         btnBack = findViewById(R.id.btn_back);
         ivAvatar = findViewById(R.id.iv_avatar);
         tvRecipientName = findViewById(R.id.tv_recipient_name);
         tvRecipientStatus = findViewById(R.id.tv_recipient_status);
-        btnAttach = findViewById(R.id.btn_attach); // <-- ÁNH XẠ NÚT +
+        btnAttach = findViewById(R.id.btn_attach);
 
         btnBack.setOnClickListener(v -> finish());
-
-        // Gán listener cho nút +
         btnAttach.setOnClickListener(v -> {
             showProposalMenu();
         });
     }
 
+    /**
+     * Lấy Token, UserID, và Roles trực tiếp từ AuthManager (SharedPreferences).
+     */
     private void getInitialDataAndToken() {
+        // 1. Lấy dữ liệu từ AuthManager
         mJwtToken = mAuthManager.getAccessToken();
 
-        // --- HARDCODED RECIPIENT FOR TESTING ---
-        String customerId = "72d01198-4a4e-4743-8cb8-038a9de9ea98";
-        String shipperId = "62b08293-e714-45e1-9bec-a4a7e9e1bc71";
+        // (Giả sử AuthManager có 2 phương thức này, đọc từ SharedPreferences
+        // mà LoginActivity đã lưu)
+        mCurrentUserId = mAuthManager.getUserId();
+        mCurrentRoles = mAuthManager.getRoles();
 
+        Log.d(TAG, "Auth data loaded from Prefs. UserID: " + mCurrentUserId);
+
+        // 2. Lấy dữ liệu từ Intent (như cũ)
         Log.d(TAG, "Reading data from Intent...");
         Intent intent = getIntent();
-        //mRecipientId = shipperId;
-
         mRecipientId = intent.getStringExtra("RECIPIENT_ID");
         mRecipientName = intent.getStringExtra("RECIPIENT_NAME");
         mParcelId = intent.getStringExtra("PARCEL_ID");
-
-        // (Lấy dữ liệu mới cho thanh tiêu đề)
         mParcelCode = intent.getStringExtra("PARCEL_CODE");
 
         if (mRecipientId == null || mRecipientId.isEmpty()) {
@@ -158,10 +163,23 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         Log.d(TAG, "Initial Data - Parcel Code: " + mParcelCode);
     }
 
+    /**
+     * Kiểm tra cả UserID và Roles đã được tải.
+     */
     private boolean validateInitialIntentData() {
         if (mJwtToken == null || mJwtToken.isEmpty()) {
             Log.e(TAG, "Initial data validation failed: Token missing.");
             showErrorToastAndFinish("Authentication token not found. Please login.");
+            return false;
+        }
+        if (mCurrentUserId == null || mCurrentUserId.isEmpty()) {
+            Log.e(TAG, "Initial data validation failed: UserID missing.");
+            showErrorToastAndFinish("User ID not found. Please login.");
+            return false;
+        }
+        if (mCurrentRoles == null || mCurrentRoles.isEmpty()) {
+            Log.e(TAG, "Initial data validation failed: Roles missing.");
+            showErrorToastAndFinish("User Roles not found. Please login.");
             return false;
         }
         return true;
@@ -169,7 +187,7 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
 
     private void initRecyclerView() {
         mAdapter = new MessageAdapter(mMessages, mCurrentUserId);
-        mAdapter.setListener(this); // Gán listener là Activity này
+        mAdapter.setListener(this);
         LinearLayoutManager lm = new LinearLayoutManager(this);
         lm.setStackFromEnd(true);
         rvMessages.setLayoutManager(lm);
@@ -178,53 +196,7 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
 
     private void initRetrofitClients() {
         mChatClient = RetrofitClient.getChatRetrofitInstance().create(ChatClient.class);
-        mAuthClient = RetrofitClient.getAuthRetrofitInstance().create(AuthClient.class);
     }
-
-    /**
-     * Lấy thông tin user (gọi API /auth/me).
-     */
-    private void getUserInfoAndProceed() {
-        if (mJwtToken == null) return;
-
-        Log.d(TAG, "Fetching user info...");
-        String authorizationHeader = "Bearer " + mJwtToken;
-        Call<BaseResponse<KeycloakUserInfoDto>> call = mAuthClient.getUserInfo(authorizationHeader);
-
-        call.enqueue(new Callback<BaseResponse<KeycloakUserInfoDto>>() {
-            @Override
-            public void onResponse(@NonNull Call<BaseResponse<KeycloakUserInfoDto>> call,
-                                   @NonNull Response<BaseResponse<KeycloakUserInfoDto>> response) {
-                if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
-                    KeycloakUserInfoDto user = response.body().getResult();
-                    mCurrentUserId = user.getSub();
-                    if (user.getRoles() != null) {
-                        mCurrentRoles = user.getRoles();
-                    }
-                    if (mCurrentUserId == null || mCurrentUserId.isEmpty()) {
-                        handleFatalError("Failed to get User ID from token response.");
-                        return;
-                    }
-                    Log.i(TAG, "✅ User info fetched. Current User ID: " + mCurrentUserId);
-                    if (mAdapter != null) {
-                        mAdapter.setCurrentUserId(mCurrentUserId);
-                    }
-
-                    // Bắt đầu chuỗi tải dữ liệu
-                    fetchConversationIdAndConnect();
-                    loadAvailableProposals();
-
-                } else {
-                    handleFatalError("Failed to fetch user info (API Error: " + response.code() + ")");
-                }
-            }
-            @Override
-            public void onFailure(@NonNull Call<BaseResponse<KeycloakUserInfoDto>> call, @NonNull Throwable t) {
-                handleFatalError("Network error fetching user info: " + t.getMessage());
-            }
-        });
-    }
-
     /**
      * Lấy ID cuộc trò chuyện (gọi API /conversations/find-by-users).
      */
@@ -246,10 +218,9 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                     mConversationId = conversation.getConversationId();
                     Log.i(TAG, "✅ Conversation ID fetched/found: " + mConversationId);
 
-                    //
                     mRecipientName = conversation.getPartnerName();
                     mRecipientAvatarUrl = conversation.getPartnerAvatar();
-                    //
+
                     if (mAdapter != null) {
                         mAdapter.setRecipientInfo(mRecipientAvatarUrl);
                     }
@@ -312,12 +283,10 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     }
 
     /**
-     * HÀM MỚI: Tải các loại proposal mà user này có thể TẠO.
+     * Tải các loại proposal mà user này có thể TẠO.
      */
     private void loadAvailableProposals() {
-        Log.i(TAG, "in load config {}" + mCurrentRoles.get(0));
         if (mJwtToken == null) return;
-        String authorizationHeader = "Bearer " + mJwtToken;
 
         Call<List<ProposalTypeConfig>> call = mChatClient.getAvailableConfigs(mCurrentRoles);
         call.enqueue(new Callback<List<ProposalTypeConfig>>() {
@@ -328,7 +297,6 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                     mAvailableProposals = response.body();
                 } else {
                     Log.e(TAG, "Lỗi tải proposal configs: " + response.code());
-                    // Không crash, user chỉ không thể tạo proposal
                 }
             }
             @Override
@@ -339,7 +307,7 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     }
 
     /**
-     * ĐÃ CẬP NHẬT: Kết nối bằng WebSocket Manager.
+     * Kết nối bằng WebSocket Manager.
      */
     private void connectWebSocket() {
         if (mWebSocketManager != null && mWebSocketManager.isConnected()) {
@@ -370,7 +338,7 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     }
 
     /**
-     * ĐÃ CẬP NHẬT: Gửi tin nhắn bằng WebSocket Manager.
+     * Gửi tin nhắn bằng WebSocket Manager.
      */
     private void sendMessage(String content) {
         if (mCurrentUserId == null || mRecipientId == null) {
@@ -404,7 +372,7 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     }
 
     /**
-     * HÀM MỚI: Hiển thị menu khi bấm nút +
+     * Hiển thị menu khi bấm nút +
      */
     private void showProposalMenu() {
         if (mAvailableProposals == null || mAvailableProposals.isEmpty()) {
@@ -420,31 +388,22 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         new AlertDialog.Builder(this)
                 .setTitle("Chọn hành động")
                 .setItems(items, (dialog, which) -> {
-                    // Lấy config được chọn
                     ProposalTypeConfig selectedConfig = mAvailableProposals.get(which);
-
-                    // Phân luồng dựa trên actionType của config
                     String actionType = selectedConfig.getCreationActionType();
                     if (actionType == null) return;
                     if ("DATE_PICKER".equals(actionType)) {
                         actionType = "POSTPONE_OPTIONS";
                     }
 
-
                     switch (actionType) {
-                        case "POSTPONE_OPTIONS": // (Đã đổi tên)
-                            // (Kịch bản: Khách yêu cầu hoãn đơn)
+                        case "POSTPONE_OPTIONS":
                             showPostponeOptionsDialog(selectedConfig);
                             break;
                         case "TEXT_INPUT":
-                            // (Kịch bản: Shipper báo lý do)
-                            // Thu thập data TRƯỚC
                             showTextInputDialog(selectedConfig);
                             break;
                         case "ACCEPT_DECLINE":
                         default:
-                            // (Kịch bản: Không cần data, ví dụ: "Shipper đã đến")
-                            // Gửi luôn
                             sendProposalRequest(selectedConfig.getType(), "{}", selectedConfig.getDescription() + " với mã đơn hàng: " + mParcelCode);
                             break;
                     }
@@ -453,7 +412,7 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     }
 
     /**
-     * HÀM MỚI (Layer 1): Hiển thị 3 lựa chọn hoãn đơn
+     * (Layer 1): Hiển thị 3 lựa chọn hoãn đơn
      */
     private void showPostponeOptionsDialog(ProposalTypeConfig config) {
         CharSequence[] postponeOptions = {
@@ -467,20 +426,16 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                 .setTitle("Chọn kiểu hoãn đơn")
                 .setItems(postponeOptions, (dialog, which) -> {
                     switch (which) {
-                        case 0: // "Vào 1 thời điểm cụ thể"
-                            // Dùng hàm chọn 1 thời điểm
+                        case 0:
                             showSingleDateTimePickerDialog(config, "SPECIFIC");
                             break;
-                        case 1: // "Trước 1 thời điểm"
-                            // Cũng dùng hàm chọn 1 thời điểm, nhưng logic data khác
+                        case 1:
                             showSingleDateTimePickerDialog(config, "BEFORE");
                             break;
-                        case 2: // "Sau 1 thời điểm"
-                            // Cũng dùng hàm chọn 1 thời điểm, nhưng logic data khác
+                        case 2:
                             showSingleDateTimePickerDialog(config, "AFTER");
                             break;
-                        case 3: // "Trong 1 khoảng thời gian"
-                            // Dùng hàm chọn 2 thời điểm
+                        case 3:
                             showDateTimeRangePickerDialog(config);
                             break;
                     }
@@ -489,46 +444,36 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     }
 
     /**
-     * HÀM ĐÃ ĐỔI TÊN (Layer 2 - Option 1 & 2):
+     * (Layer 2 - Option 1 & 2):
      * Xử lý chọn 1 mốc Ngày & Giờ
      */
     private void showSingleDateTimePickerDialog(ProposalTypeConfig config, String postponeType) {
         Calendar cal = Calendar.getInstance();
         mSelectedStartTime = null; // Reset
 
-        // 1. Tạo DatePickerDialog
         DatePickerDialog dpd = new DatePickerDialog(this,
-                // DateSetListener
                 (datePicker, year, month, day) -> {
-
-                    // --- Ngày đã được chọn, lưu lại và hiển thị TimePicker ---
                     mSelectedStartTime = Calendar.getInstance();
                     mSelectedStartTime.set(year, month, day);
 
-                    // 2. Tạo TimePickerDialog
                     TimePickerDialog tpd = new TimePickerDialog(this,
-                            // TimeSetListener
                             (timePicker, hour, minute) -> {
                                 mSelectedStartTime.set(Calendar.HOUR_OF_DAY, hour);
                                 mSelectedStartTime.set(Calendar.MINUTE, minute);
 
-                                // --- Giờ đã được chọn ---
                                 String readableDateTime = String.format("%02d:%02d ngày %02d/%02d/%d",
                                         hour, minute, day, month + 1, year);
 
-                                // 3. Định dạng kết quả (ISO 8601 là tốt nhất)
-                                // ví dụ: "2025-10-30T14:30:00"
                                 String resultData = String.format("%d-%02d-%02dT%02d:%02d:00",
                                         year, month + 1, day, hour, minute);
 
-                                // 4. Tạo JSON data
                                 String dataJson = "{}";
                                 String fallbackContent = "";
 
                                 if ("SPECIFIC".equals(postponeType)) {
                                     dataJson = "{\"specific_datetime\":\"" + resultData + "\"}";
                                     fallbackContent = config.getDescription() +  " với mã đơn hàng: " + mParcelCode + " vào " + readableDateTime;
-                                } else if ("AFTER".equals(postponeType)) { // "AFTER"
+                                } else if ("AFTER".equals(postponeType)) {
                                     dataJson = "{\"after_datetime\":\"" + resultData + "\"}";
                                     fallbackContent = config.getDescription() +  " với mã đơn hàng: " + mParcelCode + " sau " + readableDateTime;
                                 } else {
@@ -536,7 +481,6 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                                     fallbackContent = config.getDescription() +  " với mã đơn hàng: " + mParcelCode + " trước " + readableDateTime;
                                 }
 
-                                // 5. Gửi proposal
                                 sendProposalRequest(config.getType(), dataJson, fallbackContent);
                             },
                             cal.get(Calendar.HOUR_OF_DAY),
@@ -544,51 +488,45 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                             true // 24-hour format
                     );
                     tpd.setTitle("Chọn Giờ");
-                    tpd.show(); // Hiển thị TimePicker
+                    tpd.show();
                 },
                 cal.get(Calendar.YEAR),
                 cal.get(Calendar.MONTH),
                 cal.get(Calendar.DAY_OF_MONTH)
         );
         dpd.setTitle("Chọn Ngày");
-        dpd.show(); // Hiển thị DatePicker TRƯỚC
+        dpd.show();
     }
 
     /**
-     * HÀM MỚI (Layer 2 - Option 3):
+     * (Layer 2 - Option 3):
      * Xử lý chọn 2 mốc Ngày & Giờ (Bắt đầu và Kết thúc)
      */
     private void showDateTimeRangePickerDialog(ProposalTypeConfig config) {
         mSelectedStartTime = null; // Reset
 
-        // --- BƯỚC 1: CHỌN NGÀY BẮT ĐẦU ---
         Calendar cal = Calendar.getInstance();
         DatePickerDialog dpdStart = new DatePickerDialog(this, (dpdView, year, month, day) -> {
             mSelectedStartTime = Calendar.getInstance();
             mSelectedStartTime.set(year, month, day);
 
-            // --- BƯỚC 2: CHỌN GIỜ BẮT ĐẦU ---
             TimePickerDialog tpdStart = new TimePickerDialog(this, (tpdView, hour, minute) -> {
                 mSelectedStartTime.set(Calendar.HOUR_OF_DAY, hour);
                 mSelectedStartTime.set(Calendar.MINUTE, minute);
 
-                // --- BƯỚC 3: CHỌN NGÀY KẾT THÚC ---
                 DatePickerDialog dpdEnd = new DatePickerDialog(this, (dpdView2, year2, month2, day2) -> {
                     Calendar selectedEndTime = Calendar.getInstance();
                     selectedEndTime.set(year2, month2, day2);
 
-                    // --- BƯỚC 4: CHỌN GIỜ KẾT THÚC ---
                     TimePickerDialog tpdEnd = new TimePickerDialog(this, (tpdView2, hour2, minute2) -> {
                         selectedEndTime.set(Calendar.HOUR_OF_DAY, hour2);
                         selectedEndTime.set(Calendar.MINUTE, minute2);
 
-                        // (Kiểm tra logic EndTime > StartTime...)
                         if (selectedEndTime.before(mSelectedStartTime)) {
                             showErrorToast("Giờ kết thúc phải sau giờ bắt đầu.");
                             return;
                         }
 
-                        // --- BƯỚC 5: GỬI PROPOSAL ---
                         String startTimeStr = String.format("%d-%02d-%02dT%02d:%02d:00",
                                 year, month + 1, day, hour, minute);
                         String endTimeStr = String.format("%d-%02d-%02dT%02d:%02d:00",
@@ -618,40 +556,36 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         dpdStart.setTitle("Chọn Ngày Bắt Đầu");
         dpdStart.show();
     }
+
     /**
-     * HÀM MỚI: Hiển thị dialog nhập text (cho TEXT_INPUT)
+     * Hiển thị dialog nhập text (cho TEXT_INPUT)
      */
     private void showTextInputDialog(ProposalTypeConfig config) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(config.getDescription());
         builder.setMessage("Vui lòng nhập lý do:");
 
-        // Tạo một EditText
         final EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_TEXT);
 
-        // Cần một layout để bọc EditText cho có padding
         LinearLayout layout = new LinearLayout(this);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
         );
-        params.setMargins(50, 20, 50, 20); // (Left, Top, Right, Bottom)
+        params.setMargins(50, 20, 50, 20);
         input.setLayoutParams(params);
         layout.addView(input);
 
         builder.setView(layout);
 
         builder.setPositiveButton("Gửi", (dialog, which) -> {
-            // 1. User đã nhập text
             String resultData = input.getText().toString().trim();
             if (resultData.isEmpty()) {
                 showErrorToast("Cần nhập lý do.");
                 return;
             }
-            // 2. Tạo JSON data
             String dataJson = "{\"reason\":\"" + resultData + "\"}";
-            // 3. Gửi proposal
             sendProposalRequest(config.getType(), dataJson, config.getDescription());
         });
         builder.setNegativeButton("Hủy", (dialog, which) -> dialog.cancel());
@@ -676,7 +610,6 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                 mCurrentUserId, mCurrentRoles
         );
 
-        String authorizationHeader = "Bearer " + mJwtToken;
         Call<InteractiveProposal> call = mChatClient.createProposal(payload);
 
         call.enqueue(new Callback<InteractiveProposal>() {
@@ -684,8 +617,6 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             public void onResponse(@NonNull Call<InteractiveProposal> call, @NonNull Response<InteractiveProposal> response) {
                 if (response.isSuccessful()) {
                     Log.i(TAG, "Gửi proposal thành công. Chờ WebSocket echo...");
-                    // Server sẽ tự động gửi Message (loại PROPOSAL)
-                    // qua kênh /user/queue/messages
                     loadChatHistory();
                 } else {
                     Log.e(TAG, "Gửi proposal thất bại: " + response.code());
@@ -707,16 +638,13 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     @Override
     public void onProposalRespond(UUID proposalId, String resultData) {
         Log.d(TAG, "Handling RESPOND for proposal: " + proposalId + " with data: " + resultData);
-        String authorizationHeader = "Bearer " + mJwtToken;
 
-        // 1. Tạo DTO payload mới
         ProposalResponseRequest payload = new ProposalResponseRequest(resultData);
 
-        // 2. Gọi API /respond mới
         Call<InteractiveProposal> call = mChatClient.respondToProposal(
                 proposalId,
                 mCurrentUserId,
-                payload // Gửi DTO trong body
+                payload
         );
 
         call.enqueue(new Callback<InteractiveProposal>() {
@@ -724,7 +652,6 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             public void onResponse(@NonNull Call<InteractiveProposal> call, @NonNull Response<InteractiveProposal> response) {
                 if (response.isSuccessful()) {
                     Log.i(TAG, "Phản hồi proposal thành công. Chờ WebSocket update...");
-                    // Server sẽ gửi update qua /user/queue/proposal-update
                     loadChatHistory();
                 } else {
                     Log.e(TAG, "Phản hồi proposal thất bại: " + response.code());
@@ -777,21 +704,17 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         runOnUiThread(() -> {
             if (update != null && mAdapter != null && update.getProposalId() != null) {
                 Log.i(TAG, "Updating status for Proposal " + update.getProposalId() + " to " + update.getNewStatus());
-
-                // (Bạn cần cập nhật DTO ProposalUpdateDTO ở server và client
-                // để nó chứa cả 'resultData')
-                String resultData = update.getResultData(); // Giả sử DTO đã có
-
+                String resultData = update.getResultData();
                 mAdapter.updateProposalStatus(
                         update.getProposalId(),
                         update.getNewStatus(),
-                        resultData // <-- Truyền cả kết quả
+                        resultData
                 );
             }
         });
     }
 
-    /* --- CÁC HÀM TIỆN ÍCH (Giữ nguyên) --- */
+    /* --- CÁC HÀM TIỆN ÍCH --- */
 
     private void scrollToBottom() {
         if (mAdapter != null && mAdapter.getItemCount() > 0) {

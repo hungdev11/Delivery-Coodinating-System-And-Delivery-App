@@ -104,7 +104,7 @@ public class KeycloakAuthService implements IKeycloakAuthService {
                             .refreshToken(tokenResponse.getRefreshToken())
                             .tokenType(tokenResponse.getTokenType())
                             .expiresIn(tokenResponse.getExpiresIn())
-                            .user(user)
+                            .user(user) 
                             .build();
                     });
             })

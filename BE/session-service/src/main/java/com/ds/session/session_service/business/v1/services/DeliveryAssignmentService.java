@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -22,6 +23,7 @@ import com.ds.session.session_service.application.client.parcelclient.response.P
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.PageResponse;
+import com.ds.session.session_service.common.entities.dto.response.ShipperInfo;
 import com.ds.session.session_service.common.enums.AssignmentStatus;
 import com.ds.session.session_service.common.enums.ParcelEvent;
 import com.ds.session.session_service.common.enums.SessionStatus; 
@@ -215,6 +217,23 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
 
         // Trả về PageResponse (giữ nguyên thông tin phân trang)
         return PageResponse.from(tasksPage, dtoList);
+    }
+
+    public Optional<ShipperInfo> getLatestDriverIdForParcel(String parcelId) {
+        log.info("Tìm kiếm tài xế gần nhất cho parcelId: {}", parcelId);
+
+        Optional<DeliveryAssignment> latestAssignmentOpt = deliveryAssignmentRepository.findFirstByParcelIdOrderByUpdatedAtDesc(parcelId);
+
+        if (latestAssignmentOpt.isEmpty()) {
+            log.warn("Không tìm thấy assignment hợp lệ nào cho parcelId: {}", parcelId);
+            return Optional.empty();
+        }
+
+        return latestAssignmentOpt.map(assignment -> {
+            String driverId = assignment.getSession().getDeliveryManId();
+            log.info("Tìm thấy tài xế: {} cho parcelId: {}", driverId, parcelId);
+            return new ShipperInfo(driverId, "Tài xế", "0912312312");
+        });
     }
 
     // --- UTILITY METHODS ---

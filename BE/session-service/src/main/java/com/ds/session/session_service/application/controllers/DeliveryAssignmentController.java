@@ -1,6 +1,7 @@
 package com.ds.session.session_service.application.controllers;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -14,7 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ds.session.session_service.common.entities.dto.request.TaskFailRequest;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
-import com.ds.session.session_service.common.entities.dto.response.PageResponse; 
+import com.ds.session.session_service.common.entities.dto.response.PageResponse;
+import com.ds.session.session_service.common.entities.dto.response.ShipperInfo;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
 import com.ds.session.session_service.common.interfaces.IDeliveryAssignmentService;
 
@@ -124,5 +126,16 @@ public class DeliveryAssignmentController {
         );
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/current-shipper/parcels/{parcelId}")
+    public ResponseEntity<ShipperInfo> getCurrentShipperInfoForParcel(@PathVariable String parcelId) {
+        Optional<ShipperInfo> shipperOpt = assignmentService.getLatestDriverIdForParcel(parcelId);
+        if (shipperOpt.isPresent()) {
+            return ResponseEntity.ok(shipperOpt.get());
+        } else {
+            return ResponseEntity.ok(null);
+        }
+    }
+    
 }
 
