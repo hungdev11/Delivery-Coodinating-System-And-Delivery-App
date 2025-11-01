@@ -28,10 +28,11 @@ import com.ds.deliveryapp.clients.SessionClient;
 import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.DeliveryAssignment;
+import com.ds.deliveryapp.utils.SessionManager;
 import com.ds.deliveryapp.utils.SpinnerItem;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter; // Import
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -70,12 +71,12 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
     private List<SpinnerItem> statusOptions;
 
     private LinearLayoutManager layoutManager;
+    private SessionManager sessionManager;
+    private String driverId;
 
-    //Định dạng API phải là ISO (yyyy-MM-dd) để khớp với Specification
     private final DateTimeFormatter apiFormatter = DateTimeFormatter.ISO_LOCAL_DATE;
     private final DateTimeFormatter uiFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-    private static final String DRIVER_ID = "0bbfa6a6-1c0b-4e4f-9e6e-11e36c142ea5";
     private static final String TAG = "ActivityFragment";
 
     @Nullable
@@ -85,30 +86,28 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         View view = inflater.inflate(R.layout.fragment_activity, container, false);
 
         adapter = new TasksAdapter(allTasks, this);
-
-        // 1. Ánh xạ Views
         initViews(view);
+        sessionManager = new SessionManager(requireContext());
+        driverId = sessionManager.getDriverId();
 
-        // 2. Thiết lập RecyclerView
+        if (driverId == null || driverId.isEmpty()) {
+            Toast.makeText(getContext(), "Không xác định được tài xế. Vui lòng đăng nhập lại.", Toast.LENGTH_SHORT).show();
+            return view;
+        }
+
         layoutManager = new LinearLayoutManager(getContext());
         rvActivities.setLayoutManager(layoutManager);
         rvActivities.setAdapter(adapter);
         setupPaginationScrollListener();
 
-        // 3. Thiết lập Filter và Spinner
         setDefaultFilters();
-        setupStatusSpinnerLogic(); // Sử dụng logic SpinnerItem
+        setupStatusSpinnerLogic();
 
-        // 4. Thiết lập sự kiện
         imgCreatedAtPicker.setOnClickListener(v -> showDatePickerDialog(true, true));
         imgCompletedAtPicker.setOnClickListener(v -> showDatePickerDialog(false, true));
-        btnApplyFilters.setOnClickListener(v -> {
-            resetPaginationAndFetchTasks();
-        });
+        btnApplyFilters.setOnClickListener(v -> resetPaginationAndFetchTasks());
 
-        // Tải dữ liệu lần đầu
         fetchTasks(currentPage);
-
         return view;
     }
 
@@ -132,14 +131,9 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         statusOptions = new ArrayList<>();
         statusOptions.add(new SpinnerItem("Tất cả", null));
         statusOptions.add(new SpinnerItem("Đang giao", "IN_PROGRESS"));
-        // SỬA LỖI 2: "SUCCESS" -> "COMPLETED"
         statusOptions.add(new SpinnerItem("Đã giao thành công", "COMPLETED"));
         statusOptions.add(new SpinnerItem("Giao hàng thất bại", "FAILED"));
     }
-
-    // (setupStatusSpinnerLogic, getSelectedStatuses, setDefaultFilters,
-    //  updateDateDisplay, showDatePickerDialog, resetPaginationAndFetchTasks
-    //  giữ nguyên như file gốc)
 
     private void setupStatusSpinnerLogic() {
         initializeStatusOptions();
@@ -180,7 +174,6 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
     }
 
     private void showDatePickerDialog(boolean isCreatedDate, boolean isSelectingStartDate) {
-        // (Logic chọn ngày giữ nguyên)
         LocalDate currentStart = isCreatedDate ? createdAtStart : completedAtStart;
         LocalDate currentEnd = isCreatedDate ? createdAtEnd : completedAtEnd;
 
@@ -205,14 +198,11 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
                                 completedAtEnd = completedAtStart;
                             }
                         }
-                        // Hiển thị dialog chọn ngày kết thúc
                         showDatePickerDialog(isCreatedDate, false);
                     } else {
                         LocalDate finalStart = isCreatedDate ? createdAtStart : completedAtStart;
-                        // Đảm bảo ngày kết thúc không trước ngày bắt đầu
                         if (finalStart != null && chosenDate.isBefore(finalStart)) {
                             Toast.makeText(getContext(), "Ngày kết thúc không được trước ngày bắt đầu.", Toast.LENGTH_LONG).show();
-                            // Hiển thị lại dialog chọn ngày kết thúc
                             showDatePickerDialog(isCreatedDate, false);
                             return;
                         }
@@ -222,7 +212,6 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
                         } else {
                             completedAtEnd = chosenDate;
                         }
-                        // Cập nhật UI sau khi chọn xong
                         updateDateDisplay(isCreatedDate);
                     }
                 },
@@ -241,22 +230,22 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         isLastPage = false;
         allTasks.clear();
         adapter.notifyDataSetChanged();
-        //calculateSummary(new ArrayList<>());
         fetchTasks(currentPage);
     }
 
-
     public void fetchTasks(int page) {
         if (isLoading || isLastPage) return;
+        if (driverId == null || driverId.isEmpty()) {
+            Toast.makeText(getContext(), "Không xác định được tài xế.", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
         isLoading = true;
         tvEmptyState.setVisibility(View.GONE);
-        // ... (Hiển thị loading)
 
         Retrofit retrofit = RetrofitClient.getRetrofitInstance(getContext());
         SessionClient service = retrofit.create(SessionClient.class);
 
-        // SỬA LỖI 1: Dùng apiFormatter (yyyy-MM-dd)
         String createdStartStr = createdAtStart != null ? createdAtStart.format(apiFormatter) : null;
         String createdEndStr = createdAtEnd != null ? createdAtEnd.format(apiFormatter) : null;
         String completedStartStr = completedAtStart != null ? completedAtStart.format(apiFormatter) : null;
@@ -264,7 +253,7 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         List<String> statuses = getSelectedStatuses();
 
         Call<PageResponse<DeliveryAssignment>> call = service.getTasks(
-                DRIVER_ID,
+                driverId,
                 statuses,
                 createdStartStr,
                 createdEndStr,
@@ -278,8 +267,6 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
             @Override
             public void onResponse(Call<PageResponse<DeliveryAssignment>> call, Response<PageResponse<DeliveryAssignment>> response) {
                 isLoading = false;
-                // ... (Ẩn loading)
-
                 if (response.isSuccessful() && response.body() != null) {
                     PageResponse<DeliveryAssignment> pageResponse = response.body();
                     List<DeliveryAssignment> newTasks = pageResponse.content();
@@ -288,8 +275,6 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
 
                     if (page == 0) {
                         allTasks.clear();
-                        // Chỉ tính summary cho trang đầu tiên (hoặc tính tổng sau)
-                        // calculateSummary(newTasks);
                     }
 
                     allTasks.addAll(newTasks);
@@ -302,11 +287,11 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
                     }
 
                     currentPage++;
-
                 } else {
-                    Log.e(TAG, "Response unsuccessful: " + response.code() + " - " + response.errorBody());
+                    Log.e(TAG, "Response unsuccessful: " + response.code());
                 }
             }
+
             @Override
             public void onFailure(Call<PageResponse<DeliveryAssignment>> call, Throwable t) {
                 isLoading = false;
@@ -314,9 +299,6 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
             }
         });
     }
-
-    // (setupPaginationScrollListener, calculateSummary, onTaskClick
-    //  giữ nguyên như file gốc)
 
     private void setupPaginationScrollListener() {
         rvActivities.addOnScrollListener(new RecyclerView.OnScrollListener() {

@@ -26,7 +26,7 @@ public class DeliveryAssignmentResponse {
 
     private String deliveryManPhone;
     private String receiverName;
-
+    private String receiverId;
     private String receiverPhone;
     private String deliveryLocation;
     private BigDecimal value;
@@ -43,7 +43,8 @@ public class DeliveryAssignmentResponse {
                 .status(assignment.getStatus().name())
                 .deliveryManAssignedId(session.getDeliveryManId())
                 .deliveryManPhone(deliveryManPhone) 
-                .receiverName(receiverName) 
+                .receiverName(receiverName)
+                .receiverId(parcel.getReceiverId())
                 .receiverPhone(parcel.getReceiverPhoneNumber())
                 .deliveryLocation(parcel.getTargetDestination()) // Mapping targetDestination as deliveryLocation
                 .value(parcel.getValue())

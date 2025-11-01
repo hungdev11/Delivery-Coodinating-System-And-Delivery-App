@@ -91,15 +91,27 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:layout_marginTop="12dp">
+                    android:layout_marginTop="12dp"
+                    android:weightSum="2">
 
                     <Button
                         android:id="@+id/btn_call_receiver_detail"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="GỌI KHÁCH"
-                        android:layout_marginEnd="0dp"/>
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="GỌI KHÁCH"
+                    android:drawableLeft="@drawable/ic_call"
+                    android:layout_marginEnd="8dp"/>
 
+                    <Button
+                        android:id="@+id/btn_chat_receiver_detail"
+                        style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="CHAT"
+                    android:drawableLeft="@drawable/ic_chat"
+                    android:layout_marginStart="8dp"/>
                 </LinearLayout>
             </LinearLayout>
         </androidx.cardview.widget.CardView>

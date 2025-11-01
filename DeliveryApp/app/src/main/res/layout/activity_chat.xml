@@ -105,16 +105,22 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
+        <ImageButton
+            android:id="@+id/btn_attach"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_chat_circle_outline" android:contentDescription="Đính kèm"/>
+
         <EditText
             android:id="@+id/et_message"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:hint="Nhập tin nhắn..."
-            android:inputType="textMultiLine"
-            android:maxLines="4"
             android:background="@drawable/bg_editext_rounded"
             android:padding="12dp"
+            android:layout_marginStart="8dp"
             android:layout_marginEnd="8dp"/>
 
         <ImageButton

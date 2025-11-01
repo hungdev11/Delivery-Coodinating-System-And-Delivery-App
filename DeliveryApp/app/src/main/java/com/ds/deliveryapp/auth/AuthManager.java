@@ -3,11 +3,17 @@ package com.ds.deliveryapp.auth;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 public class AuthManager {
     private static final String PREFS_NAME = "AuthPrefs";
     private static final String KEY_ACCESS_TOKEN = "accessToken";
     private static final String KEY_REFRESH_TOKEN = "refreshToken";
-    private static final String KEY_DRIVER_ID = "driverId";
+    private static final String USER_ID = "userId";
+    private static final String ROLES = "roles";
 
     private final SharedPreferences prefs;
 
@@ -24,8 +30,12 @@ public class AuthManager {
         return prefs.getString(KEY_REFRESH_TOKEN, null);
     }
 
-    public String getDriverId() {
-        return prefs.getString(KEY_DRIVER_ID, null);
+    public String getUserId() {
+        return prefs.getString(USER_ID, null);
+    }
+
+    public List<String> getRoles() {
+        return new ArrayList<>(prefs.getStringSet(ROLES, null));
     }
 
     public boolean isLoggedIn() {
@@ -33,11 +43,12 @@ public class AuthManager {
     }
 
     // Cần gọi phương thức này khi nhận được token mới (khi login hoặc refresh)
-    public void saveTokens(String accessToken, String refreshToken, String driverId) {
+    public void saveTokens(String accessToken, String refreshToken, String userId, List<String> roles) {
         prefs.edit()
                 .putString(KEY_ACCESS_TOKEN, accessToken)
                 .putString(KEY_REFRESH_TOKEN, refreshToken)
-                .putString(KEY_DRIVER_ID, driverId)
+                .putString(USER_ID, userId)
+                .putStringSet(ROLES, new HashSet<>(roles))
                 .apply();
     }
 

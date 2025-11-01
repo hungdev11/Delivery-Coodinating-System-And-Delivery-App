@@ -24,6 +24,7 @@ public class DeliveryAssignment implements Serializable {
     private String deliveryType;
     private String status;
     private String deliveryManAssignedId;
+    private String receiverId;
     private String deliveryManPhone;
     private String receiverName;
     private String receiverPhone;

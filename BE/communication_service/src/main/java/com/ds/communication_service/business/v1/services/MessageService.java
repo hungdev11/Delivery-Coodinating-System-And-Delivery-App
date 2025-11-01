@@ -12,6 +12,7 @@ import com.ds.communication_service.app_context.models.Message;
 import com.ds.communication_service.app_context.repositories.ConversationRepository;
 import com.ds.communication_service.app_context.repositories.MessageRepository;
 import com.ds.communication_service.common.dto.ChatMessagePayload;
+import com.ds.communication_service.common.dto.InteractiveProposalResponseDTO;
 import com.ds.communication_service.common.dto.MessageResponse;
 import com.ds.communication_service.common.enums.ContentType;
 import com.ds.communication_service.common.interfaces.IMessageService;
@@ -49,32 +50,30 @@ public class MessageService implements IMessageService{
     @Override
     @Transactional
     public MessageResponse processAndSaveMessage(ChatMessagePayload payload, String senderId) {
-        // 1. Gọi ConversationService với String ID -> Khớp với service đã sửa ở trên
+        // 1. Gọi ConversationService với String ID
         Conversation conversation = conversationService
                     .findOrCreateConversation(senderId, payload.getRecipientId());
         log.info("Send message: {}", payload.getContent());
-        // 2. Gán String ID -> Khớp với Message Entity
         Message message = new Message();
         message.setConversation(conversation);
-        message.setSenderId(senderId); // <-- Gán String
+        message.setSenderId(senderId); 
         message.setContent(payload.getContent());
         message.setType(ContentType.TEXT); 
 
         Message savedMessage = messageRepository.save(message);
 
-        conversation.setLastMessage(savedMessage);
-        conversationRepository.save(conversation);
-
         return toDto(savedMessage);
     }
 
-    private MessageResponse toDto(Message message) {
+    private MessageResponse toDto(Message message) {        
+        InteractiveProposalResponseDTO res = message.getProposal() != null ? InteractiveProposalResponseDTO.from(message.getProposal()) : null;
         return MessageResponse.builder()
             .id(message.getId().toString()) 
             .content(message.getContent())
             .type(message.getType())
             .senderId(message.getSenderId())
             .sentAt(message.getSentAt())
+            .proposal(res) 
             .build();
     }
 }

@@ -24,3 +24,6 @@ logging:
         web: TRACE
         messaging: DEBUG
         security: DEBUG
+services:
+    session:
+      base-url: ${SESSION_SERVICE_URL:http://localhost:21505}

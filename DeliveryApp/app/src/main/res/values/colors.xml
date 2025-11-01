@@ -1,5 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Màu sắc cơ bản -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Màu chữ mặc định (thường là màu xám đậm) -->
+    <color name="default_text_color">#FF333333</color>
+
+    <!-- Màu cho Trạng thái Đơn hàng -->
+
+    <!-- Màu Xanh lá (Thành công: DELIVERED, SUCCEEDED) -->
+    <color name="status_success">#FF2E7D32</color>
+
+    <!-- Màu Vàng/Cam (Chờ/Trễ: IN_WAREHOUSE, DELAYED) -->
+    <color name="status_pending">#FFFFA000</color>
+
+    <!-- Màu Xanh dương (Đang giao: ON_ROUTE) -->
+    <color name="status_on_route">#FF1976D2</color>
+
+    <!-- Màu Đỏ (Thất bại/Lỗi: FAILED, DISPUTE, LOST) -->
+    <color name="status_failed">#FFD32F2F</color>
+
 </resources>

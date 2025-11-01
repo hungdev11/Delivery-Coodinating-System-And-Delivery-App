@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Layout cho proposal BẠN NHẬN.
+Đây là layout "cha" chứa container cho các UI động.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingStart="8dp"
+    android:paddingEnd="60dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp">
+
+    <!-- Avatar (Giống item_message_received) -->
+    <ImageView
+        android:id="@+id/iv_partner_avatar"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="bottom"
+        android:src="@drawable/ic_person" />
+
+    <!-- Card nội dung -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/bg_message_received"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <!-- Nội dung/mô tả của proposal -->
+    <TextView
+        android:id="@+id/tv_message_content"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxWidth="250dp"
+        android:text="Shipper yêu cầu bạn xác nhận từ chối đơn hàng."
+        android:textColor="@android:color/black"
+        android:textSize="16sp" />
+
+    <!-- Trạng thái (hiển thị khi đã xử lý, ví dụ: ACCEPTED) -->
+    <TextView
+        android:id="@+id/tv_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="ĐÃ CHẤP NHẬN"
+        android:textStyle="bold"
+        android:textColor="@android:color/darker_gray"
+        android:visibility="gone" /> <!-- Mặc định ẩn -->
+
+    <!-- Kết quả (hiển thị khi đã xử lý và có resultData) -->
+    <TextView
+        android:id="@+id/tv_result_data"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Kết quả: Lý do của tôi"
+        android:textColor="@android:color/black"
+        android:textStyle="bold|italic"
+        android:visibility="gone" /> <!-- Mặc định ẩn -->
+
+    <!-- CONTAINER CHO UI ĐỘNG -->
+    <!-- MessageAdapter sẽ chèn layout "partial" vào đây -->
+    <FrameLayout
+        android:id="@+id/dynamic_ui_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" />
+
+</LinearLayout>
+    </LinearLayout>

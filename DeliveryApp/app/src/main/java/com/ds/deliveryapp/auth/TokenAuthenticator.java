@@ -66,7 +66,8 @@ public class TokenAuthenticator implements Authenticator {
                     authManager.saveTokens(
                             newTokens.getAccessToken(),
                             newTokens.getRefreshToken(),
-                            authManager.getDriverId()
+                            authManager.getUserId(),
+                            authManager.getRoles()
                     );
 
                     return response.request().newBuilder()

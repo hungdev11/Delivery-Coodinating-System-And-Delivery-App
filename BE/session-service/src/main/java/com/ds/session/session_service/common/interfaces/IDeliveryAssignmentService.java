@@ -1,11 +1,13 @@
 package com.ds.session.session_service.common.interfaces;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.PageResponse;
+import com.ds.session.session_service.common.entities.dto.response.ShipperInfo;
 
 /**
  * Interface (đã chính xác từ lần trước)
@@ -38,5 +40,7 @@ public interface IDeliveryAssignmentService {
         String completedAtStart, String completedAtEnd,
         int page, int size
     );
+
+    Optional<ShipperInfo> getLatestDriverIdForParcel(String parcelId);
 }
 

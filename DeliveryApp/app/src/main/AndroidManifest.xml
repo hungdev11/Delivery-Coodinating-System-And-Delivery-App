@@ -40,6 +40,9 @@
             android:name=".ChatActivity"
             android:exported="false" />
         <activity
+            android:name=".customer.MainActivity"
+            android:exported="false" />
+        <activity
             android:name=".MainActivity"
             android:exported="false" />
         <activity

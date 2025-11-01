@@ -3,19 +3,21 @@ package com.ds.communication_service.app_context.models;
 import java.sql.Types;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.List; 
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.OneToMany;
 
 import org.hibernate.annotations.Check;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
@@ -44,8 +46,13 @@ public class Conversation {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+    
 
-    @OneToOne(fetch = FetchType.LAZY) 
-    @JoinColumn(name = "last_message_id")
-    private Message lastMessage;
-}
+    @OneToMany(
+        mappedBy = "conversation", 
+        cascade = CascadeType.ALL,
+        orphanRemoval = true
+    )
+    @JsonManagedReference
+    private List<Message> messages;
+    }

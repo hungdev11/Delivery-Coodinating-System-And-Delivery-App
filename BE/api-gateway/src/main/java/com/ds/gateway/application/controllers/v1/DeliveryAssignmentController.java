@@ -162,4 +162,15 @@ public class DeliveryAssignmentController {
 
         return restTemplate.exchange(url, HttpMethod.POST, requestEntity, Object.class);
     }
+
+    @GetMapping("/current-shipper/parcels/{parcelId}")
+    ResponseEntity<?> lastestShipperForParcel(
+        @PathVariable UUID parcelId
+    ) {
+        String url = String.format("%s/api/v1/assignments/current-shipper/parcels/%s", 
+            sessionServiceUrl, parcelId);
+        log.info("Gateway: Proxying 'lastest shipper' to {}", url);
+        
+        return restTemplate.exchange(url, HttpMethod.GET, null, Object.class);
+    }
 }

@@ -8,5 +8,4 @@ public class Conversation {
     private String partnerId;
     private String partnerName;
     private String partnerAvatar;
-    private Message lastMessage;
 }

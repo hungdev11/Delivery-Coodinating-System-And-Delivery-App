@@ -49,5 +49,7 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
      */
     @Query("SELECT da FROM DeliveryAssignment da JOIN da.session s WHERE da.parcelId = :parcelId AND s.status = :status")
     Optional<DeliveryAssignment> findActiveByParcelId(String parcelId, SessionStatus status);
+
+    Optional<DeliveryAssignment> findFirstByParcelIdOrderByUpdatedAtDesc(String parcelId);
 }
 

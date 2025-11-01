@@ -19,4 +19,5 @@ public class MessageResponse {
     private String content;
     private LocalDateTime sentAt;
     private ContentType type;
+    private InteractiveProposalResponseDTO proposal;
 }

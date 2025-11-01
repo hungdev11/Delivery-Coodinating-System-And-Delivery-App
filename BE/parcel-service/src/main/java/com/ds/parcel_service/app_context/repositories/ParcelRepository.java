@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
@@ -20,4 +22,8 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID>, JpaSpecif
 
     List<Parcel> findByStatusAndDeliveredAtBetween(ParcelStatus delivered, LocalDateTime twentyFourHoursAgo,
             LocalDateTime now);
+
+    Page<Parcel> findBySenderId(String senderId, Pageable pageable);
+
+    Page<Parcel> findByReceiverId(String receiverId, Pageable pageable);
 }

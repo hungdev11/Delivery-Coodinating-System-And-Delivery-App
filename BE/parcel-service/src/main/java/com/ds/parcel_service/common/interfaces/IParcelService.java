@@ -26,4 +26,8 @@ public interface IParcelService {
         String direction
     );
     Map<String, ParcelResponse> fetchParcelsBulk(List<UUID> parcelIds);
+
+    PageResponse<ParcelResponse> getParcelsSentByCustomer(String customerId, int page, int size);
+
+    PageResponse<ParcelResponse> getParcelsReceivedByCustomer(String customerId, int page, int size);
 }
