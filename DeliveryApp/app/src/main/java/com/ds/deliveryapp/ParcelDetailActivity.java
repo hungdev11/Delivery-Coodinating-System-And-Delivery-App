@@ -11,15 +11,17 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.ds.deliveryapp.auth.AuthManager;
 import com.ds.deliveryapp.clients.SessionClient;
-// SỬA LỖI 1: Import DTO Request và Model Response
 import com.ds.deliveryapp.clients.req.ScanParcelRequest;
-import com.ds.deliveryapp.model.DeliveryAssignment;
-// ---
+import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
+import com.ds.deliveryapp.model.DeliveryAssignment;
 import com.ds.deliveryapp.model.Parcel;
+import com.ds.deliveryapp.utils.SessionManager;
 
 import java.math.BigDecimal;
 import java.util.Locale;
@@ -39,9 +41,11 @@ public class ParcelDetailActivity extends AppCompatActivity {
             tvReceiverPhone, tvWeight, tvValue;
     private ImageButton btnClose;
     private Button btnAcceptTask;
-
+    private AuthManager mAuthManager;
+    private SessionManager mSessionManager;
     private String parcelId;
-    private static final String DRIVER_ID = "0bbfa6a6-1c0b-4e4f-9e6e-11e36c142ea5";
+    private String mJwtToken;
+    private String driverId;
 
     private static final String TAG = "ParcelDetailActivity";
 
@@ -51,6 +55,25 @@ public class ParcelDetailActivity extends AppCompatActivity {
         setContentView(R.layout.activity_parcel_detail);
 
         initViews();
+        mAuthManager = new AuthManager(this);
+        mSessionManager = new SessionManager(this);
+        mJwtToken = mAuthManager.getAccessToken();
+
+        if (mJwtToken == null || mJwtToken.isEmpty()) {
+            Toast.makeText(this, "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.", Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
+
+        driverId = mSessionManager.getDriverId();
+        if (driverId == null || driverId.isEmpty()) {
+            Toast.makeText(this, "Không xác định được tài xế. Vui lòng đăng nhập lại.", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+
+        Log.d(TAG, "Driver ID (from SessionManager): " + driverId);
+
         loadDataFromIntent();
         setupEventListeners();
     }
@@ -73,63 +96,51 @@ public class ParcelDetailActivity extends AppCompatActivity {
     private void loadDataFromIntent() {
         Intent intent = getIntent();
         if (intent == null) {
-            Toast.makeText(this, "Lỗi: Không có dữ liệu đơn hàng.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Không có dữ liệu bưu kiện.", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
-        Parcel parcel;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            parcel = intent.getSerializableExtra("PARCEL_INFO", Parcel.class);
-        } else {
-            parcel = (Parcel) intent.getSerializableExtra("PARCEL_INFO");
-        }
+        Parcel parcel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                ? intent.getSerializableExtra("PARCEL_INFO", Parcel.class)
+                : (Parcel) intent.getSerializableExtra("PARCEL_INFO");
 
         if (parcel == null) {
-            Toast.makeText(this, "Không thể tải thông tin bưu kiện. Lỗi dữ liệu.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Không thể tải thông tin bưu kiện.", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
-        String code = parcel.getCode();
-        parcelId = parcel.getId(); // Lấy ID
-        String deliveryType = parcel.getDeliveryType() != null ? parcel.getDeliveryType().toString() : "N/A";
-        String status = parcel.getStatus() != null ? parcel.getStatus().toString() : "N/A";
-        String windowStart = parcel.getWindowStart() != null ? parcel.getWindowStart().toString() : "N/A";
-        String windowEnd = parcel.getWindowEnd() != null ? parcel.getWindowEnd().toString() : "N/A";
-        BigDecimal value = parcel.getValue();
+        parcelId = parcel.getId();
+        tvParcelCode.setText("Mã bưu kiện: #" + parcel.getCode());
+        tvStatus.setText("Trạng thái: " + parcel.getStatus());
+        tvDeliveryType.setText("Loại giao hàng: " + parcel.getDeliveryType());
+        tvReceiveFrom.setText("Từ: " + parcel.getReceiveFrom());
+        tvTargetDestination.setText("Đến: " + parcel.getTargetDestination());
+        tvDeliveryWindow.setText("Thời gian giao: " + parcel.getWindowStart() + " - " + parcel.getWindowEnd());
+        tvReceiverName.setText("Người nhận (ID): " + parcel.getReceiverId());
+        tvReceiverPhone.setText("SĐT: " + parcel.getReceiverPhoneNumber());
+        tvWeight.setText(String.format(Locale.getDefault(), "%.2f kg", parcel.getWeight()));
+        tvValue.setText("Giá trị: " + formatCurrency(parcel.getValue()));
 
-        tvParcelCode.setText("Mã bưu kiện: #" + (code != null ? code : "N/A"));
-        tvStatus.setText("Trạng thái: " + status);
-        tvDeliveryType.setText("Loại giao hàng: " + deliveryType);
-        tvReceiveFrom.setText("Từ: " + (parcel.getReceiveFrom() != null ? parcel.getReceiveFrom() : "N/A"));
-        tvTargetDestination.setText("Đến: " + (parcel.getTargetDestination() != null ? parcel.getTargetDestination() : "N/A"));
-        tvDeliveryWindow.setText("Thời gian giao: " + windowStart + " - " + windowEnd);
-        tvReceiverName.setText("Người nhận (ID): " + (parcel.getReceiverId() != null ? parcel.getReceiverId() : "N/A"));
-        tvReceiverPhone.setText("SĐT: " + (parcel.getReceiverPhoneNumber() != null ? parcel.getReceiverPhoneNumber() : "N/A"));
-        tvWeight.setText("Khối lượng: " + String.format(Locale.getDefault(), "%.2f kg", parcel.getWeight()));
-        tvValue.setText("Giá trị: " + formatCurrency(value));
-        Log.d(TAG, "Parcel details loaded for code: " + code);
-
-        if (parcel.getStatus() != null && !parcel.getStatus().toString().equals("IN_WAREHOUSE")) {
+        if (!"IN_WAREHOUSE".equals(parcel.getStatus().toString())) {
             btnAcceptTask.setText("KHÔNG THỂ NHẬN NHIỆM VỤ");
             btnAcceptTask.setEnabled(false);
         }
     }
 
-
     private void setupEventListeners() {
         btnClose.setOnClickListener(v -> finish());
-
         btnAcceptTask.setOnClickListener(v -> {
+            if (driverId == null) {
+                Toast.makeText(this, "Không xác định được tài xế. Vui lòng thử lại.", Toast.LENGTH_SHORT).show();
+                return;
+            }
             if (parcelId == null || parcelId.isEmpty()) {
-                Toast.makeText(this, "Lỗi: Không có Parcel ID.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Thiếu Parcel ID.", Toast.LENGTH_SHORT).show();
                 return;
             }
             btnAcceptTask.setEnabled(false);
-            Toast.makeText(this, "Đang xử lý nhận nhiệm vụ...", Toast.LENGTH_SHORT).show();
-
-            // SỬA LỖI 1: Gọi hàm mới
             handleAcceptTask(parcelId);
         });
     }
@@ -138,39 +149,27 @@ public class ParcelDetailActivity extends AppCompatActivity {
         Retrofit retrofit = RetrofitClient.getRetrofitInstance(this);
         SessionClient service = retrofit.create(SessionClient.class);
 
-        // 1. Tạo Request DTO
         ScanParcelRequest requestBody = new ScanParcelRequest(parcelIdToAccept);
+        Call<DeliveryAssignment> call = service.acceptParcelToSession(driverId, requestBody);
 
-        // 2. Gọi API đúng (từ SessionController)
-        Call<DeliveryAssignment> call = service.acceptParcelToSession(DRIVER_ID, requestBody);
-
-        // 3. Sửa kiểu trả về (Callback<DeliveryAssignment>)
         call.enqueue(new Callback<DeliveryAssignment>() {
             @Override
             public void onResponse(Call<DeliveryAssignment> call, Response<DeliveryAssignment> response) {
-
                 if (response.isSuccessful() && response.body() != null) {
-                    // Thành công, server trả về task (Assignment) vừa tạo
-                    Toast.makeText(ParcelDetailActivity.this, "Nhận đơn thành công. Nhiệm vụ đã được thêm.", Toast.LENGTH_LONG).show();
-
-                    setResult(RESULT_OK); // Báo cho TaskFragment tải lại
-                    finish();
-
+                    Toast.makeText(ParcelDetailActivity.this, "Nhận đơn thành công.", Toast.LENGTH_SHORT).show();
+                    setResult(RESULT_OK);
                 } else {
-                    // Thất bại (ví dụ: 4xx, 5xx)
-                    // (Đơn này đã được nhận, hoặc server lỗi)
-                    Log.e(TAG, "Response unsuccessful: " + response.code() + ". Message: " + response.message());
-                    Toast.makeText(ParcelDetailActivity.this, "Lỗi nhận nhiệm vụ: " + response.code(), Toast.LENGTH_LONG).show();
-
+                    Log.e(TAG, "Lỗi khi nhận đơn: " + response.code());
+                    Toast.makeText(ParcelDetailActivity.this, "Không thể nhận nhiệm vụ.", Toast.LENGTH_SHORT).show();
                     setResult(RESULT_CANCELED);
-                    finish();
                 }
+                finish();
             }
 
             @Override
             public void onFailure(Call<DeliveryAssignment> call, Throwable t) {
                 Log.e(TAG, "Network error: " + t.getMessage());
-                Toast.makeText(ParcelDetailActivity.this, "Lỗi kết nối mạng khi nhận nhiệm vụ.", Toast.LENGTH_LONG).show();
+                Toast.makeText(ParcelDetailActivity.this, "Lỗi mạng khi nhận nhiệm vụ.", Toast.LENGTH_SHORT).show();
                 setResult(RESULT_CANCELED);
                 finish();
             }

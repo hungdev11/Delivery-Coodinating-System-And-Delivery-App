@@ -16,7 +16,7 @@
 
     <TextView
         android:id="@+id/tvDriverName"
-        android:text="Tài xế Nguyễn Văn A"
+        android:text="Nguyễn Văn A"
         android:textSize="18sp"
         android:textStyle="bold"
         android:layout_marginTop="12dp"

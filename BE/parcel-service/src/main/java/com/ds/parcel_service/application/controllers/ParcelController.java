@@ -1,5 +1,6 @@
 package com.ds.parcel_service.application.controllers;
 
+import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -27,7 +28,6 @@ import com.ds.parcel_service.common.enums.ParcelEvent;
 import com.ds.parcel_service.common.interfaces.IParcelService;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -70,6 +70,26 @@ public class ParcelController {
         log.info("Fetching parcel by code={}", code);
         ParcelResponse response = parcelService.getParcelByCode(code);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<PageResponse<ParcelResponse>> getMyParcels(
+            @RequestParam String customerId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        PageResponse<ParcelResponse> parcels = parcelService.getParcelsSentByCustomer(customerId, page, size);
+        return ResponseEntity.ok(parcels);
+    }
+
+    @GetMapping("/me/receive")
+    public ResponseEntity<PageResponse<ParcelResponse>> getReceiveParcels(
+            @RequestParam String customerId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        PageResponse<ParcelResponse> parcels = parcelService.getParcelsReceivedByCustomer(customerId, page, size);
+        return ResponseEntity.ok(parcels);
     }
     
     @GetMapping()

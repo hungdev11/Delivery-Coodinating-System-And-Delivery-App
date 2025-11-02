@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Layout MỚI cho màn hình Chi tiết đơn hàng.
+-->
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF">
+
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+
+        <!-- Thanh tiêu đề giả (vì chúng ta ẩn ActionBar) -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="?attr/colorPrimary">
+
+            <!-- Nút Back (để gọi hàm closeDetailFragment) -->
+            <ImageButton
+                android:id="@+id/btn_detail_back"
+                android:layout_width="?attr/actionBarSize"
+                android:layout_height="?attr/actionBarSize"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                app:tint="@android:color/white" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="Chi tiết đơn hàng"
+                android:textColor="@android:color/white"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+
+        <!-- Nội dung chi tiết -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/tv_detail_code"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="@color/black"
+                tools:text="VN123456789" />
+
+            <TextView
+                android:id="@+id/tv_detail_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textSize="16sp"
+                tools:text="Đang vận chuyển"
+                tools:textColor="@color/status_on_route" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#EEE"
+                android:layout_marginVertical="16dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Từ:"
+                android:textSize="14sp"/>
+            <TextView
+                android:id="@+id/tv_detail_from"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black"
+                android:textSize="16sp"
+                tools:text="Kho Cầu Giấy, Hà Nội" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Đến:"
+                android:layout_marginTop="8dp"
+                android:textSize="14sp"/>
+            <TextView
+                android:id="@+id/tv_detail_to"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/black"
+                android:textSize="16sp"
+                tools:text="123 Nguyễn Huệ, Q.1, TP.HCM" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#EEE"
+                android:layout_marginVertical="16dp"/>
+
+            <TextView
+                android:id="@+id/tv_detail_weight"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                tools:text="Cân nặng: 2.5 kg" />
+
+            <TextView
+                android:id="@+id/tv_detail_created_at"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                tools:text="Ngày tạo: 01/11/2025 08:00" />
+
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

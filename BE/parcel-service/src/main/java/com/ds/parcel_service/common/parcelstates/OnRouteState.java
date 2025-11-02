@@ -13,6 +13,7 @@ public class OnRouteState implements IParcelState{
             case POSTPONE:
                 yield ParcelStatus.DELAYED;
             case CAN_NOT_DELIVERY:
+            case CUSTOMER_REJECT:
                 yield ParcelStatus.FAILED;
             default:
                 throw new IllegalStateException("Invalid event at " + getParcelStatus().name() + ": " + event.name());

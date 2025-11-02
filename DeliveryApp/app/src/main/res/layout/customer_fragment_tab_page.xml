@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Layout này được TÁI SỬ DỤNG cho cả
+  ReceivedOrdersFragment và SentOrdersFragment.
+  Nó chỉ chứa một RecyclerView.
+-->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:background="#FFFFFF"
+    android:layout_height="match_parent">
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_view_parcels"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="8dp"
+        android:clipToPadding="false"/>
+
+    <!-- (Bạn có thể thêm ProgressBar ở đây) -->
+
+</FrameLayout>

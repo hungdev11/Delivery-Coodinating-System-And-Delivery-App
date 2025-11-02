@@ -66,6 +66,54 @@ public class ParcelServiceController {
     public ResponseEntity<?> getParcelByCode(@PathVariable String code) {
         return ResponseEntity.ok(restTemplate.getForObject(PARCEL_URL+"/code/"+code, Object.class));
     }
+
+    @GetMapping("/me")
+    public ResponseEntity<?> getParcelsSent(@RequestParam String customerId, @RequestParam int page, @RequestParam int size) {
+
+        String finalUrl = UriComponentsBuilder.fromUriString(PARCEL_URL)
+                .path("/me")
+                .queryParam("customerId", customerId)
+                .queryParam("page", page)
+                .queryParam("size", size)
+                .toUriString();
+        try {
+            ResponseEntity<Object> response = restTemplate.exchange(
+                finalUrl, 
+                HttpMethod.GET, 
+                null, // null for no request body
+                Object.class
+            );
+            return response;
+
+        } catch (HttpClientErrorException | HttpServerErrorException e) {
+            log.error("Error during proxied get parcels receive: {}", e.getMessage());
+            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        }
+    }
+
+    @GetMapping("/me/receive")
+    public ResponseEntity<?> getParcelsReceive(@RequestParam String customerId, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+
+        String finalUrl = UriComponentsBuilder.fromUriString(PARCEL_URL)
+                .path("/me/receive")
+                .queryParam("customerId", customerId)
+                .queryParam("page", page)
+                .queryParam("size", size)
+                .toUriString();
+        try {
+            ResponseEntity<Object> response = restTemplate.exchange(
+                finalUrl, 
+                HttpMethod.GET, 
+                null, // null for no request body
+                Object.class
+            );
+            return response;
+
+        } catch (HttpClientErrorException | HttpServerErrorException e) {
+            log.error("Error during proxied get parcels receive: {}", e.getMessage());
+            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        }
+    }
     
     @GetMapping()
     public ResponseEntity<?> getParcels(

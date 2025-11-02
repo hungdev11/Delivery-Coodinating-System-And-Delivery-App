@@ -8,6 +8,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 
 import com.ds.communication_service.common.enums.ContentType;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,6 +21,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.OneToOne;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -37,6 +39,7 @@ public class Message {
 
     @ManyToOne(fetch = FetchType.LAZY) 
     @JoinColumn(name = "conversation_id", nullable = false)
+    @JsonBackReference
     private Conversation conversation;
 
     @Column(name = "sender_id", nullable = false)
@@ -52,4 +55,8 @@ public class Message {
     @CreationTimestamp
     @Column(name = "sent_at", nullable = false, updatable = false)
     private LocalDateTime sentAt;
+    
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "proposal_id", nullable = true, unique = true) 
+    private InteractiveProposal proposal;
 }

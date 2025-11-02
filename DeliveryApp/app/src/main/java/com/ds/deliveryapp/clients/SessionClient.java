@@ -6,6 +6,7 @@ import com.ds.deliveryapp.clients.req.TaskFailRequest;
 import com.ds.deliveryapp.clients.req.RouteInfo;
 import com.ds.deliveryapp.clients.res.DeliverySession;
 import com.ds.deliveryapp.clients.res.PageResponse;
+import com.ds.deliveryapp.clients.res.ShipperInfo;
 import com.ds.deliveryapp.model.DeliveryAssignment;
 
 import java.util.List;
@@ -113,4 +114,8 @@ public interface SessionClient {
             @Body TaskFailRequest request // Body này chứa reason + routeInfo
     );
 
+    @GET("/api/v1/assignments/current-shipper/parcels/{parcelId}")
+    Call<ShipperInfo> getLastestShipperInfoForParcel( //if ok status but null -> not found
+            @Path("parcelId") String parcelId
+    );
 }

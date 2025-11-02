@@ -221,6 +221,24 @@ public class ParcelService implements IParcelService{
             ));
     }
 
+    @Override
+    public PageResponse<ParcelResponse> getParcelsSentByCustomer(String customerId, int page, int size) {
+        Pageable pageable = PageUtil.build(page, size, "createdAt", "DESC", Parcel.class);
+        
+        Page<Parcel> parcels = parcelRepository.findBySenderId(customerId, pageable);
+        
+        return PageResponse.from(parcels.map(this::toDto));
+    }
+
+    @Override
+    public PageResponse<ParcelResponse> getParcelsReceivedByCustomer(String customerId, int page, int size) {
+        Pageable pageable = PageUtil.build(page, size, "createdAt", "DESC", Parcel.class);
+        
+        Page<Parcel> parcels = parcelRepository.findByReceiverId(customerId, pageable);
+        
+        return PageResponse.from(parcels.map(this::toDto));
+    }
+
     //update address
     // parcel staticstic
 }

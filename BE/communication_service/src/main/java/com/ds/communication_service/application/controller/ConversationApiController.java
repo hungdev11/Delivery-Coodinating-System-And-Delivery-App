@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ds.communication_service.app_context.models.Conversation;
-import com.ds.communication_service.app_context.models.Message;
 import com.ds.communication_service.common.dto.ConversationResponse;
 import com.ds.communication_service.common.dto.MessageResponse;
 import com.ds.communication_service.common.dto.PageResponse;
@@ -50,7 +49,7 @@ public class ConversationApiController {
             @RequestParam("user2") String userId2
     ) {
         Conversation conversation = conversationService.findOrCreateConversation(userId1, userId2);
-        return ResponseEntity.ok(mapToConversationResponse(conversation, userId2));
+        return ResponseEntity.ok(mapToConversationResponse(conversation, userId2)); 
     }
 
     @GetMapping("/user/{currentUserId}")
@@ -60,7 +59,7 @@ public class ConversationApiController {
         List<Conversation> conversations = conversationService.getConversationsForUser(currentUserId);
 
         List<ConversationResponse> responseDtos = conversations.stream()
-                .map(conv -> mapToConversationResponse(conv, currentUserId))
+                .map(conv -> mapToConversationResponse(conv, currentUserId)) 
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(responseDtos);
@@ -72,18 +71,6 @@ public class ConversationApiController {
         dto.setPartnerId(partnerId);
         dto.setPartnerName("User " + partnerId.substring(0, 4));
         dto.setPartnerAvatar(null);
-
-        if (conversation.getLastMessage() != null) {
-            Message lastMsgEntity = conversation.getLastMessage();
-            MessageResponse lastMsgDto = MessageResponse.builder()
-                    .id(lastMsgEntity.getId().toString())
-                    .senderId(lastMsgEntity.getSenderId())
-                    .content(lastMsgEntity.getContent())
-                    .type(lastMsgEntity.getType())
-                    .sentAt(lastMsgEntity.getSentAt())
-                    .build();
-            dto.setLastMessage(lastMsgDto);
-        }
 
         return dto;
     }
