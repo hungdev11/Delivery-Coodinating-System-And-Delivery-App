@@ -127,6 +127,25 @@ public class DeliveryAssignmentController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * API shipper gọi khi khách báo hoãn (loại thẳng khỏi danh sách đang giao nếu shipper chấp nhận - k xử lý các case thời gian).
+     */
+    @PostMapping("/drivers/{deliveryManId}/parcels/{parcelId}/postpone")
+    public ResponseEntity<DeliveryAssignmentResponse> postponeTask(
+        @PathVariable UUID deliveryManId,
+        @PathVariable UUID parcelId,
+        @RequestBody String addInfo
+    ) {
+        log.info("Shipper {} flagging parcel {} as POSTPONE and accept by both side", deliveryManId, parcelId);
+        DeliveryAssignmentResponse response = assignmentService.postponeByCustomer(
+            parcelId, 
+            deliveryManId, 
+            "Khách yêu cầu hoãn với thời gian: " + addInfo,
+            new RouteInfo()
+        );
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/current-shipper/parcels/{parcelId}")
     public ResponseEntity<ShipperInfo> getCurrentShipperInfoForParcel(@PathVariable String parcelId) {
         Optional<ShipperInfo> shipperOpt = assignmentService.getLatestDriverIdForParcel(parcelId);

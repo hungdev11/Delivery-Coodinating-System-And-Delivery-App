@@ -31,6 +31,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
@@ -164,6 +165,10 @@ public class ProposalService implements IProposalService{
             callRefuseParcelApi(proposal.getProposerId(), proposal.getData());
         }
 
+        if (proposal.getType().equals(ProposalType.POSTPONE_REQUEST)) {
+            callPostponeParcelApi(currentUserId, proposal.getData());
+        }
+
         log.info("Proposal {} đã được PHẢN HỒI bởi User {}", proposalId, currentUserId);
         return savedProposal;
     }
@@ -195,6 +200,49 @@ public class ProposalService implements IProposalService{
             e.printStackTrace();
         }
     }
+
+    private void callPostponeParcelApi(String deliveryManId, String data) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode node = mapper.readTree(data);
+
+            // Lấy parcelId ra và bỏ khỏi dữ liệu gửi đi
+            String parcelId = node.has("parcelId") ? node.get("parcelId").asText() : null;
+
+            if (parcelId == null) {
+                log.warn("Không tìm thấy parcelId trong dữ liệu postpone.");
+                return;
+            }
+
+            // Tạo payload mới: loại bỏ trường parcelId
+            ((ObjectNode) node).remove("parcelId");
+            String cleanedData = mapper.writeValueAsString(node);
+
+            // Tạo URL đúng endpoint
+            String url = String.format("%s/api/v1/assignments/drivers/%s/parcels/%s/postpone",
+                    sessionServiceUrl, deliveryManId, parcelId);
+
+            log.info("Đang gọi API ngoài: POST {}", url);
+            log.debug("Payload gửi đi: {}", cleanedData);
+
+            // Header + body
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<String> entity = new HttpEntity<>(cleanedData, headers);
+
+            // Thực hiện gọi API
+            restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+
+            log.info("Gọi API postpone parcel thành công cho Parcel ID: {}", parcelId);
+
+        } catch (JsonProcessingException e) {
+            log.error("Lỗi parse JSON trong callPostponeParcelApi", e);
+        } catch (Exception e) {
+            log.error("Lỗi khi gọi postpone parcel API", e);
+        }
+    }
+
 
     /**
      * Logic (chạy tự động) để xử lý các proposal hết hạn.

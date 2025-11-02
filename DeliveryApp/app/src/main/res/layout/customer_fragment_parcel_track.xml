@@ -54,123 +54,145 @@
         android:visibility="gone"
         tools:visibility="visible"/>
 
-    <!-- ScrollView để chứa kết quả -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:layout_marginTop="16dp">
 
-    <!-- Thẻ kết quả (ẩn ban đầu) -->
-    <LinearLayout
-        android:id="@+id/layout_track_result"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp"
-    android:visibility="gone"
-    tools:visibility="visible">
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Chi tiết đơn hàng"
-        android:textStyle="bold"
-        android:textSize="14sp"
-        android:textColor="@color/design_default_color_primary"/>
-
-    <TextView
-        android:id="@+id/text_result_code"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:textSize="16sp"
-        tools:text="Mã đơn: VN123456789"/>
-
-    <TextView
-        android:id="@+id/text_result_status"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:textStyle="bold"
-        tools:text="Trạng thái: Đang vận chuyển"/>
-
-    <TextView
-        android:id="@+id/text_result_destination"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        tools:text="Đến: 123 Nguyễn Huệ, Q.1, TP.HCM"/>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="#E0E0E0"
-        android:layout_marginVertical="16dp"/>
-
-    <LinearLayout
-        android:id="@+id/layout_shipper_info"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:visibility="gone"
-        tools:visibility="visible">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Thông tin tài xế"
-            android:textStyle="bold"
-            android:textSize="14sp"
-            android:textColor="@color/design_default_color_primary"/>
-
-        <TextView
-            android:id="@+id/text_shipper_name"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textSize="16sp"
-            tools:text="Tên: Nguyễn Văn A"/>
-
-        <TextView
-            android:id="@+id/text_shipper_phone"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            tools:text="SĐT: 0909123456"/>
-
-        <!-- (MỚI) HÀNG NÚT GỌI/CHAT -->
         <LinearLayout
+            android:id="@+id/layout_track_result"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="12dp">
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone"
+            tools:visibility="visible">
 
-            <Button
-                android:id="@+id/button_call_shipper"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="0dp"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Gọi điện"
-                app:icon="@android:drawable/ic_menu_call" />
+                android:text="Chi tiết đơn hàng"
+                android:textStyle="bold"
+                android:textSize="14sp"
+                android:textColor="@color/design_default_color_primary"/>
 
-            <Button
-                android:id="@+id/button_chat_shipper"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="0dp"
+            <TextView
+                android:id="@+id/text_result_code"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="16dp"
-                android:text="Nhắn tin"
-                app:icon="@android:drawable/ic_dialog_email" />
+                android:layout_marginTop="8dp"
+                android:textSize="16sp"
+                tools:text="Mã đơn: VN123456789"/>
+
+            <TextView
+                android:id="@+id/text_result_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textStyle="bold"
+                tools:text="Trạng thái: Đang vận chuyển"/>
+
+            <TextView
+                android:id="@+id/text_result_destination"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                tools:text="Đến: 123 Nguyễn Huệ, Q.1, TP.HCM"/>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#E0E0E0"
+                android:layout_marginVertical="16dp"/>
+
+            <LinearLayout
+                android:id="@+id/layout_shipper_info"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Thông tin tài xế"
+                    android:textStyle="bold"
+                    android:textSize="14sp"
+                    android:textColor="@color/design_default_color_primary"/>
+
+                <TextView
+                    android:id="@+id/text_shipper_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textSize="16sp"
+                    tools:text="Tên: Nguyễn Văn A"/>
+
+                <TextView
+                    android:id="@+id/text_shipper_phone"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    tools:text="SĐT: 0909123456"/>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="12dp">
+
+                    <Button
+                        android:id="@+id/button_call_shipper"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Gọi điện"
+                        app:icon="@android:drawable/ic_menu_call" />
+
+                    <Button
+                        android:id="@+id/button_chat_shipper"
+                        style="@style/Widget.MaterialComponents.Button"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="16dp"
+                        android:text="Nhắn tin"
+                        app:icon="@android:drawable/ic_dialog_email" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- HÀNG NÚT XÁC NHẬN/TRẠNG THÁI -->
+            <LinearLayout
+                android:id="@+id/layout_confirm_buttons"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="24dp">
+
+                <Button
+                    android:id="@+id/button_confirm_received"
+                    style="@style/Widget.MaterialComponents.Button"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Đã nhận hàng"
+                    app:icon="@android:drawable/ic_input_add" />
+
+                <Button
+                    android:id="@+id/button_not_received"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:text="Chưa nhận được"
+                    app:icon="@android:drawable/ic_dialog_alert" />
+            </LinearLayout>
 
         </LinearLayout>
-
-    </LinearLayout>
-
-</LinearLayout>
     </ScrollView>
 
-    </LinearLayout>
-
+</LinearLayout>

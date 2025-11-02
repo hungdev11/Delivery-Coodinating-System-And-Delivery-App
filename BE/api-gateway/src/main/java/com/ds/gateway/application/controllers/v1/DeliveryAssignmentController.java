@@ -151,14 +151,30 @@ public class DeliveryAssignmentController {
     @PostMapping("/drivers/{deliveryManId}/parcels/{parcelId}/refuse")
     public ResponseEntity<?> refuseTask(
         @PathVariable UUID deliveryManId,
-        @PathVariable UUID parcelId,
-        @Valid @RequestBody Object taskFailRequest
+        @PathVariable UUID parcelId
     ) {
         String url = String.format("%s/api/v1/assignments/drivers/%s/parcels/%s/refuse", 
             sessionServiceUrl, deliveryManId, parcelId);
         log.info("Gateway: Proxying 'refuseTask' to {}", url);
         
-        HttpEntity<Object> requestEntity = new HttpEntity<>(taskFailRequest);
+        return restTemplate.exchange(url, HttpMethod.POST, null, Object.class);
+    }
+
+    /**
+     * Khách báo hoãn
+     * Gọi tới: POST /api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/postpone
+     */
+    @PostMapping("/drivers/{deliveryManId}/parcels/{parcelId}/postpone")
+    public ResponseEntity<?> postponeTask(
+        @PathVariable UUID deliveryManId,
+        @PathVariable UUID parcelId,
+        @RequestBody String addInfo
+    ) {
+        String url = String.format("%s/api/v1/assignments/drivers/%s/parcels/%s/postpone", 
+            sessionServiceUrl, deliveryManId, parcelId);
+        log.info("Gateway: Proxying 'refuseTask' to {}", url);
+        
+        HttpEntity<Object> requestEntity = new HttpEntity<>(addInfo);
 
         return restTemplate.exchange(url, HttpMethod.POST, requestEntity, Object.class);
     }

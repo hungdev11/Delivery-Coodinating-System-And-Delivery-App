@@ -95,6 +95,11 @@ public class ReceiveOrdersFragment extends Fragment implements ParcelAdapter.OnI
     public void onResume() {
         super.onResume();
         Log.d("LIFE_DEBUG", getClass().getSimpleName() + " resumed");
+
+        // Gọi lại API mỗi khi fragment hiển thị lại
+        if (viewModel != null) {
+            viewModel.fetchMyParcels();
+        }
     }
     @Override
     public void onPause() {

@@ -86,6 +86,18 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         );
     }
 
+    @Override
+    public DeliveryAssignmentResponse postponeByCustomer(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo) {
+        return updateTaskState(
+            parcelId,
+            deliveryManId,
+            routeInfo,
+            AssignmentStatus.COMPLETED,       // newStatus
+            ParcelEvent.POSTPONE,      // parcelEvent 
+            reason                            // failReason
+        );
+    }
+
     private DeliveryAssignmentResponse updateTaskState(UUID parcelId, UUID deliveryManId, RouteInfo routeInfo,
                                                        AssignmentStatus newStatus, ParcelEvent parcelEvent, String failReason) {
         
