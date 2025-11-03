@@ -24,6 +24,7 @@
 import { PrismaClient, AddressType } from '@prisma/client';
 import { OSMParser, findLatestVietnamPBF } from '../utils/osm-parser.js';
 import { join } from 'path';
+import { existsSync } from 'fs';
 import * as geohash from '../utils/geohash.js';
 
 const prisma = new PrismaClient();
@@ -31,7 +32,7 @@ const prisma = new PrismaClient();
 interface POI {
   osmId: string;
   name: string;
-  nameEn?: string;
+  nameEn: string | undefined;
   lat: number;
   lon: number;
   addressType: AddressType;
@@ -274,11 +275,25 @@ async function seedAddresses() {
     // Step 1: Parse OSM PBF file (ALL features, not just roads!)
     console.log('Step 1: Parsing OSM PBF file...');
     const rawDataDir = join(process.cwd(), './raw_data');
-    const pbfPath = findLatestVietnamPBF(rawDataDir);
-    const thuDucPoly = join(rawDataDir, 'poly/thuduc_cu.poly');
+    
+    // Use complete extract if available, otherwise use poly extract
+    const completeExtractPath = join(rawDataDir, 'extracted/thuduc_complete.osm.pbf');
+    let pbfPath: string;
+    let polyFile: string | undefined;
+    
+    if (existsSync(completeExtractPath)) {
+      console.log('  Using complete extract (routing + addresses)');
+      pbfPath = completeExtractPath;
+      polyFile = undefined; // Already clipped
+    } else {
+      console.log('  Using source PBF with polygon clip');
+      console.log('  Tip: Run "npm run extract:complete" for better address coverage');
+      pbfPath = findLatestVietnamPBF(rawDataDir);
+      polyFile = join(rawDataDir, 'poly/thuduc_cu.poly');
+    }
 
     const parser = new OSMParser();
-    const osmData = await parser.parseAllFeatures(pbfPath, thuDucPoly);
+    const osmData = await parser.parseAllFeatures(pbfPath, polyFile);
     console.log(`✓ Parsed ${osmData.nodes.size} nodes and ${osmData.ways.length} ways\n`);
 
     // Step 2: Extract POIs

@@ -21,6 +21,9 @@ export interface RouteOptions {
   geometries?: 'geojson' | 'polyline' | 'polyline6';
   annotations?: boolean;   // Include additional metadata
   continue_straight?: boolean;
+  vehicle?: 'car' | 'motorbike';  // Vehicle type (determines which OSRM profile to use)
+  // Routing mode determines WHICH motorbike OSRM instance to query
+  mode?: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base';
 }
 
 export interface OSRMRoute {
@@ -93,13 +96,16 @@ export class OSRMRouterService {
   private instance2Client: AxiosInstance;
   private instance1Url: string;
   private instance2Url: string;
+  
+  // Motorbike routes use per-mode clients created on demand
 
   constructor() {
     this.prisma = prisma;
 
     // Get OSRM instance URLs from environment
-    this.instance1Url = process.env.OSRM_INSTANCE_1_URL || 'http://localhost:5000';
-    this.instance2Url = process.env.OSRM_INSTANCE_2_URL || 'http://localhost:5001';
+    // Legacy (car dual-instance)
+    this.instance1Url = process.env.OSRM_INSTANCE_1_URL || process.env.OSRM_BALANCED_URL || 'http://localhost:5002';
+    this.instance2Url = process.env.OSRM_INSTANCE_2_URL || process.env.OSRM_BASE_URL || 'http://localhost:5004';
 
     // Create axios clients for each instance
     this.instance1Client = axios.create({
@@ -111,8 +117,17 @@ export class OSRMRouterService {
       baseURL: this.instance2Url,
       timeout: 10000,
     });
+    
+    // Motorbike clients are created per request based on mode
 
-    logger.info(`OSRM Router initialized with instances: ${this.instance1Url}, ${this.instance2Url}`);
+    logger.info(
+      `OSRM Router initialized - Car: ${this.instance1Url}, ${this.instance2Url} | Motorbike modes: ` +
+      `priority_first=${process.env.OSRM_PRIORITY_FIRST_URL || 'n/a'}, ` +
+      `speed_leaning=${process.env.OSRM_SPEED_LEANING_URL || 'n/a'}, ` +
+      `balanced=${process.env.OSRM_BALANCED_URL || 'n/a'}, ` +
+      `no_recommend=${process.env.OSRM_NO_RECOMMEND_URL || 'n/a'}, ` +
+      `base=${process.env.OSRM_BASE_URL || 'n/a'}`
+    );
 
     // Load active instance from database
     this.loadActiveInstance().catch(error => {
@@ -145,21 +160,41 @@ export class OSRMRouterService {
       geometries: options.geometries || 'geojson',
       steps: options.steps ?? true,
       alternatives: options.alternatives ?? false,
-      annotations: options.annotations ?? true,
+      // Request detailed annotations including OSM node IDs
+      annotations: options.annotations === false ? false : 'nodes,distance,duration,weight,speed',
       continue_straight: options.continue_straight ?? true,
     };
 
     const queryString = new URLSearchParams(params).toString();
-    const path = `/route/v1/driving/${coordinates}?${queryString}`;
+    
+    // Determine vehicle profile
+    const vehicle = options.vehicle || 'car';
+    const profile = vehicle === 'motorbike' ? 'motorbike' : 'car';
+    const path = `/route/v1/${profile}/${coordinates}?${queryString}`;
 
     try {
-      // Try active instance first
+      // Motorbike uses per-mode instances
+      if (vehicle === 'motorbike') {
+        const client = this.getMotorbikeClientForMode(options.mode);
+        const response = await client.get(path);
+        return response.data;
+      }
+      
+      // Car uses dual-instance with failover
       const response = await this.queryInstance(this.activeInstance, path);
       return response.data;
     } catch (error) {
-      logger.warn(`Active instance ${this.activeInstance} failed, trying failover`, error);
+      // Motorbike instance has no failover
+      if (vehicle === 'motorbike') {
+        // Avoid logging circular structures
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error('Motorbike OSRM instance failed', { message: msg });
+        throw new Error('Motorbike routing service unavailable');
+      }
+      
+      logger.warn(`Active car instance ${this.activeInstance} failed, trying failover`);
 
-      // Try other instance as failover
+      // Try other instance as failover (car only)
       const failoverInstance = this.activeInstance === 1 ? 2 : 1;
 
       try {
@@ -171,6 +206,23 @@ export class OSRMRouterService {
         throw new Error('OSRM service unavailable');
       }
     }
+  }
+
+  /**
+   * Select motorbike OSRM axios client based on routing mode
+   */
+  private getMotorbikeClientForMode(
+    mode: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base' | undefined
+  ): AxiosInstance {
+    const map: Record<string, string | undefined> = {
+      priority_first: process.env.OSRM_PRIORITY_FIRST_URL,
+      speed_leaning: process.env.OSRM_SPEED_LEANING_URL,
+      balanced: process.env.OSRM_BALANCED_URL,
+      no_recommend: process.env.OSRM_NO_RECOMMEND_URL,
+      base: process.env.OSRM_BASE_URL,
+    };
+    const selected = (mode && map[mode]) || process.env.OSRM_BALANCED_URL || this.instance2Url;
+    return axios.create({ baseURL: selected, timeout: 10000 });
   }
 
   /**

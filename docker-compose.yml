@@ -103,8 +103,11 @@ services:
       DB_PASSWORD: ${DB_PASSWORD} # not using
       ZONE_DB_CONNECTION: ${ZONE_DB_CONNECTION}
       SETTINGS_SERVICE_URL: http://settings-service:21502
-      OSRM_INSTANCE_1_URL: http://osrm-instance-1:5000
-      OSRM_INSTANCE_2_URL: http://osrm-instance-2:5000
+      OSRM_PRIORITY_FIRST_URL: http://osrm-priority-first:5000
+      OSRM_SPEED_LEANING_URL: http://osrm-speed-leaning:5000
+      OSRM_BALANCED_URL: http://osrm-balanced:5000
+      OSRM_NO_RECOMMEND_URL: http://osrm-no-recommend:5000
+      OSRM_BASE_URL: http://osrm-base:5000
       PORT: 21503
     ports:
       - "21503:21503"
@@ -152,13 +155,13 @@ services:
       retries: 120
       start_period: 30s
 
-  # OSRM Instance 1 (Primary routing engine)
-  osrm-instance-1:
+  # OSRM Priority-First (Motorbike - High priority waypoints, accepts detours)
+  osrm-priority-first:
     image: osrm/osrm-backend:latest
-    container_name: dss-osrm-1
+    container_name: dss-osrm-priority-first
     restart: on-failure
     volumes:
-      - ./BE/zone_service/osrm_data/osrm-instance-1:/data:ro
+      - ./BE/zone_service/osrm_data/osrm-priority-first:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
     ports:
       - "5000:5000"
@@ -169,16 +172,67 @@ services:
       retries: 3
       start_period: 10s
 
-  # OSRM Instance 2 (Standby routing engine for zero-downtime updates)
-  osrm-instance-2:
+  # OSRM Speed-Leaning (Motorbike - Prefers fast routes, skips low-priority if far)
+  osrm-speed-leaning:
     image: osrm/osrm-backend:latest
-    container_name: dss-osrm-2
+    container_name: dss-osrm-speed-leaning
     restart: on-failure
     volumes:
-      - ./BE/zone_service/osrm_data/osrm-instance-2:/data:ro
+      - ./BE/zone_service/osrm_data/osrm-speed-leaning:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
     ports:
       - "5001:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # OSRM Balanced (Motorbike - Balanced priority vs speed)
+  osrm-balanced:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-balanced
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-balanced:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "5002:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # OSRM No-Recommend (Motorbike - Ignores AI recommendations)
+  osrm-no-recommend:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-no-recommend
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-no-recommend:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "5003:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # OSRM Base (Motorbike - No overrides, pure base weights)
+  osrm-base:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-base
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-base:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "5004:5000"
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s

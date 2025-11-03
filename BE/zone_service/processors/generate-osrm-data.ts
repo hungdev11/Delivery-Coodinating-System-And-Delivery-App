@@ -21,8 +21,8 @@ const prisma = new PrismaClient();
 /**
  * Export road network to OSM XML format
  */
-async function exportToOSMXML(instanceName: string): Promise<string> {
-  console.log(`\n📦 Exporting road network to OSM XML for ${instanceName}...`);
+async function exportToOSMXML(instanceName: string, mode: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base' = 'base'): Promise<string> {
+  console.log(`\n📦 Exporting road network to OSM XML for ${instanceName} (mode: ${mode})...`);
 
   const outputDir = join(process.cwd(), 'osrm_data', instanceName);
   if (!existsSync(outputDir)) {
@@ -31,42 +31,130 @@ async function exportToOSMXML(instanceName: string): Promise<string> {
 
   const osmFilePath = join(outputDir, 'network.osm.xml');
 
-  // Fetch all roads, nodes, segments, and traffic conditions
+  // Fetch all roads, nodes, segments, traffic conditions, and user feedback
+  // NOTE: Load segments in batches to avoid MySQL prepared statement limit
   console.log('   Fetching data from database...');
-  const [roads, nodes, segments, trafficConditions] = await Promise.all([
+
+  // Load basic data first
+  const [roads, nodes] = await Promise.all([
     prisma.roads.findMany(),
     prisma.road_nodes.findMany(),
-    prisma.road_segments.findMany({
+  ]);
+
+  console.log(`   Found ${roads.length} roads, ${nodes.length} nodes`);
+
+  // Load segments in batches (MySQL prepared statement limit workaround)
+  console.log('   Loading segments in batches...');
+  const BATCH_SIZE = 5000;
+  const segments: any[] = [];
+  let offset = 0;
+  let batch = 0;
+
+  while (true) {
+    batch++;
+    const segmentBatch = await prisma.road_segments.findMany({
+      skip: offset,
+      take: BATCH_SIZE,
       include: {
         from_node: true,
         to_node: true,
         traffic_conditions: {
           where: {
             expires_at: {
-              gte: new Date() // Only get non-expired traffic data
+              gte: new Date()
             }
           },
           orderBy: {
-            source_timestamp: 'desc' // Get latest traffic data
+            source_timestamp: 'desc'
           },
-          take: 1 // Only the most recent per segment
+          take: 1
+        },
+        user_feedback: {
+          orderBy: {
+            created_at: 'desc'
+          },
+          take: 10
         }
       },
-    }),
-    prisma.traffic_conditions.findMany({
+    });
+
+    if (segmentBatch.length === 0) break;
+
+    segments.push(...segmentBatch);
+    offset += BATCH_SIZE;
+    console.log(`   Loaded batch ${batch}: ${segments.length} segments total`);
+
+    if (segmentBatch.length < BATCH_SIZE) break; // Last batch
+  }
+
+  // Traffic conditions (not used in current logic, but kept for compatibility)
+  const trafficConditions = await prisma.traffic_conditions.findMany({
       where: {
         expires_at: {
           gte: new Date()
         }
       },
-      include: {
-        road_segment: true
-      }
-    })
-  ]);
+    take: 1000, // Limit for performance
+  });
+
+  // Load road overrides for dynamic routing adjustments
+  console.log('   Loading road overrides...');
+  const overrides = await prisma.road_overrides.findMany();
+
+  // Build lookup maps for fast access
+  const overridesBySegmentId = new Map(
+    overrides.filter(o => o.segment_id).map(o => [o.segment_id, o])
+  );
+  const overridesByOsmWayId = new Map(
+    overrides.filter(o => o.osm_way_id).map(o => [o.osm_way_id?.toString(), o])
+  );
 
   console.log(`   Found ${roads.length} roads, ${nodes.length} nodes, ${segments.length} segments`);
   console.log(`   Found ${trafficConditions.length} active traffic conditions`);
+  console.log(`   Found ${overrides.length} road overrides`);
+
+  // Calculate delta_weight from user feedback and update database
+  console.log('   Calculating delta weights from user feedback...');
+  const deltaWeightUpdates: Array<{ segment_id: string; delta_weight: number }> = [];
+
+  for (const segment of segments) {
+    const shipperScore = calculateShipperFeedbackScore([segment]);
+    if (shipperScore !== null && segment.user_feedback.length > 0) {
+      // Convert score (0-1) to weight penalty
+      // Score 1.0 = no penalty (delta 0)
+      // Score 0.5 = +50% penalty (delta 0.5 * base_weight)
+      // Score 0.0 = +100% penalty (delta 1.0 * base_weight)
+      const baseWeight = segment.base_weight ?? 1.0;
+      const delta_weight = (1.0 - shipperScore) * baseWeight;
+      deltaWeightUpdates.push({
+        segment_id: segment.segment_id,
+        delta_weight
+      });
+    }
+  }
+
+  // Batch update delta_weight in database
+  if (deltaWeightUpdates.length > 0) {
+    console.log(`   Updating ${deltaWeightUpdates.length} segment delta weights...`);
+    const DELTA_BATCH_SIZE = 1000;
+
+    for (let i = 0; i < deltaWeightUpdates.length; i += DELTA_BATCH_SIZE) {
+      const batch = deltaWeightUpdates.slice(i, i + DELTA_BATCH_SIZE);
+      const caseStatements = batch
+        .map(u => `WHEN '${u.segment_id}' THEN ${u.delta_weight}`)
+        .join(' ');
+      const segmentIds = batch.map(u => `'${u.segment_id}'`).join(',');
+
+      await prisma.$executeRawUnsafe(`
+        UPDATE road_segments
+        SET delta_weight = CASE segment_id ${caseStatements} END
+        WHERE segment_id IN (${segmentIds})
+      `);
+    }
+    console.log(`   ✓ Updated ${deltaWeightUpdates.length} segment delta weights`);
+  } else {
+    console.log(`   ℹ️  No user feedback found, skipping delta weight update`);
+  }
 
   // Create mapping from string IDs to numeric IDs
   console.log('   Creating ID mappings...');
@@ -89,89 +177,252 @@ async function exportToOSMXML(instanceName: string): Promise<string> {
 
   // Generate OSM XML
   console.log('   Generating OSM XML...');
+
+  // Prepare coordinate -> numeric node id map for reusing nodes at same position
+  // CRITICAL: Use real OSM node IDs so backend can match them to DB
+  const coordToNodeId = new Map<string, number>();
+  const nodeCoords = new Map<number, { lat: number; lon: number }>(); // Store coords for later export
+  const coordToDbNode = new Map<string, any>(); // Map coord to DB node with OSM ID
+
+  // Build reverse lookup: coordinates -> DB node
+  for (const node of nodes) {
+    if (node.lat && node.lon) {
+      const key = coordKey(node.lat, node.lon);
+      coordToDbNode.set(key, node);
+    }
+  }
+
+  function coordKey(lat: number, lon: number): string {
+    return `${lat.toFixed(7)},${lon.toFixed(7)}`; // 7 decimals for ~1cm precision
+  }
+
+  function ensureNodeForCoord(lat: number, lon: number): number {
+    const key = coordKey(lat, lon);
+    if (coordToNodeId.has(key)) return coordToNodeId.get(key)!;
+
+    // Try to find matching DB node with real OSM ID
+    const dbNode = coordToDbNode.get(key);
+    let nodeId: number;
+
+    if (dbNode && dbNode.osm_id && !isNaN(Number(dbNode.osm_id))) {
+      // Use real OSM node ID from database
+      nodeId = Number(dbNode.osm_id);
+    } else {
+      // Fallback: use DB node_id hash or generate (should rarely happen)
+      nodeId = dbNode ? Math.abs(hashString(dbNode.node_id)) : 10_000_000 + coordToNodeId.size;
+    }
+
+    coordToNodeId.set(key, nodeId);
+    nodeCoords.set(nodeId, { lat, lon });
+    return nodeId;
+  }
+
+  function hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash);
+  }
+
+  // STEP 1: Collect all ways first (build node references)
+  console.log('   Building ways from segments...');
+  const ways: Array<{
+    id: number;
+    nodeRefs: number[];
+    tags: Array<{ k: string; v: string }>;
+  }> = [];
+
+  let wayIdCounter = 5_000_000;
+  let skippedSegments = 0;
+
+  for (const segment of segments) {
+    const segWayId = wayIdCounter++;
+    const nodeRefs: number[] = [];
+    const tags: Array<{ k: string; v: string }> = [];
+
+    // Parse geometry: expect GeoJSON LineString { coordinates: [[lon,lat], ...] }
+    let coords: Array<[number, number]> = [];
+    try {
+      if (typeof segment.geometry === 'string') {
+        const parsed = JSON.parse(segment.geometry);
+        coords = parsed.coordinates || [];
+      } else if (segment.geometry && typeof segment.geometry === 'object' && 'coordinates' in segment.geometry) {
+        coords = (segment.geometry as any).coordinates;
+      }
+    } catch (e) {
+      // Fallback: use endpoint nodes
+      const fromNode = nodeIdMap.get(segment.from_node_id);
+      const toNode = nodeIdMap.get(segment.to_node_id);
+      if (fromNode && toNode) {
+        nodeRefs.push(fromNode, toNode);
+      } else {
+        skippedSegments++;
+        continue;
+      }
+    }
+
+    // Build node references from geometry
+    if (coords.length >= 2) {
+      for (const [lon, lat] of coords) {
+        nodeRefs.push(ensureNodeForCoord(lat, lon));
+      }
+    } else if (coords.length === 0 && nodeRefs.length === 0) {
+      // Fallback to endpoint nodes
+      const fromNode = nodeIdMap.get(segment.from_node_id);
+      const toNode = nodeIdMap.get(segment.to_node_id);
+      if (fromNode && toNode) {
+        nodeRefs.push(fromNode, toNode);
+      } else {
+        skippedSegments++;
+        continue;
+        }
+      }
+
+    if (nodeRefs.length < 2) {
+      skippedSegments++;
+      continue;
+    }
+
+    // Build tags
+    const road = roads.find(r => r.road_id === segment.road_id);
+    const roadType = road ? mapRoadTypeToOSM(road.road_type) : 'unclassified';
+    tags.push({ k: 'highway', v: roadType });
+
+    if (segment.name) {
+      tags.push({ k: 'name', v: escapeXML(segment.name) });
+    } else if (road && road.name) {
+      tags.push({ k: 'name', v: escapeXML(road.name) });
+    }
+
+    if (road && road.name_en) {
+      tags.push({ k: 'name:en', v: escapeXML(road.name_en) });
+    }
+
+    if (segment.max_speed || (road && road.max_speed)) {
+      tags.push({ k: 'maxspeed', v: String(segment.max_speed || road!.max_speed) });
+    }
+
+    if (road && road.lanes) {
+      tags.push({ k: 'lanes', v: String(road.lanes) });
+    }
+
+    // Calculate final weight: base_weight + delta_weight (from user feedback)
+    const baseWeight = segment.base_weight ?? 1.0;
+    const deltaWeight = segment.delta_weight ?? 0.0;
+    const segWeight = baseWeight + deltaWeight;
+    tags.push({ k: 'custom_weight', v: segWeight.toFixed(2) });
+
+    const trafficCondition = segment.traffic_conditions && segment.traffic_conditions[0];
+    if (trafficCondition) {
+      tags.push({ k: 'traffic_level', v: trafficCondition.traffic_level });
+      if (trafficCondition.congestion_score > 0) {
+        tags.push({ k: 'congestion_score', v: trafficCondition.congestion_score.toFixed(1) });
+      }
+    }
+
+    const shipperScore = calculateShipperFeedbackScore([segment]);
+    if (shipperScore !== null) {
+      tags.push({ k: 'shipper_score', v: shipperScore.toFixed(2) });
+    }
+
+    // Add knp:* tags from overrides (for dynamic routing adjustments)
+    // Different modes apply overrides differently
+    const override = overridesBySegmentId.get(segment.segment_id) ||
+                     (segment.osm_way_id ? overridesByOsmWayId.get(segment.osm_way_id.toString()) : null);
+
+    // Mode-specific override application
+    if (mode !== 'base' && override) {
+      // Block level (always applied except in base mode)
+      if (override.block_level && override.block_level !== 'none') {
+        tags.push({ k: 'knp:block_level', v: override.block_level });
+      }
+
+      // For 'no_recommend' mode, disable recommendations
+      const recommendEnabled = mode === 'no_recommend' ? false : (override.recommend_enabled !== false);
+
+      // Delta weight adjustment (except no_recommend mode)
+      if (mode !== 'no_recommend' && override.delta !== null && override.delta !== undefined) {
+        tags.push({ k: 'knp:delta', v: override.delta.toFixed(3) });
+      }
+
+      // Point score (except no_recommend mode)
+      if (mode !== 'no_recommend' && override.point_score !== null && override.point_score !== undefined) {
+        tags.push({ k: 'knp:point_score', v: override.point_score.toFixed(3) });
+      }
+
+      // Recommendation enabled flag
+      tags.push({ k: 'knp:recommend_enabled', v: recommendEnabled ? '1' : '0' });
+
+      // Custom penalty factors (if set)
+      if (override.soft_penalty_factor !== null && override.soft_penalty_factor !== undefined) {
+        tags.push({ k: 'knp:soft_penalty', v: override.soft_penalty_factor.toFixed(2) });
+      }
+      if (override.min_penalty_factor !== null && override.min_penalty_factor !== undefined) {
+        tags.push({ k: 'knp:min_penalty', v: override.min_penalty_factor.toFixed(2) });
+      }
+
+      // Mode tag for profile to use
+      tags.push({ k: 'knp:mode', v: mode });
+    } else if (mode === 'base') {
+      // Base mode: no overrides applied
+      tags.push({ k: 'knp:mode', v: 'base' });
+    }
+
+    // Handle oneway vs bidirectional roads
+    const isOneWay = segment.one_way || (road && road.one_way);
+
+    if (isOneWay) {
+      // One-way road: create single way with oneway tag
+      tags.push({ k: 'oneway', v: 'yes' });
+      ways.push({ id: segWayId, nodeRefs, tags });
+    } else {
+      // Bidirectional road: create TWO ways (forward and backward)
+      // This allows OSRM to route in both directions and make U-turns at any point
+
+      // Forward way (original direction)
+      ways.push({ id: segWayId, nodeRefs, tags });
+
+      // Backward way (reversed direction)
+      const reverseWayId = wayIdCounter++;
+      const reverseNodeRefs = [...nodeRefs].reverse();
+      ways.push({ id: reverseWayId, nodeRefs: reverseNodeRefs, tags });
+    }
+  }
+
+  console.log(`   Built ${ways.length} ways (${skippedSegments} segments skipped)`);
+  console.log(`   Created ${nodeCoords.size} unique nodes from geometry`);
+
+  // Log bidirectional stats
+  const bidirectionalCount = segments.filter(s => !s.one_way && !(roads.find(r => r.road_id === s.road_id)?.one_way)).length;
+  const onewayCount = segments.length - bidirectionalCount;
+  console.log(`   Bidirectional segments: ${bidirectionalCount} (exported as ${bidirectionalCount * 2} ways)`);
+  console.log(`   One-way segments: ${onewayCount} (exported as ${onewayCount} ways)`);
+
+  // STEP 2: Write XML in correct order: header → nodes → ways
+  console.log('   Writing OSM XML...');
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
   xml += '<osm version="0.6" generator="zone-service">\n';
   xml += '  <bounds minlat="10.3" minlon="106.3" maxlat="11.2" maxlon="107.0"/>\n';
 
-  // Add nodes
-  for (const node of nodes) {
-    const numericId = nodeIdMap.get(node.node_id)!;
-    xml += `  <node id="${numericId}" lat="${node.lat}" lon="${node.lon}"/>\n`;
-  }
-
-  // Add ways (roads) with segments
-  for (const road of roads) {
-    const roadSegments = segments.filter(s => s.road_id === road.road_id);
-    if (roadSegments.length === 0) continue;
-
-    const wayId = roadIdMap.get(road.road_id)!;
-    xml += `  <way id="${wayId}">\n`;
-
-    // Build ordered node list for the way
-    const orderedNodes: string[] = [];
-    const segmentMap = new Map(roadSegments.map(s => [s.from_node_id, s]));
-
-    // Start with the first segment
-    if (roadSegments.length > 0) {
-      let currentSegment = roadSegments[0];
-      orderedNodes.push(currentSegment.from_node_id);
-      orderedNodes.push(currentSegment.to_node_id);
-
-      // Try to chain segments (simple approach for now)
-      for (let i = 1; i < roadSegments.length; i++) {
-        const nextSegment = roadSegments[i];
-        if (nextSegment.from_node_id === orderedNodes[orderedNodes.length - 1]) {
-          orderedNodes.push(nextSegment.to_node_id);
-        } else if (!orderedNodes.includes(nextSegment.from_node_id)) {
-          orderedNodes.push(nextSegment.from_node_id);
-          orderedNodes.push(nextSegment.to_node_id);
-        }
-      }
+  // Write all nodes first
+  console.log('   Writing nodes...');
+  for (const [nodeId, coords] of nodeCoords.entries()) {
+    xml += `  <node id="${nodeId}" lat="${coords.lat}" lon="${coords.lon}"/>\n`;
     }
 
-    // Add node references using numeric IDs
-    for (const nodeId of orderedNodes) {
-      const numericNodeId = nodeIdMap.get(nodeId)!;
-      xml += `    <nd ref="${numericNodeId}"/>\n`;
+  // Write all ways after nodes
+  console.log('   Writing ways...');
+  for (const way of ways) {
+    xml += `  <way id="${way.id}">\n`;
+    for (const nodeRef of way.nodeRefs) {
+      xml += `    <nd ref="${nodeRef}"/>\n`;
     }
-
-    // Add tags
-    const roadType = mapRoadTypeToOSM(road.road_type);
-    xml += `    <tag k="highway" v="${roadType}"/>\n`;
-    xml += `    <tag k="name" v="${escapeXML(road.name)}"/>\n`;
-
-    if (road.name_en) {
-      xml += `    <tag k="name:en" v="${escapeXML(road.name_en)}"/>\n`;
+    for (const tag of way.tags) {
+      xml += `    <tag k="${tag.k}" v="${tag.v}"/>\n`;
     }
-
-    if (road.max_speed) {
-      xml += `    <tag k="maxspeed" v="${road.max_speed}"/>\n`;
-    }
-
-    if (road.one_way) {
-      xml += `    <tag k="oneway" v="yes"/>\n`;
-    }
-
-    if (road.lanes) {
-      xml += `    <tag k="lanes" v="${road.lanes}"/>\n`;
-    }
-
-    // Add custom weight tag (average from segments with traffic conditions)
-    const avgWeight = calculateAverageWeightWithTraffic(roadSegments);
-    xml += `    <tag k="custom_weight" v="${avgWeight.toFixed(2)}"/>\n`;
-    
-    // Add traffic level tag (most common traffic level for this road)
-    const trafficLevel = getMostCommonTrafficLevel(roadSegments);
-    if (trafficLevel) {
-      xml += `    <tag k="traffic_level" v="${trafficLevel}"/>\n`;
-    }
-    
-    // Add congestion score tag
-    const congestionScore = getAverageCongestionScore(roadSegments);
-    if (congestionScore > 0) {
-      xml += `    <tag k="congestion_score" v="${congestionScore.toFixed(1)}"/>\n`;
-    }
-
     xml += `  </way>\n`;
   }
 
@@ -180,20 +431,17 @@ async function exportToOSMXML(instanceName: string): Promise<string> {
   // Write to file
   writeFileSync(osmFilePath, xml, 'utf-8');
 
-  console.log(`   ✓ Exported to ${osmFilePath}`);
+  console.log(`   ✓ Exported ${ways.length} ways with ${nodeCoords.size} unique nodes`);
+  console.log(`   ✓ Saved to ${osmFilePath}`);
   return osmFilePath;
 }
 
 /**
- * Generate Lua profile for OSRM
+ * Generate Car Lua Script (based on standard OSRM car.lua with custom weights)
  */
-function generateLuaProfile(instanceName: string): string {
-  console.log(`\n🔧 Generating custom Lua profile for ${instanceName}...`);
-
-  const outputDir = join(process.cwd(), 'osrm_data', instanceName);
-  const luaFilePath = join(outputDir, 'custom_car.lua');
-
-  const luaScript = `-- Custom car profile for OSRM with dynamic weights
+function generateCarLuaScript(): string {
+  return `-- Custom car profile for OSRM with dynamic weights
+-- Based on standard OSRM car.lua but with traffic-aware routing
 -- Generated by Zone Service
 
 api_version = 4
@@ -201,7 +449,8 @@ api_version = 4
 properties.max_speed_for_map_matching = 180 / 3.6
 properties.use_turn_restrictions = true
 properties.continue_straight_at_waypoint = true
-properties.weight_name = 'custom'
+properties.weight_name = 'routability'  -- Use routability for better turn handling
+properties.weight_precision = 2
 
 function setup()
   return {
@@ -212,11 +461,15 @@ function setup()
     turn_penalty = 7.5,
     turn_bias = 1.075,
     u_turn_penalty = 20,
+    traffic_signal_penalty = 2,
+    use_turn_restrictions = true,
   }
 end
 
 function process_way(profile, way, result, relations)
   local highway = way:get_value_by_key("highway")
+  local name = way:get_value_by_key("name")
+  local ref = way:get_value_by_key("ref")
   local custom_weight = tonumber(way:get_value_by_key("custom_weight"))
   local traffic_level = way:get_value_by_key("traffic_level")
   local congestion_score = tonumber(way:get_value_by_key("congestion_score"))
@@ -228,12 +481,19 @@ function process_way(profile, way, result, relations)
   -- Default speeds
   local speed_map = {
     motorway = 90,
+    motorway_link = 45,
     trunk = 70,
+    trunk_link = 40,
     primary = 60,
+    primary_link = 30,
     secondary = 50,
+    secondary_link = 25,
     tertiary = 40,
+    tertiary_link = 20,
     residential = 30,
     service = 20,
+    unclassified = 25,
+    living_street = 10,
   }
 
   local speed = speed_map[highway] or 30
@@ -242,52 +502,265 @@ function process_way(profile, way, result, relations)
     speed = maxspeed
   end
 
-  -- Apply traffic-based speed reduction
+  -- Apply traffic-based speed reduction (critical for routing)
   if traffic_level then
     local traffic_multiplier = 1.0
     if traffic_level == "FREE_FLOW" then
-      traffic_multiplier = 1.1  -- Slightly faster
+      traffic_multiplier = 1.1
     elseif traffic_level == "NORMAL" then
-      traffic_multiplier = 1.0  -- Normal speed
+      traffic_multiplier = 1.0
     elseif traffic_level == "SLOW" then
-      traffic_multiplier = 0.7  -- 30% slower
+      traffic_multiplier = 0.7
     elseif traffic_level == "CONGESTED" then
-      traffic_multiplier = 0.4  -- 60% slower
+      traffic_multiplier = 0.4
     elseif traffic_level == "BLOCKED" then
-      traffic_multiplier = 0.1  -- 90% slower
+      traffic_multiplier = 0.1
     end
-    
-    -- Apply congestion score if available
+
     if congestion_score and congestion_score > 0 then
       local congestion_multiplier = math.max(0.1, 1.0 - (congestion_score / 100))
       traffic_multiplier = traffic_multiplier * congestion_multiplier
     end
-    
+
     speed = speed * traffic_multiplier
   end
 
   -- Handle oneway
   local oneway = way:get_value_by_key("oneway")
-  if oneway == "yes" then
+  if oneway == "yes" or oneway == "1" or oneway == "true" then
     result.forward_mode = mode.driving
     result.backward_mode = mode.inaccessible
+  elseif oneway == "-1" or oneway == "reverse" then
+    result.forward_mode = mode.inaccessible
+    result.backward_mode = mode.driving
   else
     result.forward_mode = mode.driving
     result.backward_mode = mode.driving
   end
 
-  -- Set speed
   result.forward_speed = speed
   result.backward_speed = speed
 
-  -- Apply custom weight (includes traffic conditions)
+  -- Set name for OSRM to use in instructions
+  if name then
+    result.name = name
+  elseif ref then
+    result.name = ref
+  end
+
+  -- CRITICAL: Custom weight system for traffic-aware routing
   if custom_weight and custom_weight > 0 then
-    result.forward_rate = 60.0 / custom_weight
-    result.backward_rate = 60.0 / custom_weight
+    -- Convert custom_weight to duration (seconds)
+    -- weight is abstract units, convert to time penalty
+    local weight_duration = custom_weight * 60.0  -- scale factor
+    result.duration = weight_duration
     result.weight = custom_weight
   else
-    result.forward_rate = speed
-    result.backward_rate = speed
+    -- Use speed-based calculation
+    result.duration = 0  -- OSRM will calc from speed
+    result.weight = 0    -- OSRM will calc from speed
+  end
+end
+
+function process_node(profile, node, result, relations)
+  local traffic_signal = node:get_value_by_key("highway")
+  if traffic_signal == "traffic_signals" then
+    result.traffic_lights = true
+  end
+end
+
+function process_turn(profile, turn)
+  local angle = math.abs(turn.angle)
+
+  -- U-turn penalty
+  if angle >= 170 and angle <= 190 then
+    turn.duration = turn.duration + profile.u_turn_penalty
+    turn.weight = turn.weight + profile.u_turn_penalty
+  elseif angle >= 45 then
+    -- Regular turn penalty
+    turn.duration = turn.duration + profile.turn_penalty
+    turn.weight = turn.weight + profile.turn_penalty
+  end
+end
+
+return {
+  setup = setup,
+  process_way = process_way,
+  process_node = process_node,
+  process_turn = process_turn,
+}
+`;
+}
+
+/**
+ * Generate Motorbike Lua Script (Vietnam optimized with shipper feedback)
+ */
+function generateMotorbikeLuaScript(mode: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base' = 'base'): string {
+  return `-- Custom motorbike profile for OSRM with shipper feedback
+-- Generated by Zone Service
+-- Mode: ${mode.toUpperCase()}
+-- Optimized for Vietnam traffic (no motorways, shipper ratings matter)
+
+api_version = 4
+
+properties.max_speed_for_map_matching = 140 / 3.6
+properties.use_turn_restrictions = true
+properties.continue_straight_at_waypoint = true
+properties.weight_name = 'custom'
+
+function setup()
+  return {
+    properties = properties,
+    default_mode = mode.driving,
+    default_speed = 35,     -- Realistic Saigon motorbike speed
+    oneway_handling = true,
+    turn_penalty = 4,       -- Motorbikes turn easier
+    turn_bias = 1.05,
+    u_turn_penalty = 10,    -- Lower than cars
+  }
+end
+
+function process_way(profile, way, result, relations)
+  local highway = way:get_value_by_key("highway")
+  local name = way:get_value_by_key("name")
+  local ref = way:get_value_by_key("ref")
+
+  if not highway then
+    return
+  end
+
+  -- Motorbikes CANNOT use motorways in Vietnam
+  if highway == "motorway" or highway == "motorway_link" then
+    return
+  end
+
+  local maxspeed = tonumber(way:get_value_by_key("maxspeed"))
+  local custom_weight = tonumber(way:get_value_by_key("custom_weight"))
+  local traffic_level = way:get_value_by_key("traffic_level")
+  local congestion_score = tonumber(way:get_value_by_key("congestion_score"))
+
+  -- SHIPPER FEEDBACK: Critical for Vietnam routing!
+  -- Score 0-1: 0 = terrible road, 1 = excellent road
+  local shipper_score = tonumber(way:get_value_by_key("shipper_score")) or 1.0
+
+  -- KNP OVERRIDES: Dynamic routing adjustments
+  local knp_block_level = way:get_value_by_key("knp:block_level")
+  local knp_delta = tonumber(way:get_value_by_key("knp:delta")) or 0
+  local knp_point_score = tonumber(way:get_value_by_key("knp:point_score"))
+  local knp_recommend_enabled = way:get_value_by_key("knp:recommend_enabled")
+  local knp_soft_penalty = tonumber(way:get_value_by_key("knp:soft_penalty")) or 2.0
+  local knp_min_penalty = tonumber(way:get_value_by_key("knp:min_penalty")) or 5.0
+
+  -- Handle blocking (highest priority)
+  if knp_block_level == "hard" then
+    -- Hard block: road is completely inaccessible
+    return
+  end
+
+  -- Vietnam motorbike speed map (realistic)
+  local speed_map = {
+    trunk = 60,           -- Quốc lộ
+    trunk_link = 40,
+    primary = 50,         -- Đường chính
+    primary_link = 30,
+    secondary = 45,       -- Đường cấp 2
+    secondary_link = 25,
+    tertiary = 40,        -- Đường cấp 3
+    tertiary_link = 20,
+    residential = 30,     -- Đường dân cư
+    service = 20,         -- Đường phụ
+    unclassified = 25,    -- Đường nhỏ
+    living_street = 15,   -- Đường nội bộ
+    pedestrian = 10       -- Đường đi bộ (can ride slow)
+  }
+
+  local speed = speed_map[highway] or 25
+
+  -- Respect maxspeed but don't exceed bike limits
+  if maxspeed and maxspeed > 0 then
+    speed = math.min(speed, maxspeed)
+  end
+
+  -- Apply traffic conditions
+  if traffic_level then
+    local traffic_multiplier = 1.0
+    if traffic_level == "FREE_FLOW" then
+      traffic_multiplier = 1.1
+    elseif traffic_level == "NORMAL" then
+      traffic_multiplier = 1.0
+    elseif traffic_level == "SLOW" then
+      traffic_multiplier = 0.7
+    elseif traffic_level == "CONGESTED" then
+      traffic_multiplier = 0.5   -- Bikes handle congestion slightly better
+    elseif traffic_level == "BLOCKED" then
+      traffic_multiplier = 0.2   -- Still some weaving ability
+    end
+
+    if congestion_score and congestion_score > 0 then
+      local congestion_multiplier = math.max(0.2, 1.0 - (congestion_score / 100))
+      traffic_multiplier = traffic_multiplier * congestion_multiplier
+    end
+
+    speed = speed * traffic_multiplier
+  end
+
+  -- Motorbikes generally follow oneway rules
+  local oneway = way:get_value_by_key("oneway")
+  if oneway == "yes" or oneway == "1" or oneway == "true" then
+    result.forward_mode = mode.driving
+    result.backward_mode = mode.inaccessible
+  elseif oneway == "-1" or oneway == "reverse" then
+    result.forward_mode = mode.inaccessible
+    result.backward_mode = mode.driving
+  else
+    result.forward_mode = mode.driving
+    result.backward_mode = mode.driving
+  end
+
+  result.forward_speed = speed
+  result.backward_speed = speed
+
+  -- Set name for OSRM to use in instructions
+  if name then
+    result.name = name
+  elseif ref then
+    result.name = ref
+  end
+
+  -- WEIGHT CALCULATION WITH SHIPPER FEEDBACK AND KNP OVERRIDES
+  -- Lower shipper score = avoid this road = increase weight
+  if custom_weight and custom_weight > 0 then
+    -- Formula: bad roads (score 0.5) get 2x penalty, good roads (score 1.0) get no penalty
+    -- Intuition: shipper_score 0.5 → penalty 1.5, shipper_score 0.3 → penalty 1.7
+    local shipper_penalty = 2.0 - shipper_score
+    local adjusted_weight = custom_weight * shipper_penalty
+
+    -- Apply KNP adjustments
+    -- 1. Point score (0-1): higher = better road, reduce weight
+    if knp_point_score and knp_recommend_enabled ~= "0" then
+      local point_factor = 2.0 - knp_point_score  -- 1.0 = neutral, 0.5 for score=1.0, 1.5 for score=0.5
+      adjusted_weight = adjusted_weight * point_factor
+    end
+
+    -- 2. Delta: direct additive adjustment
+    adjusted_weight = adjusted_weight + knp_delta
+
+    -- 3. Blocking penalties
+    if knp_block_level == "soft" then
+      adjusted_weight = adjusted_weight * knp_soft_penalty
+    elseif knp_block_level == "min" then
+      adjusted_weight = adjusted_weight * knp_min_penalty
+    end
+
+    -- Ensure minimum positive weight
+    adjusted_weight = math.max(0.1, adjusted_weight)
+
+    local weight_duration = adjusted_weight * 60.0
+    result.duration = weight_duration
+    result.weight = adjusted_weight
+  else
+    result.duration = 0  -- OSRM will calc from speed
+    result.weight = 0    -- OSRM will calc from speed
   end
 end
 
@@ -314,21 +787,39 @@ return {
   process_turn = process_turn,
 }
 `;
+}
+
+/**
+ * Generate Lua profile for OSRM (car or motorbike)
+ */
+function generateLuaProfile(
+  instanceName: string,
+  vehicleType: 'car' | 'motorbike',
+  mode: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base' = 'base'
+): string {
+  console.log(`\n🔧 Generating custom ${vehicleType} Lua profile for ${instanceName} (${mode})...`);
+
+  const outputDir = join(process.cwd(), 'osrm_data', instanceName);
+  const luaFilePath = join(outputDir, `custom_${vehicleType}.lua`);
+
+  const luaScript = vehicleType === 'motorbike'
+    ? generateMotorbikeLuaScript(mode)
+    : generateCarLuaScript();
 
   writeFileSync(luaFilePath, luaScript, 'utf-8');
-  console.log(`   ✓ Generated Lua profile at ${luaFilePath}`);
+  console.log(`   ✓ Generated Lua profile at ${luaFilePath} (mode: ${mode})`);
   return luaFilePath;
 }
 
 /**
  * Run OSRM processing using Docker
  */
-async function runOSRMProcessing(instanceName: string): Promise<void> {
+async function runOSRMProcessing(instanceName: string, vehicleType: 'car' | 'motorbike'): Promise<void> {
   console.log(`\n⚙️  Running OSRM processing for ${instanceName}...`);
 
   const dataDir = join(process.cwd(), 'osrm_data', instanceName);
   const osmFile = 'network.osm.xml';
-  const profileFile = 'custom_car.lua';
+  const profileFile = `custom_${vehicleType}.lua`;
   const osrmFile = 'network.osrm';
 
   try {
@@ -406,20 +897,20 @@ function escapeXML(text: string): string {
 
 function calculateAverageWeightWithTraffic(segments: any[]): number {
   if (segments.length === 0) return 1.0;
-  
+
   const sum = segments.reduce((acc, segment) => {
     // Use current_weight (includes traffic adjustments) if available
     let weight = segment.current_weight || segment.base_weight || 1.0;
-    
+
     // Apply traffic condition multiplier if available
     if (segment.traffic_conditions && segment.traffic_conditions.length > 0) {
       const traffic = segment.traffic_conditions[0];
       weight *= traffic.weight_multiplier || 1.0;
     }
-    
+
     return acc + weight;
   }, 0);
-  
+
   return sum / segments.length;
 }
 
@@ -427,15 +918,15 @@ function getMostCommonTrafficLevel(segments: any[]): string | null {
   const trafficLevels = segments
     .filter(s => s.traffic_conditions && s.traffic_conditions.length > 0)
     .map(s => s.traffic_conditions[0].traffic_level);
-    
+
   if (trafficLevels.length === 0) return null;
-  
+
   // Count occurrences
   const counts: Record<string, number> = {};
   trafficLevels.forEach(level => {
     counts[level] = (counts[level] || 0) + 1;
   });
-  
+
   // Return most common
   return Object.entries(counts)
     .sort(([,a], [,b]) => b - a)[0]?.[0] || null;
@@ -445,10 +936,34 @@ function getAverageCongestionScore(segments: any[]): number {
   const scores = segments
     .filter(s => s.traffic_conditions && s.traffic_conditions.length > 0)
     .map(s => s.traffic_conditions[0].congestion_score);
-    
+
   if (scores.length === 0) return 0;
-  
+
   return scores.reduce((sum, score) => sum + score, 0) / scores.length;
+}
+
+/**
+ * Calculate average shipper feedback score (0-1 scale)
+ * Higher score = better road quality from shipper perspective
+ */
+function calculateShipperFeedbackScore(segments: any[]): number | null {
+  const allScores: number[] = [];
+
+  for (const segment of segments) {
+    if (segment.user_feedback && segment.user_feedback.length > 0) {
+      for (const feedback of segment.user_feedback) {
+        if (typeof feedback.score === 'number') {
+          // Normalize score to 0-1 range (assuming feedback.score is 1-5)
+          const normalizedScore = feedback.score / 5.0;
+          allScores.push(normalizedScore);
+        }
+      }
+    }
+  }
+
+  if (allScores.length === 0) return null;
+
+  return allScores.reduce((sum, score) => sum + score, 0) / allScores.length;
 }
 
 /**
@@ -456,26 +971,33 @@ function getAverageCongestionScore(segments: any[]): number {
  */
 async function main() {
   console.log('='.repeat(70));
-  console.log('🚀 OSRM Data Generator with Real-time Traffic');
+  console.log('🚀 OSRM Data Generator - 5 Motorbike Routing Profiles');
   console.log('='.repeat(70));
 
-  const instances = ['osrm-instance-1', 'osrm-instance-2'];
+  // 5 instances for different routing strategies
+  const instances = [
+    { name: 'osrm-priority-first', vehicle: 'motorbike' as const, mode: 'priority_first' as const },
+    { name: 'osrm-speed-leaning', vehicle: 'motorbike' as const, mode: 'speed_leaning' as const },
+    { name: 'osrm-balanced', vehicle: 'motorbike' as const, mode: 'balanced' as const },
+    { name: 'osrm-no-recommend', vehicle: 'motorbike' as const, mode: 'no_recommend' as const },
+    { name: 'osrm-base', vehicle: 'motorbike' as const, mode: 'base' as const },
+  ];
 
   try {
     // Step 0: Fetch and update traffic data
     console.log('\n🌐 Step 0: Fetching real-time traffic data...');
     console.log('─'.repeat(70));
-    
+
     try {
       const trafficService = new TomTomTrafficService();
-      
+
       // Clean up expired conditions first
       await trafficService.cleanupExpiredConditions();
-      
+
       // Fetch fresh traffic data for Thu Duc area
       const boundingBox = '10.3,106.3,11.2,107.0'; // Thu Duc area
       await trafficService.fetchAndUpdateTrafficData(boundingBox);
-      
+
       console.log('✅ Traffic data updated successfully');
     } catch (error) {
       console.error('❌ Failed to fetch traffic data:', error);
@@ -485,28 +1007,40 @@ async function main() {
     // Step 1-3: Generate OSRM data for each instance
     for (const instance of instances) {
       console.log(`\n${'─'.repeat(70)}`);
-      console.log(`Processing ${instance}`);
+      console.log(`Processing ${instance.name} (${instance.vehicle.toUpperCase()} - ${instance.mode.toUpperCase()})`);
       console.log('─'.repeat(70));
 
       // Step 1: Export to OSM XML
-      await exportToOSMXML(instance);
+      await exportToOSMXML(instance.name, instance.mode);
 
-      // Step 2: Generate Lua profile
-      generateLuaProfile(instance);
+      // Step 2: Generate Lua profile with mode
+      generateLuaProfile(instance.name, instance.vehicle, instance.mode);
 
       // Step 3: Run OSRM processing
-      await runOSRMProcessing(instance);
+      await runOSRMProcessing(instance.name, instance.vehicle);
 
-      console.log(`\n✅ ${instance} is ready!`);
+      console.log(`\n✅ ${instance.name} (${instance.vehicle} - ${instance.mode}) is ready!`);
     }
 
     console.log('\n' + '='.repeat(70));
-    console.log('🎉 All OSRM instances generated successfully!');
+    console.log('🎉 All 5 OSRM instances generated successfully!');
     console.log('='.repeat(70));
-    console.log('\nYou can now start the OSRM containers:');
-    console.log('  docker-compose up osrm-instance-1 osrm-instance-2');
-    console.log('\nOr start all services:');
+    console.log('\n📍 Instances created:');
+    console.log('  1. osrm-priority-first    (port 5000) - Strict priority, accepts detours');
+    console.log('  2. osrm-speed-leaning     (port 5001) - Fast routes, skip low-priority if far');
+    console.log('  3. osrm-balanced          (port 5002) - Balanced priority vs speed');
+    console.log('  4. osrm-no-recommend      (port 5003) - Ignores AI recommendations');
+    console.log('  5. osrm-base              (port 5004) - Pure base weights, no overrides');
+    console.log('\n🐳 Start OSRM containers:');
+    console.log('  docker-compose up osrm-priority-first osrm-speed-leaning osrm-balanced osrm-no-recommend osrm-base');
+    console.log('\n🚀 Or start all services:');
     console.log('  docker-compose up -d');
+    console.log('\n🌐 API endpoints:');
+    console.log('  • Priority-First: /route/v1/motorbike/{coordinates}  (via OSRM_PRIORITY_FIRST_URL)');
+    console.log('  • Speed-Leaning:  /route/v1/motorbike/{coordinates}  (via OSRM_SPEED_LEANING_URL)');
+    console.log('  • Balanced:       /route/v1/motorbike/{coordinates}  (via OSRM_BALANCED_URL)');
+    console.log('  • No-Recommend:   /route/v1/motorbike/{coordinates}  (via OSRM_NO_RECOMMEND_URL)');
+    console.log('  • Base:           /route/v1/motorbike/{coordinates}  (via OSRM_BASE_URL)');
     console.log('='.repeat(70));
 
     process.exit(0);

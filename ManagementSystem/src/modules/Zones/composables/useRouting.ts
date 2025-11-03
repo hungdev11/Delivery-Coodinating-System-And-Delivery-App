@@ -11,7 +11,7 @@ import { calculateDemoRoute } from '../routing.api'
 import type {
   Waypoint,
   PriorityGroup,
-  DemoRouteResponse,
+  DemoRouteResponseData,
   PriorityLevelType,
 } from '../routing.type'
 import { PriorityLevel, PriorityLabel } from '../routing.type'
@@ -22,14 +22,17 @@ export const useRoutingStore = defineStore('routing', () => {
   // State
   const startPoint = ref<Waypoint | null>(null)
   const priorityGroups = ref<PriorityGroup[]>([
+    { priority: PriorityLevel.URGENT, waypoints: [] },
     { priority: PriorityLevel.EXPRESS, waypoints: [] },
     { priority: PriorityLevel.FAST, waypoints: [] },
     { priority: PriorityLevel.NORMAL, waypoints: [] },
     { priority: PriorityLevel.ECONOMY, waypoints: [] },
   ])
-  const routeResult = ref<DemoRouteResponse | null>(null)
+  const routeResult = ref<DemoRouteResponseData | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const routingMode = ref<'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base'>('balanced')
+  const routingStrategy = ref<'strict_urgent' | 'flexible'>('strict_urgent')
 
   // Computed
   const hasStartPoint = computed(() => startPoint.value !== null)
@@ -121,15 +124,21 @@ export const useRoutingStore = defineStore('routing', () => {
       // Filter out empty priority groups
       const nonEmptyGroups = priorityGroups.value.filter((g) => g.waypoints.length > 0)
 
-      const result = await calculateDemoRoute({
+      const response = await calculateDemoRoute({
         startPoint: startPoint.value!,
         priorityGroups: nonEmptyGroups,
         steps: true,
         annotations: true,
+        mode: routingMode.value,
+        strategy: routingStrategy.value,
       })
 
-      if (result.code === 'Ok') {
-        routeResult.value = result
+      if (response.result && response.result.code === 'Ok') {
+        // Validate that the route has valid distance and duration
+        if (response.result.summary.totalDistance === 0 || response.result.summary.totalDuration === 0) {
+          throw new Error('No valid route found. The waypoints may be too close together or OSRM data is not available for this area.')
+        }
+        routeResult.value = response.result
         toast.add({
           title: 'Success',
           description: 'Route calculated successfully',
@@ -163,10 +172,11 @@ export const useRoutingStore = defineStore('routing', () => {
    */
   const getPriorityColor = (priority: PriorityLevelType): string => {
     const colors: Record<PriorityLevelType, string> = {
-      [PriorityLevel.EXPRESS]: '#ef4444', // red
-      [PriorityLevel.FAST]: '#f59e0b', // amber
-      [PriorityLevel.NORMAL]: '#3b82f6', // blue
-      [PriorityLevel.ECONOMY]: '#10b981', // green
+      [PriorityLevel.URGENT]: '#dc2626', // red-600 (darker red for urgent)
+      [PriorityLevel.EXPRESS]: '#f97316', // orange-500
+      [PriorityLevel.FAST]: '#eab308', // yellow-500
+      [PriorityLevel.NORMAL]: '#3b82f6', // blue-500
+      [PriorityLevel.ECONOMY]: '#10b981', // green-500
     }
     return colors[priority] || '#6b7280'
   }
@@ -178,6 +188,8 @@ export const useRoutingStore = defineStore('routing', () => {
     routeResult,
     loading,
     error,
+    routingMode,
+    routingStrategy,
     // Computed
     hasStartPoint,
     totalWaypoints,

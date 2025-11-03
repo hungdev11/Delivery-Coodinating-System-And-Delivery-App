@@ -194,6 +194,18 @@ public class ZoneServiceClient implements IZoneServiceClient {
     }
 
     @Override
+    public CompletableFuture<Object> calculateDemoRoute(Object requestBody) {
+        return zoneServiceWebClient.post()
+                .uri("/api/v1/routing/demo-route")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromValue(requestBody))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
     public CompletableFuture<Object> getOsrmStatus() {
         return zoneServiceWebClient.get()
                 .uri("/api/v1/routing/osrm-status")

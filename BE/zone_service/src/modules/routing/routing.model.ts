@@ -3,7 +3,7 @@
  * DTOs and data models for routing module
  */
 
-import { IsArray, IsBoolean, IsNumber, IsOptional, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsNumber, IsOptional, IsString, IsIn, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 /**
@@ -42,6 +42,16 @@ export class RouteRequestDto {
   @IsOptional()
   @IsBoolean()
   annotations?: boolean;
+  
+  @IsOptional()
+  @IsString()
+  @IsIn(['car', 'motorbike'])
+  vehicle?: 'car' | 'motorbike';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['priority_first', 'speed_leaning', 'balanced', 'no_recommend', 'base'])
+  mode?: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base';
 }
 
 /**
@@ -62,6 +72,14 @@ export interface RouteStepDto {
   instruction: string;
   name: string;
   maneuver: ManeuverDto;
+  /**
+   * Detailed geometry for this step (GeoJSON LineString)
+   * Present when OSRM is queried with geometries=geojson & steps=true
+   */
+  geometry?: {
+    type: 'LineString';
+    coordinates: Array<[number, number]>;
+  };
   addresses?: string[];
   trafficLevel?: string;
 }
@@ -100,7 +118,19 @@ export interface RouteDto {
  */
 export interface RouteResponseDto {
   code: string;
-  routes: RouteDto[];
+  route: RouteDto;
+  visitOrder?: Array<{
+    index: number;
+    priority: number;
+    priorityLabel: string;
+    waypoint: WaypointDto;
+  }>;
+  summary?: {
+    totalDistance: number;
+    totalDuration: number;
+    totalWaypoints: number;
+    priorityCounts?: Record<string, number>;
+  };
 }
 
 /**
@@ -108,7 +138,7 @@ export interface RouteResponseDto {
  */
 export class PriorityGroupDto {
   @IsNumber()
-  priority!: number; // 1 = express, 2 = fast, 3 = normal, 4 = economy
+  priority!: number; // 0 = urgent, 1 = express, 2 = fast, 3 = normal, 4 = economy
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -137,6 +167,21 @@ export class DemoRouteRequestDto {
   @IsOptional()
   @IsBoolean()
   annotations?: boolean;
+  
+  @IsOptional()
+  @IsString()
+  @IsIn(['car', 'motorbike'])
+  vehicle?: 'car' | 'motorbike';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['priority_first', 'speed_leaning', 'balanced', 'no_recommend', 'base'])
+  mode?: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['strict_urgent', 'flexible'])
+  strategy?: 'strict_urgent' | 'flexible';
 }
 
 /**

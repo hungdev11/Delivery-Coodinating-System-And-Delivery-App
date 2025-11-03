@@ -106,7 +106,7 @@ const zoneMarkers = computed((): MapMarker[] => {
 const mapConfig = {
   center: [106.660172, 10.762622] as [number, number], // Ho Chi Minh City
   zoom: 11,
-  style: `https://api.maptiler.com/maps/streets/style.json?key=${import.meta.env.MAPTILER_API_KEY || 'get_your_own_OpIi9ZULNHzrESv6T2vL'}`,
+  style: `https://api.maptiler.com/maps/streets/style.json?key=${import.meta.env.VITE_MAPTILER_API_KEY || 'get_your_own_OpIi9ZULNHzrESv6T2vL'}`,
 }
 
 /**

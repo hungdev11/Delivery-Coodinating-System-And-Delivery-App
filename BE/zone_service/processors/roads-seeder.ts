@@ -15,6 +15,7 @@ import { OSMParser, calculateLineLength, findLatestVietnamPBF } from '../utils/o
 import { findIntersections, generateSegments } from '../utils/intersection-finder.js';
 import { calculateBaseWeight } from '../utils/weight-calculator.js';
 import { join } from 'path';
+import { existsSync } from 'fs';
 
 const prisma = new PrismaClient();
 
@@ -32,11 +33,25 @@ async function seedRoads() {
     // Step 1: Parse OSM PBF file
     console.log('Step 1: Parsing OSM PBF file...');
     const rawDataDir = join(process.cwd(), './raw_data');
-    const pbfPath = findLatestVietnamPBF(rawDataDir);
-    const thuDucPoly = join(rawDataDir, 'poly/thuduc_cu.poly');
+    
+    // Use complete extract if available, otherwise use poly extract
+    const completeExtractPath = join(rawDataDir, 'extracted/thuduc_complete.osm.pbf');
+    let pbfPath: string;
+    let polyFile: string | undefined;
+    
+    if (existsSync(completeExtractPath)) {
+      console.log('  Using complete extract (routing + addresses)');
+      pbfPath = completeExtractPath;
+      polyFile = undefined; // Already clipped
+    } else {
+      console.log('  Using source PBF with polygon clip');
+      console.log('  Tip: Run "npm run extract:complete" for better coverage');
+      pbfPath = findLatestVietnamPBF(rawDataDir);
+      polyFile = join(rawDataDir, 'poly/thuduc_cu.poly');
+    }
 
     const parser = new OSMParser();
-    const osmData = await parser.parsePBF(pbfPath, thuDucPoly);
+    const osmData = await parser.parsePBF(pbfPath, polyFile);
     console.log(`✓ Parsed ${osmData.nodes.size} nodes and ${osmData.ways.length} ways\n`);
 
     // Step 2: Filter road ways
@@ -48,20 +63,20 @@ async function seedRoads() {
     console.log('Step 3: Loading zones...');
     const zones = await prisma.zones.findMany();
     console.log(`✓ Loaded ${zones.length} zones\n`);
-    const defaultZoneId = zones.length > 0 ? zones[0].zone_id : null;
+    const defaultZoneId: string | null = zones.length > 0 && zones[0] ? zones[0].zone_id : null;
 
     // Step 4: Prepare roads for batch insert
     console.log('Step 4: Preparing roads data...');
     const roadsToCreate: Array<{
       osm_id: string;
       name: string;
-      name_en: string | undefined;
+      name_en: string | null;
       road_type: any;
-      max_speed: number | undefined;
-      avg_speed: number | undefined;
+      max_speed: number | null;
+      avg_speed: number | null;
       one_way: boolean;
-      lanes: number | undefined;
-      surface: string | undefined;
+      lanes: number | null;
+      surface: string | null;
       geometry: any;
       zone_id: string | null;
     }> = [];
@@ -71,15 +86,16 @@ async function seedRoads() {
       coordinates: Array<[number, number]>;
       nodeIds: string[];
     }> = [];
-    let skipCount = 0;
+    let generatedNameCount = 0;
 
     for (const way of roadWays) {
-      const { name, nameEn } = OSMParser.getRoadName(way.tags);
-      if (!name) {
-        skipCount++;
-        continue;
+      const { name, nameEn, isNamed } = OSMParser.getRoadName(way.tags);
+      
+      if (!isNamed) {
+        generatedNameCount++;
       }
-
+      
+      // Now we always have a name (original or generated)
       const roadType = OSMParser.getRoadType(way.tags);
       const { maxSpeed, avgSpeed } = OSMParser.getSpeedInfo(way.tags);
       const oneWay = OSMParser.isOneWay(way.tags);
@@ -105,13 +121,13 @@ async function seedRoads() {
       roadsToCreate.push({
         osm_id: way.id,
         name,
-        name_en: nameEn,
+        name_en: nameEn !== undefined ? nameEn : null,
         road_type: roadType as any,
-        max_speed: maxSpeed,
-        avg_speed: avgSpeed,
+        max_speed: maxSpeed ?? null,
+        avg_speed: avgSpeed ?? null,
         one_way: oneWay,
-        lanes,
-        surface,
+        lanes: lanes ?? null,
+        surface: surface ?? null,
         geometry,
         zone_id: defaultZoneId,
       });
@@ -128,7 +144,8 @@ async function seedRoads() {
       }
     }
 
-    console.log(`✓ Prepared ${roadsArray.length} roads (skipped ${skipCount} unnamed)\n`);
+    const originallyNamed = roadsArray.length - generatedNameCount;
+    console.log(`✓ Prepared ${roadsArray.length} roads (${originallyNamed} có tên gốc, ${generatedNameCount} tên được tạo)\n`);
 
     // Step 5: Clear old data
     console.log('Step 5: Clearing old data...');
@@ -142,7 +159,7 @@ async function seedRoads() {
 
     // Step 6: Batch insert roads
     console.log('Step 6: Inserting roads in batches...');
-    const batchSize = 500;
+    const batchSize = 2000;
     for (let i = 0; i < roadsToCreate.length; i += batchSize) {
       const batch = roadsToCreate.slice(i, i + batchSize);
       await prisma.roads.createMany({
@@ -354,6 +371,8 @@ async function seedRoads() {
 
       for (const [_, nodeIds] of duplicateGroups) {
         const [keepNodeId, ...duplicateNodeIds] = nodeIds;
+        if (!keepNodeId) continue;
+        
         for (const dupId of duplicateNodeIds) {
           nodeIdMap.set(dupId, keepNodeId);
           nodesToDelete.push(dupId);
@@ -364,7 +383,7 @@ async function seedRoads() {
       if (nodeIdMap.size > 0) {
         const entries = Array.from(nodeIdMap.entries());
         const fromCases = entries.map(([old, _new]) => `WHEN '${old}' THEN '${_new}'`);
-        const oldIds = entries.map(([old]) => `'${old}'`).join(',');
+        const oldIds = entries.map(([old, _]) => `'${old}'`).join(',');
 
         await prisma.$executeRawUnsafe(`
           UPDATE road_segments

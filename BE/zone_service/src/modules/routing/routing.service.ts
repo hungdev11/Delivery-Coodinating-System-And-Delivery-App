@@ -26,17 +26,18 @@ export class RoutingService {
    */
   public static async calculateRoute(request: RouteRequestDto): Promise<RouteResponseDto> {
     try {
-      logger.info(`Calculating route with ${request.waypoints.length} waypoints`);
+      logger.info(`Calculating route with ${request.waypoints.length} waypoints (vehicle: ${request.vehicle || 'car'})`);
 
       // Query OSRM using dual-instance router
       const osrmResponse = await this.osrmRouter.getRoute(
         request.waypoints,
         {
           steps: request.steps !== false,
-          annotations: request.annotations !== false,
+          annotations: true,  // Always enable for traffic data
           alternatives: request.alternatives || false,
           overview: 'full',
           geometries: 'geojson',
+          vehicle: request.vehicle || 'car',
         }
       );
 
@@ -55,25 +56,54 @@ export class RoutingService {
   }
 
   /**
-   * Calculate priority-based multi-stop route
+   * Calculate priority-based multi-stop route with intelligent optimization
    */
   public static async calculatePriorityRoutes(request: RouteRequestDto): Promise<RouteResponseDto> {
     try {
       if (!request.priorities || request.priorities.length !== request.waypoints.length - 1) {
-        throw createError('Priorities must be provided for each segment', 400);
+        throw createError('Priorities must be provided for each waypoint (excluding origin)', 400);
       }
 
-      logger.info('Calculating priority-based multi-route');
+      logger.info(`Calculating INTELLIGENT priority-based route (vehicle: ${request.vehicle || 'car'})`);
 
-      // Use OSRMRouterService multi-stop routing
-      const osrmResponse = await this.osrmRouter.getMultiStopRoute({
-        stops: request.waypoints,
-        priorities: request.priorities,
-        optimize: true,
-        options: {
-          steps: request.steps !== false,
-          annotations: request.annotations !== false,
-        },
+      // Import priority optimizer
+      const { PriorityRouteOptimizer } = await import('./priority-optimizer.js');
+      type PriorityWaypoint = import('./priority-optimizer.js').PriorityWaypoint;
+
+      // Prepare waypoints with priorities
+      const origin = request.waypoints[0];
+      if (!origin) {
+        throw createError('Origin waypoint is required', 400);
+      }
+      const destinations: PriorityWaypoint[] = request.waypoints.slice(1).map((wp, idx) => {
+        const priority = request.priorities![idx];
+        if (priority === undefined) {
+          throw createError(`Priority missing for waypoint at index ${idx + 1}`, 400);
+        }
+        return {
+          lat: wp.lat,
+          lon: wp.lon,
+          index: idx,
+          priority,
+        };
+      });
+
+      // Optimize waypoint order based on priority and traffic
+      logger.info(`Original waypoints: ${destinations.map(d => `[${d.index}:P${d.priority}]`).join(' → ')}`);
+      const optimizedDestinations = PriorityRouteOptimizer.optimizeOrder(origin, destinations);
+      logger.info(`Optimized waypoints: ${optimizedDestinations.map(d => `[${d.index}:P${d.priority}]`).join(' → ')}`);
+
+      // Build final waypoint list (origin + optimized destinations)
+      const optimizedWaypoints = [origin, ...optimizedDestinations].filter(Boolean);
+
+      // Call OSRM with optimized order
+      const osrmResponse = await this.osrmRouter.getRoute(optimizedWaypoints as any[], {
+        steps: request.steps !== false,
+        annotations: true,  // Enable traffic/speed annotations
+        vehicle: request.vehicle || 'motorbike',
+        mode: request.mode || 'balanced',
+        geometries: 'geojson',
+        overview: 'full',
       });
 
       if (osrmResponse.code !== 'Ok') {
@@ -82,6 +112,16 @@ export class RoutingService {
 
       // Enrich with our custom data
       const enrichedResponse = await this.enrichRouteData(osrmResponse, request);
+
+      // Add visit order information
+      enrichedResponse.visitOrder = optimizedDestinations.map(dest => ({
+        index: dest.index,
+        priority: dest.priority,
+        priorityLabel: PriorityRouteOptimizer.getPriorityLabel(dest.priority),
+        waypoint: { lat: dest.lat, lon: dest.lon },
+      }));
+
+      logger.info(`Priority route calculated: ${enrichedResponse.route.distance}m, ${enrichedResponse.route.duration}s`);
 
       return enrichedResponse;
     } catch (error) {
@@ -108,6 +148,210 @@ export class RoutingService {
   }
 
   /**
+   * Get road names from database for OSM node sequence (lightweight query)
+   */
+  private static async getRoadNamesFromDB(
+    osmNodeIds: number[]
+  ): Promise<Map<string, string>> {
+    if (osmNodeIds.length < 2) return new Map();
+
+    try {
+      const nodeIdStrings = osmNodeIds.map(id => id.toString());
+      
+      // Load nodes to map OSM IDs to DB node_ids
+      const dbNodes = await prisma.road_nodes.findMany({
+        where: {
+          osm_id: { in: nodeIdStrings }
+        },
+        select: {
+          node_id: true,
+          osm_id: true
+        }
+      });
+
+      const osmIdToDbId = new Map<string, string>();
+      for (const node of dbNodes) {
+        if (node.osm_id) {
+          osmIdToDbId.set(node.osm_id, node.node_id);
+        }
+      }
+
+      if (osmIdToDbId.size === 0) return new Map();
+
+      // Get DB node IDs
+      const dbNodeIds = Array.from(osmIdToDbId.values());
+      
+      // Query segments with only name field (lightweight)
+      const segments = await prisma.road_segments.findMany({
+        where: {
+          from_node_id: { in: dbNodeIds },
+          to_node_id: { in: dbNodeIds }
+        },
+        select: {
+          name: true,
+          from_node: {
+            select: { osm_id: true }
+          },
+          to_node: {
+            select: { osm_id: true }
+          }
+        }
+      });
+
+      // Build name map
+      const nameMap = new Map<string, string>();
+      for (const segment of segments) {
+        const fromOsmId = segment.from_node.osm_id;
+        const toOsmId = segment.to_node.osm_id;
+        
+        if (fromOsmId && toOsmId && segment.name) {
+          const key = `${fromOsmId}-${toOsmId}`;
+          nameMap.set(key, segment.name);
+        }
+      }
+
+      logger.info(`Loaded names for ${nameMap.size} road segments from DB`);
+      return nameMap;
+    } catch (error) {
+      logger.error('Failed to load road names from database', { error });
+      return new Map();
+    }
+  }
+
+  /**
+   * Get detailed geometry and traffic data from database for OSM node sequence
+   * @deprecated Currently unused - OSRM provides detailed geometry directly
+   * Reserved for future DB enrichment enhancements
+   */
+  public static async _getSegmentGeometriesFromDB(
+    osmNodeIds: number[]
+  ): Promise<Map<string, any>> {
+    if (osmNodeIds.length < 2) return new Map();
+
+    try {
+      const nodeIdStrings = osmNodeIds.map(id => id.toString());
+      
+      // Load all nodes first to get their node_ids from DB
+      const dbNodes = await prisma.road_nodes.findMany({
+        where: {
+          osm_id: { in: nodeIdStrings }
+        },
+        select: {
+          node_id: true,
+          osm_id: true
+        }
+      });
+
+      // Create mapping: osm_id (number) → node_id (uuid)
+      const osmIdToDbId = new Map<string, string>();
+      for (const node of dbNodes) {
+        if (node.osm_id) {
+          osmIdToDbId.set(node.osm_id, node.node_id);
+        }
+      }
+
+      logger.info(`Matched ${osmIdToDbId.size}/${osmNodeIds.length} OSM nodes to DB nodes`);
+
+      if (osmIdToDbId.size === 0) {
+        logger.warn('No OSM nodes matched to DB nodes - routing may use simplified geometry');
+        return new Map();
+      }
+
+      // Build list of DB node IDs to query segments
+      const dbNodeIds = Array.from(osmIdToDbId.values());
+      
+      // Query ALL segments connecting these nodes (efficient single query)
+      const allSegments = await prisma.road_segments.findMany({
+        where: {
+          from_node_id: { in: dbNodeIds },
+          to_node_id: { in: dbNodeIds }
+        },
+        include: {
+          from_node: {
+            select: { osm_id: true }
+          },
+          to_node: {
+            select: { osm_id: true }
+          },
+          traffic_conditions: {
+            where: {
+              expires_at: { gte: new Date() }
+            },
+            orderBy: {
+              source_timestamp: 'desc'
+            },
+            take: 1
+          }
+        }
+      });
+
+      logger.info(`Loaded ${allSegments.length} potential segments from DB`);
+
+      // Create reverse mapping: DB node_id → OSM ID
+      const dbIdToOsmId = new Map<string, string>();
+      for (const node of dbNodes) {
+        if (node.osm_id) {
+          dbIdToOsmId.set(node.node_id, node.osm_id);
+        }
+      }
+
+      // Build map of consecutive node pairs from OSRM route
+      const routePairMap = new Map<string, string>(); // "fromOsmId" → "toOsmId"
+      for (let i = 0; i < osmNodeIds.length - 1; i++) {
+        const fromOsmId = osmNodeIds[i];
+        const toOsmId = osmNodeIds[i + 1];
+        if (fromOsmId !== undefined && toOsmId !== undefined) {
+          routePairMap.set(fromOsmId.toString(), toOsmId.toString());
+        }
+      }
+
+      // Filter segments to only those on the route (consecutive pairs)
+      const segmentDataMap = new Map<string, any>();
+      
+      for (const segment of allSegments) {
+        const fromOsmId = segment.from_node.osm_id;
+        const toOsmId = segment.to_node.osm_id;
+        
+        if (!fromOsmId || !toOsmId) continue;
+
+        // Check if this segment is on the route (consecutive node pair)
+        const expectedToOsmId = routePairMap.get(fromOsmId);
+        if (expectedToOsmId !== toOsmId) {
+          continue; // Not on the route
+        }
+
+        const key = `${fromOsmId}-${toOsmId}`;
+        const trafficCondition = segment.traffic_conditions[0];
+        
+        segmentDataMap.set(key, {
+          geometry: segment.geometry,
+          segmentId: segment.segment_id,
+          name: segment.name,
+          roadType: segment.road_type,
+          maxSpeed: segment.max_speed,
+          avgSpeed: segment.avg_speed,
+          baseWeight: segment.base_weight,
+          currentWeight: segment.current_weight,
+          deltaWeight: segment.delta_weight,
+          traffic: trafficCondition ? {
+            level: trafficCondition.traffic_level,
+            currentSpeed: trafficCondition.current_speed,
+            congestionScore: trafficCondition.congestion_score,
+            weightMultiplier: trafficCondition.weight_multiplier,
+            recordedAt: trafficCondition.source_timestamp,
+          } : null
+        });
+      }
+
+      logger.info(`Matched ${segmentDataMap.size}/${osmNodeIds.length - 1} consecutive route segments from DB`);
+      return segmentDataMap;
+    } catch (error) {
+      logger.error('Failed to load segment data from database', { error });
+      return new Map();
+    }
+  }
+
+  /**
    * Enrich route data with traffic, addresses, etc.
    */
   private static async enrichRouteData(
@@ -124,28 +368,41 @@ export class RoutingService {
       for (const leg of route.legs || []) {
         const enrichedSteps: RouteStepDto[] = [];
 
-        for (const step of leg.steps || []) {
-          // Find segments along this step
-          const segmentIds = await this.findSegmentsAlongPath(step.geometry?.coordinates || []);
+        // Get OSM node IDs from leg annotation to enrich with road names
+        const osmNodeIds = leg.annotation?.nodes || [];
+        
+        // Query road names from DB based on node sequence
+        const roadNamesMap = await this.getRoadNamesFromDB(osmNodeIds);
 
-          // Get traffic info
-          const trafficInfo = await this.getTrafficInfo(segmentIds);
+        for (let stepIdx = 0; stepIdx < leg.steps.length; stepIdx++) {
+          const step = leg.steps[stepIdx];
 
-          // Get nearby addresses
-          const addresses = await this.getNearbyAddresses(step.geometry?.coordinates || []);
-
+          // Get road name from DB using node pair
+          let stepName = 'Unknown road';
+          if (stepIdx < osmNodeIds.length - 1) {
+            const fromNodeId = osmNodeIds[stepIdx];
+            const toNodeId = osmNodeIds[stepIdx + 1];
+            const key = `${fromNodeId}-${toNodeId}`;
+            const roadName = roadNamesMap.get(key);
+            if (roadName) {
+              stepName = roadName;
+            }
+          }
+          
           enrichedSteps.push({
             distance: step.distance,
             duration: step.duration,
             instruction: this.generateInstruction(step),
-            name: step.name || 'Unknown road',
+            name: stepName,
             maneuver: {
               type: step.maneuver.type,
               modifier: step.maneuver.modifier,
               location: step.maneuver.location,
             },
-            addresses: addresses.map(a => a.name).slice(0, 3),
-            trafficLevel: trafficInfo.level,
+            // Use OSRM geometry directly (detailed from our export)
+            geometry: step.geometry,
+            addresses: [],
+            trafficLevel: 'NORMAL', // TODO: Add traffic enrichment later
           });
         }
 
@@ -159,10 +416,30 @@ export class RoutingService {
       // Calculate traffic summary
       const trafficSummary = this.calculateTrafficSummary(route);
 
+      // Build a dense geometry for the whole route by concatenating step geometries when available
+      const stepCoordinates: Array<[number, number]> = [];
+      for (const l of enrichedLegs) {
+        // CRITICAL: Use enriched steps with DB geometry, not OSRM's simplified steps!
+        for (const s of l.steps) {
+          if (s.geometry?.coordinates && Array.isArray(s.geometry.coordinates)) {
+            stepCoordinates.push(...(s.geometry.coordinates as Array<[number, number]>));
+          }
+        }
+      }
+
+      const routeCoordinates: Array<[number, number]> = stepCoordinates.length > 0
+        ? stepCoordinates
+        : (route.geometry?.coordinates || []);
+
+      const mergedGeometry = {
+        type: 'LineString',
+        coordinates: routeCoordinates,
+      } as const;
+
       enrichedRoutes.push({
         distance: route.distance,
         duration: route.duration,
-        geometry: JSON.stringify(route.geometry),
+        geometry: JSON.stringify(mergedGeometry),
         legs: enrichedLegs,
         trafficSummary,
       });
@@ -170,14 +447,16 @@ export class RoutingService {
 
     return {
       code: osrmResponse.code,
-      routes: enrichedRoutes,
-    };
+      route: enrichedRoutes[0],
+    } as any;
   }
 
   /**
    * Find road segments along a path
+   * @deprecated Currently unused
+   * Reserved for future spatial query enhancements
    */
-  private static async findSegmentsAlongPath(_coordinates: Array<[number, number]>): Promise<string[]> {
+  public static async _findSegmentsAlongPath(_coordinates: Array<[number, number]>): Promise<string[]> {
     // Simplified version
     // TODO: Use PostGIS spatial queries for production
     return [];
@@ -185,8 +464,9 @@ export class RoutingService {
 
   /**
    * Get traffic info for segments
+   * @deprecated Currently unused - will be re-enabled when DB enrichment is ready
    */
-  private static async getTrafficInfo(segmentIds: string[]): Promise<{ level: string; avgSpeed: number }> {
+  public static async _getTrafficInfo(segmentIds: string[]): Promise<{ level: string; avgSpeed: number }> {
     if (segmentIds.length === 0) {
       return { level: 'NORMAL', avgSpeed: 30 };
     }
@@ -222,8 +502,9 @@ export class RoutingService {
 
   /**
    * Get nearby addresses along a path
+   * @deprecated Currently unused - reserved for future address geocoding
    */
-  private static async getNearbyAddresses(_coordinates: Array<[number, number]>): Promise<any[]> {
+  public static async _getNearbyAddresses(_coordinates: Array<[number, number]>): Promise<any[]> {
     // TODO: Implement spatial queries
     return [];
   }
@@ -282,8 +563,9 @@ export class RoutingService {
     try {
       logger.info('Calculating demo route with priority-based ordering');
 
-      // Priority labels mapping
+      // Priority labels mapping (0=urgent, 1=express, 2=fast, 3=normal, 4=economy)
       const priorityLabels: Record<number, string> = {
+        0: 'urgent',
         1: 'express',
         2: 'fast',
         3: 'normal',
@@ -304,8 +586,30 @@ export class RoutingService {
         }
       }
 
-      // Sort by priority (lower number = higher priority)
-      allWaypoints.sort((a, b) => a.priority - b.priority);
+      // Handle strategy: strict_urgent vs flexible
+      const strategy = request.strategy || 'strict_urgent';
+      
+      if (strategy === 'strict_urgent') {
+        // URGENT (priority 0) MUST be visited first, regardless of location
+        const urgentWaypoints = allWaypoints.filter(w => w.priority === 0);
+        const otherWaypoints = allWaypoints.filter(w => w.priority > 0);
+        
+        // Sort each group by priority
+        urgentWaypoints.sort((a, b) => a.priority - b.priority);
+        otherWaypoints.sort((a, b) => a.priority - b.priority);
+        
+        // Combine: URGENT first, then others
+        allWaypoints.length = 0;
+        allWaypoints.push(...urgentWaypoints, ...otherWaypoints);
+        
+        logger.info(`Strategy: STRICT_URGENT - ${urgentWaypoints.length} urgent waypoints will be visited first`);
+      } else {
+        // Flexible: treat URGENT as very high priority but allow optimization
+        // Sort by priority (lower number = higher priority)
+        allWaypoints.sort((a, b) => a.priority - b.priority);
+        
+        logger.info(`Strategy: FLEXIBLE - all waypoints sorted by priority`);
+      }
 
       // Build ordered route: start point + sorted waypoints
       const orderedWaypoints = [
@@ -319,6 +623,7 @@ export class RoutingService {
         annotations: request.annotations !== false,
         overview: 'full',
         geometries: 'geojson',
+        vehicle: request.vehicle || 'car',
       });
 
       if (osrmResponse.code !== 'Ok' || !osrmResponse.routes || osrmResponse.routes.length === 0) {
@@ -332,9 +637,14 @@ export class RoutingService {
         annotations: request.annotations,
       } as RouteRequestDto);
 
-      const route = enrichedResponse.routes[0];
+      const route = (enrichedResponse as any).route || (enrichedResponse as any).routes?.[0];
       if (!route) {
         throw createError('No route found', 500);
+      }
+
+      // Validate that the route has valid distance and duration
+      if (route.distance === 0 || route.duration === 0) {
+        throw createError('OSRM returned an invalid route with zero distance/duration. The OSRM instance may not have road data for this area.', 503);
       }
 
       // Build visit order information
@@ -367,11 +677,14 @@ export class RoutingService {
         summary,
       };
     } catch (error) {
-      logger.error('Demo route calculation failed', { error });
+      // Avoid logging circular structures (e.g., Axios errors contain sockets)
+      const safeMessage = error instanceof Error ? error.message : 'Unknown error';
+      const safeStack = error instanceof Error ? error.stack : undefined;
+      logger.error('Demo route calculation failed', { message: safeMessage, stack: safeStack });
       if (error instanceof Error && error.message.includes('OSRM error')) {
         throw error;
       }
-      throw createError('Failed to calculate demo route', 500);
+      throw createError(safeMessage || 'Failed to calculate demo route', 500);
     }
   }
 }

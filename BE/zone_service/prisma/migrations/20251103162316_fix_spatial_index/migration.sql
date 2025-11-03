@@ -79,6 +79,27 @@ CREATE TABLE `osrm_builds` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
+CREATE TABLE `poi_priorities` (
+    `priority_id` VARCHAR(191) NOT NULL,
+    `poi_id` VARCHAR(191) NOT NULL,
+    `poi_name` VARCHAR(191) NULL,
+    `poi_type` VARCHAR(191) NULL,
+    `priority` INTEGER NOT NULL DEFAULT 3,
+    `time_windows` JSON NULL,
+    `latitude` DECIMAL(10, 7) NULL,
+    `longitude` DECIMAL(10, 7) NULL,
+    `updated_by` VARCHAR(191) NULL,
+    `updated_at` DATETIME(3) NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    UNIQUE INDEX `poi_priorities_poi_id_key`(`poi_id`),
+    INDEX `poi_priorities_priority_idx`(`priority`),
+    INDEX `poi_priorities_poi_type_idx`(`poi_type`),
+    INDEX `poi_priorities_latitude_longitude_idx`(`latitude`, `longitude`),
+    PRIMARY KEY (`priority_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
 CREATE TABLE `road_nodes` (
     `node_id` VARCHAR(191) NOT NULL,
     `osm_id` VARCHAR(191) NULL,
@@ -96,12 +117,36 @@ CREATE TABLE `road_nodes` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
+CREATE TABLE `road_overrides` (
+    `override_id` VARCHAR(191) NOT NULL,
+    `segment_id` VARCHAR(191) NULL,
+    `osm_way_id` BIGINT NULL,
+    `block_level` ENUM('none', 'soft', 'min', 'hard') NOT NULL DEFAULT 'none',
+    `delta` FLOAT NULL,
+    `point_score` FLOAT NULL,
+    `recommend_enabled` BOOLEAN NOT NULL DEFAULT true,
+    `soft_penalty_factor` FLOAT NULL,
+    `min_penalty_factor` FLOAT NULL,
+    `updated_by` VARCHAR(191) NULL,
+    `updated_at` DATETIME(3) NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `road_overrides_segment_id_idx`(`segment_id`),
+    INDEX `road_overrides_osm_way_id_idx`(`osm_way_id`),
+    INDEX `road_overrides_block_level_idx`(`block_level`),
+    INDEX `road_overrides_updated_at_idx`(`updated_at`),
+    PRIMARY KEY (`override_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
 CREATE TABLE `road_segments` (
     `segment_id` VARCHAR(191) NOT NULL,
+    `osm_way_id` BIGINT NULL,
     `from_node_id` VARCHAR(191) NOT NULL,
     `to_node_id` VARCHAR(191) NOT NULL,
     `road_id` VARCHAR(191) NOT NULL,
     `geometry` JSON NOT NULL,
+    `geom` geometry NULL,
     `length_meters` DOUBLE NOT NULL,
     `name` VARCHAR(191) NOT NULL,
     `road_type` ENUM('MOTORWAY', 'TRUNK', 'PRIMARY', 'SECONDARY', 'TERTIARY', 'RESIDENTIAL', 'SERVICE', 'UNCLASSIFIED', 'LIVING_STREET', 'PEDESTRIAN', 'TRACK', 'PATH') NOT NULL,
@@ -121,6 +166,7 @@ CREATE TABLE `road_segments` (
     INDEX `road_segments_road_id_idx`(`road_id`),
     INDEX `road_segments_zone_id_idx`(`zone_id`),
     INDEX `road_segments_current_weight_idx`(`current_weight`),
+    INDEX `road_segments_osm_way_id_idx`(`osm_way_id`),
     PRIMARY KEY (`segment_id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -258,6 +304,9 @@ ALTER TABLE `destination` ADD CONSTRAINT `destination_geohash_cell_id_fkey` FORE
 
 -- AddForeignKey
 ALTER TABLE `road_nodes` ADD CONSTRAINT `road_nodes_zone_id_fkey` FOREIGN KEY (`zone_id`) REFERENCES `zones`(`zone_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `road_overrides` ADD CONSTRAINT `road_overrides_segment_id_fkey` FOREIGN KEY (`segment_id`) REFERENCES `road_segments`(`segment_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `road_segments` ADD CONSTRAINT `road_segments_from_node_id_fkey` FOREIGN KEY (`from_node_id`) REFERENCES `road_nodes`(`node_id`) ON DELETE RESTRICT ON UPDATE CASCADE;

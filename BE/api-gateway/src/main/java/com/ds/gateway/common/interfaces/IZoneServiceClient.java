@@ -28,6 +28,7 @@ public interface IZoneServiceClient {
     
     // Routing endpoints
     CompletableFuture<Object> calculateRoute(Object requestBody);
+    CompletableFuture<Object> calculateDemoRoute(Object requestBody);
     CompletableFuture<Object> getOsrmStatus();
     
     // Address endpoints

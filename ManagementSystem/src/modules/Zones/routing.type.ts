@@ -4,6 +4,8 @@
  * Type definitions for routing and navigation
  */
 
+import type { IApiResponse } from '@/common/types/http'
+
 export interface Waypoint {
   lat: number
   lon: number
@@ -19,6 +21,8 @@ export interface DemoRouteRequest {
   priorityGroups: PriorityGroup[]
   steps?: boolean
   annotations?: boolean
+  mode?: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base'
+  strategy?: 'strict_urgent' | 'flexible'  // 🚨 Cách xử lý URGENT
 }
 
 export interface RouteRequest {
@@ -27,6 +31,7 @@ export interface RouteRequest {
   alternatives?: boolean
   steps?: boolean
   annotations?: boolean
+  mode?: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base'
 }
 
 export interface Maneuver {
@@ -41,6 +46,11 @@ export interface RouteStep {
   instruction: string
   name: string
   maneuver: Maneuver
+  // Detailed geometry for the step when available
+  geometry?: {
+    type: 'LineString'
+    coordinates: [number, number][]
+  }
   addresses?: string[]
   trafficLevel?: string
 }
@@ -65,7 +75,7 @@ export interface Route {
   trafficSummary: TrafficSummary
 }
 
-export interface RouteResponse {
+export interface RouteResponseData {
   code: string
   routes: Route[]
 }
@@ -84,25 +94,31 @@ export interface RouteSummary {
   priorityCounts: Record<string, number>
 }
 
-export interface DemoRouteResponse {
+export interface DemoRouteResponseData {
   code: string
   route: Route
   visitOrder: VisitOrder[]
   summary: RouteSummary
 }
 
+// API Response types wrapped in IApiResponse
+export type RouteResponse = IApiResponse<RouteResponseData>
+export type DemoRouteResponse = IApiResponse<DemoRouteResponseData>
+
 export const PriorityLevel = {
-  EXPRESS: 1,
-  FAST: 2,
-  NORMAL: 3,
-  ECONOMY: 4,
+  URGENT: 0,     // 🚨 Gấp tuyệt đối - phải giao đầu tiên
+  EXPRESS: 1,    // 🔥 Đơn hàng gấp
+  FAST: 2,       // ⚡ Giao nhanh
+  NORMAL: 3,     // 📦 Đơn bình thường
+  ECONOMY: 4,    // 💰 Ưu tiên giá (có thể giao sau)
 } as const
 
 export const PriorityLabel = {
-  [PriorityLevel.EXPRESS]: 'Express',
-  [PriorityLevel.FAST]: 'Fast',
-  [PriorityLevel.NORMAL]: 'Normal',
-  [PriorityLevel.ECONOMY]: 'Economy',
+  [PriorityLevel.URGENT]: '🚨 Urgent (Gấp tuyệt đối)',
+  [PriorityLevel.EXPRESS]: '🔥 Express (Đơn hàng gấp)',
+  [PriorityLevel.FAST]: '⚡ Fast (Giao nhanh)',
+  [PriorityLevel.NORMAL]: '📦 Normal (Bình thường)',
+  [PriorityLevel.ECONOMY]: '💰 Economy (Ưu tiên giá)',
 } as const
 
 export type PriorityLevelType = (typeof PriorityLevel)[keyof typeof PriorityLevel]

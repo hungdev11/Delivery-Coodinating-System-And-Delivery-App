@@ -1,3 +1,0 @@
-# This file ensures the osrm-instance-2 directory is tracked by git
-# The actual OSRM data files are ignored but the directory structure is preserved
-# for Docker Compose volume mounts
