@@ -25,6 +25,8 @@ public class ParcelTrackViewModel extends AndroidViewModel {
     private final MutableLiveData<ShipperInfo> shipperInfoResult = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>(false);
     private final MutableLiveData<String> errorMessage = new MutableLiveData<>();
+    private final MutableLiveData<Boolean> statusChangeSuccess = new MutableLiveData<>();
+
 
     // --- Khai báo API Clients ---
     private ParcelClient parcelClient;
@@ -55,6 +57,10 @@ public class ParcelTrackViewModel extends AndroidViewModel {
     }
     public LiveData<String> getErrorMessage() {
         return errorMessage;
+    }
+
+    public LiveData<Boolean> getStatusChangeSuccess() {
+        return statusChangeSuccess;
     }
 
     public void trackParcel(String code) {
@@ -116,4 +122,32 @@ public class ParcelTrackViewModel extends AndroidViewModel {
                     }
                 });
     }
+
+    public void changeParcelStatus(String parcelId, String event) {
+        isLoading.setValue(true);
+        errorMessage.setValue(null);
+
+        parcelClient.changeParcelStatus(parcelId, event)
+                .enqueue(new Callback<Parcel>() {
+                    @Override
+                    public void onResponse(@NonNull Call<Parcel> call, @NonNull Response<Parcel> response) {
+                        isLoading.setValue(false);
+                        if (response.isSuccessful() && response.body() != null) {
+                            parcelResult.setValue(response.body());
+                            statusChangeSuccess.setValue(true);
+                        } else {
+                            errorMessage.setValue("Không thể cập nhật trạng thái (" + response.code() + ")");
+                            statusChangeSuccess.setValue(false);
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull Call<Parcel> call, @NonNull Throwable t) {
+                        isLoading.setValue(false);
+                        errorMessage.setValue("Lỗi mạng (Đổi trạng thái): " + t.getMessage());
+                        statusChangeSuccess.setValue(false);
+                    }
+                });
+    }
+
 }

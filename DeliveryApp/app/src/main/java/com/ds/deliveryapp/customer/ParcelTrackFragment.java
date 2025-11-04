@@ -21,12 +21,14 @@ import androidx.lifecycle.ViewModelProvider;
 import com.ds.deliveryapp.ChatActivity;
 import com.ds.deliveryapp.R;
 import com.ds.deliveryapp.clients.res.ShipperInfo;
+import com.ds.deliveryapp.enums.ParcelStatus;
 import com.ds.deliveryapp.model.Parcel;
 import com.ds.deliveryapp.viewmodel.ParcelTrackViewModel;
 
 public class ParcelTrackFragment extends Fragment {
 
     // 1. Khai báo các biến View
+    private LinearLayout layoutConfirmButtons;
     private EditText editTextTrackCode;
     private Button buttonTrack;
     private ProgressBar progressBarTrack;
@@ -34,7 +36,7 @@ public class ParcelTrackFragment extends Fragment {
     private TextView textResultCode, textResultStatus, textResultDestination;
     private LinearLayout layoutShipperInfo;
     private TextView textShipperName, textShipperPhone;
-    private Button buttonCallShipper, buttonChatShipper;
+    private Button buttonCallShipper, buttonChatShipper, buttonReceived, buttonNotReceived;
 
     // 2. Khai báo ViewModel
     private ParcelTrackViewModel viewModel;
@@ -66,6 +68,10 @@ public class ParcelTrackFragment extends Fragment {
         textShipperPhone = view.findViewById(R.id.text_shipper_phone);
         buttonCallShipper = view.findViewById(R.id.button_call_shipper);
         buttonChatShipper = view.findViewById(R.id.button_chat_shipper);
+        layoutConfirmButtons = view.findViewById(R.id.layout_confirm_buttons);
+        buttonReceived = view.findViewById(R.id.button_confirm_received);
+        buttonNotReceived = view.findViewById(R.id.button_not_received);
+
 
         // 5. Khởi tạo ViewModel
         viewModel = new ViewModelProvider(this).get(ParcelTrackViewModel.class);
@@ -115,6 +121,19 @@ public class ParcelTrackFragment extends Fragment {
             startActivity(chatIntent);
             Toast.makeText(getContext(), "Mở màn hình Chat...", Toast.LENGTH_SHORT).show();
         });
+
+        buttonReceived.setOnClickListener(v -> {
+            if (currentParcel != null) {
+                viewModel.changeParcelStatus(currentParcel.getId(), "CUSTOMER_RECEIVED");
+            }
+        });
+
+        buttonNotReceived.setOnClickListener(v -> {
+            if (currentParcel != null) {
+                viewModel.changeParcelStatus(currentParcel.getId(), "CUSTOMER_CONFIRM_NOT_RECEIVED");
+            }
+        });
+
     }
 
     private void observeViewModel() {
@@ -131,6 +150,17 @@ public class ParcelTrackFragment extends Fragment {
         viewModel.getErrorMessage().observe(getViewLifecycleOwner(), error -> {
             if (error != null && !error.isEmpty()) {
                 handleError(error);
+            }
+        });
+
+        // Lắng kết quả cập nhật trạng thái
+        viewModel.getStatusChangeSuccess().observe(getViewLifecycleOwner(), success -> {
+            if (Boolean.TRUE.equals(success)) {
+                Toast.makeText(requireContext(), "Cập nhật trạng thái thành công!", Toast.LENGTH_SHORT).show();
+                // Tự động tải lại thông tin đơn hàng sau khi đổi trạng thái
+                if (currentParcel != null) {
+                    viewModel.trackParcel(currentParcel.getCode());
+                }
             }
         });
     }
@@ -152,6 +182,15 @@ public class ParcelTrackFragment extends Fragment {
             handleError("Không tìm thấy đơn hàng.");
             return;
         }
+
+        ParcelStatus status = parcel.getStatus();
+
+        if (ParcelStatus.DELIVERED.equals(status)) {
+            layoutConfirmButtons.setVisibility(View.VISIBLE);
+        } else {
+            layoutConfirmButtons.setVisibility(View.GONE);
+        }
+
         currentParcel = parcel;
         layoutTrackResult.setVisibility(View.VISIBLE);
         textResultCode.setText("Mã đơn: " + parcel.getCode());

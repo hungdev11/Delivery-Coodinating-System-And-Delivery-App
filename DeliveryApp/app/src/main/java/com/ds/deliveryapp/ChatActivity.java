@@ -36,6 +36,8 @@ import com.ds.deliveryapp.utils.ChatWebSocketListener;
 import com.ds.deliveryapp.utils.ChatWebSocketManager;
 import com.google.gson.Gson;
 
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -604,6 +606,18 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         if ("CONFIRM_REFUSAL".equals(type) && mParcelId != null) {
             data = "{\"parcelId\":\"" + mParcelId + "\"}";
         }
+
+        if ("POSTPONE_REQUEST".equals(type) && mParcelId != null) {
+            try {
+                JSONObject json = new JSONObject(data); // parse data hiện tại
+                json.put("parcelId", mParcelId);        // thêm parcelId
+                data = json.toString();                 // convert lại thành chuỗi JSON
+            } catch (Exception e) {
+                Log.e(TAG, "Lỗi khi thêm parcelId vào data", e);
+                data = "{\"parcelId\":\"" + mParcelId + "\"}"; // fallback nếu lỗi
+            }
+        }
+
 
         CreateProposalDTO payload = new CreateProposalDTO(
                 mConversationId, mRecipientId, type, data, fallbackContent,

@@ -19,6 +19,8 @@ public interface IDeliveryAssignmentService {
     DeliveryAssignmentResponse deliveryFailed(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
     
     DeliveryAssignmentResponse rejectedByCustomer(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
+
+    DeliveryAssignmentResponse postponeByCustomer(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
     
     /**
      * Lấy các task trong phiên ĐANG HOẠT ĐỘNG (phân trang và lọc)
