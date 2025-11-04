@@ -11,9 +11,9 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { OSMParser, calculateLineLength, findLatestVietnamPBF } from '../utils/osm-parser.js';
-import { findIntersections, generateSegments } from '../utils/intersection-finder.js';
-import { calculateBaseWeight } from '../utils/weight-calculator.js';
+import { OSMParser, calculateLineLength, findLatestVietnamPBF } from '../../utils/osm-parser.js';
+import { findIntersections, generateSegments } from '../../utils/intersection-finder.js';
+import { calculateBaseWeight } from '../../utils/weight-calculator.js';
 import { join } from 'path';
 import { existsSync } from 'fs';
 

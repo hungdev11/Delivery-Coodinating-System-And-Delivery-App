@@ -104,13 +104,23 @@ const mapMarkers = computed((): MapMarker[] => {
   // Waypoint markers grouped by priority
   priorityGroups.value.forEach((group) => {
     group.waypoints.forEach((waypoint, index) => {
+      const parcelId = waypoint.parcelId || ''
+      const title = parcelId
+        ? `${getPriorityLabel(group.priority)} - Parcel: ${parcelId}`
+        : `${getPriorityLabel(group.priority)} - ${index + 1}`
+      const popup = parcelId
+        ? `<strong>${getPriorityLabel(group.priority)}</strong><br>Parcel ID: ${parcelId}<br>Priority: ${index + 1}`
+        : `<strong>${getPriorityLabel(group.priority)}</strong><br>Priority: ${index + 1}`
+
       markers.push({
         id: `waypoint-${group.priority}-${index}`,
         coordinates: [waypoint.lon, waypoint.lat],
         type: 'custom',
-        title: `${getPriorityLabel(group.priority)} - ${index + 1}`,
+        title,
         color: getPriorityColor(group.priority),
-        label: `${index + 1}`,
+        label: parcelId ? parcelId.substring(0, 6) : `${index + 1}`, // Show first 6 chars of parcelId or index
+        popup,
+        parcelId: parcelId || undefined, // Store parcelId for reference
       })
     })
   })
@@ -178,12 +188,23 @@ const mapRoutes = computed((): RouteData[] => {
 })
 
 /**
+ * Generate a random parcel ID
+ */
+const generateRandomParcelId = (): string => {
+  // Generate a more readable format: PARCEL-XXXXXX (6 random alphanumeric chars)
+  const randomChars = Math.random().toString(36).substring(2, 8).toUpperCase()
+  return `PARCEL-${randomChars}`
+}
+
+/**
  * Handle map click - set start point or add waypoint
  */
 const handleMapClick = (data: { lngLat: [number, number] }) => {
   const waypoint: Waypoint = {
     lat: data.lngLat[1],
     lon: data.lngLat[0],
+    // Always assign a random parcelId for new waypoints
+    parcelId: generateRandomParcelId(),
   }
 
   if (clickMode.value === 'start') {
@@ -565,19 +586,19 @@ onUnmounted(() => {
             <URadioGroup
               v-model="routingMode"
               :items="[
-                { label: '🎯 Priority-First (strict priority)', value: 'priority_first' },
-                { label: '⚡ Speed-Leaning (fast, skip low-priority)', value: 'speed_leaning' },
-                { label: '⚖️ Balanced (priority + speed)', value: 'balanced' },
-                { label: '🚫 No-Recommend (ignore AI)', value: 'no_recommend' },
-                { label: '📦 Base (pure base weights)', value: 'base' }
+                { label: '🎯 Strict Priority + Delta (ưu tiên nghiêm ngặt + AI)', value: 'strict_priority_with_delta' },
+                { label: '🔄 Flexible Priority + Delta (linh hoạt + AI)', value: 'flexible_priority_with_delta' },
+                { label: '📋 Strict Priority No-Delta (ưu tiên nghiêm ngặt, không AI)', value: 'strict_priority_no_delta' },
+                { label: '⚡ Flexible Priority No-Delta (linh hoạt, không AI)', value: 'flexible_priority_no_delta' },
+                { label: '📦 Base (OSRM cơ bản)', value: 'base' }
               ]"
             />
             <div class="text-xs text-gray-500">
-              <span v-if="routingMode === 'priority_first'">Always visits high-priority waypoints</span>
-              <span v-else-if="routingMode === 'speed_leaning'">Skips low-priority if detour is large</span>
-              <span v-else-if="routingMode === 'balanced'">Balanced between priority and speed</span>
-              <span v-else-if="routingMode === 'no_recommend'">Ignores point_score and delta overrides</span>
-              <span v-else>No overrides applied, pure base routing</span>
+              <span v-if="routingMode === 'strict_priority_with_delta'">Luôn ưu tiên theo độ ưu tiên, có áp dụng point_score/delta từ AI</span>
+              <span v-else-if="routingMode === 'flexible_priority_with_delta'">Ưu tiên linh hoạt (cho phép đơn thấp nếu tiện đường), có AI</span>
+              <span v-else-if="routingMode === 'strict_priority_no_delta'">Luôn ưu tiên theo độ ưu tiên, KHÔNG dùng AI recommendations</span>
+              <span v-else-if="routingMode === 'flexible_priority_no_delta'">Ưu tiên linh hoạt, KHÔNG dùng AI recommendations</span>
+              <span v-else>Base OSRM logic (từ car.lua), chỉ shipper feedback</span>
             </div>
           </div>
         </UCard>
@@ -751,6 +772,9 @@ onUnmounted(() => {
                 Leg {{ legIndex + 1 }}
                 <span class="text-gray-500 text-xs ml-2">
                   {{ formatDistance(leg.distance) }} · {{ formatDuration(leg.duration) }}
+                  <span v-if="leg.parcelId" class="ml-2 text-primary-600 dark:text-primary-400">
+                    (Parcel: {{ leg.parcelId }})
+                  </span>
                 </span>
               </div>
 

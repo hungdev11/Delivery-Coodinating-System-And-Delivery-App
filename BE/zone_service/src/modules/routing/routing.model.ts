@@ -15,6 +15,10 @@ export class WaypointDto {
 
   @IsNumber()
   lon!: number;
+
+  @IsOptional()
+  @IsString()
+  parcelId?: string;
 }
 
 /**
@@ -50,8 +54,8 @@ export class RouteRequestDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['priority_first', 'speed_leaning', 'balanced', 'no_recommend', 'base'])
-  mode?: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base';
+  @IsIn(['strict_priority_with_delta', 'flexible_priority_with_delta', 'strict_priority_no_delta', 'flexible_priority_no_delta', 'base'])
+  mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base';
 }
 
 /**
@@ -91,6 +95,7 @@ export interface RouteLegDto {
   distance: number;
   duration: number;
   steps: RouteStepDto[];
+  parcelId?: string;
 }
 
 /**
@@ -153,20 +158,20 @@ export class PriorityGroupDto {
 export class DemoRouteRequestDto {
   @ValidateNested()
   @Type(() => WaypointDto)
-  startPoint!: WaypointDto;
+  startPoint!: WaypointDto; // Điểm của shipper
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PriorityGroupDto)
-  priorityGroups!: PriorityGroupDto[];
+  priorityGroups!: PriorityGroupDto[]; // Các điểm của khách hàng
 
   @IsOptional()
   @IsBoolean()
-  steps?: boolean;
+  steps: boolean = true; // default: true
 
   @IsOptional()
   @IsBoolean()
-  annotations?: boolean;
+  annotations: boolean = true; // default: true
   
   @IsOptional()
   @IsString()
@@ -175,8 +180,8 @@ export class DemoRouteRequestDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['priority_first', 'speed_leaning', 'balanced', 'no_recommend', 'base'])
-  mode?: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base';
+  @IsIn(['strict_priority_with_delta', 'flexible_priority_with_delta', 'strict_priority_no_delta', 'flexible_priority_no_delta', 'base'])
+  mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base';
 
   @IsOptional()
   @IsString()

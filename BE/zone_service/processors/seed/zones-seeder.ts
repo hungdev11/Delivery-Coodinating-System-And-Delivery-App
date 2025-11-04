@@ -13,7 +13,7 @@ import {
   unionPolygons, 
   generateZoneCode,
   calculateCentroid
-} from '../utils/polygon-parser.js';
+} from '../../utils/polygon-parser.js';
 
 const prisma = new PrismaClient();
 

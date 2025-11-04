@@ -31,7 +31,7 @@ export const useRoutingStore = defineStore('routing', () => {
   const routeResult = ref<DemoRouteResponseData | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
-  const routingMode = ref<'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base'>('balanced')
+  const routingMode = ref<'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base'>('flexible_priority_with_delta')
   const routingStrategy = ref<'strict_urgent' | 'flexible'>('strict_urgent')
 
   // Computed
@@ -56,10 +56,23 @@ export const useRoutingStore = defineStore('routing', () => {
   }
 
   /**
+   * Generate a random parcel ID
+   */
+  const generateRandomParcelId = (): string => {
+    // Generate a more readable format: PARCEL-XXXXXX (6 random alphanumeric chars)
+    const randomChars = Math.random().toString(36).substring(2, 8).toUpperCase()
+    return `PARCEL-${randomChars}`
+  }
+
+  /**
    * Add waypoint to priority group
    */
   const addWaypoint = (priority: PriorityLevelType, waypoint: Waypoint) => {
     const group = priorityGroups.value.find((g) => g.priority === priority)
+    // Always assign a random parcelId for new waypoints if not already present
+    if (!waypoint.parcelId) {
+      waypoint.parcelId = generateRandomParcelId()
+    }
     if (group) {
       group.waypoints.push(waypoint)
     }

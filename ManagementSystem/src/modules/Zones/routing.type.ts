@@ -9,6 +9,7 @@ import type { IApiResponse } from '@/common/types/http'
 export interface Waypoint {
   lat: number
   lon: number
+  parcelId?: string
 }
 
 export interface PriorityGroup {
@@ -21,7 +22,7 @@ export interface DemoRouteRequest {
   priorityGroups: PriorityGroup[]
   steps?: boolean
   annotations?: boolean
-  mode?: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base'
+  mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base'
   strategy?: 'strict_urgent' | 'flexible'  // 🚨 Cách xử lý URGENT
 }
 
@@ -31,7 +32,7 @@ export interface RouteRequest {
   alternatives?: boolean
   steps?: boolean
   annotations?: boolean
-  mode?: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base'
+  mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base'
 }
 
 export interface Maneuver {
@@ -59,6 +60,7 @@ export interface RouteLeg {
   distance: number
   duration: number
   steps: RouteStep[]
+  parcelId?: string // Optional parcel ID for tracking delivery parcels
 }
 
 export interface TrafficSummary {

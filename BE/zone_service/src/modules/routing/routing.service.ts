@@ -101,7 +101,7 @@ export class RoutingService {
         steps: request.steps !== false,
         annotations: true,  // Enable traffic/speed annotations
         vehicle: request.vehicle || 'motorbike',
-        mode: request.mode || 'balanced',
+        mode: request.mode || 'flexible_priority_with_delta',
         geometries: 'geojson',
         overview: 'full',
       });
@@ -365,12 +365,12 @@ export class RoutingService {
     for (const route of osrmResponse.routes || []) {
       const enrichedLegs: RouteLegDto[] = [];
 
-      for (const leg of route.legs || []) {
+            for (const leg of route.legs || []) {
         const enrichedSteps: RouteStepDto[] = [];
 
-        // Get OSM node IDs from leg annotation to enrich with road names
+        // Get OSM node IDs from leg annotation to enrich with road names       
         const osmNodeIds = leg.annotation?.nodes || [];
-        
+
         // Query road names from DB based on node sequence
         const roadNamesMap = await this.getRoadNamesFromDB(osmNodeIds);
 
@@ -410,6 +410,7 @@ export class RoutingService {
           distance: leg.distance,
           duration: leg.duration,
           steps: enrichedSteps,
+          // parcelId will be mapped after enrichment in calculateDemoRoute
         });
       }
 
@@ -554,16 +555,66 @@ export class RoutingService {
     return instructions[key || 'continue'] || `Continue on ${name}`;
   }
 
+    /**
+   * Get OSRM table (distance/duration matrix) using appropriate vehicle/mode
+   */
+  private static async getOSRMTableForDemoRoute(
+    points: Array<{ lat: number; lon: number }>,
+    vehicle: 'car' | 'motorbike' = 'motorbike',
+    mode: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base' = 'flexible_priority_with_delta'
+  ): Promise<{ durations: number[][]; distances: number[][] }> {
+    const vehicleType = vehicle === 'motorbike' ? 'motorbike' : 'driving';
+    const coordinates = points.map(p => `${p.lon},${p.lat}`).join(';');
+    
+    // For motorbike, use mode-specific OSRM instance
+    // For car, use default instance
+    let baseUrl: string;
+    if (vehicle === 'motorbike') {
+      const modeUrls: Record<string, string> = {
+        strict_priority_with_delta: process.env.OSRM_STRICT_PRIORITY_WITH_DELTA_URL || 'http://localhost:5000',
+        flexible_priority_with_delta: process.env.OSRM_FLEXIBLE_PRIORITY_WITH_DELTA_URL || 'http://localhost:5001',
+        strict_priority_no_delta: process.env.OSRM_STRICT_PRIORITY_NO_DELTA_URL || 'http://localhost:5002',
+        flexible_priority_no_delta: process.env.OSRM_FLEXIBLE_PRIORITY_NO_DELTA_URL || 'http://localhost:5003',
+        base: process.env.OSRM_BASE_URL || 'http://localhost:5004',
+      };
+      baseUrl = modeUrls[mode] || modeUrls.flexible_priority_with_delta || 'http://localhost:5001';
+    } else {
+      baseUrl = process.env.OSRM_INSTANCE_1_URL || 'http://localhost:5002';
+    }
+
+    const url = `${baseUrl}/table/v1/${vehicleType}/${coordinates}?annotations=duration,distance`;
+    
+    try {
+      const axios = await import('axios');
+      const response = await axios.default.get(url);
+
+      if (response.data.code !== 'Ok') {
+        throw new Error(`OSRM table API error: ${response.data.code}`);
+      }
+
+      return {
+        durations: response.data.durations || [],
+        distances: response.data.distances || [],
+      };
+    } catch (error: any) {
+      logger.error(`Failed to fetch OSRM table from ${baseUrl}:`, error.message);
+      throw new Error(`Failed to fetch OSRM table: ${error.message}`);
+    }
+  }
+
   /**
    * Calculate demo route with priority-based waypoint ordering
-   * Input: startPoint + priorityGroups (express, fast, normal, economy)
+   * Input: startPoint + priorityGroups (express, fast, normal, economy)        
    * Output: optimized route visiting higher priority points first
+   * 
+   * Uses OSRM table API for accurate distance/duration calculations
+   * Supports 5 routing modes with intelligent waypoint ordering
    */
-  public static async calculateDemoRoute(request: DemoRouteRequestDto): Promise<DemoRouteResponseDto> {
+  public static async calculateDemoRoute(request: DemoRouteRequestDto): Promise<DemoRouteResponseDto> {                                                         
     try {
-      logger.info('Calculating demo route with priority-based ordering');
+      logger.info(`Calculating demo route with priority-based ordering (mode: ${request.mode || 'flexible_priority_with_delta'})`);       
 
-      // Priority labels mapping (0=urgent, 1=express, 2=fast, 3=normal, 4=economy)
+      // Priority labels mapping (0=urgent, 1=express, 2=fast, 3=normal, 4=economy)                                                                             
       const priorityLabels: Record<number, string> = {
         0: 'urgent',
         1: 'express',
@@ -572,8 +623,8 @@ export class RoutingService {
         4: 'economy',
       };
 
-      // Flatten and sort waypoints by priority
-      const allWaypoints: Array<{ waypoint: WaypointDto; priority: number; index: number }> = [];
+      // Flatten waypoints with priority
+      const allWaypoints: Array<{ waypoint: WaypointDto; priority: number; index: number }> = [];                                                               
       let waypointIndex = 0;
 
       for (const group of request.priorityGroups) {
@@ -586,39 +637,82 @@ export class RoutingService {
         }
       }
 
-      // Handle strategy: strict_urgent vs flexible
-      const strategy = request.strategy || 'strict_urgent';
-      
-      if (strategy === 'strict_urgent') {
-        // URGENT (priority 0) MUST be visited first, regardless of location
-        const urgentWaypoints = allWaypoints.filter(w => w.priority === 0);
-        const otherWaypoints = allWaypoints.filter(w => w.priority > 0);
-        
-        // Sort each group by priority
-        urgentWaypoints.sort((a, b) => a.priority - b.priority);
-        otherWaypoints.sort((a, b) => a.priority - b.priority);
-        
-        // Combine: URGENT first, then others
-        allWaypoints.length = 0;
-        allWaypoints.push(...urgentWaypoints, ...otherWaypoints);
-        
-        logger.info(`Strategy: STRICT_URGENT - ${urgentWaypoints.length} urgent waypoints will be visited first`);
-      } else {
-        // Flexible: treat URGENT as very high priority but allow optimization
-        // Sort by priority (lower number = higher priority)
-        allWaypoints.sort((a, b) => a.priority - b.priority);
-        
-        logger.info(`Strategy: FLEXIBLE - all waypoints sorted by priority`);
+      if (allWaypoints.length === 0) {
+        throw createError('No waypoints provided', 400);
       }
 
+      // Get OSRM distance/duration matrix for intelligent ordering
+      const vehicle = request.vehicle || 'motorbike';
+      const mode = request.mode || 'flexible_priority_with_delta';
+      
+      const allPoints = [
+        { lat: request.startPoint.lat, lon: request.startPoint.lon }, // Start point (index 0)
+        ...allWaypoints.map(w => ({ lat: w.waypoint.lat, lon: w.waypoint.lon })),
+      ];
+
+      logger.info('Fetching OSRM table for distance/duration matrix...');
+      const matrix = await this.getOSRMTableForDemoRoute(
+        allPoints, 
+        vehicle, 
+        mode as 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base'
+      );
+
+      // Calculate distances from start point (index 0) using OSRM matrix
+      for (let i = 0; i < allWaypoints.length; i++) {
+        const waypointIdx = i + 1; // +1 because index 0 is start point
+        const duration = matrix.durations[0]?.[waypointIdx] ?? Infinity;
+        const distance = matrix.distances[0]?.[waypointIdx] ?? Infinity;
+        
+        // Store duration as primary sorting metric (more accurate than distance for routing)
+        (allWaypoints[i] as any).durationFromStart = duration;
+        (allWaypoints[i] as any).distanceFromStart = distance;
+      }
+
+      // Handle strategy: strict_urgent vs flexible
+      const strategy = request.strategy || 'strict_urgent';
+      let orderedWaypoints: Array<{ waypoint: WaypointDto; priority: number; index: number }> = [];
+
+      if (strategy === 'strict_urgent') {
+        // URGENT (priority 0) MUST be visited first, regardless of location
+        const urgentWaypoints = allWaypoints.filter(w => w.priority === 0);     
+        const otherWaypoints = allWaypoints.filter(w => w.priority > 0);        
+
+        // Sort each group: first by priority, then by duration from start point (shortest first)
+        urgentWaypoints.sort((a, b) => {
+          if (a.priority !== b.priority) return a.priority - b.priority;
+          return (a as any).durationFromStart - (b as any).durationFromStart;
+        });
+        otherWaypoints.sort((a, b) => {
+          if (a.priority !== b.priority) return a.priority - b.priority;
+          return (a as any).durationFromStart - (b as any).durationFromStart;
+        });
+
+        // Combine: URGENT first, then others
+        orderedWaypoints = [...urgentWaypoints, ...otherWaypoints];
+
+        logger.info(`Strategy: STRICT_URGENT - ${urgentWaypoints.length} urgent waypoints will be visited first (sorted by OSRM duration)`);                                              
+      } else {
+        // Flexible: treat URGENT as very high priority but allow optimization  
+        // Sort by priority (lower number = higher priority), then by duration within same priority
+        orderedWaypoints = allWaypoints.sort((a, b) => {
+          if (a.priority !== b.priority) return a.priority - b.priority;
+          return (a as any).durationFromStart - (b as any).durationFromStart;
+        });
+
+        logger.info(`Strategy: FLEXIBLE - all waypoints sorted by priority, then by OSRM duration from start`);   
+      }
+
+            // Note: Routing algorithm (priority vs speed) is handled by OSRM Lua profiles
+      // Application layer only sorts waypoints by priority; OSRM chooses optimal paths
+      
       // Build ordered route: start point + sorted waypoints
-      const orderedWaypoints = [
+      const orderedWaypointDtos = [
         request.startPoint,
-        ...allWaypoints.map((w) => w.waypoint),
+        ...orderedWaypoints.map((w) => w.waypoint),
       ];
 
       // Calculate route using OSRM
-      const osrmResponse = await this.osrmRouter.getRoute(orderedWaypoints, {
+      const osrmResponse = await this.osrmRouter.getRoute(orderedWaypointDtos, {
         steps: request.steps !== false,
         annotations: request.annotations !== false,
         overview: 'full',
@@ -630,12 +724,27 @@ export class RoutingService {
         throw createError(`OSRM error: ${osrmResponse.message || osrmResponse.code}`, 503);
       }
 
-      // Enrich the first route
-      const enrichedResponse = await this.enrichRouteData(osrmResponse, {
-        waypoints: orderedWaypoints,
+            // Enrich the first route with parcelId mapping
+      const enrichedResponse = await this.enrichRouteData(osrmResponse, {       
+        waypoints: orderedWaypointDtos,
         steps: request.steps,
         annotations: request.annotations,
       } as RouteRequestDto);
+
+            // Map parcelId to route legs (legs correspond to ordered waypoints)
+      // OSRM returns legs where: leg[0] = start->waypoint[0], leg[1] = waypoint[0]->waypoint[1], etc.
+      // Each leg should have the parcelId of its destination waypoint
+      if (enrichedResponse.route && enrichedResponse.route.legs && orderedWaypoints.length > 0) {
+        logger.info(`Mapping parcelId to ${enrichedResponse.route.legs.length} legs from ${orderedWaypoints.length} waypoints`);
+        for (let i = 0; i < orderedWaypoints.length && i < enrichedResponse.route.legs.length; i++) {
+          const waypoint = orderedWaypoints[i];
+          const leg = enrichedResponse.route.legs[i];
+          if (leg && waypoint && waypoint.waypoint.parcelId) {
+            leg.parcelId = waypoint.waypoint.parcelId;
+            logger.debug(`Mapped parcelId ${waypoint.waypoint.parcelId} to leg[${i}]`);
+          }
+        }
+      }
 
       const route = (enrichedResponse as any).route || (enrichedResponse as any).routes?.[0];
       if (!route) {
@@ -647,13 +756,16 @@ export class RoutingService {
         throw createError('OSRM returned an invalid route with zero distance/duration. The OSRM instance may not have road data for this area.', 503);
       }
 
-      // Build visit order information
-      const visitOrder = allWaypoints.map((w) => ({
-        index: w.index,
-        priority: w.priority,
-        priorityLabel: priorityLabels[w.priority] || 'unknown',
-        waypoint: w.waypoint,
-      }));
+      // Build visit order information (only for waypoints that were actually visited)
+      const visitedWaypointIndices = new Set(orderedWaypoints.map(w => w.index));
+      const visitOrder = allWaypoints
+        .filter(w => visitedWaypointIndices.has(w.index))
+        .map((w) => ({
+          index: w.index,
+          priority: w.priority,
+          priorityLabel: priorityLabels[w.priority] || 'unknown',
+          waypoint: w.waypoint, // Preserve parcelId from original waypoint
+        }));
 
       // Calculate priority counts
       const priorityCounts: Record<string, number> = {};
@@ -666,7 +778,7 @@ export class RoutingService {
       const summary = {
         totalDistance: route.distance,
         totalDuration: route.duration,
-        totalWaypoints: allWaypoints.length,
+        totalWaypoints: orderedWaypoints.length, // Only count visited waypoints
         priorityCounts,
       };
 

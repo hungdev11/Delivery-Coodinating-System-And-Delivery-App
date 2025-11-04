@@ -14,7 +14,7 @@
 
 import { PrismaClient, AddressType } from '@prisma/client';
 import axios from 'axios';
-import * as geohash from '../utils/geohash.js';
+import * as geohash from '../../utils/geohash.js';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 

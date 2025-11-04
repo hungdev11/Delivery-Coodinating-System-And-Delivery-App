@@ -1,4 +1,4 @@
-import { OSMParser } from '../utils/osm-parser.js';
+import { OSMParser } from '../../utils/osm-parser.js';
 import { join } from 'path';
 
 async function debugOSMData() {

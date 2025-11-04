@@ -23,7 +23,8 @@ export interface RouteOptions {
   continue_straight?: boolean;
   vehicle?: 'car' | 'motorbike';  // Vehicle type (determines which OSRM profile to use)
   // Routing mode determines WHICH motorbike OSRM instance to query
-  mode?: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base';
+
+  mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base';
 }
 
 export interface OSRMRoute {
@@ -82,12 +83,7 @@ export interface OSRMRouteResponse {
   message?: string;
 }
 
-export interface MultiStopRouteRequest {
-  stops: Coordinate[];
-  priorities?: number[];   // Priority for each stop (higher = visit first)
-  optimize?: boolean;      // Optimize stop order
-  options?: RouteOptions;
-}
+
 
 export class OSRMRouterService {
   private prisma: PrismaClient;
@@ -104,7 +100,7 @@ export class OSRMRouterService {
 
     // Get OSRM instance URLs from environment
     // Legacy (car dual-instance)
-    this.instance1Url = process.env.OSRM_INSTANCE_1_URL || process.env.OSRM_BALANCED_URL || 'http://localhost:5002';
+    this.instance1Url = process.env.OSRM_INSTANCE_1_URL || process.env.OSRM_FLEXIBLE_PRIORITY_WITH_DELTA_URL || 'http://localhost:5001';
     this.instance2Url = process.env.OSRM_INSTANCE_2_URL || process.env.OSRM_BASE_URL || 'http://localhost:5004';
 
     // Create axios clients for each instance
@@ -122,10 +118,10 @@ export class OSRMRouterService {
 
     logger.info(
       `OSRM Router initialized - Car: ${this.instance1Url}, ${this.instance2Url} | Motorbike modes: ` +
-      `priority_first=${process.env.OSRM_PRIORITY_FIRST_URL || 'n/a'}, ` +
-      `speed_leaning=${process.env.OSRM_SPEED_LEANING_URL || 'n/a'}, ` +
-      `balanced=${process.env.OSRM_BALANCED_URL || 'n/a'}, ` +
-      `no_recommend=${process.env.OSRM_NO_RECOMMEND_URL || 'n/a'}, ` +
+      `strict_priority_with_delta=${process.env.OSRM_STRICT_PRIORITY_WITH_DELTA_URL || 'n/a'}, ` +
+      `flexible_priority_with_delta=${process.env.OSRM_FLEXIBLE_PRIORITY_WITH_DELTA_URL || 'n/a'}, ` +
+      `strict_priority_no_delta=${process.env.OSRM_STRICT_PRIORITY_NO_DELTA_URL || 'n/a'}, ` +
+      `flexible_priority_no_delta=${process.env.OSRM_FLEXIBLE_PRIORITY_NO_DELTA_URL || 'n/a'}, ` +
       `base=${process.env.OSRM_BASE_URL || 'n/a'}`
     );
 
@@ -212,103 +208,23 @@ export class OSRMRouterService {
    * Select motorbike OSRM axios client based on routing mode
    */
   private getMotorbikeClientForMode(
-    mode: 'priority_first' | 'speed_leaning' | 'balanced' | 'no_recommend' | 'base' | undefined
+    mode: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base' | undefined
   ): AxiosInstance {
     const map: Record<string, string | undefined> = {
-      priority_first: process.env.OSRM_PRIORITY_FIRST_URL,
-      speed_leaning: process.env.OSRM_SPEED_LEANING_URL,
-      balanced: process.env.OSRM_BALANCED_URL,
-      no_recommend: process.env.OSRM_NO_RECOMMEND_URL,
+      strict_priority_with_delta: process.env.OSRM_STRICT_PRIORITY_WITH_DELTA_URL,
+      flexible_priority_with_delta: process.env.OSRM_FLEXIBLE_PRIORITY_WITH_DELTA_URL,
+      strict_priority_no_delta: process.env.OSRM_STRICT_PRIORITY_NO_DELTA_URL,
+      flexible_priority_no_delta: process.env.OSRM_FLEXIBLE_PRIORITY_NO_DELTA_URL,
       base: process.env.OSRM_BASE_URL,
     };
-    const selected = (mode && map[mode]) || process.env.OSRM_BALANCED_URL || this.instance2Url;
+    const selected = (mode && map[mode]) || process.env.OSRM_FLEXIBLE_PRIORITY_WITH_DELTA_URL || this.instance2Url;
     return axios.create({ baseURL: selected, timeout: 10000 });
   }
 
   /**
-   * Get optimized route for multiple stops (TSP - Traveling Salesman Problem)
+   * NOTE: Multi-stop and trip routing removed - use calculateDemoRoute instead
+   * which handles priority-based waypoint ordering with proper OSRM mode selection
    */
-  async getMultiStopRoute(
-    request: MultiStopRouteRequest
-  ): Promise<OSRMRouteResponse> {
-    const { stops, priorities, optimize = true, options = {} } = request;
-
-    if (stops.length < 2) {
-      return {
-        code: 'Error',
-        message: 'At least 2 stops required',
-      };
-    }
-
-    // If optimization requested and priorities provided, reorder stops
-    let orderedStops = stops;
-
-    if (optimize && priorities && priorities.length === stops.length) {
-      // Sort by priority (descending)
-      const indexed = stops.map((stop, i) => ({ stop, priority: priorities[i] }));
-      indexed.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-      orderedStops = indexed.map(item => item.stop);
-
-      logger.info(`Optimized stop order by priority: ${priorities.join(', ')}`);
-    }
-
-    // For simple multi-stop routing, use the trip endpoint
-    if (optimize && !priorities) {
-      return this.getTripRoute(orderedStops, options);
-    }
-
-    // Otherwise, get point-to-point routes
-    return this.getRoute(orderedStops, options);
-  }
-
-  /**
-   * Get optimized trip route (visits all waypoints in optimal order)
-   */
-  async getTripRoute(
-    waypoints: Coordinate[],
-    options: RouteOptions = {}
-  ): Promise<OSRMRouteResponse> {
-    if (waypoints.length < 2) {
-      return {
-        code: 'Error',
-        message: 'At least 2 waypoints required',
-      };
-    }
-
-    const coordinates = waypoints
-      .map(wp => `${wp.lon},${wp.lat}`)
-      .join(';');
-
-    const params: Record<string, any> = {
-      overview: options.overview || 'full',
-      geometries: options.geometries || 'geojson',
-      steps: options.steps ?? true,
-      annotations: options.annotations ?? true,
-      roundtrip: false,  // Don't return to start
-      source: 'first',   // Start at first waypoint
-      destination: 'last', // End at last waypoint
-    };
-
-    const queryString = new URLSearchParams(params).toString();
-    const path = `/trip/v1/driving/${coordinates}?${queryString}`;
-
-    try {
-      const response = await this.queryInstance(this.activeInstance, path);
-      return response.data;
-    } catch (error) {
-      logger.warn(`Trip query failed on instance ${this.activeInstance}, trying failover`);
-
-      const failoverInstance = this.activeInstance === 1 ? 2 : 1;
-
-      try {
-        const response = await this.queryInstance(failoverInstance, path);
-        return response.data;
-      } catch (failoverError) {
-        logger.error('Both OSRM instances failed for trip query:', failoverError);
-        throw new Error('OSRM service unavailable');
-      }
-    }
-  }
 
   /**
    * Get distance matrix between multiple points
