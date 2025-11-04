@@ -356,7 +356,7 @@ class TomTomTrafficService {
           // Check if any coordinate in the geometry is within radius
           {
             geometry: {
-              path: ['coordinates'],
+              path: 'coordinates' as const,
               array_contains: [
                 [
                   [incident.point.lon - radius, incident.point.lat - radius],

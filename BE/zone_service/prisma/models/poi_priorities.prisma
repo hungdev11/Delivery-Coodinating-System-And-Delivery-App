@@ -1,0 +1,26 @@
+// POI priorities for waypoint sequencing
+model poi_priorities {
+  priority_id           String   @id @default(uuid())
+  poi_id                String   @unique
+  poi_name              String?
+  poi_type              String?
+  
+  // Priority level (1 = highest, 5 = lowest)
+  priority              Int      @default(3)
+  
+  // Optional time windows (JSON array of {start, end, days} objects)
+  time_windows          Json?    // [{start: "08:00", end: "18:00", days: [1,2,3,4,5]}]
+  
+  // Coordinates (for lookup)
+  latitude              Decimal? @db.Decimal(10, 7)
+  longitude             Decimal? @db.Decimal(10, 7)
+  
+  // Audit fields
+  updated_by            String?
+  updated_at            DateTime @updatedAt
+  created_at            DateTime @default(now())
+  
+  @@index([priority])
+  @@index([poi_type])
+  @@index([latitude, longitude])
+}

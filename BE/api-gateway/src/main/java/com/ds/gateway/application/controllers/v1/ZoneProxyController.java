@@ -140,6 +140,12 @@ public class ZoneProxyController {
         return zoneServiceClient.calculateRoute(requestBody).thenApply(ResponseEntity::ok).join();
     }
 
+    @PostMapping("/routing/demo-route")
+    public ResponseEntity<?> calculateDemoRoute(@RequestBody Object requestBody) {
+        log.info("POST /api/v1/routing/demo-route");
+        return zoneServiceClient.calculateDemoRoute(requestBody).thenApply(ResponseEntity::ok).join();
+    }
+
     @GetMapping("/routing/osrm-status")
     public ResponseEntity<?> getOsrmStatus() {
         log.info("GET /api/v1/routing/osrm-status");

@@ -57,6 +57,7 @@ export interface MapMarker {
   color?: string
   popup?: string
   onClick?: () => void
+  parcelId?: string // Optional parcel ID for routing/delivery tracking
 }
 
 /**
