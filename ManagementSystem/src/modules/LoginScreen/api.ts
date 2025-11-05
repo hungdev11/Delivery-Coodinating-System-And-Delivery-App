@@ -7,7 +7,7 @@ import {
   type RefreshTokenRequest,
   type TokenValidationResponse
 } from './model.type'
-import type { IApiResponse } from '@/common/types'
+import type { IApiResponse } from '@/common/types/http'
 
 const axiosHttpClient = new AxiosHttpClient(import.meta.env.VITE_API_URL)
 

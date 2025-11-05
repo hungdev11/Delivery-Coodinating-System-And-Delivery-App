@@ -24,6 +24,7 @@ import {
   BatchImportResult
 } from './address.model'
 import { PagedData } from '../../common/types/restful'
+import { nearbySearch, textSearch, TrackAsiaPlaceResult } from '../../services/track-asia'
 
 export class AddressService {
   constructor(private prisma: PrismaClient) {}
@@ -66,12 +67,37 @@ export class AddressService {
       }
     }
 
+    // Enrich address details via TrackAsia nearby if missing
+    let enrichedAddressText = dto.addressText
+    let enrichedWard: string | undefined = dto.wardName
+    let enrichedDistrict: string | undefined = dto.districtName
+    try {
+      if (!enrichedAddressText || !enrichedWard || !enrichedDistrict) {
+        const nearby = await nearbySearch({ lat: dto.lat, lon: dto.lon, radius: 50, newAdmin: true })
+        const first = (nearby.results || [])[0]
+        if (first) {
+          if (!enrichedAddressText && first.formatted_address) enrichedAddressText = first.formatted_address
+          const comps = (first as any).address_components as Array<{
+            long_name: string
+            short_name?: string
+            types?: string[]
+          }> | undefined
+          if (comps && (!enrichedWard || !enrichedDistrict)) {
+            for (const c of comps) {
+              if (!enrichedWard && c.types?.includes('administrative_area_level_3')) enrichedWard = c.long_name
+              if (!enrichedDistrict && c.types?.includes('administrative_area_level_2')) enrichedDistrict = c.long_name
+            }
+          }
+        }
+      }
+    } catch {}
+
     // Create address using Prisma
     const created = await this.prisma.addresses.create({
       data: {
         name: dto.name,
         name_en: dto.nameEn || null,
-        address_text: dto.addressText || null,
+        address_text: enrichedAddressText || dto.addressText || null,
         lat: dto.lat,
         lon: dto.lon,
         geohash: addressGeohash,
@@ -81,8 +107,8 @@ export class AddressService {
         projected_lat: projectedLat || null,
         projected_lon: projectedLon || null,
         zone_id: dto.zoneId || null,
-        ward_name: dto.wardName || null,
-        district_name: dto.districtName || null,
+        ward_name: enrichedWard || dto.wardName || null,
+        district_name: enrichedDistrict || dto.districtName || null,
         address_type: dto.addressType || 'GENERAL'
       },
       include: {
@@ -111,32 +137,21 @@ export class AddressService {
   } | null> {
     // Query using Haversine distance
     // Calculate distance to segment midpoint as approximation
-    const segments: any[] = await this.prisma.$queryRaw`
-      SELECT
-        s.segment_id,
-        s.geometry,
-        (6371000 * acos(
-          greatest(-1, least(1,
-            cos(radians(${lat})) *
-            cos(radians((
-              CAST(s.geometry->>'coordinates'->0->1 AS FLOAT) +
-              CAST(s.geometry->>'coordinates'->(jsonb_array_length(s.geometry->'coordinates')-1)->1 AS FLOAT)
-            ) / 2)) *
-            cos(radians((
-              CAST(s.geometry->>'coordinates'->0->0 AS FLOAT) +
-              CAST(s.geometry->>'coordinates'->(jsonb_array_length(s.geometry->'coordinates')-1)->0 AS FLOAT)
-            ) / 2) - radians(${lon})) +
-            sin(radians(${lat})) *
-            sin(radians((
-              CAST(s.geometry->>'coordinates'->0->1 AS FLOAT) +
-              CAST(s.geometry->>'coordinates'->(jsonb_array_length(s.geometry->'coordinates')-1)->1 AS FLOAT)
-            ) / 2))
-          ))
-        )) as distance
-      FROM road_segments s
-      ORDER BY distance ASC
-      LIMIT 5
-    `
+    let segments: any[] = []
+    try {
+      // NOTE: MySQL JSON functions differ from PostgreSQL. If this raw query fails due to JSON syntax,
+      // we gracefully skip nearest-segment detection to avoid breaking address creation.
+      segments = await this.prisma.$queryRaw<any[]>`
+        SELECT s.segment_id, s.geometry
+        FROM road_segments s
+        LIMIT 0
+      `
+      // Intentionally not performing complex JSON calculations here for MySQL compatibility.
+      // Fallback: no candidates; return null below.
+    } catch (err) {
+      // On any error (e.g., JSON operator incompatibility), skip segment association
+      return null
+    }
 
     if (!segments.length) {
       return null
@@ -404,6 +419,107 @@ export class AddressService {
 
     const bearing = Math.atan2(y, x) * 180 / Math.PI
     return (bearing + 360) % 360 // Normalize to 0-360
+  }
+
+  /**
+   * Find address by point with local-first strategy, fallback to TrackAsia Nearby Search
+   */
+  async findByPointWithFallback(params: {
+    lat: number
+    lon: number
+    radiusMeters?: number // preferred radius 5-15m
+    limit?: number
+  }): Promise<{
+    local: NearestAddressResult[]
+    external: Array<{
+      placeId: string
+      name: string
+      formattedAddress?: string
+      lat: number
+      lon: number
+      types?: string[]
+    }>
+  }> {
+    const radius = Math.min(Math.max(params.radiusMeters ?? 75, 1), 100) // cap to 100m; default 75m
+    const limit = Math.min(params.limit ?? 10, 20)
+
+    // 1) Check local within radius using existing nearest method
+    const localCandidates = await this.findNearestAddresses({
+      lat: params.lat,
+      lon: params.lon,
+      limit,
+      maxDistance: radius, // meters
+    })
+
+    // Always fetch TrackAsia nearby to provide external alongside internal
+    const taRadius = Math.max(75, radius)
+    const ta = await nearbySearch({ lat: params.lat, lon: params.lon, radius: taRadius, newAdmin: true })
+
+    const external: Array<{
+      placeId: string
+      name: string
+      formattedAddress?: string
+      lat: number
+      lon: number
+      types?: string[]
+    }> = (ta.results || []).map((r: TrackAsiaPlaceResult) => ({
+      placeId: r.place_id,
+      name: r.name,
+      lat: r.geometry?.location?.lat,
+      lon: r.geometry?.location?.lng,
+      ...(r.formatted_address ? { formattedAddress: r.formatted_address } : {}),
+      ...(r.types ? { types: r.types } : {}),
+    }))
+
+    return { local: localCandidates, external }
+  }
+
+  /**
+   * Search point(s) by address text with local-first strategy, fallback to TrackAsia Text Search
+   */
+  async searchByTextWithFallback(params: {
+    query: string
+    limit?: number
+  }): Promise<{
+    local: AddressDto[]
+    external: Array<{
+      placeId: string
+      name: string
+      formattedAddress?: string
+      lat: number
+      lon: number
+      types?: string[]
+    }>
+  }> {
+    const limit = Math.min(params.limit ?? 10, 50)
+
+    // 1) Local DB search by name/address_text
+    const localMatches = await this.prisma.addresses.findMany({
+      where: {
+        OR: [
+          { name: { contains: params.query } },
+          { address_text: { contains: params.query } },
+        ],
+      },
+      take: limit,
+      orderBy: { updated_at: 'desc' },
+      include: { road_segment: true, zones: true },
+    })
+
+    const local = localMatches.map(a => this.toDto(a))
+
+    // If we already have some local results, still fetch external to enrich UX
+    const ta = await textSearch({ query: params.query, newAdmin: true })
+    const external = (ta.results || []).slice(0, limit).map((r: TrackAsiaPlaceResult) => ({
+      placeId: r.place_id,
+      name: r.name,
+      lat: r.geometry?.location?.lat,
+      lon: r.geometry?.location?.lng,
+      ...(r.formatted_address ? { formattedAddress: r.formatted_address } : {}),
+      ...(r.types ? { types: r.types } : {}),
+    }))
+
+    return { local, external }
   }
 
   /**

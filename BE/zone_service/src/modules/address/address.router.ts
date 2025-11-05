@@ -29,6 +29,22 @@ router.post('/', addressController.createAddress)
 router.post('/batch', addressController.batchImport)
 
 /**
+ * @route GET /api/v1/addresses/by-point
+ * @desc Local-first lookup by point, fallback to TrackAsia
+ * @query lat, lon (required), radius (5-15m suggested), limit
+ * @access Public
+ */
+router.get('/by-point', addressController.findByPoint)
+
+/**
+ * @route GET /api/v1/addresses/search
+ * @desc Search by address text (local + TrackAsia)
+ * @query q (or query), limit
+ * @access Public
+ */
+router.get('/search', addressController.searchByText)
+
+/**
  * @route GET /api/v1/addresses/nearest
  * @desc Find nearest addresses to a point
  * @query lat, lon (required), limit, maxDistance, addressType, segmentId, zoneId

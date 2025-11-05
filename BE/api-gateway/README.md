@@ -539,7 +539,7 @@ Log level can be configured in `application.yaml`.
 ## Documentation
 
 - [API Documentation](.docs/README.md)
-- [Route Documentation](.docs/route/README.md)
+- [Route Documentation](.docs/route/) - [auth.md](.docs/route/auth.md), [users.md](.docs/route/users.md), [zones.md](.docs/route/zones.md), [centers.md](.docs/route/centers.md), [addresses.md](.docs/route/addresses.md), [routing.md](.docs/route/routing.md), [osrm.md](.docs/route/osrm.md), [parcels.md](.docs/route/parcels.md), [sessions.md](.docs/route/sessions.md), [assignments.md](.docs/route/assignments.md), [settings.md](.docs/route/settings.md)
 - [Keycloak Migration Guide](./KEYCLOAK_MIGRATION.md)
 - [Global RESTful Standards](../RESTFUL.md)
 

@@ -9,7 +9,7 @@ RUN mvn dependency:go-offline -B
 COPY src ./src
 RUN mvn clean package -DskipTests
 
-FROM openjdk:22-slim
+FROM eclipse-temurin:22-jre-jammy
 
 WORKDIR /app
 

@@ -126,13 +126,46 @@ const navigationItems = ref<NavigationMenuItem[][]>([
     },
     {
       label: 'Users',
-      to: '/users',
       icon: 'i-heroicons-user-group',
+      children: [
+        {
+          label: 'List',
+          to: '/users',
+          icon: 'i-heroicons-user-group',
+        },
+      ],
     },
     {
       label: 'Zones',
-      to: '/zones',
       icon: 'i-heroicons-map',
+      children: [
+        {
+          label: 'List',
+          to: '/zones',
+          icon: 'i-heroicons-rectangle-stack',
+        },
+        {
+          label: 'Map',
+          to: '/zones/map',
+          icon: 'i-heroicons-map',
+        },
+        {
+          label: 'Demo Routing',
+          to: '/zones/map/demo-routing',
+          icon: 'i-heroicons-arrow-path-rounded-square',
+        },
+      ],
+    },
+    {
+      label: 'Addresses',
+      icon: 'i-heroicons-map-pin',
+      children: [
+        {
+          label: 'Picker',
+          to: '/addresses/picker',
+          icon: 'i-heroicons-map-pin',
+        },
+      ],
     },
     {
       label: 'Settings',

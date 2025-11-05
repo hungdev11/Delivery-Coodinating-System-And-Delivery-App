@@ -1,3 +1,110 @@
+# Address Routes
+
+Base URL: `http://localhost:21503/api/v1`
+
+## Endpoints
+
+### GET /addresses
+- Description: List addresses (paginated, filterable).
+- Query: `page, size, search, addressType, segmentId, zoneId, wardName, districtName`
+- Response 200:
+```json
+{
+  "result": {
+    "data": [ { "id": "uuid", "name": "...", "lat": 10.762622, "lon": 106.660172, "addressText": null } ],
+    "page": { "page": 0, "size": 10, "totalElements": 1, "totalPages": 1, "filters": [], "sorts": [], "selected": [] }
+  }
+}
+```
+
+### GET /addresses/:id
+- Description: Get address by ID.
+- Response 200:
+```json
+{ "result": { "id": "uuid", "name": "...", "lat": 10.762622, "lon": 106.660172, "addressText": null } }
+```
+- Response 404:
+```json
+{ "message": "Address not found" }
+```
+
+### POST /addresses
+- Description: Create address (enriches formatted address and admin fields when missing).
+- Body:
+```json
+{ "name": "...", "addressText": "optional", "lat": 10.762622, "lon": 106.660172 }
+```
+- Response 201:
+```json
+{ "result": { "id": "uuid", "name": "...", "lat": 10.762622, "lon": 106.660172 }, "message": "Address created successfully" }
+```
+
+### PUT /addresses/:id
+- Description: Update address (partial).
+- Body (all fields optional):
+```json
+{ "name": "...", "addressText": "...", "lat": 10.762622, "lon": 106.660172 }
+```
+- Response 200:
+```json
+{ "result": { "id": "uuid", "name": "...", "lat": 10.762622, "lon": 106.660172 }, "message": "Address updated successfully" }
+```
+
+### DELETE /addresses/:id
+- Description: Delete address.
+- Response 200:
+```json
+{ "result": null, "message": "Address deleted successfully" }
+```
+- Response 404:
+```json
+{ "message": "Address not found" }
+```
+
+### POST /addresses/batch
+- Description: Batch import addresses.
+- Response 201 (or 207 when partial failures):
+```json
+{ "result": { "total": 10, "successful": 9, "failed": 1, "errors": [], "addresses": [] }, "message": "Batch import completed: 9 successful, 1 failed" }
+```
+
+### GET /addresses/nearest
+- Description: Find nearest local addresses.
+- Query: `lat, lon` (required), `limit?` (default 10), `maxDistance?` (default 5000)
+- Response 200:
+```json
+{ "result": [ { "id": "uuid", "name": "...", "lat": 10.7626, "lon": 106.6601, "distance": 12.3 } ] }
+```
+
+### GET /addresses/by-point
+- Description: Local-first + TrackAsia Nearby. Returns both internal and external.
+- Query: `lat, lon` (required), `radius?` (default 75, max 100), `limit?`
+- Response 200:
+```json
+{
+  "result": {
+    "local": [ { "id": "uuid", "name": "...", "lat": 10.7626, "lon": 106.6601, "distance": 9.8 } ],
+    "external": [ { "placeId": "ta_xxx", "name": "...", "formattedAddress": "...", "lat": 10.7627, "lon": 106.6602 } ]
+  }
+}
+```
+
+### GET /addresses/search
+- Description: Local DB search + TrackAsia Text Search.
+- Query: `q` (required), `limit?` (default 10)
+- Response 200:
+```json
+{
+  "result": {
+    "local": [ { "id": "uuid", "name": "...", "lat": 10.7626, "lon": 106.6601 } ],
+    "external": [ { "placeId": "ta_xxx", "name": "...", "formattedAddress": "...", "lat": 10.7627, "lon": 106.6602 } ]
+  }
+}
+```
+
+## Notes
+- All responses follow BaseResponse (see RESTFUL.md)
+- TrackAsia API key via `TRACKASIA_API_KEY` or `TRACK_ASIA_API_KEY`
 # Address API Documentation
 
 Base path: `/api/v1/addresses`

@@ -241,6 +241,10 @@ String keycloakUrl = restTemplate.getForObject(
 - Forward requests to `/api/v1/settings/public` for client access
 - Protect private settings endpoints with authentication
 
+## 📚 Documentation
+
+- [Route Documentation](.docs/route/settings.md) - Complete API endpoint reference
+
 ## 🎉 Summary
 
 Settings Service cung cấp:

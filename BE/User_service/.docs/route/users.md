@@ -1,30 +1,75 @@
 # User Routes
 
-Base URL: `http://localhost:8081/api/v1`
+Base URL: `http://localhost:<port>/api/v1/users`
 
 ## Endpoints
 
-### GET /users
-- Description: Get all users.
+### POST /users
+- Description: Get all users with advanced filtering and sorting (paginated).
+- Body:
+```json
+{
+  "page": 0,
+  "size": 10,
+  "search": "optional",
+  "filters": [],
+  "sorts": [],
+  "selected": []
+}
+```
 - Response 200:
 ```json
 {
-  "result": [
-    {
+  "status": "success",
+  "data": {
+    "data": [{
       "id": "uuid",
       "keycloakId": "keycloak-uuid",
-      "username": "johndoe",
-      "email": "john@example.com",
-      "firstName": "John",
-      "lastName": "Doe",
-      "phone": "+84123456789",
+      "username": "testuser",
+      "email": "test@example.com",
+      "firstName": "Test",
+      "lastName": "User",
+      "phone": "1234567890",
       "address": "123 Main St",
-      "identityNumber": "0123456789",
-      "status": "ACTIVE",
-      "createdAt": "2024-01-01T00:00:00",
-      "updatedAt": "2024-01-01T00:00:00"
-    }
-  ]
+      "identityNumber": "123456789",
+      "status": "ACTIVE"
+    }],
+    "page": { "page": 0, "size": 10, "totalElements": 1, "totalPages": 1 }
+  }
+}
+```
+
+### POST /users/create
+- Description: Create a new user.
+- Body:
+```json
+{
+  "keycloakId": "keycloak-uuid",
+  "username": "testuser",
+  "email": "test@example.com",
+  "firstName": "Test",
+  "lastName": "User",
+  "phone": "1234567890",
+  "address": "123 Main St",
+  "identityNumber": "123456789",
+  "status": "ACTIVE"
+}
+```
+- Response 201:
+```json
+{
+  "status": "success",
+  "message": "User created successfully",
+  "data": {
+    "id": "uuid",
+    "username": "testuser",
+    "email": "test@example.com",
+    "firstName": "Test",
+    "lastName": "User",
+    "phone": "1234567890",
+    "address": "123 Main St",
+    "status": "ACTIVE"
+  }
 }
 ```
 
@@ -33,25 +78,23 @@ Base URL: `http://localhost:8081/api/v1`
 - Response 200:
 ```json
 {
-  "result": {
+  "status": "success",
+  "data": {
     "id": "uuid",
-    "keycloakId": "keycloak-uuid",
-    "username": "johndoe",
-    "email": "john@example.com",
-    "firstName": "John",
-    "lastName": "Doe",
-    "phone": "+84123456789",
+    "username": "testuser",
+    "email": "test@example.com",
+    "firstName": "Test",
+    "lastName": "User",
+    "phone": "1234567890",
     "address": "123 Main St",
-    "identityNumber": "0123456789",
-    "status": "ACTIVE",
-    "createdAt": "2024-01-01T00:00:00",
-    "updatedAt": "2024-01-01T00:00:00"
+    "status": "ACTIVE"
   }
 }
 ```
 - Response 404:
 ```json
 {
+  "status": "error",
   "message": "User not found"
 }
 ```
@@ -59,50 +102,23 @@ Base URL: `http://localhost:8081/api/v1`
 ### GET /users/username/:username
 - Description: Get user by username.
 - Response 200: Same as GET /users/:id
-- Response 404: Same as GET /users/:id
-
-### GET /users/keycloak/:keycloakId
-- Description: Get user by Keycloak ID.
-- Response 200 same as GET /users/:id
-- Response 404 same as GET /users/:id
-
-### POST /users
-- Description: Create a new user.
-- Body:
+- Response 404:
 ```json
 {
-  "keycloakId": "optional-keycloak-uuid",
-  "username": "johndoe",
-  "email": "john@example.com",
-  "firstName": "John",
-  "lastName": "Doe",
-  "phone": "+84123456789",
-  "address": "123 Main St",
-  "identityNumber": "0123456789",
-  "status": "ACTIVE"
+  "status": "error",
+  "message": "User not found"
 }
 ```
-- Response 201:
+
+### GET /users/me
+- Description: Get current authenticated user.
+- Response 501:
 ```json
 {
-  "result": {
-    "id": "uuid",
-    "keycloakId": "keycloak-uuid",
-    "username": "johndoe",
-    "email": "john@example.com",
-    "firstName": "John",
-    "lastName": "Doe",
-    "phone": "+84123456789",
-    "address": "123 Main St",
-    "identityNumber": "0123456789",
-    "status": "ACTIVE",
-    "createdAt": "2024-01-01T00:00:00",
-    "updatedAt": null
-  },
-  "message": "User created successfully"
+  "status": "error",
+  "message": "Current user endpoint not implemented"
 }
 ```
-- Errors: 400 validation failed.
 
 ### PUT /users/:id
 - Description: Update user.
@@ -110,43 +126,44 @@ Base URL: `http://localhost:8081/api/v1`
 ```json
 {
   "email": "newemail@example.com",
-  "firstName": "Jane",
-  "lastName": "Smith",
-  "phone": "+84987654321",
-  "address": "456 Another St",
-  "identityNumber": "9876543210",
-  "status": "BLOCKED"
+  "firstName": "New",
+  "lastName": "Name",
+  "phone": "9876543210",
+  "address": "456 New St",
+  "identityNumber": "987654321",
+  "status": "INACTIVE"
 }
 ```
 - Response 200:
 ```json
 {
-  "result": {
+  "status": "success",
+  "message": "User updated successfully",
+  "data": {
     "id": "uuid",
-    "keycloakId": "keycloak-uuid",
-    "username": "johndoe",
+    "username": "testuser",
     "email": "newemail@example.com",
-    "firstName": "Jane",
-    "lastName": "Smith",
-    "phone": "+84987654321",
-    "address": "456 Another St",
-    "identityNumber": "9876543210",
-    "status": "BLOCKED",
-    "createdAt": "2024-01-01T00:00:00",
-    "updatedAt": "2024-01-02T00:00:00"
-  },
-  "message": "User updated successfully"
+    "firstName": "New",
+    "lastName": "Name",
+    "status": "INACTIVE"
+  }
 }
 ```
-- Errors: 404 user not found.
 
 ### DELETE /users/:id
 - Description: Delete user.
 - Response 200:
 ```json
 {
-  "result": null,
+  "status": "success",
   "message": "User deleted successfully"
+}
+```
+- Response 404:
+```json
+{
+  "status": "error",
+  "message": "User not found"
 }
 ```
 
@@ -156,37 +173,24 @@ Base URL: `http://localhost:8081/api/v1`
 ```json
 {
   "keycloakId": "keycloak-uuid",
-  "username": "johndoe",
-  "email": "john@example.com",
-  "firstName": "John",
-  "lastName": "Doe"
+  "username": "testuser",
+  "email": "test@example.com",
+  "firstName": "Test",
+  "lastName": "User"
 }
 ```
 - Response 200:
 ```json
 {
-  "result": {
+  "status": "success",
+  "message": "User synced successfully",
+  "data": {
     "id": "uuid",
     "keycloakId": "keycloak-uuid",
-    "username": "johndoe",
-    "email": "john@example.com",
-    "firstName": "John",
-    "lastName": "Doe",
-    "phone": null,
-    "address": null,
-    "identityNumber": null,
-    "status": "ACTIVE",
-    "createdAt": "2024-01-01T00:00:00",
-    "updatedAt": "2024-01-01T00:00:00"
-  },
-  "message": "User synced successfully"
+    "username": "testuser",
+    "email": "test@example.com",
+    "firstName": "Test",
+    "lastName": "User"
+  }
 }
 ```
-- Note: This endpoint creates a new user if keycloakId doesn't exist, or updates existing user's fields.
-
-## User Status
-
-User status can be one of:
-- `ACTIVE` (1) - User is active and can use the system
-- `PENDING` (2) - User registration is pending approval
-- `BLOCKED` (0) - User is blocked and cannot access the system
