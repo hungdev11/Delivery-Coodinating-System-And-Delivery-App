@@ -5,6 +5,7 @@ import { routes } from '@/modules/common/routes'
 import { usersRoutes } from '@/modules/Users/Users.routes'
 import { zonesRoutes } from '@/modules/Zones/Zones.routes'
 import { settingsRoutes } from '@/modules/Settings/Settings.routes'
+import { addressesRoutes } from '@/modules/Addresses/Addresses.routes'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -14,6 +15,7 @@ const router = createRouter({
     ...usersRoutes,
     ...zonesRoutes,
     ...settingsRoutes,
+    ...addressesRoutes,
     {
       path: '/:pathMatch(.*)*',
       component: () => import('@/modules/common/NotFoundPage.vue'),

@@ -86,6 +86,56 @@ export class AddressController {
   }
 
   /**
+   * GET /addresses/by-point
+   * Local-first address lookup by point, fallback to TrackAsia nearby
+   */
+  findByPoint = async (req: Request, res: Response) => {
+    try {
+      const { lat, lon, radius, limit } = req.query
+
+      if (!lat || !lon) {
+        return res.status(400).json(BaseResponse.error('Missing required parameters: lat, lon'))
+      }
+
+      const result = await this.service.findByPointWithFallback({
+        lat: parseFloat(lat as string),
+        lon: parseFloat(lon as string),
+        radiusMeters: radius ? parseInt(radius as string) : 75,
+        limit: limit ? parseInt(limit as string) : 10
+      })
+
+      return res.json(BaseResponse.success(result))
+    } catch (error: any) {
+      console.error('Error finding by point:', error)
+      return res.status(500).json(BaseResponse.error(error.message || 'Failed to find by point'))
+    }
+  }
+
+  /**
+   * GET /addresses/search
+   * Search by address text, returning local matches and TrackAsia text results
+   */
+  searchByText = async (req: Request, res: Response) => {
+    try {
+      const { q, query, limit } = req.query
+      const term = (q || query) as string
+      if (!term) {
+        return res.status(400).json(BaseResponse.error('Missing required parameter: q'))
+      }
+
+      const result = await this.service.searchByTextWithFallback({
+        query: term,
+        limit: limit ? parseInt(limit as string) : 10
+      })
+
+      return res.json(BaseResponse.success(result))
+    } catch (error: any) {
+      console.error('Error searching by text:', error)
+      return res.status(500).json(BaseResponse.error(error.message || 'Failed to search by text'))
+    }
+  }
+
+  /**
    * GET /addresses/nearest
    * Find nearest addresses to a point
    */
