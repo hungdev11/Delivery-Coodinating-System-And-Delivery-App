@@ -12,14 +12,62 @@
         android:layout_height="match_parent"
         tilesource="Mapnik"/>
 
+    <TextView
+        android:id="@+id/tv_instruction"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start|end"
+        android:layout_margin="16dp"
+        android:background="#99000000"
+        android:padding="12dp"
+        android:textColor="@android:color/white"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        tools:text="Đi thẳng trên đường Lê Văn Việt" />
+
+    <!-- NÚT MỚI: Điều hướng về vị trí tài xế -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_recenter"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="80dp"
+        android:layout_marginEnd="16dp"
+        android:src="@android:drawable/ic_menu_mylocation"
+        app:fabSize="mini"
+        app:backgroundTint="@color/material_dynamic_neutral99"
+        android:contentDescription="Về vị trí hiện tại"/>
+
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_list_tasks"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|start"
+        android:layout_gravity="bottom|start"
         android:layout_margin="16dp"
         android:src="@drawable/ic_list"
-        app:fabSize="mini"
+        app:fabSize="normal"
         app:backgroundTint="@color/material_dynamic_neutral99"
-        android:contentDescription="Show Task List"/>
+        android:contentDescription="Hiển thị danh sách nhiệm vụ"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_next_task"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        android:src="@android:drawable/ic_media_next"
+        app:fabSize="normal"
+        app:backgroundTint="@color/design_default_color_primary"
+        android:contentDescription="Nhiệm vụ tiếp theo"/>
+
+    <ProgressBar
+        android:id="@+id/progress_bar"
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone"
+        tools:visibility="visible"
+        android:elevation="10dp"/>
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

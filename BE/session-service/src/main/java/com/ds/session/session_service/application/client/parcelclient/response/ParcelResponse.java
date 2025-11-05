@@ -26,4 +26,7 @@ public class ParcelResponse {
     private BigDecimal value;
     private LocalTime windowStart;
     private LocalTime windowEnd;
+
+    private BigDecimal lat;
+    private BigDecimal lon;
 }
