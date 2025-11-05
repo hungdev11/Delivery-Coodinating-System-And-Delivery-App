@@ -59,7 +59,7 @@ public class DeliveryAssignmentResponse {
 
                 .lat(parcel.getLat())
                 .lon(parcel.getLon())
-                
+
                 .build();
     }
 }
