@@ -1,0 +1,38 @@
+// Road overrides for dynamic routing adjustments
+model road_overrides {
+  override_id           String   @id @default(uuid())
+  
+  // Keys (at least one must be provided)
+  segment_id            String?
+  osm_way_id            BigInt?
+  
+  // Relations
+  segment               road_segments? @relation(fields: [segment_id], references: [segment_id], onDelete: Cascade)
+  
+  // Override fields
+  block_level           BlockLevel @default(none)
+  delta                 Float?     @db.Float // Additional weight delta adjustment
+  point_score           Float?     @db.Float // Road quality score 0-1 (higher = better)
+  recommend_enabled     Boolean    @default(true) // Enable/disable recommendation for this road
+  
+  // Custom blocking factors (override global defaults)
+  soft_penalty_factor   Float?     @db.Float // Custom penalty factor for soft block
+  min_penalty_factor    Float?     @db.Float // Custom penalty factor for min block
+  
+  // Audit fields
+  updated_by            String?
+  updated_at            DateTime   @updatedAt
+  created_at            DateTime   @default(now())
+  
+  @@index([segment_id])
+  @@index([osm_way_id])
+  @@index([block_level])
+  @@index([updated_at])
+}
+
+enum BlockLevel {
+  none
+  soft
+  min
+  hard
+}

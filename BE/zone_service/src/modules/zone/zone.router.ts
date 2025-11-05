@@ -8,9 +8,8 @@ import { ZoneController } from './zone.controller';
 
 export const zoneRouter = Router();
 
-// Create zone service instance
-const zoneService = new (require('../../common/services/zone-service').ZoneService)(require('@prisma/client').PrismaClient);
-const zoneController = new ZoneController(zoneService);
+// Create zone controller instance
+const zoneController = new ZoneController();
 
 // Get zones with filtering and sorting
 zoneRouter.post('/', zoneController.getZones.bind(zoneController));

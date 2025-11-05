@@ -356,7 +356,7 @@ class TomTomTrafficService {
           // Check if any coordinate in the geometry is within radius
           {
             geometry: {
-              path: ['coordinates'],
+              path: 'coordinates' as const,
               array_contains: [
                 [
                   [incident.point.lon - radius, incident.point.lat - radius],
@@ -483,7 +483,7 @@ class TomTomTrafficService {
       );
 
       // Execute in smaller batches to avoid connection pool exhaustion
-      const batchSize = 20; // Reduced from 100 to 20
+      const batchSize = 100
       for (let i = 0; i < segmentUpdatePromises.length; i += batchSize) {
         const batch = segmentUpdatePromises.slice(i, i + batchSize);
         await Promise.all(batch);

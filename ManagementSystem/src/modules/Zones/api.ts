@@ -26,7 +26,7 @@ export const checkHealth = async (): Promise<any> => {
 }
 
 /**
- * Get list of zones (paginated)
+ * Get list of zones (paginated) - Updated to use POST with PagingRequest
  */
 export const getZones = async (params?: {
   page?: number
@@ -34,7 +34,31 @@ export const getZones = async (params?: {
   search?: string
   centerId?: string
 }): Promise<GetZonesResponse> => {
-  return apiClient.get<GetZonesResponse>('/v1/zones', { params })
+  // Build PagingRequest body according to new API spec
+  const requestBody = {
+    page: params?.page ?? 0,
+    size: params?.size ?? 10,
+    search: params?.search,
+    filters: params?.centerId ? {
+      logic: 'AND' as const,
+      conditions: [
+        {
+          field: 'centerId',
+          operator: 'eq' as const,
+          value: params.centerId
+        }
+      ]
+    } : undefined,
+    sorts: [
+      {
+        field: 'name',
+        direction: 'asc' as const
+      }
+    ],
+    selected: []
+  }
+
+  return apiClient.post<GetZonesResponse, any>('/v1/zones', requestBody)
 }
 
 /**
@@ -62,7 +86,7 @@ export const getZonesByCenter = async (centerId: string): Promise<any> => {
  * Create new zone
  */
 export const createZone = async (data: CreateZoneRequest): Promise<CreateZoneResponse> => {
-  return apiClient.post<CreateZoneResponse, CreateZoneRequest>('/v1/zones', data)
+  return apiClient.post<CreateZoneResponse, CreateZoneRequest>('/v1/zones/create', data)
 }
 
 /**

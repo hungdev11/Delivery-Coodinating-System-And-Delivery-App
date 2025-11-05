@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,7 +41,10 @@ public class PagingRequest {
     private Optional<List<String>> selected = Optional.empty();
     
     public FilterGroup getFiltersOrEmpty() {
-        return filters.orElse(FilterGroup.builder().logic("AND").conditions(List.of()).build());
+        return filters.orElse(FilterGroup.builder()
+                .logic("AND")
+                .conditions(new ArrayList<>())
+                .build());
     }
     
     public List<SortConfig> getSortsOrEmpty() {

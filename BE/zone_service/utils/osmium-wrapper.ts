@@ -17,384 +17,666 @@ import { readFile } from 'fs/promises';
 const execAsync = promisify(exec);
 
 export interface OsmiumOptions {
-  bbox?: [number, number, number, number]; // [minLon, minLat, maxLon, maxLat]
-  outputFormat?: 'json' | 'xml' | 'pbf';
-  verbose?: boolean;
+	bbox?: [number, number, number, number]; // [minLon, minLat, maxLon, maxLat]
+	outputFormat?: 'json' | 'xml' | 'pbf';
+	verbose?: boolean;
 }
 
 export class OsmiumWrapper {
-  private verbose: boolean;
+	private verbose: boolean;
+	private version: string | null = null;
 
-  constructor(verbose: boolean = false) {
-    this.verbose = verbose;
-  }
+	constructor(verbose: boolean = false) {
+		this.verbose = verbose;
+	}
 
-  /**
-   * Check if osmium-tool is installed
-   */
-  async checkInstallation(): Promise<boolean> {
-    try {
-      const { stdout } = await execAsync('osmium --version');
-      if (this.verbose) {
-        console.log(`✓ Osmium found: ${stdout.trim()}`);
-      }
-      return true;
-    } catch (error) {
-      console.error('❌ osmium-tool is not installed!');
-      console.error('\nPlease install osmium-tool:');
-      console.error('  Ubuntu/Debian: sudo apt-get install osmium-tool');
-      console.error('  macOS: brew install osmium-tool');
-      return false;
-    }
-  }
+	/**
+	 * Check if osmium-tool is installed and detect version
+	 */
+	async checkInstallation(): Promise<boolean> {
+		try {
+			const { stdout } = await execAsync('osmium --version');
+			this.version = stdout.trim();
+			if (this.verbose) {
+				console.log(`✓ Osmium found: ${this.version}`);
+			}
+			return true;
+		} catch (error) {
+			console.error('❌ osmium-tool is not installed!');
+			console.error('\nPlease install osmium-tool:');
+			console.error('  Ubuntu/Debian: sudo apt-get install osmium-tool');
+			console.error('  macOS: brew install osmium-tool');
+			return false;
+		}
+	}
 
-  /**
-   * Extract specific data types from PBF file
-   * @param inputPbf - Path to input PBF file
-   * @param outputFile - Path to output file (will be created in JSON format)
-   * @param options - Additional options
-   */
-  async extractToJson(
-    inputPbf: string,
-    outputFile: string,
-    options: OsmiumOptions = {}
-  ): Promise<void> {
-    if (!existsSync(inputPbf)) {
-      throw new Error(`Input file not found: ${inputPbf}`);
-    }
+	/**
+	 * Detect if osmium supports modern strategy flags (1.16+)
+	 * 
+	 * Modern versions use strategy presets:
+	 * - `simple`: Basic bbox clipping (may break ways at boundary)
+	 * - `complete_ways`: Include complete ways + referenced nodes (default for routing)
+	 * - `smart`: Complete ways + related objects (best for complex data)
+	 * 
+	 * Legacy versions use individual flags:
+	 * - `--complete-ways`: Include ways completely
+	 * - `--complete-nodes`: Include all nodes for complete ways
+	 * - `--complete-relations`: Include parent relations
+	 * 
+	 * Both approaches ensure routing graph integrity.
+	 */
+	private async supportsStrategyFlag(): Promise<boolean> {
+		try {
+			const { stdout } = await execAsync('osmium extract --help');
+			// Check if help text mentions -s or --strategy
+			return stdout.includes('--strategy') || stdout.includes('-s [');
+		} catch {
+			// Default to modern approach (safer bet in 2024+)
+			return true;
+		}
+	}
 
-    // Ensure output directory exists
-    const outputDir = dirname(outputFile);
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
-    }
+	/**
+	 * Extract specific data types from PBF file
+	 * @param inputPbf - Path to input PBF file
+	 * @param outputFile - Path to output file (will be created in JSON format)
+	 * @param options - Additional options
+	 */
+	async extractToJson(
+		inputPbf: string,
+		outputFile: string,
+		options: OsmiumOptions = {}
+	): Promise<void> {
+		if (!existsSync(inputPbf)) {
+			throw new Error(`Input file not found: ${inputPbf}`);
+		}
 
-    // Build osmium command
-    const args: string[] = ['export', inputPbf];
+		// Ensure output directory exists
+		const outputDir = dirname(outputFile);
+		if (!existsSync(outputDir)) {
+			mkdirSync(outputDir, { recursive: true });
+		}
 
-    // Add bounding box filter if provided
-    if (options.bbox) {
-      const [minLon, minLat, maxLon, maxLat] = options.bbox;
-      args.push('--bbox', `${minLon},${minLat},${maxLon},${maxLat}`);
-    }
+		// Build osmium command
+		const args: string[] = ['export', inputPbf];
 
-    // Output format (GeoJSON)
-    args.push('--output', outputFile);
-    args.push('--output-format', 'geojson');
-    args.push('--add-unique-id', 'counter');
+		// Add bounding box filter if provided
+		if (options.bbox) {
+			const [minLon, minLat, maxLon, maxLat] = options.bbox;
+			args.push('--bbox', `${minLon},${minLat},${maxLon},${maxLat}`);
+		}
 
-    if (this.verbose) {
-      console.log(`Running: osmium ${args.join(' ')}`);
-    }
+		// Output format (GeoJSON)
+		args.push('--output', outputFile);
+		args.push('--output-format', 'geojson');
+		args.push('--add-unique-id', 'counter');
 
-    return new Promise((resolve, reject) => {
-      const osmium = spawn('osmium', args);
+		if (this.verbose) {
+			console.log(`Running: osmium ${args.join(' ')}`);
+		}
 
-      let stdout = '';
-      let stderr = '';
+		return new Promise((resolve, reject) => {
+			const osmium = spawn('osmium', args);
 
-      osmium.stdout.on('data', (data) => {
-        stdout += data.toString();
-        if (this.verbose) {
-          process.stdout.write(data);
-        }
-      });
+			let stdout = '';
+			let stderr = '';
 
-      osmium.stderr.on('data', (data) => {
-        stderr += data.toString();
-        if (this.verbose) {
-          process.stderr.write(data);
-        }
-      });
+			osmium.stdout.on('data', (data) => {
+				stdout += data.toString();
+				if (this.verbose) {
+					process.stdout.write(data);
+				}
+			});
 
-      osmium.on('close', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`Osmium exited with code ${code}\n${stderr}`));
-        }
-      });
+			osmium.stderr.on('data', (data) => {
+				stderr += data.toString();
+				if (this.verbose) {
+					process.stderr.write(data);
+				}
+			});
 
-      osmium.on('error', (error) => {
-        reject(new Error(`Failed to start osmium: ${error.message}`));
-      });
-    });
-  }
+			osmium.on('close', (code) => {
+				if (code === 0) {
+					resolve();
+				} else {
+					reject(
+						new Error(`Osmium exited with code ${code}\n${stderr}`)
+					);
+				}
+			});
 
-  /**
-   * Extract data within a polygon boundary
-   * @param inputPbf - Path to input PBF file
-   * @param outputPbf - Path to output PBF file
-   * @param polyFile - Path to .poly file defining the boundary
-   */
-  async extractByPoly(
-    inputPbf: string,
-    outputPbf: string,
-    polyFile: string
-  ): Promise<void> {
-    if (!existsSync(inputPbf)) {
-      throw new Error(`Input file not found: ${inputPbf}`);
-    }
+			osmium.on('error', (error) => {
+				reject(new Error(`Failed to start osmium: ${error.message}`));
+			});
+		});
+	}
 
-    if (!existsSync(polyFile)) {
-      throw new Error(`Poly file not found: ${polyFile}`);
-    }
+	/**
+	 * Extract data within a polygon boundary
+	 * @param inputPbf - Path to input PBF file
+	 * @param outputPbf - Path to output PBF file
+	 * @param polyFile - Path to .poly file defining the boundary
+	 */
+	async extractByPoly(
+		inputPbf: string,
+		outputPbf: string,
+		polyFile: string
+	): Promise<void> {
+		if (!existsSync(inputPbf)) {
+			throw new Error(`Input file not found: ${inputPbf}`);
+		}
 
-    const outputDir = dirname(outputPbf);
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
-    }
+		if (!existsSync(polyFile)) {
+			throw new Error(`Poly file not found: ${polyFile}`);
+		}
 
-    // Use osmium extract with polygon
-    const args: string[] = [
-      'extract',
-      '--polygon', polyFile,
-      inputPbf,
-      '--output', outputPbf,
-      '--overwrite'
-    ];
+		const outputDir = dirname(outputPbf);
+		if (!existsSync(outputDir)) {
+			mkdirSync(outputDir, { recursive: true });
+		}
 
-    if (this.verbose) {
-      console.log(`Extracting by polygon: osmium ${args.join(' ')}`);
-    }
+		// Auto-detect osmium version and use appropriate flags
+		const useStrategyFlag = await this.supportsStrategyFlag();
 
-    return new Promise((resolve, reject) => {
-      const osmium = spawn('osmium', args);
+		const args: string[] = ['extract', '--polygon', polyFile];
 
-      let stderr = '';
+		if (useStrategyFlag) {
+			// Modern osmium (1.16+) uses strategy presets
+			// -s complete_ways = old --complete-ways --complete-nodes --complete-relations
+			args.push('-s', 'complete_ways');
+		} else {
+			// Legacy osmium uses individual flags
+			args.push(
+				'--complete-ways',
+				'--complete-nodes',
+				'--complete-relations'
+			);
+		}
 
-      osmium.stdout.on('data', (data) => {
-        if (this.verbose) {
-          process.stdout.write(data);
-        }
-      });
+		args.push('--overwrite', '--output', outputPbf, inputPbf);
 
-      osmium.stderr.on('data', (data) => {
-        stderr += data.toString();
-        if (this.verbose) {
-          process.stderr.write(data);
-        }
-      });
+		if (this.verbose) {
+			const strategy = useStrategyFlag
+				? 'strategy: complete_ways'
+				: 'legacy complete flags';
+			console.log(
+				`Extracting polygon (${strategy}): osmium ${args.join(' ')}`
+			);
+		}
 
-      osmium.on('close', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`Osmium extract exited with code ${code}\n${stderr}`));
-        }
-      });
+		return new Promise((resolve, reject) => {
+			const osmium = spawn('osmium', args);
 
-      osmium.on('error', (error) => {
-        reject(new Error(`Failed to start osmium: ${error.message}`));
-      });
-    });
-  }
+			let stderr = '';
 
-  /**
-   * Extract only road ways from PBF file
-   * This uses osmium tags-filter to extract only highway=* ways
-   */
-  async extractRoads(
-    inputPbf: string,
-    outputPbf: string,
-    _options: OsmiumOptions = {}
-  ): Promise<void> {
-    if (!existsSync(inputPbf)) {
-      throw new Error(`Input file not found: ${inputPbf}`);
-    }
+			osmium.stdout.on(
+				'data',
+				(d) => this.verbose && process.stdout.write(d)
+			);
+			osmium.stderr.on('data', (d) => {
+				stderr += d.toString();
+				if (this.verbose) process.stderr.write(d);
+			});
 
-    // Ensure output directory exists
-    const outputDir = dirname(outputPbf);
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
-    }
+			osmium.on('close', (code) => {
+				code === 0
+					? resolve()
+					: reject(
+							new Error(
+								`Osmium extract exited with code ${code}\n${stderr}`
+							)
+					  );
+			});
 
-    // Build osmium command to filter roads
-    const args: string[] = [
-      'tags-filter',
-      inputPbf,
-      'w/highway=motorway,trunk,primary,secondary,tertiary,unclassified,residential,service,motorway_link,trunk_link,primary_link,secondary_link,tertiary_link,living_street,pedestrian,track,road',
-      '--output', outputPbf,
-      '--overwrite'
-    ];
+			osmium.on('error', (err) => {
+				reject(new Error(`Failed to start osmium: ${err.message}`));
+			});
+		});
+	}
 
-    if (this.verbose) {
-      console.log(`Filtering roads: osmium ${args.join(' ')}`);
-    }
+	/**
+	 * Extract all address nodes from PBF file
+	 * Captures addr:* tags including floating nodes outside road network
+	 */
+	async extractAddressNodes(
+		inputPbf: string,
+		outputPbf: string
+	): Promise<void> {
+		if (!existsSync(inputPbf)) {
+			throw new Error(`Input file not found: ${inputPbf}`);
+		}
 
-    return new Promise((resolve, reject) => {
-      const osmium = spawn('osmium', args);
+		const outputDir = dirname(outputPbf);
+		if (!existsSync(outputDir)) {
+			mkdirSync(outputDir, { recursive: true });
+		}
 
-      let stderr = '';
+		const args: string[] = [
+			'tags-filter',
+			inputPbf,
+			'n/addr:housenumber',
+			'n/addr:street',
+			'n/addr:city',
+			'n/addr:district',
+			'n/addr:suburb',
+			'n/addr:neighbourhood',
+			'--overwrite',
+			'--output',
+			outputPbf,
+		];
 
-      osmium.stdout.on('data', (data) => {
-        if (this.verbose) {
-          process.stdout.write(data);
-        }
-      });
+		if (this.verbose) {
+			console.log(`Extracting address nodes: osmium ${args.join(' ')}`);
+		}
 
-      osmium.stderr.on('data', (data) => {
-        stderr += data.toString();
-        if (this.verbose) {
-          process.stderr.write(data);
-        }
-      });
+		return new Promise((resolve, reject) => {
+			const osmium = spawn('osmium', args);
 
-      osmium.on('close', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`Osmium tags-filter exited with code ${code}\n${stderr}`));
-        }
-      });
+			let stderr = '';
 
-      osmium.on('error', (error) => {
-        reject(new Error(`Failed to start osmium: ${error.message}`));
-      });
-    });
-  }
+			osmium.stdout.on('data', (d) => {
+				if (this.verbose) process.stdout.write(d);
+			});
 
-  /**
-   * Convert PBF to OSM XML format (useful for debugging)
-   */
-  async convertToXml(
-    inputPbf: string,
-    outputXml: string
-  ): Promise<void> {
-    if (!existsSync(inputPbf)) {
-      throw new Error(`Input file not found: ${inputPbf}`);
-    }
+			osmium.stderr.on('data', (d) => {
+				stderr += d.toString();
+				if (this.verbose) process.stderr.write(d);
+			});
 
-    const outputDir = dirname(outputXml);
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
-    }
+			osmium.on('close', (code) => {
+				code === 0
+					? resolve()
+					: reject(
+							new Error(
+								`Osmium tags-filter exited with code ${code}\n${stderr}`
+							)
+					  );
+			});
 
-    const args: string[] = [
-      'cat',
-      inputPbf,
-      '--output', outputXml,
-      '--output-format', 'xml'
-    ];
+			osmium.on('error', (err) => {
+				reject(new Error(`Failed to start osmium: ${err.message}`));
+			});
+		});
+	}
 
-    if (this.verbose) {
-      console.log(`Converting to XML: osmium ${args.join(' ')}`);
-    }
+	/**
+	 * Merge multiple PBF files into one
+	 * Useful for combining routing data + address data
+	 */
+	async mergePBFs(
+		inputPbfs: string[],
+		outputPbf: string
+	): Promise<void> {
+		for (const input of inputPbfs) {
+			if (!existsSync(input)) {
+				throw new Error(`Input file not found: ${input}`);
+			}
+		}
 
-    return new Promise((resolve, reject) => {
-      const osmium = spawn('osmium', args);
+		const outputDir = dirname(outputPbf);
+		if (!existsSync(outputDir)) {
+			mkdirSync(outputDir, { recursive: true });
+		}
 
-      let stderr = '';
+		const args: string[] = [
+			'merge',
+			...inputPbfs,
+			'--overwrite',
+			'--output',
+			outputPbf,
+		];
 
-      osmium.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
+		if (this.verbose) {
+			console.log(`Merging PBF files: osmium ${args.join(' ')}`);
+		}
 
-      osmium.on('close', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`Osmium cat exited with code ${code}\n${stderr}`));
-        }
-      });
+		return new Promise((resolve, reject) => {
+			const osmium = spawn('osmium', args);
 
-      osmium.on('error', (error) => {
-        reject(new Error(`Failed to start osmium: ${error.message}`));
-      });
-    });
-  }
+			let stderr = '';
 
-  /**
-   * Get file info using osmium fileinfo
-   */
-  async getFileInfo(pbfPath: string): Promise<any> {
-    if (!existsSync(pbfPath)) {
-      throw new Error(`Input file not found: ${pbfPath}`);
-    }
+			osmium.stdout.on('data', (d) => {
+				if (this.verbose) process.stdout.write(d);
+			});
 
-    try {
-      const { stdout } = await execAsync(`osmium fileinfo ${pbfPath} --json`);
-      return JSON.parse(stdout);
-    } catch (error: any) {
-      throw new Error(`Failed to get file info: ${error.message}`);
-    }
-  }
+			osmium.stderr.on('data', (d) => {
+				stderr += d.toString();
+				if (this.verbose) process.stderr.write(d);
+			});
 
-  /**
-   * Extract nodes and ways separately using osmium getid
-   * This is more efficient for large files
-   */
-  async extractWaysWithNodes(
-    inputPbf: string,
-    outputPbf: string,
-    wayIds: string[]
-  ): Promise<void> {
-    if (!existsSync(inputPbf)) {
-      throw new Error(`Input file not found: ${inputPbf}`);
-    }
+			osmium.on('close', (code) => {
+				code === 0
+					? resolve()
+					: reject(
+							new Error(
+								`Osmium merge exited with code ${code}\n${stderr}`
+							)
+					  );
+			});
 
-    const outputDir = dirname(outputPbf);
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
-    }
+			osmium.on('error', (err) => {
+				reject(new Error(`Failed to start osmium: ${err.message}`));
+			});
+		});
+	}
 
-    // Create a temporary file with way IDs
-    const tempIdFile = join(outputDir, 'temp_way_ids.txt');
-    const { writeFile } = await import('fs/promises');
-    await writeFile(tempIdFile, wayIds.map(id => `w${id}`).join('\n'));
+	/**
+	 * Two-stage extract: routing graph + complete address coverage
+	 * 
+	 * Strategy:
+	 * 1. Extract polygon with complete ways/nodes/relations (for routing)
+	 * 2. Extract all address nodes from source (captures floaters)
+	 * 3. Clip addresses to polygon
+	 * 4. Merge routing + addresses
+	 * 
+	 * This ensures:
+	 * - Clean routing graph (no broken ways)
+	 * - Complete address coverage (no missing house numbers)
+	 * - Optimal for both OSRM + geocoding
+	 */
+	async extractRoutingWithAddresses(
+		inputPbf: string,
+		polyFile: string,
+		outputPbf: string
+	): Promise<void> {
+		if (!existsSync(inputPbf)) {
+			throw new Error(`Input file not found: ${inputPbf}`);
+		}
 
-    try {
-      const args: string[] = [
-        'getid',
-        '--id-file', tempIdFile,
-        '--add-referenced',
-        inputPbf,
-        '--output', outputPbf,
-        '--overwrite'
-      ];
+		if (!existsSync(polyFile)) {
+			throw new Error(`Poly file not found: ${polyFile}`);
+		}
 
-      if (this.verbose) {
-        console.log(`Extracting ways with nodes: osmium ${args.join(' ')}`);
-      }
+		const outputDir = dirname(outputPbf);
+		if (!existsSync(outputDir)) {
+			mkdirSync(outputDir, { recursive: true });
+		}
 
-      await new Promise<void>((resolve, reject) => {
-        const osmium = spawn('osmium', args);
+		// Temp files
+		const tempDir = join(outputDir, 'temp_extract');
+		if (!existsSync(tempDir)) {
+			mkdirSync(tempDir, { recursive: true });
+		}
 
-        let stderr = '';
+		const routingPbf = join(tempDir, 'routing.osm.pbf');
+		const allAddrPbf = join(tempDir, 'all_addresses.osm.pbf');
+		const clippedAddrPbf = join(tempDir, 'addresses_clipped.osm.pbf');
 
-        osmium.stderr.on('data', (data) => {
-          stderr += data.toString();
-        });
+		try {
+			// Step 1: Extract routing graph with complete ways
+			if (this.verbose) {
+				console.log(
+					'\n[1/4] Extracting routing graph with complete ways...'
+				);
+			}
+			await this.extractByPoly(inputPbf, routingPbf, polyFile);
 
-        osmium.on('close', (code) => {
-          if (code === 0) {
-            resolve();
-          } else {
-            reject(new Error(`Osmium getid exited with code ${code}\n${stderr}`));
-          }
-        });
+			// Step 2: Extract all address nodes from source
+			if (this.verbose) {
+				console.log('\n[2/4] Extracting all address nodes...');
+			}
+			await this.extractAddressNodes(inputPbf, allAddrPbf);
 
-        osmium.on('error', (error) => {
-          reject(new Error(`Failed to start osmium: ${error.message}`));
-        });
-      });
-    } finally {
-      // Clean up temp file
-      if (existsSync(tempIdFile)) {
-        unlinkSync(tempIdFile);
-      }
-    }
-  }
+			// Step 3: Clip addresses to polygon
+			if (this.verbose) {
+				console.log(
+					'\n[3/4] Clipping addresses to polygon boundary...'
+				);
+			}
+			await this.extractByPoly(allAddrPbf, clippedAddrPbf, polyFile);
+
+			// Step 4: Merge routing + addresses
+			if (this.verbose) {
+				console.log('\n[4/4] Merging routing graph + addresses...');
+			}
+			await this.mergePBFs([routingPbf, clippedAddrPbf], outputPbf);
+
+			if (this.verbose) {
+				console.log(
+					`\n✓ Complete extract created: ${outputPbf}`
+				);
+			}
+		} finally {
+			// Clean up temp files
+			if (existsSync(routingPbf)) unlinkSync(routingPbf);
+			if (existsSync(allAddrPbf)) unlinkSync(allAddrPbf);
+			if (existsSync(clippedAddrPbf)) unlinkSync(clippedAddrPbf);
+			if (existsSync(tempDir)) {
+				try {
+					const { rmdirSync } = await import('fs');
+					rmdirSync(tempDir);
+				} catch {
+					// Ignore cleanup errors
+				}
+			}
+		}
+	}
+
+	/**
+	 * Extract only road ways from PBF file
+	 * This uses osmium tags-filter to extract only highway=* ways
+	 */
+	async extractRoads(
+		inputPbf: string,
+		outputPbf: string,
+		_options: OsmiumOptions = {}
+	): Promise<void> {
+		if (!existsSync(inputPbf)) {
+			throw new Error(`Input file not found: ${inputPbf}`);
+		}
+
+		// Ensure output directory exists
+		const outputDir = dirname(outputPbf);
+		if (!existsSync(outputDir)) {
+			mkdirSync(outputDir, { recursive: true });
+		}
+
+		// Build osmium command to filter roads
+		const args: string[] = [
+			'tags-filter',
+			inputPbf,
+			'w/highway=motorway,trunk,primary,secondary,tertiary,unclassified,residential,service,motorway_link,trunk_link,primary_link,secondary_link,tertiary_link,living_street,pedestrian,track,road',
+			'--output',
+			outputPbf,
+			'--overwrite',
+		];
+
+		if (this.verbose) {
+			console.log(`Filtering roads: osmium ${args.join(' ')}`);
+		}
+
+		return new Promise((resolve, reject) => {
+			const osmium = spawn('osmium', args);
+
+			let stderr = '';
+
+			osmium.stdout.on('data', (data) => {
+				if (this.verbose) {
+					process.stdout.write(data);
+				}
+			});
+
+			osmium.stderr.on('data', (data) => {
+				stderr += data.toString();
+				if (this.verbose) {
+					process.stderr.write(data);
+				}
+			});
+
+			osmium.on('close', (code) => {
+				if (code === 0) {
+					resolve();
+				} else {
+					reject(
+						new Error(
+							`Osmium tags-filter exited with code ${code}\n${stderr}`
+						)
+					);
+				}
+			});
+
+			osmium.on('error', (error) => {
+				reject(new Error(`Failed to start osmium: ${error.message}`));
+			});
+		});
+	}
+
+	/**
+	 * Convert PBF to OSM XML format (useful for debugging)
+	 */
+	async convertToXml(inputPbf: string, outputXml: string): Promise<void> {
+		if (!existsSync(inputPbf)) {
+			throw new Error(`Input file not found: ${inputPbf}`);
+		}
+
+		const outputDir = dirname(outputXml);
+		if (!existsSync(outputDir)) {
+			mkdirSync(outputDir, { recursive: true });
+		}
+
+		const args: string[] = [
+			'cat',
+			inputPbf,
+			'--output',
+			outputXml,
+			'--output-format',
+			'xml',
+		];
+
+		if (this.verbose) {
+			console.log(`Converting to XML: osmium ${args.join(' ')}`);
+		}
+
+		return new Promise((resolve, reject) => {
+			const osmium = spawn('osmium', args);
+
+			let stderr = '';
+
+			osmium.stderr.on('data', (data) => {
+				stderr += data.toString();
+			});
+
+			osmium.on('close', (code) => {
+				if (code === 0) {
+					resolve();
+				} else {
+					reject(
+						new Error(
+							`Osmium cat exited with code ${code}\n${stderr}`
+						)
+					);
+				}
+			});
+
+			osmium.on('error', (error) => {
+				reject(new Error(`Failed to start osmium: ${error.message}`));
+			});
+		});
+	}
+
+	/**
+	 * Get file info using osmium fileinfo
+	 */
+	async getFileInfo(pbfPath: string): Promise<any> {
+		if (!existsSync(pbfPath)) {
+			throw new Error(`Input file not found: ${pbfPath}`);
+		}
+
+		try {
+			const { stdout } = await execAsync(
+				`osmium fileinfo ${pbfPath} --json`
+			);
+			return JSON.parse(stdout);
+		} catch (error: any) {
+			throw new Error(`Failed to get file info: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Extract nodes and ways separately using osmium getid
+	 * This is more efficient for large files
+	 */
+	async extractWaysWithNodes(
+		inputPbf: string,
+		outputPbf: string,
+		wayIds: string[]
+	): Promise<void> {
+		if (!existsSync(inputPbf)) {
+			throw new Error(`Input file not found: ${inputPbf}`);
+		}
+
+		const outputDir = dirname(outputPbf);
+		if (!existsSync(outputDir)) {
+			mkdirSync(outputDir, { recursive: true });
+		}
+
+		// Create a temporary file with way IDs
+		const tempIdFile = join(outputDir, 'temp_way_ids.txt');
+		const { writeFile } = await import('fs/promises');
+		await writeFile(tempIdFile, wayIds.map((id) => `w${id}`).join('\n'));
+
+		try {
+			const args: string[] = [
+				'getid',
+				'--id-file',
+				tempIdFile,
+				'--add-referenced',
+				inputPbf,
+				'--output',
+				outputPbf,
+				'--overwrite',
+			];
+
+			if (this.verbose) {
+				console.log(
+					`Extracting ways with nodes: osmium ${args.join(' ')}`
+				);
+			}
+
+			await new Promise<void>((resolve, reject) => {
+				const osmium = spawn('osmium', args);
+
+				let stderr = '';
+
+				osmium.stderr.on('data', (data) => {
+					stderr += data.toString();
+				});
+
+				osmium.on('close', (code) => {
+					if (code === 0) {
+						resolve();
+					} else {
+						reject(
+							new Error(
+								`Osmium getid exited with code ${code}\n${stderr}`
+							)
+						);
+					}
+				});
+
+				osmium.on('error', (error) => {
+					reject(
+						new Error(`Failed to start osmium: ${error.message}`)
+					);
+				});
+			});
+		} finally {
+			// Clean up temp file
+			if (existsSync(tempIdFile)) {
+				unlinkSync(tempIdFile);
+			}
+		}
+	}
 }
 
 /**
  * Parse GeoJSON output from osmium export
  */
 export async function parseOsmiumGeoJson(filePath: string): Promise<any> {
-  if (!existsSync(filePath)) {
-    throw new Error(`File not found: ${filePath}`);
-  }
+	if (!existsSync(filePath)) {
+		throw new Error(`File not found: ${filePath}`);
+	}
 
-  const content = await readFile(filePath, 'utf-8');
-  return JSON.parse(content);
+	const content = await readFile(filePath, 'utf-8');
+	return JSON.parse(content);
 }

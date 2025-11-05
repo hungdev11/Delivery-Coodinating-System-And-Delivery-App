@@ -451,20 +451,106 @@ export class OSMParser {
   /**
    * Get road name in Vietnamese
    */
-  static getRoadName(tags: Record<string, string>): { name?: string; nameEn?: string } {
-    const result: { name?: string; nameEn?: string } = {};
-
-    const name = tags.name || tags['name:vi'];
-    if (name) {
-      result.name = name;
-    }
-
+  static getRoadName(tags: Record<string, string>): { 
+    name: string;  // Always return a name (original or generated)
+    nameEn: string | undefined; 
+    isNamed: boolean;  // Track if original name existed
+  } {
+    const originalName = tags.name || tags['name:vi'];
     const nameEn = tags['name:en'];
-    if (nameEn) {
-      result.nameEn = nameEn;
+    
+    if (originalName) {
+      return {
+        name: originalName,
+        nameEn: nameEn ?? undefined,
+        isNamed: true
+      };
     }
-
-    return result;
+    
+    // Generate meaningful Vietnamese name for unnamed roads
+    const highway = tags.highway;
+    const ref = tags.ref;  // Road reference number (like QL1A, DT743)
+    const service = tags.service;
+    const access = tags.access;
+    
+    let generatedName = 'Đường không tên';  // "Unnamed road"
+    
+    // Priority 1: Use reference number if available
+    if (ref) {
+      generatedName = `Đường ${ref}`;
+      return { name: generatedName, nameEn: `Route ${ref}`, isNamed: false };
+    }
+    
+    // Priority 2: Generate based on road type
+    switch (highway) {
+      case 'motorway':
+        generatedName = 'Đường cao tốc không tên';
+        break;
+      case 'trunk':
+        generatedName = 'Đường quốc lộ không tên';
+        break;
+      case 'primary':
+        generatedName = 'Đường chính không tên';
+        break;
+      case 'secondary':
+        generatedName = 'Đường cấp hai không tên';
+        break;
+      case 'tertiary':
+        generatedName = 'Đường cấp ba không tên';
+        break;
+      case 'residential':
+        generatedName = 'Đường dân cư không tên';
+        break;
+      case 'service':
+        // More specific for service roads
+        if (service === 'parking_aisle') {
+          generatedName = 'Lối đi bãi đỗ xe';
+        } else if (service === 'driveway') {
+          generatedName = 'Lối vào';
+        } else if (service === 'alley') {
+          generatedName = 'Hẻm không tên';
+        } else {
+          generatedName = 'Đường phụ';
+        }
+        break;
+      case 'unclassified':
+        generatedName = 'Đường nhỏ không tên';
+        break;
+      case 'living_street':
+        generatedName = 'Đường nội bộ';
+        break;
+      case 'pedestrian':
+        generatedName = 'Đường đi bộ';
+        break;
+      case 'track':
+        generatedName = 'Đường mòn';
+        break;
+      case 'road':
+        generatedName = 'Đường không rõ loại';
+        break;
+      case 'motorway_link':
+      case 'trunk_link':
+      case 'primary_link':
+      case 'secondary_link':
+      case 'tertiary_link':
+        generatedName = 'Nhánh rẽ';
+        break;
+      default:
+        if (highway) {
+          generatedName = `Đường ${highway} không tên`;
+        }
+    }
+    
+    // Add access restriction info if private
+    if (access === 'private') {
+      generatedName += ' (Riêng tư)';
+    }
+    
+    return {
+      name: generatedName,
+      nameEn: undefined,
+      isNamed: false
+    };
   }
 }
 

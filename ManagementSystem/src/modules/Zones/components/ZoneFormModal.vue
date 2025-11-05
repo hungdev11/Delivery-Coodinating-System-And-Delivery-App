@@ -93,7 +93,7 @@ onMounted(() => {
         <UFormField label="Distribution Center" name="centerId" required>
           <USelect
             v-model="form.centerId"
-            :options="centerOptions"
+            :items="centerOptions"
             :loading="loadingCenters"
             placeholder="Select a distribution center"
           />

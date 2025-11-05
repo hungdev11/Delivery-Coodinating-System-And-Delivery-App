@@ -3,7 +3,7 @@
  * DTOs and data models for routing module
  */
 
-import { IsArray, IsBoolean, IsNumber, IsOptional, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsNumber, IsOptional, IsString, IsIn, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 /**
@@ -15,6 +15,10 @@ export class WaypointDto {
 
   @IsNumber()
   lon!: number;
+
+  @IsOptional()
+  @IsString()
+  parcelId?: string;
 }
 
 /**
@@ -42,6 +46,16 @@ export class RouteRequestDto {
   @IsOptional()
   @IsBoolean()
   annotations?: boolean;
+  
+  @IsOptional()
+  @IsString()
+  @IsIn(['car', 'motorbike'])
+  vehicle?: 'car' | 'motorbike';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['strict_priority_with_delta', 'flexible_priority_with_delta', 'strict_priority_no_delta', 'flexible_priority_no_delta', 'base'])
+  mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base';
 }
 
 /**
@@ -62,6 +76,14 @@ export interface RouteStepDto {
   instruction: string;
   name: string;
   maneuver: ManeuverDto;
+  /**
+   * Detailed geometry for this step (GeoJSON LineString)
+   * Present when OSRM is queried with geometries=geojson & steps=true
+   */
+  geometry?: {
+    type: 'LineString';
+    coordinates: Array<[number, number]>;
+  };
   addresses?: string[];
   trafficLevel?: string;
 }
@@ -73,6 +95,7 @@ export interface RouteLegDto {
   distance: number;
   duration: number;
   steps: RouteStepDto[];
+  parcelId?: string;
 }
 
 /**
@@ -100,5 +123,89 @@ export interface RouteDto {
  */
 export interface RouteResponseDto {
   code: string;
-  routes: RouteDto[];
+  route: RouteDto;
+  visitOrder?: Array<{
+    index: number;
+    priority: number;
+    priorityLabel: string;
+    waypoint: WaypointDto;
+  }>;
+  summary?: {
+    totalDistance: number;
+    totalDuration: number;
+    totalWaypoints: number;
+    priorityCounts?: Record<string, number>;
+  };
+}
+
+/**
+ * Priority Group DTO for Demo Routing
+ */
+export class PriorityGroupDto {
+  @IsNumber()
+  priority!: number; // 0 = urgent, 1 = express, 2 = fast, 3 = normal, 4 = economy
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WaypointDto)
+  waypoints!: WaypointDto[];
+}
+
+/**
+ * Demo Route Request DTO
+ * Input: starting point + priority-grouped waypoints
+ */
+export class DemoRouteRequestDto {
+  @ValidateNested()
+  @Type(() => WaypointDto)
+  startPoint!: WaypointDto; // Điểm của shipper
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PriorityGroupDto)
+  priorityGroups!: PriorityGroupDto[]; // Các điểm của khách hàng
+
+  @IsOptional()
+  @IsBoolean()
+  steps: boolean = true; // default: true
+
+  @IsOptional()
+  @IsBoolean()
+  annotations: boolean = true; // default: true
+  
+  @IsOptional()
+  @IsString()
+  @IsIn(['car', 'motorbike'])
+  vehicle?: 'car' | 'motorbike';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['strict_priority_with_delta', 'flexible_priority_with_delta', 'strict_priority_no_delta', 'flexible_priority_no_delta', 'base'])
+  mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['strict_urgent', 'flexible'])
+  strategy?: 'strict_urgent' | 'flexible';
+}
+
+/**
+ * Demo Route Response DTO
+ * Output: optimized route with priority ordering
+ */
+export interface DemoRouteResponseDto {
+  code: string;
+  route: RouteDto;
+  visitOrder: Array<{
+    index: number;
+    priority: number;
+    priorityLabel: string;
+    waypoint: WaypointDto;
+  }>;
+  summary: {
+    totalDistance: number;
+    totalDuration: number;
+    totalWaypoints: number;
+    priorityCounts: Record<string, number>;
+  };
 }

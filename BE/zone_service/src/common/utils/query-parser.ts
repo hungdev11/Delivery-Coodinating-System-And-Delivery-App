@@ -131,12 +131,12 @@ export class QueryParser {
         return { zone_id: 'desc' as const };
       }
       return {
-        [sort.field]: sort.direction
+        [sort.field]: sort.direction as 'asc' | 'desc'
       } as Prisma.zonesOrderByWithRelationInput;
     }
 
     return sorts.map(sort => ({
-      [sort.field]: sort.direction
+      [sort.field]: sort.direction as 'asc' | 'desc'
     })) as Prisma.zonesOrderByWithRelationInput[];
   }
 
@@ -167,8 +167,8 @@ export class QueryParser {
 
     return {
       OR: [
-        { name: { contains: searchTerm, mode: 'insensitive' } },
-        { code: { contains: searchTerm, mode: 'insensitive' } }
+        { name: { contains: searchTerm } },
+        { code: { contains: searchTerm } }
       ]
     };
   }

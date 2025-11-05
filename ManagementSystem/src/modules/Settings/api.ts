@@ -21,6 +21,13 @@ export const getSettingsByGroup = async (group: string): Promise<GetSettingsResp
 }
 
 /**
+ * List settings using POST API call
+ */
+export const listSettings = async (query: any): Promise<GetSettingsResponse> => {
+  return apiClient.post<GetSettingsResponse, any>(`/v1/settings`, query)
+}
+
+/**
  * Get setting by group and key
  */
 export const getSettingByKey = async (

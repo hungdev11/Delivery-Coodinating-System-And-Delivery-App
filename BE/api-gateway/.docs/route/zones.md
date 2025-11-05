@@ -27,25 +27,50 @@ The API Gateway provides proxy endpoints for managing delivery zones through the
 
 ---
 
-### GET /zones
-**List all zones (paginated)**
+### POST /zones
+**List zones with advanced filtering and sorting**
 
-Retrieve a paginated list of delivery zones with optional filtering.
+Retrieve a paginated list of delivery zones with comprehensive filtering, sorting, and search capabilities using the new POST endpoint standard.
 
-**Query Parameters:**
-- `page` (optional) - Page number (default: 0)
-- `size` (optional) - Page size (default: 10)
-- `search` (optional) - Search term for name/code
-- `code` (optional) - Filter by zone code
-- `centerId` (optional) - Filter by center ID
-- `filters` (optional) - Additional filters array
-- `sorts` (optional) - Sorting criteria array
-- `selected` (optional) - Selected items array
-
-**Example Request:**
+**Request Body (PagingRequest):**
+```json
+{
+  "page": 0,
+  "size": 10,
+  "search": "HCM",
+  "filters": {
+    "logic": "AND",
+    "conditions": [
+      {
+        "field": "centerId",
+        "operator": "eq",
+        "value": "660e8400-e29b-41d4-a716-446655440001"
+      },
+      {
+        "field": "name",
+        "operator": "contains",
+        "value": "District",
+        "caseSensitive": false
+      }
+    ]
+  },
+  "sorts": [
+    {
+      "field": "name",
+      "direction": "asc"
+    }
+  ],
+  "selected": []
+}
 ```
-GET /api/v1/zones?page=0&size=10&search=HCM
-```
+
+**Field Descriptions:**
+- `page` (optional) - Page number, default: 0
+- `size` (optional) - Page size, default: 10
+- `search` (optional) - Global search term
+- `filters` (optional) - Advanced filter groups with MongoDB-style conditions
+- `sorts` (optional) - Sort configuration array
+- `selected` (optional) - Selected item IDs array
 
 **Response 200:**
 ```json
@@ -67,8 +92,22 @@ GET /api/v1/zones?page=0&size=10&search=HCM
       "size": 10,
       "totalElements": 1,
       "totalPages": 1,
-      "filters": [],
-      "sorts": [],
+      "filters": {
+        "logic": "AND",
+        "conditions": [
+          {
+            "field": "centerId",
+            "operator": "eq",
+            "value": "660e8400-e29b-41d4-a716-446655440001"
+          }
+        ]
+      },
+      "sorts": [
+        {
+          "field": "name",
+          "direction": "asc"
+        }
+      ],
       "selected": []
     }
   }
@@ -175,7 +214,7 @@ Retrieve all zones associated with a specific distribution center.
 
 ---
 
-### POST /zones
+### POST /zones/create
 **Create new zone**
 
 Create a new delivery zone associated with a distribution center.
@@ -298,6 +337,143 @@ No Content
 
 ---
 
+### GET /zones/filterable-fields
+**Get filterable fields for zones**
+
+Retrieve a list of fields that can be used in filter conditions.
+
+**Response 200:**
+```json
+{
+  "result": [
+    "id",
+    "code", 
+    "name",
+    "centerId",
+    "centerCode",
+    "centerName",
+    "createdAt",
+    "updatedAt"
+  ]
+}
+```
+
+---
+
+### GET /zones/sortable-fields
+**Get sortable fields for zones**
+
+Retrieve a list of fields that can be used for sorting.
+
+**Response 200:**
+```json
+{
+  "result": [
+    "id",
+    "code",
+    "name", 
+    "centerId",
+    "centerCode",
+    "centerName",
+    "createdAt",
+    "updatedAt"
+  ]
+}
+```
+
+---
+
+## Advanced Filtering
+
+The POST `/zones` endpoint supports comprehensive filtering using MongoDB-style filter groups.
+
+### Filter Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `eq` | Equals | `{"field": "centerId", "operator": "eq", "value": "uuid"}` |
+| `ne` | Not equals | `{"field": "code", "operator": "ne", "value": "ZONE001"}` |
+| `contains` | String contains | `{"field": "name", "operator": "contains", "value": "District"}` |
+| `startsWith` | String starts with | `{"field": "code", "operator": "startsWith", "value": "ZONE"}` |
+| `endsWith` | String ends with | `{"field": "code", "operator": "endsWith", "value": "001"}` |
+| `gt` | Greater than | `{"field": "createdAt", "operator": "gt", "value": "2024-01-01"}` |
+| `gte` | Greater than or equal | `{"field": "createdAt", "operator": "gte", "value": "2024-01-01"}` |
+| `lt` | Less than | `{"field": "createdAt", "operator": "lt", "value": "2024-12-31"}` |
+| `lte` | Less than or equal | `{"field": "createdAt", "operator": "lte", "value": "2024-12-31"}` |
+| `between` | Between values | `{"field": "createdAt", "operator": "between", "value": ["2024-01-01", "2024-12-31"]}` |
+| `in` | In array | `{"field": "centerId", "operator": "in", "value": ["uuid1", "uuid2"]}` |
+| `notIn` | Not in array | `{"field": "code", "operator": "notIn", "value": ["ZONE001", "ZONE002"]}` |
+| `isNull` | Is null | `{"field": "polygon", "operator": "isNull"}` |
+| `isNotNull` | Is not null | `{"field": "polygon", "operator": "isNotNull"}` |
+
+### Filter Examples
+
+#### Basic Filter
+```json
+{
+  "filters": {
+    "logic": "AND",
+    "conditions": [
+      {
+        "field": "centerId",
+        "operator": "eq",
+        "value": "660e8400-e29b-41d4-a716-446655440001"
+      }
+    ]
+  }
+}
+```
+
+#### Complex Nested Filter
+```json
+{
+  "filters": {
+    "logic": "AND",
+    "conditions": [
+      {
+        "field": "name",
+        "operator": "contains",
+        "value": "District",
+        "caseSensitive": false
+      },
+      {
+        "logic": "OR",
+        "conditions": [
+          {
+            "field": "centerId",
+            "operator": "in",
+            "value": ["uuid1", "uuid2"]
+          },
+          {
+            "field": "code",
+            "operator": "startsWith",
+            "value": "HCM"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### Date Range Filter
+```json
+{
+  "filters": {
+    "logic": "AND",
+    "conditions": [
+      {
+        "field": "createdAt",
+        "operator": "between",
+        "value": ["2024-01-01", "2024-12-31"]
+      }
+    ]
+  }
+}
+```
+
+---
+
 ## Data Models
 
 ### Zone Object
@@ -325,19 +501,75 @@ No Content
 
 ## Examples
 
-### Example 1: List zones for a specific center
-```bash
-GET /api/v1/zones?centerId=660e8400-e29b-41d4-a716-446655440001&page=0&size=20
-```
-
-### Example 2: Search zones by name
-```bash
-GET /api/v1/zones?search=District&page=0&size=10
-```
-
-### Example 3: Create a zone with polygon
+### Example 1: List zones for a specific center (POST)
 ```bash
 POST /api/v1/zones
+Content-Type: application/json
+
+{
+  "page": 0,
+  "size": 20,
+  "filters": {
+    "logic": "AND",
+    "conditions": [
+      {
+        "field": "centerId",
+        "operator": "eq",
+        "value": "660e8400-e29b-41d4-a716-446655440001"
+      }
+    ]
+  }
+}
+```
+
+### Example 2: Search zones by name (POST)
+```bash
+POST /api/v1/zones
+Content-Type: application/json
+
+{
+  "page": 0,
+  "size": 10,
+  "search": "District"
+}
+```
+
+### Example 3: Advanced filtering with sorting (POST)
+```bash
+POST /api/v1/zones
+Content-Type: application/json
+
+{
+  "page": 0,
+  "size": 10,
+  "filters": {
+    "logic": "AND",
+    "conditions": [
+      {
+        "field": "name",
+        "operator": "contains",
+        "value": "District",
+        "caseSensitive": false
+      },
+      {
+        "field": "createdAt",
+        "operator": "gte",
+        "value": "2024-01-01"
+      }
+    ]
+  },
+  "sorts": [
+    {
+      "field": "name",
+      "direction": "asc"
+    }
+  ]
+}
+```
+
+### Example 4: Create a zone with polygon
+```bash
+POST /api/v1/zones/create
 Content-Type: application/json
 
 {
@@ -359,7 +591,7 @@ Content-Type: application/json
 }
 ```
 
-### Example 4: Update zone name only
+### Example 5: Update zone name only
 ```bash
 PUT /api/v1/zones/550e8400-e29b-41d4-a716-446655440000
 Content-Type: application/json
@@ -392,5 +624,8 @@ Authorization: Bearer <jwt_token>
 2. **Zone Codes**: Must be unique across the entire system
 3. **Center Relationship**: Zones must be associated with an existing distribution center
 4. **Pagination**: Default page size is 10, maximum is 100
-5. **Service Availability**: If Zone Service is unavailable, endpoints will return 503 Service Unavailable
-6. **Async Processing**: All requests are processed asynchronously through the gateway
+5. **POST Standard**: List operations now use POST with `PagingRequest` body for advanced filtering
+6. **Filter Support**: Comprehensive MongoDB-style filtering with nested conditions and multiple operators
+7. **Service Availability**: If Zone Service is unavailable, endpoints will return 503 Service Unavailable
+8. **Async Processing**: All requests are processed asynchronously through the gateway
+9. **Migration**: GET `/zones` is deprecated, use POST `/zones` with `PagingRequest` body instead

@@ -1,16 +1,16 @@
-# Documentation
+# Settings Service Documentation
 
-Welcome to the Settings Service documentation.
+Welcome to the documentation for the Settings Service.
 
-## Table of Contents
+This service is responsible for managing system-wide and service-specific settings.
 
-- Overview
-  - [Service README](../README.md)
-- Routes
-  - [Route TOC and Summary](./route/README.md)
+## 📚 Table of Contents
 
-## Notes
+1.  **[Architecture](./ARCHITECTURE.md)**
+    *   An overview of the service's structure and design.
 
-- All APIs follow the BaseResponse<T> contract.
-- Settings service manages system-wide configuration.
-- See global RESTful standards at `../../RESTFUL.md`.
+2.  **[API Reference](./API.md)**
+    *   Detailed documentation for the service's API endpoints.
+
+3.  **[Setup and Deployment](./SETUP.md)**
+    *   Instructions for setting up and running the service.

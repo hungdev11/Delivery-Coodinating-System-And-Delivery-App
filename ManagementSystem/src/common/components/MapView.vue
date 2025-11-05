@@ -69,6 +69,7 @@ const props = withDefaults(defineProps<Props>(), {
 interface Emits {
   (e: 'map-loaded'): void
   (e: 'map-click', data: { lngLat: [number, number]; point: [number, number] }): void
+  (e: 'zone-click', data: { zoneId: string; zoneName: string; lngLat: [number, number] }): void
   (e: 'view-change', state: MapViewState): void
 }
 
@@ -107,6 +108,27 @@ onMounted(async () => {
         lngLat: [e.lngLat.lng, e.lngLat.lat],
         point: [e.point.x, e.point.y],
       })
+    })
+
+    // Zone click handler
+    mapInstance.on('click', 'zones-layer', (e) => {
+      const feature = e.features?.[0]
+      if (feature?.properties) {
+        emit('zone-click', {
+          zoneId: feature.properties.id,
+          zoneName: feature.properties.name,
+          lngLat: [e.lngLat.lng, e.lngLat.lat],
+        })
+      }
+    })
+
+    // Change cursor on hover
+    mapInstance.on('mouseenter', 'zones-layer', () => {
+      mapInstance.getCanvas().style.cursor = 'pointer'
+    })
+
+    mapInstance.on('mouseleave', 'zones-layer', () => {
+      mapInstance.getCanvas().style.cursor = ''
     })
 
     // View change handler

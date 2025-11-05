@@ -15,6 +15,6 @@ WORKDIR /app
 
 COPY --from=build /app/target/*.jar api-gateway.jar
 
-EXPOSE 8082
+EXPOSE 21500
 
 ENTRYPOINT ["java", "-jar", "api-gateway.jar"]

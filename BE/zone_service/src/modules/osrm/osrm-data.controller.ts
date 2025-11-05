@@ -12,11 +12,10 @@ import { Request, Response, NextFunction } from 'express';
 import { BaseResponse } from '../../common/types/restful';
 import { OSRMDataManagerService } from '../../services/osrm/osrm-data-manager.service';
 import { logger } from '../../common/logger';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../common/database/prisma.client';
 
 export class OSRMDataController {
-  private static prisma = new PrismaClient();
-  private static dataManager = new OSRMDataManagerService(OSRMDataController.prisma);
+  private static dataManager = new OSRMDataManagerService(prisma);
 
   /**
    * Build OSRM data for specific instance
