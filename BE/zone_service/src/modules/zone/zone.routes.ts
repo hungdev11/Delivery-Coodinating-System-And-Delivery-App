@@ -4,13 +4,9 @@
 
 import { Router } from 'express';
 import { ZoneController } from './zone.controller';
-import { ZoneService } from '../../common/services/zone-service';
-import { PrismaClient } from '@prisma/client';
 
 const router = Router();
-const prisma = new PrismaClient();
-const zoneService = new ZoneService(prisma);
-const zoneController = new ZoneController(zoneService);
+const zoneController = new ZoneController();
 
 // Zone CRUD operations with new API standard
 router.post('/', zoneController.getZones.bind(zoneController)); // Get zones with filtering/sorting

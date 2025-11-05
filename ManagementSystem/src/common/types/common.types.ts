@@ -6,10 +6,11 @@
 
 /**
  * Base API Response wrapper
+ * @deprecated Use IApiResponse from '@/common/types/http' instead
  */
 export interface BaseResponse<T = any> {
-  result: T
-  message?: string | null
+  result?: T
+  message?: string
 }
 
 /**

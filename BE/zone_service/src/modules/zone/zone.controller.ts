@@ -3,11 +3,12 @@
  */
 
 import { Request, Response } from 'express';
-import { ZoneService } from '../../common/services/zone-service';
-import { PagingRequest, BaseResponse } from '../../common/types/filter';
+import { ZoneService } from './zone.service';
+import { CreateZoneDto, UpdateZoneDto } from './zone.model';
+import { BaseResponse, PagingRequest } from '../../common/types/filter';
 
 export class ZoneController {
-  constructor(private zoneService: ZoneService) {}
+  constructor() {}
 
   /**
    * Get zones with advanced filtering and sorting
@@ -19,7 +20,7 @@ export class ZoneController {
       
       console.log('Received getZones request:', request);
       
-      const result = await this.zoneService.getZones(request);
+      const result = await ZoneService.getZones(request);
       
       const response: BaseResponse<typeof result> = {
         result
@@ -56,7 +57,7 @@ export class ZoneController {
       
       console.log('Received getZoneById request:', id);
       
-      const zone = await this.zoneService.getZoneById(id);
+      const zone = await ZoneService.getZoneById(id);
       
       if (!zone) {
         const response: BaseResponse<null> = {
@@ -89,11 +90,11 @@ export class ZoneController {
    */
   async createZone(req: Request, res: Response) {
     try {
-      const zoneData = req.body;
+      const zoneData: CreateZoneDto = req.body;
       
       console.log('Received createZone request');
       
-      const zone = await this.zoneService.createZone(zoneData);
+      const zone = await ZoneService.createZone(zoneData);
       
       const response: BaseResponse<typeof zone> = {
         result: zone,
@@ -120,7 +121,7 @@ export class ZoneController {
   async updateZone(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const zoneData = req.body;
+      const zoneData: UpdateZoneDto = req.body;
       
       if (!id) {
         const response: BaseResponse<null> = {
@@ -132,7 +133,7 @@ export class ZoneController {
       
       console.log('Received updateZone request:', id);
       
-      const zone = await this.zoneService.updateZone(id, zoneData);
+      const zone = await ZoneService.updateZone(id, zoneData);
       
       const response: BaseResponse<typeof zone> = {
         result: zone,
@@ -170,7 +171,7 @@ export class ZoneController {
       
       console.log('Received deleteZone request:', id);
       
-      await this.zoneService.deleteZone(id);
+      await ZoneService.deleteZone(id);
       
       const response: BaseResponse<null> = {
         message: 'Zone deleted successfully'
@@ -195,7 +196,7 @@ export class ZoneController {
    */
   async getFilterableFields(_req: Request, res: Response): Promise<void> {
     try {
-      const fields = this.zoneService.getFilterableFields();
+      const fields = ZoneService.getFilterableFields();
       
       const response: BaseResponse<string[]> = {
         result: fields
@@ -220,7 +221,7 @@ export class ZoneController {
    */
   async getSortableFields(_req: Request, res: Response): Promise<void> {
     try {
-      const fields = this.zoneService.getSortableFields();
+      const fields = ZoneService.getSortableFields();
       
       const response: BaseResponse<string[]> = {
         result: fields
@@ -238,4 +239,5 @@ export class ZoneController {
       res.status(500).json(response);
     }
   }
+
 }

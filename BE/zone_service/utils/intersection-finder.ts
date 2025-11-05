@@ -24,12 +24,14 @@ export interface Intersection {
 
 /**
  * Find intersections between roads
- * This is a simplified version - production would use spatial indexing
+ * SIMPLIFIED: Every node becomes an intersection point for segment creation
+ * This ensures: nodes count ≈ segments count (N nodes → N-1 segments per road)
  */
 export function findIntersections(roads: Road[]): Intersection[] {
+  const intersections: Intersection[] = [];
   const nodeMap = new Map<string, { lat: number; lon: number; roads: Set<string> }>();
 
-  // Build map of all nodes and which roads use them
+  // Build map of ALL nodes from all roads
   for (const road of roads) {
     for (let i = 0; i < road.nodeIds.length; i++) {
       const nodeId = road.nodeIds[i];
@@ -44,30 +46,14 @@ export function findIntersections(roads: Road[]): Intersection[] {
           roads: new Set(),
         });
       }
-
       nodeMap.get(nodeId)!.roads.add(road.roadId);
     }
   }
 
-  // Find nodes where multiple roads meet
-  const intersections: Intersection[] = [];
-
+  // CRITICAL CHANGE: Mark EVERY node as an intersection
+  // This creates segments between every consecutive node pair
+  // Result: N nodes → (N-1) segments, matching theory!
   for (const [nodeId, data] of nodeMap.entries()) {
-    // Intersection if used by 2+ roads, or at start/end of a road
-    if (data.roads.size >= 2) {
-      intersections.push({
-        nodeId,
-        lat: data.lat,
-        lon: data.lon,
-        roads: Array.from(data.roads),
-      });
-    } else if (data.roads.size === 1) {
-      // Also add start/end points of roads
-      const roadId = Array.from(data.roads)[0];
-      const road = roads.find(r => r.roadId === roadId);
-      if (road) {
-        const nodeIndex = road.nodeIds.indexOf(nodeId);
-        if (nodeIndex === 0 || nodeIndex === road.nodeIds.length - 1) {
           intersections.push({
             nodeId,
             lat: data.lat,
@@ -75,9 +61,8 @@ export function findIntersections(roads: Road[]): Intersection[] {
             roads: Array.from(data.roads),
           });
         }
-      }
-    }
-  }
+
+  console.log(`   Found ${intersections.length} intersection points (all nodes)`);
 
   return intersections;
 }
@@ -95,24 +80,41 @@ export interface Segment {
 export function generateSegments(roads: Road[], intersections: Intersection[]): Segment[] {
   const segments: Segment[] = [];
   const intersectionNodeIds = new Set(intersections.map(i => i.nodeId));
+  
+  // CRITICAL: Maximum nodes per segment to prevent OSRM issues
+  // If a road segment has too many nodes, OSRM may reject it or perform poorly
+  const MAX_NODES_PER_SEGMENT = 50;
 
   for (const road of roads) {
-    let segmentStart = 0;
+    if (road.nodeIds.length < 2 || road.coordinates.length < 2) continue;
+    
     const firstCoord = road.coordinates[0];
     if (!firstCoord) continue;
+    
+    let segmentStart = 0;
     let segmentCoords: Array<[number, number]> = [firstCoord];
 
     for (let i = 1; i < road.nodeIds.length; i++) {
       const nodeId = road.nodeIds[i];
       const coord = road.coordinates[i];
       if (!nodeId || !coord) continue;
+      
       segmentCoords.push(coord);
 
-      // Create segment when we hit an intersection or end of road
-      if (intersectionNodeIds.has(nodeId) || i === road.nodeIds.length - 1) {
+      // Determine if we should break here
+      const isIntersection = intersectionNodeIds.has(nodeId);
+      const isEndOfRoad = i === road.nodeIds.length - 1;
+      const isTooLong = segmentCoords.length >= MAX_NODES_PER_SEGMENT;
+      
+      // CRITICAL: Break at intersections OR end of road OR max length
+      // BUT: Don't break on max length if we're at intersection (to preserve intersection node)
+      const shouldBreak = isIntersection || isEndOfRoad || (isTooLong && !isIntersection);
+
+      if (shouldBreak) {
         const fromNodeId = road.nodeIds[segmentStart];
         if (!fromNodeId) continue;
 
+        // Push segment
         segments.push({
           roadId: road.roadId,
           fromNodeId,
@@ -120,9 +122,11 @@ export function generateSegments(roads: Road[], intersections: Intersection[]): 
           coordinates: [...segmentCoords],
         });
 
-        // Start new segment
+        // Start new segment (CRITICAL: reuse current node as start of next segment)
+        if (i < road.nodeIds.length - 1) {
         segmentStart = i;
-        segmentCoords = [coord];
+          segmentCoords = [coord]; // Current node becomes start of next segment
+        }
       }
     }
   }

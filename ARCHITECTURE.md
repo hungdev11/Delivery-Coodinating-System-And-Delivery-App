@@ -59,8 +59,8 @@ This is a **microservices-based delivery management system** built with modern t
 ┌─────────────────────────────────────────────────────────────────┐
 │                      🗄️ Data Layer                              │
 ├─────────────────────────────────────────────────────────────────┤
-│  PostgreSQL      │  MongoDB        │  Redis Cache               │
-│  (Primary DB)    │  (Document DB)  │  (Session Store)           │
+│  MySQL               │  Redis Cache                            │
+│  (Primary DB)        │  (Session Store)                        │
 │                  │                 │                           │
 │  File Storage    │  Message Queue  │  External APIs             │
 │  (MinIO/S3)      │  (RabbitMQ)     │  (Maps, Payment, etc.)     │
@@ -94,8 +94,7 @@ This is a **microservices-based delivery management system** built with modern t
 
 | Technology | Purpose | Usage |
 |------------|---------|-------|
-| **PostgreSQL** | Primary relational database | User, Parcel, Settings data |
-| **MongoDB** | Document database | Zone data, complex queries |
+| **MySQL** | Primary relational database | User, Parcel, Settings data |
 | **Redis** | Caching & session storage | Session management, caching |
 | **OSRM** | Routing engine | Zone Service routing |
 
@@ -215,8 +214,7 @@ Client → API Gateway → Service Registry → Target Service
 │                    🖥️ Local Development                        │
 ├─────────────────────────────────────────────────────────────────┤
 │  Docker Compose                                                 │
-│  ├── PostgreSQL (Database)                                     │
-│  ├── MongoDB (Document Store)                                  │
+│  ├── MySQL (Database)                                     │
 │  ├── Redis (Cache)                                             │
 │  ├── Keycloak (Auth Server)                                    │
 │  ├── API Gateway (Port 8080)                                   │
@@ -237,8 +235,7 @@ Client → API Gateway → Service Registry → Target Service
 │  Load Balancer (NGINX/HAProxy)                                 │
 │  ├── API Gateway Cluster                                       │
 │  ├── Microservices Cluster                                     │
-│  ├── Database Cluster (PostgreSQL)                             │
-│  ├── Document Store (MongoDB)                                  │
+│  ├── Database Cluster (MySQL)                             │
 │  ├── Cache Cluster (Redis)                                     │
 │  └── Message Queue (RabbitMQ)                                  │
 └─────────────────────────────────────────────────────────────────┘

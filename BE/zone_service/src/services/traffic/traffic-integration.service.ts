@@ -4,6 +4,7 @@
  */
 
 import { PrismaClient, TrafficLevel } from '@prisma/client';
+import { prisma } from '../../common/database/prisma.client';
 import { logger } from '../../common/logger/logger.service';
 import axios from 'axios';
 
@@ -30,7 +31,7 @@ export class TrafficIntegrationService {
   private intervalId: NodeJS.Timeout | null = null;
 
   constructor(updateIntervalMinutes: number = 30) {
-    this.prisma = new PrismaClient();
+    this.prisma = prisma;
     this.updateInterval = updateIntervalMinutes * 60 * 1000; // Convert to ms
   }
 

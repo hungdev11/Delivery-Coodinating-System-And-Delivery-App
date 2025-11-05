@@ -15,5 +15,4 @@ export type {
   OSRMManeuver,
   OSRMIntersection,
   OSRMRouteResponse,
-  MultiStopRouteRequest,
 } from './osrm-router.service';

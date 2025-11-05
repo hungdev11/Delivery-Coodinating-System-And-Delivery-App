@@ -1,5 +1,7 @@
 package com.ds.gateway.business.v1.services;
 
+import com.ds.gateway.common.entities.dto.common.BaseResponse;
+import com.ds.gateway.common.entities.dto.common.PagedData;
 import com.ds.gateway.common.exceptions.ServiceUnavailableException;
 import com.ds.gateway.common.interfaces.IZoneServiceClient;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -26,18 +29,16 @@ public class ZoneServiceClient implements IZoneServiceClient {
     private WebClient zoneServiceWebClient;
 
     @Override
-    public CompletableFuture<Object> listZones(Map<String, String> queryParams) {
-        log.debug("Listing zones with params: {}", queryParams);
-        WebClient.RequestHeadersUriSpec<?> req = zoneServiceWebClient.get();
-        WebClient.RequestHeadersSpec<?> spec = req.uri(uriBuilder -> {
-            var builder = uriBuilder.path("/api/v1/zones");
-            if (queryParams != null) {
-                queryParams.forEach(builder::queryParam);
-            }
-            return builder.build();
-        });
-        return spec.retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+    public CompletableFuture<Object> listZones(Object requestBody) {
+        log.debug("Listing zones with request body: {}", requestBody);
+        
+        return zoneServiceWebClient.post()
+                .uri("/api/v1/zones")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromValue(requestBody))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<BaseResponse<PagedData<Object>>>() {})
+                .map(response -> (Object) response.getResult())
                 .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
                 .toFuture();
     }
@@ -75,11 +76,12 @@ public class ZoneServiceClient implements IZoneServiceClient {
     @Override
     public CompletableFuture<Object> createZone(Object requestBody) {
         return zoneServiceWebClient.post()
-                .uri("/api/v1/zones")
+                .uri("/api/v1/zones/create")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(BodyInserters.fromValue(requestBody))
                 .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .bodyToMono(new ParameterizedTypeReference<BaseResponse<Object>>() {})
+                .map(BaseResponse::getResult)
                 .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
                 .toFuture();
     }
@@ -183,6 +185,18 @@ public class ZoneServiceClient implements IZoneServiceClient {
     public CompletableFuture<Object> calculateRoute(Object requestBody) {
         return zoneServiceWebClient.post()
                 .uri("/api/v1/routing/route")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromValue(requestBody))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> calculateDemoRoute(Object requestBody) {
+        return zoneServiceWebClient.post()
+                .uri("/api/v1/routing/demo-route")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(BodyInserters.fromValue(requestBody))
                 .retrieve()
@@ -432,6 +446,30 @@ public class ZoneServiceClient implements IZoneServiceClient {
                 .uri("/health")
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+    
+    @Override
+    public CompletableFuture<Object> getFilterableFields() {
+        log.debug("Getting filterable fields for zones");
+        return zoneServiceWebClient.get()
+                .uri("/api/v1/zones/filterable-fields")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<BaseResponse<List<String>>>() {})
+                .map(response -> (Object) response.getResult())
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+    
+    @Override
+    public CompletableFuture<Object> getSortableFields() {
+        log.debug("Getting sortable fields for zones");
+        return zoneServiceWebClient.get()
+                .uri("/api/v1/zones/sortable-fields")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<BaseResponse<List<String>>>() {})
+                .map(response -> (Object) response.getResult())
                 .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
                 .toFuture();
     }

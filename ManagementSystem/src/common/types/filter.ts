@@ -63,6 +63,7 @@ export interface FilterCondition {
   value: any
   caseSensitive?: boolean
   id?: string // for UI tracking
+  logic?: 'AND' | 'OR' // for UI grouping
 }
 
 export interface FilterGroup {

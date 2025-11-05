@@ -71,7 +71,7 @@ export class Paging<TKey> {
 	size: number;
 	totalElements: number;
 	totalPages: number;
-	filters: any[];
+	filters?: any;
 	sorts: any[];
     selected: TKey[];
 
@@ -80,7 +80,6 @@ export class Paging<TKey> {
         this.size = 0;
         this.totalElements = 0;
         this.totalPages = 0;
-        this.filters = [];
         this.sorts = [];
         this.selected = [];
     }

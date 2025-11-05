@@ -70,8 +70,8 @@
       </div>
     </div>
 
-    <!-- Advanced Filter Modal -->
-    <FilterModal
+    <!-- Advanced Filter Drawer -->
+    <AdvancedFilterDrawer
       :show="showAdvancedModal"
       :columns="columns"
       :active-filters="activeFilters || []"
@@ -83,10 +83,10 @@
 
 <script setup lang="ts" generic="TData">
 import { computed, ref } from 'vue'
-import type { FilterableColumn, FilterCondition, FilterGroup } from '@/common/types/filter'
-import { createEmptyFilterGroup } from '@/common/utils/query-builder'
+import type { FilterableColumn, FilterCondition, FilterGroup } from '../../types/filter'
+import { createEmptyFilterGroup } from '../../utils/query-builder'
 import ColumnFilter from './ColumnFilter.vue'
-import FilterModal from './FilterModal.vue'
+import AdvancedFilterDrawer from './AdvancedFilterDrawer.vue'
 
 interface Props {
   columns: FilterableColumn[]
@@ -243,14 +243,10 @@ function clearAllFilters() {
 
 function toggleAdvanced() {
   showAdvancedModal.value = true
+  emit('toggle:advanced')
 }
 
-function handleAdvancedApply(filters: FilterCondition[]) {
-  // Convert individual filters to FilterGroup
-  const filterGroup: FilterGroup = {
-    logic: 'AND',
-    conditions: filters,
-  }
+function handleAdvancedApply(filterGroup: FilterGroup) {
   emit('update:filters', filterGroup)
   showAdvancedModal.value = false
 }

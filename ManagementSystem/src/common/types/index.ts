@@ -1,2 +1,5 @@
-export * from './http'
+/**
+ * Common Types Index
+ */
+
 export * from './map.type'

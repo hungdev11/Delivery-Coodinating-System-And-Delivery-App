@@ -5,6 +5,7 @@
  */
 
 import { PrismaClient, OsrmBuildStatus } from '@prisma/client';
+import { prisma } from '../../common/database/prisma.client';
 import { logger } from '../../common/logger/logger.service';
 import { writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
@@ -24,7 +25,7 @@ export class OSRMGeneratorService {
   private currentInstance: 'osrm-instance-1' | 'osrm-instance-2' = 'osrm-instance-1';
 
   constructor() {
-    this.prisma = new PrismaClient();
+    this.prisma = prisma;
   }
 
   /**
