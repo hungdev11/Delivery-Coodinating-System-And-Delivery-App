@@ -173,6 +173,20 @@ public class ZoneProxyController {
         return zoneServiceClient.getNearestAddresses(params).thenApply(ResponseEntity::ok).join();
     }
 
+    @GetMapping("/addresses/by-point")
+    public ResponseEntity<?> getAddressesByPoint(HttpServletRequest request) {
+        Map<String, String> params = extractQueryParams(request);
+        log.info("GET /api/v1/addresses/by-point with params: {}", params);
+        return zoneServiceClient.getAddressesByPoint(params).thenApply(ResponseEntity::ok).join();
+    }
+
+    @GetMapping("/addresses/search")
+    public ResponseEntity<?> searchAddresses(HttpServletRequest request) {
+        Map<String, String> params = extractQueryParams(request);
+        log.info("GET /api/v1/addresses/search with params: {}", params);
+        return zoneServiceClient.searchAddresses(params).thenApply(ResponseEntity::ok).join();
+    }
+
     @PostMapping("/addresses")
     public ResponseEntity<?> createAddress(@RequestBody Object requestBody) {
         log.info("POST /api/v1/addresses");

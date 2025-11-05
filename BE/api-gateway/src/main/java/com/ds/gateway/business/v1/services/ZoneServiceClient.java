@@ -261,6 +261,40 @@ public class ZoneServiceClient implements IZoneServiceClient {
     }
 
     @Override
+    public CompletableFuture<Object> getAddressesByPoint(Map<String, String> queryParams) {
+        log.debug("Getting addresses by point with params: {}", queryParams);
+        WebClient.RequestHeadersUriSpec<?> req = zoneServiceWebClient.get();
+        WebClient.RequestHeadersSpec<?> spec = req.uri(uriBuilder -> {
+            var builder = uriBuilder.path("/api/v1/addresses/by-point");
+            if (queryParams != null) {
+                queryParams.forEach(builder::queryParam);
+            }
+            return builder.build();
+        });
+        return spec.retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> searchAddresses(Map<String, String> queryParams) {
+        log.debug("Searching addresses with params: {}", queryParams);
+        WebClient.RequestHeadersUriSpec<?> req = zoneServiceWebClient.get();
+        WebClient.RequestHeadersSpec<?> spec = req.uri(uriBuilder -> {
+            var builder = uriBuilder.path("/api/v1/addresses/search");
+            if (queryParams != null) {
+                queryParams.forEach(builder::queryParam);
+            }
+            return builder.build();
+        });
+        return spec.retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
     public CompletableFuture<Object> createAddress(Object requestBody) {
         return zoneServiceWebClient.post()
                 .uri("/api/v1/addresses")

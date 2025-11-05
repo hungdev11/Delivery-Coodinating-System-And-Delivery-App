@@ -590,7 +590,7 @@ mvn flyway:migrate
 ## Documentation
 
 - [API Documentation](.docs/README.md)
-- [Route Documentation](.docs/route/README.md)
+- [Route Documentation](.docs/route/users.md)
 - [Authentication Interface](./src/main/java/com/ds/user/common/interfaces/README_AUTHENTICATION.md)
 - [Keycloak Initialization Services](./src/main/java/com/ds/user/application/startup/data/services/README.md)
 - [Global RESTful Standards](../../RESTFUL.md)

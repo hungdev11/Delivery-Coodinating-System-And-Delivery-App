@@ -15,6 +15,7 @@
 - [Architecture Overview](#architecture-overview)
 - [Documentation](#documentation)
 - [API Overview](#api-overview)
+- [Route Documentation](#route-documentation)
 - [Development](#development)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
@@ -231,10 +232,11 @@ graph TB
 
 | Document | Description |
 |----------|-------------|
-| [Routes Overview](.docs/route/README.md) | All available routes |
-| [Routing API](.docs/route/routing.md) | `/route`, `/multi-route` endpoints |
-| [Zones API](.docs/route/zones.md) | Zone management endpoints |
-| [Centers API](.docs/route/centers.md) | Distribution center endpoints |
+| [Zones API](.docs/route/zones.md) | Zone management endpoints (POST /zones, GET /zones/:id, etc.) |
+| [Centers API](.docs/route/centers.md) | Distribution center endpoints (GET /centers, POST /centers, etc.) |
+| [Addresses API](.docs/route/addresses.md) | Address management endpoints (GET /addresses, POST /addresses, etc.) |
+| [Routing API](.docs/route/routing.md) | Route calculation endpoints (POST /routing/route, etc.) |
+| [OSRM API](.docs/route/osrm.md) | OSRM data management endpoints (POST /osrm/build, etc.) |
 | [Health API](.docs/route/health.md) | Service health checks |
 
 

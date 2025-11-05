@@ -391,10 +391,13 @@ Each service exposes Swagger UI for API documentation:
 
 Detailed route documentation is available in each service's `.docs/route/` folder:
 
-- [API Gateway Routes](./api-gateway/.docs/route/README.md)
-- [User Service Routes](./User_service/.docs/route/README.md)
-- [Settings Service Routes](./Settings_service/.docs/route/README.md)
-- [Zone Service Routes](./zone_service/.docs/route/README.md)
+- [API Gateway Routes](./api-gateway/.docs/route/) - [auth.md](./api-gateway/.docs/route/auth.md), [users.md](./api-gateway/.docs/route/users.md), [zones.md](./api-gateway/.docs/route/zones.md), [centers.md](./api-gateway/.docs/route/centers.md), [addresses.md](./api-gateway/.docs/route/addresses.md), [routing.md](./api-gateway/.docs/route/routing.md), [osrm.md](./api-gateway/.docs/route/osrm.md), [parcels.md](./api-gateway/.docs/route/parcels.md), [sessions.md](./api-gateway/.docs/route/sessions.md), [assignments.md](./api-gateway/.docs/route/assignments.md), [settings.md](./api-gateway/.docs/route/settings.md)
+- [User Service Routes](./User_service/.docs/route/users.md)
+- [Settings Service Routes](./Settings_service/.docs/route/settings.md)
+- [Zone Service Routes](./zone_service/.docs/route/) - [zones.md](./zone_service/.docs/route/zones.md), [centers.md](./zone_service/.docs/route/centers.md), [addresses.md](./zone_service/.docs/route/addresses.md), [routing.md](./zone_service/.docs/route/routing.md), [osrm.md](./zone_service/.docs/route/osrm.md)
+- [Communication Service Routes](./communication_service/.docs/route/) - [proposals.md](./communication_service/.docs/route/proposals.md), [conversations.md](./communication_service/.docs/route/conversations.md), [proposal-configs.md](./communication_service/.docs/route/proposal-configs.md)
+- [Session Service Routes](./session-service/.docs/route/) - [sessions.md](./session-service/.docs/route/sessions.md), [assignments.md](./session-service/.docs/route/assignments.md)
+- [Parcel Service Routes](./parcel-service/.docs/route/parcels.md)
 
 ## Service Documentation
 

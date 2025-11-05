@@ -4,9 +4,9 @@ Base URL: `http://localhost:21503/api/v1`
 
 ## Endpoints
 
-### GET /zones
-- Description: Get all zones (paginated).
-- Query:
+### POST /zones
+- Description: Get all zones (paginated with advanced filtering/sorting).
+- Body:
 ```json
 {
   "page": 0,
@@ -41,22 +41,25 @@ Base URL: `http://localhost:21503/api/v1`
 - Description: Get zone by ID.
 - Response 200 similar to above, 404 if not found.
 
-### GET /zones/code/:code
-- Description: Get zone by code.
-- Response 200 similar to above, 404 if not found.
-
-### GET /zones/center/:centerId
-- Description: Get zones by center ID.
+### GET /zones/filterable-fields
+- Description: Get list of filterable fields for zones.
 - Response 200:
 ```json
 {
-  "result": [
-    { "id": "uuid", "code": "ZONE001", "name": "Zone 1", "polygon": null, "centerId": "uuid", "centerCode": "CTR001", "centerName": "Center" }
-  ]
+  "result": ["code", "name", "centerId", ...]
 }
 ```
 
-### POST /zones
+### GET /zones/sortable-fields
+- Description: Get list of sortable fields for zones.
+- Response 200:
+```json
+{
+  "result": ["code", "name", "centerId", ...]
+}
+```
+
+### POST /zones/create
 - Description: Create zone.
 - Body:
 ```json

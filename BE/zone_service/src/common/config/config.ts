@@ -44,6 +44,12 @@ export const config = {
   logging: {
     level: process.env.LOG_LEVEL || 'info',
   },
+
+  // TrackAsia Integration (optional)
+  trackAsia: {
+    apiKey: process.env.TRACKASIA_API_KEY || process.env.TRACK_ASIA_API_KEY || '',
+    baseUrl: 'https://maps.track-asia.com/api/v2/place',
+  },
 } as const;
 
 /**

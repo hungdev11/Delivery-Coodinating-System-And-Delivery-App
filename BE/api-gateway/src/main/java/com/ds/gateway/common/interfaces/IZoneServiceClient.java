@@ -35,6 +35,8 @@ public interface IZoneServiceClient {
     CompletableFuture<Object> listAddresses(Map<String, String> queryParams);
     CompletableFuture<Object> getAddressById(String id);
     CompletableFuture<Object> getNearestAddresses(Map<String, String> queryParams);
+    CompletableFuture<Object> getAddressesByPoint(Map<String, String> queryParams);
+    CompletableFuture<Object> searchAddresses(Map<String, String> queryParams);
     CompletableFuture<Object> createAddress(Object requestBody);
     CompletableFuture<Object> updateAddress(String id, Object requestBody);
     CompletableFuture<Void> deleteAddress(String id);

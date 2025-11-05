@@ -158,14 +158,6 @@ export function useMap() {
     const layerId = 'zones-layer'
     const sourceId = 'zones-source'
 
-    // Remove existing layer if present
-    if (map.value.getLayer(layerId)) {
-      map.value.removeLayer(layerId)
-    }
-    if (map.value.getSource(sourceId)) {
-      map.value.removeSource(sourceId)
-    }
-
     // Create GeoJSON features from zones
     const features = zones.map((zone) => ({
       type: 'Feature' as const,
@@ -181,39 +173,56 @@ export function useMap() {
       },
     }))
 
-    // Add source
-    map.value.addSource(sourceId, {
-      type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features,
-      },
-    })
+    const geojsonData = {
+      type: 'FeatureCollection',
+      features,
+    } as any
+
+    // If source exists, just update data; otherwise create source
+    const existingSource = map.value.getSource(sourceId) as any
+    if (existingSource && typeof existingSource.setData === 'function') {
+      existingSource.setData(geojsonData)
+    } else {
+      // Ensure any stale layers referencing the same id are removed before adding
+      if (map.value.getLayer(layerId)) map.value.removeLayer(layerId)
+      if (map.value.getLayer(`${layerId}-outline`)) map.value.removeLayer(`${layerId}-outline`)
+      if (map.value.getLayer(`${layerId}-labels`)) map.value.removeLayer(`${layerId}-labels`)
+      if (map.value.getSource(sourceId)) map.value.removeSource(sourceId)
+
+      map.value.addSource(sourceId, {
+        type: 'geojson',
+        data: geojsonData,
+      })
+    }
 
     // Add fill layer
-    map.value.addLayer({
-      id: layerId,
-      type: 'fill',
-      source: sourceId,
-      paint: {
-        'fill-color': ['get', 'color'],
-        'fill-opacity': options.fillOpacity ?? 0.2,
-      },
-    })
+    if (!map.value.getLayer(layerId)) {
+      map.value.addLayer({
+        id: layerId,
+        type: 'fill',
+        source: sourceId,
+        paint: {
+          'fill-color': ['get', 'color'],
+          'fill-opacity': options.fillOpacity ?? 0.2,
+        },
+      })
+    }
 
     // Add outline layer
-    map.value.addLayer({
-      id: `${layerId}-outline`,
-      type: 'line',
-      source: sourceId,
-      paint: {
-        'line-color': ['get', 'color'],
-        'line-width': options.strokeWidth ?? 2,
-      },
-    })
+    if (!map.value.getLayer(`${layerId}-outline`)) {
+      map.value.addLayer({
+        id: `${layerId}-outline`,
+        type: 'line',
+        source: sourceId,
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': options.strokeWidth ?? 2,
+        },
+      })
+    }
 
     // Add labels if enabled
-    if (options.showLabels) {
+    if (options.showLabels && !map.value.getLayer(`${layerId}-labels`)) {
       map.value.addLayer({
         id: `${layerId}-labels`,
         type: 'symbol',

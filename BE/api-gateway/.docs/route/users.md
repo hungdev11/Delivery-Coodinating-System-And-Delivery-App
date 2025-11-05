@@ -1,105 +1,41 @@
-# User Routes
+# User Routes (API Gateway - Proxy)
 
-Base URL: `http://localhost:8080/api/v1`
+Base URL: `http://localhost:<port>/api/v1/users`
 
-All endpoints require authentication via JWT token.
+**Note:** These endpoints proxy requests to the User Service. See [User Service Routes](../../User_service/.docs/route/users.md) for detailed documentation.
 
 ## Endpoints
 
+All endpoints require authentication (`Authorization: Bearer <token>`).
+
 ### GET /users/me
-- Description: Get current authenticated user (requires auth).
-- Response 200:
-```json
-{
-  "result": {
-    "id": "uuid",
-    "keycloakId": "keycloak-uuid",
-    "username": "johndoe",
-    "email": "john@example.com",
-    "firstName": "John",
-    "lastName": "Doe",
-    "phone": "+84123456789",
-    "address": "123 Main St",
-    "identityNumber": "0123456789",
-    "status": "ACTIVE",
-    "createdAt": "2024-01-01T00:00:00",
-    "updatedAt": "2024-01-01T00:00:00"
-  }
-}
-```
-
-### GET /users
-- Description: List all users (requires ADMIN or MANAGER role).
-- Response 200:
-```json
-{
-  "result": [
-    {
-      "id": "uuid",
-      "username": "johndoe",
-      "email": "john@example.com",
-      "firstName": "John",
-      "lastName": "Doe",
-      "status": "ACTIVE"
-    }
-  ]
-}
-```
-
-### GET /users/:id
-- Description: Get user by ID (requires auth).
-- Response 200: Same as GET /users/me
-
-### GET /users/username/:username
-- Description: Get user by username (requires auth).
-- Response 200: Same as GET /users/me
+- Description: Get current authenticated user.
+- Headers: `Authorization: Bearer <token>`
+- Response: Same as User Service GET /users/:id
 
 ### POST /users
+- Description: Get all users with filtering (requires ADMIN or MANAGER role).
+- Body: Same as User Service POST /users
+- Response: Same as User Service POST /users
+
+### GET /users/:id
+- Description: Get user by ID.
+- Response: Same as User Service GET /users/:id
+
+### GET /users/username/:username
+- Description: Get user by username.
+- Response: Same as User Service GET /users/username/:username
+
+### POST /users/create
 - Description: Create user (requires ADMIN role).
-- Body:
-```json
-{
-  "username": "johndoe",
-  "email": "john@example.com",
-  "firstName": "John",
-  "lastName": "Doe",
-  "phone": "+84123456789",
-  "address": "123 Main St",
-  "identityNumber": "0123456789"
-}
-```
-- Response 200:
-```json
-{
-  "result": { ... },
-  "message": "User created successfully"
-}
-```
+- Body: Same as User Service POST /users/create
+- Response: Same as User Service POST /users/create
 
 ### PUT /users/:id
-- Description: Update user (requires auth).
-- Body: Same as POST /users (all fields optional)
-- Response 200:
-```json
-{
-  "result": { ... },
-  "message": "User updated successfully"
-}
-```
+- Description: Update user.
+- Body: Same as User Service PUT /users/:id
+- Response: Same as User Service PUT /users/:id
 
 ### DELETE /users/:id
 - Description: Delete user (requires ADMIN role).
-- Response 200:
-```json
-{
-  "result": null,
-  "message": "User deleted successfully"
-}
-```
-
-## Authorization
-
-- **Public**: No authentication required
-- **Authenticated**: Requires valid JWT token
-- **ADMIN**: Requires ADMIN role in Keycloak
-- **MANAGER**: Requires MANAGER role in Keycloak
+- Response: Same as User Service DELETE /users/:id
