@@ -1,10 +1,51 @@
 # Zone Routes
 
-Base URL: `http://localhost:21503/api/v1`
+## API Versions
 
-## Endpoints
+- **V0**: Simple paging and sorting (no dynamic filters) - `http://localhost:21503/api/v0/zones`
+- **V1**: Dynamic filtering with group-level operations - `http://localhost:21503/api/v1/zones`
+- **V2**: Enhanced filtering with pair-level operations - `http://localhost:21503/api/v2/zones`
 
-### POST /zones
+## V0 Endpoints (Simple Paging)
+
+### POST /v0/zones
+- Description: Get all zones with simple paging and sorting (no dynamic filters).
+- Body:
+```json
+{
+  "page": 0,
+  "size": 10,
+  "sorts": [
+    {
+      "field": "name",
+      "direction": "asc"
+    }
+  ],
+  "search": "optional",
+  "selected": []
+}
+```
+- Response 200:
+```json
+{
+  "result": {
+    "data": [{
+      "id": "uuid",
+      "code": "ZONE001",
+      "name": "Zone Name",
+      "polygon": null,
+      "centerId": "uuid",
+      "centerCode": "CTR001",
+      "centerName": "Center"
+    }],
+    "page": { "page": 0, "size": 10, "totalElements": 1, "totalPages": 1, "filters": null, "sorts": [...] }
+  }
+}
+```
+
+## V1 Endpoints (Dynamic Filtering - Group Level)
+
+### POST /v1/zones
 - Description: Get all zones (paginated with advanced filtering/sorting).
 - Body:
 ```json
@@ -12,9 +53,16 @@ Base URL: `http://localhost:21503/api/v1`
   "page": 0,
   "size": 10,
   "search": "optional",
-  "code": "optional",
-  "centerId": "optional",
-  "filters": [],
+  "filters": {
+    "logic": "AND",
+    "conditions": [
+      {
+        "field": "code",
+        "operator": "contains",
+        "value": "ZONE"
+      }
+    ]
+  },
   "sorts": [],
   "selected": []
 }
@@ -32,10 +80,48 @@ Base URL: `http://localhost:21503/api/v1`
       "centerCode": "CTR001",
       "centerName": "Center"
     }],
-    "page": { "page": 0, "size": 10, "totalElements": 1, "totalPages": 1, "filters": [], "sorts": [], "selected": [] }
+    "page": { "page": 0, "size": 10, "totalElements": 1, "totalPages": 1, "filters": {...}, "sorts": [], "selected": [] }
   }
 }
 ```
+
+## V2 Endpoints (Enhanced Filtering - Pair Level)
+
+### POST /v2/zones
+- Description: Get all zones with enhanced filtering (operations between each pair).
+- Body:
+```json
+{
+  "page": 0,
+  "size": 10,
+  "search": "optional",
+  "filters": {
+    "type": "group",
+    "items": [
+      {
+        "type": "condition",
+        "field": "code",
+        "operator": "CONTAINS",
+        "value": "ZONE"
+      },
+      {
+        "type": "operator",
+        "value": "AND"
+      },
+      {
+        "type": "condition",
+        "field": "centerId",
+        "operator": "IS_NOT_NULL"
+      }
+    ]
+  },
+  "sorts": [],
+  "selected": []
+}
+```
+- Response 200: Same as V1
+
+## Common Endpoints (All Versions)
 
 ### GET /zones/:id
 - Description: Get zone by ID.
