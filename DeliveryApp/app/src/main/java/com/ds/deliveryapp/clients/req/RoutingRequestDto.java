@@ -8,9 +8,6 @@ import java.util.List;
  * DTOs for routing module inputs
  */
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class RoutingRequestDto {
 
     @Data

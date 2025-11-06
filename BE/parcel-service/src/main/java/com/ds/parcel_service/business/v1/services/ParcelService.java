@@ -12,14 +12,20 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import com.ds.parcel_service.app_context.models.Parcel;
+import com.ds.parcel_service.app_context.models.ParcelDestination;
 import com.ds.parcel_service.app_context.repositories.ParcelDestinationRepository;
 import com.ds.parcel_service.app_context.repositories.ParcelRepository;
+import com.ds.parcel_service.application.client.DesDetail;
+import com.ds.parcel_service.application.client.DestinationResponse;
+import com.ds.parcel_service.application.client.ListAddressResponse;
+import com.ds.parcel_service.application.client.ZoneClient;
 import com.ds.parcel_service.common.entities.dto.request.ParcelCreateRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelFilterRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelUpdateRequest;
 import com.ds.parcel_service.common.entities.dto.response.PageResponse;
 import com.ds.parcel_service.common.entities.dto.response.ParcelResponse;
 import com.ds.parcel_service.common.enums.DeliveryType;
+import com.ds.parcel_service.common.enums.DestinationType;
 import com.ds.parcel_service.common.enums.ParcelEvent;
 import com.ds.parcel_service.common.enums.ParcelStatus;
 import com.ds.parcel_service.common.exceptions.ResourceNotFound;
@@ -47,6 +53,7 @@ public class ParcelService implements IParcelService{
 
     private final ParcelRepository parcelRepository;
     private final ParcelDestinationRepository parcelDestinationRepository;
+    private final ZoneClient zoneClient;
 
     private final Map<ParcelStatus, IParcelState> stateMap = Map.of(
         ParcelStatus.IN_WAREHOUSE, new InWarehouseState(),
@@ -112,6 +119,7 @@ public class ParcelService implements IParcelService{
     }
 
     @Override
+    @Transactional
     public ParcelResponse createParcel(ParcelCreateRequest request) {
         validateUniqueCode(request.getCode());
         Parcel parcel = Parcel.builder()
@@ -132,20 +140,28 @@ public class ParcelService implements IParcelService{
         // find exiting destination from address text, if not found create new one
         // map relationship between parcel and destination
         // call to user service to get receiver/sender info
-        //
-        // Destination des = destinationClient.createOrGetDestination(request.getLat(), request.getLon(), request.getSendTo());
+
+        // DestinationResponse des = zoneClient.createDestination(
+        //     new CreateDestinationRequest(
+        //         parcel.getSendTo(), parcel.getSendTo(), request.getLat(), request.getLon()
+        //         )
+        //     );
+
+        ListAddressResponse resp = zoneClient.getNearestDestination(request.getLat(), request.getLon());
+
+        DesDetail des = !resp.getResult().isEmpty() ? resp.getResult().get(0) : null;
         
         Parcel savedParcel = parcelRepository.save(parcel);
 
-        // ParcelDestination pd = ParcelDestination.builder()
-        //     .destinationId(des.getId())
-        //     .destinationType(DestinationType.PRIMARY)
-        //     .isCurrent(true)
-        //     .isOriginal(true)
-        //     .parcel(savedParcel)
-        //     .build();
+        ParcelDestination pd = ParcelDestination.builder()
+            .destinationId(des.getId())
+            .destinationType(DestinationType.PRIMARY)
+            .isCurrent(true)
+            .isOriginal(true)
+            .parcel(savedParcel)
+            .build();
 
-        // parcelDestinationRepository.save(pd);
+        parcelDestinationRepository.save(pd);
         return toDto(savedParcel);
     }
 
@@ -172,16 +188,20 @@ public class ParcelService implements IParcelService{
 
     @Override
     public ParcelResponse getParcelById(UUID parcelId) {
-        // Destination des = destinationClient.createOrGetDestination(request.getLat(), request.getLon(), request.getSendTo());
-        // return toDtoWithLocation(getParcel(parcelId), des);
-        return toDto(getParcel(parcelId));    
+        Parcel parcel = getParcel(parcelId);
+        ParcelDestination des = parcelDestinationRepository.findByParcelAndIsCurrentTrue(parcel).orElseThrow(()-> new ResourceNotFound("Not found any current destination by parcel"));
+        
+        DestinationResponse<DesDetail> call = zoneClient.getDestination(des.getDestinationId());
+        return toDtoWithLocation(parcel, call);
     }
 
     @Override
     public ParcelResponse getParcelByCode(String code) {
-        // Destination des = destinationClient.createOrGetDestination(request.getLat(), request.getLon(), request.getSendTo());
-        // return toDtoWithLocation(parcelRepository.findByCode(code).orElseThrow(() -> new ResourceNotFound("Parcel with code not found")), des);
-        return toDto(parcelRepository.findByCode(code).orElseThrow(() -> new ResourceNotFound("Parcel with code not found")));
+        Parcel parcel = parcelRepository.findByCode(code).orElseThrow(()-> new ResourceNotFound("Not found parcel with code " + code));
+        ParcelDestination des = parcelDestinationRepository.findByParcelAndIsCurrentTrue(parcel).orElseThrow(()-> new ResourceNotFound("Not found any current destination by parcel"));
+        
+        DestinationResponse<DesDetail> call = zoneClient.getDestination(des.getDestinationId());
+        return toDtoWithLocation(parcel, call);
     }
 
     @Override
@@ -219,12 +239,14 @@ public class ParcelService implements IParcelService{
                             .build();
     }
 
-    // private ParcelResponse toDtoWithLocation(Parcel parcel, Destination des) {
-    //     ParcelResponse response = toDto(parcel);
-    //     response.setLat(des.getLat());
-    //     response.setLon(des.getLon());
-    //     return response;
-    // }
+    private ParcelResponse toDtoWithLocation(Parcel parcel, DestinationResponse<DesDetail> des) {
+        ParcelResponse response = toDto(parcel);
+        log.info("before {} {}", des.getResult().getLat(), des.getResult().getLon());
+        response.setLat(des.getResult().getLat());
+        response.setLon(des.getResult().getLon());
+        log.info("after {} {}", response.getLat(), response.getLon());
+        return response;
+    }
 
     private void validateUniqueCode(String code) {
         if (parcelRepository.existsByCode(code)) {
