@@ -37,7 +37,8 @@ export class RoutingService {
           alternatives: request.alternatives || false,
           overview: 'full',
           geometries: 'geojson',
-          vehicle: request.vehicle || 'car',
+          vehicle: request.vehicle || 'motorbike',
+          mode: request.mode || 'flexible_priority_with_delta',
         }
       );
 
@@ -717,7 +718,8 @@ export class RoutingService {
         annotations: request.annotations !== false,
         overview: 'full',
         geometries: 'geojson',
-        vehicle: request.vehicle || 'car',
+        vehicle: request.vehicle || 'motorbike',
+        mode: request.mode || 'flexible_priority_with_delta',
       });
 
       if (osrmResponse.code !== 'Ok' || !osrmResponse.routes || osrmResponse.routes.length === 0) {

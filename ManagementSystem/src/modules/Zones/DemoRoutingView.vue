@@ -38,6 +38,7 @@ const {
   canCalculateRoute,
   routingMode,
   routingStrategy,
+  vehicleType,
 } = storeToRefs(routingStore)
 
 const {
@@ -572,6 +573,27 @@ onUnmounted(() => {
               <span v-else>
                 Consider all priorities together, URGENT gets very high weight
               </span>
+            </div>
+          </div>
+        </UCard>
+
+        <!-- Vehicle Type Selector -->
+        <UCard>
+          <template #header>
+            <h3 class="text-lg font-semibold">Vehicle Type</h3>
+          </template>
+
+          <div class="space-y-3">
+            <URadioGroup
+              v-model="vehicleType"
+              :items="[
+                { label: '🏍️ Motorbike (Xe máy)', value: 'motorbike' },
+                { label: '🚗 Car (Ô tô)', value: 'car' }
+              ]"
+            />
+            <div class="text-xs text-gray-500">
+              <span v-if="vehicleType === 'motorbike'">Motorbike routing - optimized for Vietnam traffic, no motorways</span>
+              <span v-else>Car routing - full OSRM car.lua profile with dynamic weights (priority_factor, rating, flow)</span>
             </div>
           </div>
         </UCard>

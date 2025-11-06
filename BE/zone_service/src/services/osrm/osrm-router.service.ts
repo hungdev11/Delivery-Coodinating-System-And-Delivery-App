@@ -117,12 +117,17 @@ export class OSRMRouterService {
     // Motorbike clients are created per request based on mode
 
     logger.info(
-      `OSRM Router initialized - Car: ${this.instance1Url}, ${this.instance2Url} | Motorbike modes: ` +
-      `strict_priority_with_delta=${process.env.OSRM_STRICT_PRIORITY_WITH_DELTA_URL || 'n/a'}, ` +
+      `OSRM Router initialized - ` +
+      `Motorbike modes: strict_priority_with_delta=${process.env.OSRM_STRICT_PRIORITY_WITH_DELTA_URL || 'n/a'}, ` +
       `flexible_priority_with_delta=${process.env.OSRM_FLEXIBLE_PRIORITY_WITH_DELTA_URL || 'n/a'}, ` +
       `strict_priority_no_delta=${process.env.OSRM_STRICT_PRIORITY_NO_DELTA_URL || 'n/a'}, ` +
       `flexible_priority_no_delta=${process.env.OSRM_FLEXIBLE_PRIORITY_NO_DELTA_URL || 'n/a'}, ` +
-      `base=${process.env.OSRM_BASE_URL || 'n/a'}`
+      `base=${process.env.OSRM_BASE_URL || 'n/a'} | ` +
+      `Car modes: strict_priority_with_delta=${process.env.OSRM_CAR_STRICT_PRIORITY_WITH_DELTA_URL || 'n/a'}, ` +
+      `flexible_priority_with_delta=${process.env.OSRM_CAR_FLEXIBLE_PRIORITY_WITH_DELTA_URL || 'n/a'}, ` +
+      `strict_priority_no_delta=${process.env.OSRM_CAR_STRICT_PRIORITY_NO_DELTA_URL || 'n/a'}, ` +
+      `flexible_priority_no_delta=${process.env.OSRM_CAR_FLEXIBLE_PRIORITY_NO_DELTA_URL || 'n/a'}, ` +
+      `base=${process.env.OSRM_CAR_BASE_URL || 'n/a'}`
     );
 
     // Load active instance from database
@@ -169,28 +174,35 @@ export class OSRMRouterService {
     const path = `/route/v1/${profile}/${coordinates}?${queryString}`;
 
     try {
-      // Motorbike uses per-mode instances
+      // Both motorbike and car use per-mode instances
       if (vehicle === 'motorbike') {
         const client = this.getMotorbikeClientForMode(options.mode);
         const response = await client.get(path);
         return response.data;
       }
       
-      // Car uses dual-instance with failover
+      // Car uses per-mode instances (same as motorbike)
+      if (vehicle === 'car') {
+        const client = this.getCarClientForMode(options.mode);
+        const response = await client.get(path);
+        return response.data;
+      }
+      
+      // Fallback: use dual-instance with failover (legacy car routing)
       const response = await this.queryInstance(this.activeInstance, path);
       return response.data;
     } catch (error) {
-      // Motorbike instance has no failover
-      if (vehicle === 'motorbike') {
+      // Both motorbike and car instances have no failover
+      if (vehicle === 'motorbike' || vehicle === 'car') {
         // Avoid logging circular structures
         const msg = error instanceof Error ? error.message : String(error);
-        logger.error('Motorbike OSRM instance failed', { message: msg });
-        throw new Error('Motorbike routing service unavailable');
+        logger.error(`${vehicle} OSRM instance failed`, { message: msg, mode: options.mode });
+        throw new Error(`${vehicle} routing service unavailable`);
       }
       
       logger.warn(`Active car instance ${this.activeInstance} failed, trying failover`);
 
-      // Try other instance as failover (car only)
+      // Try other instance as failover (legacy car only)
       const failoverInstance = this.activeInstance === 1 ? 2 : 1;
 
       try {
@@ -218,6 +230,31 @@ export class OSRMRouterService {
       base: process.env.OSRM_BASE_URL,
     };
     const selected = (mode && map[mode]) || process.env.OSRM_FLEXIBLE_PRIORITY_WITH_DELTA_URL || this.instance2Url;
+    return axios.create({ baseURL: selected, timeout: 10000 });
+  }
+
+  /**
+   * Select car OSRM axios client based on routing mode
+   */
+  private getCarClientForMode(
+    mode: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base' | undefined
+  ): AxiosInstance {
+    const map: Record<string, string | undefined> = {
+      strict_priority_with_delta: process.env.OSRM_CAR_STRICT_PRIORITY_WITH_DELTA_URL,
+      flexible_priority_with_delta: process.env.OSRM_CAR_FLEXIBLE_PRIORITY_WITH_DELTA_URL,
+      strict_priority_no_delta: process.env.OSRM_CAR_STRICT_PRIORITY_NO_DELTA_URL,
+      flexible_priority_no_delta: process.env.OSRM_CAR_FLEXIBLE_PRIORITY_NO_DELTA_URL,
+      base: process.env.OSRM_CAR_BASE_URL,
+    };
+    // Fallback to legacy car instances if new ones not configured
+    const fallbackMap: Record<string, string | undefined> = {
+      strict_priority_with_delta: process.env.OSRM_INSTANCE_1_URL,
+      flexible_priority_with_delta: process.env.OSRM_INSTANCE_1_URL,
+      strict_priority_no_delta: process.env.OSRM_INSTANCE_2_URL,
+      flexible_priority_no_delta: process.env.OSRM_INSTANCE_2_URL,
+      base: process.env.OSRM_INSTANCE_2_URL,
+    };
+    const selected = (mode && map[mode]) || (mode && fallbackMap[mode]) || process.env.OSRM_INSTANCE_1_URL || this.instance1Url;
     return axios.create({ baseURL: selected, timeout: 10000 });
   }
 

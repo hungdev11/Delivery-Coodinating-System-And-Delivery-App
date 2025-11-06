@@ -22,7 +22,18 @@ COPY utils ./utils
 COPY raw_data ./raw_data
 
 # Create OSRM data directory structure (empty, will be populated at runtime)
-RUN mkdir -p osrm_data/osrm-instance-1 osrm_data/osrm-instance-2
+# Motorbike instances
+RUN mkdir -p osrm_data/osrm-strict-priority-with-delta \
+    osrm_data/osrm-flexible-priority-with-delta \
+    osrm_data/osrm-strict-priority-no-delta \
+    osrm_data/osrm-flexible-priority-no-delta \
+    osrm_data/osrm-base
+# Car instances
+RUN mkdir -p osrm_data/osrm-car-strict-priority-with-delta \
+    osrm_data/osrm-car-flexible-priority-with-delta \
+    osrm_data/osrm-car-strict-priority-no-delta \
+    osrm_data/osrm-car-flexible-priority-no-delta \
+    osrm_data/osrm-car-base
 
 # Build application
 RUN npm run build
@@ -47,7 +58,18 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/raw_data ./raw_data
 
 # Create OSRM data directory structure (empty, will be populated at runtime)
-RUN mkdir -p osrm_data/osrm-instance-1 osrm_data/osrm-instance-2
+# Motorbike instances
+RUN mkdir -p osrm_data/osrm-strict-priority-with-delta \
+    osrm_data/osrm-flexible-priority-with-delta \
+    osrm_data/osrm-strict-priority-no-delta \
+    osrm_data/osrm-flexible-priority-no-delta \
+    osrm_data/osrm-base
+# Car instances
+RUN mkdir -p osrm_data/osrm-car-strict-priority-with-delta \
+    osrm_data/osrm-car-flexible-priority-with-delta \
+    osrm_data/osrm-car-strict-priority-no-delta \
+    osrm_data/osrm-car-flexible-priority-no-delta \
+    osrm_data/osrm-car-base
 
 # Set environment
 ENV NODE_ENV=production
