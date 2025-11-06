@@ -24,6 +24,7 @@ export interface DemoRouteRequest {
   annotations?: boolean
   mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base'
   strategy?: 'strict_urgent' | 'flexible'  // 🚨 Cách xử lý URGENT
+  vehicle?: 'car' | 'motorbike'  // Vehicle type (default: motorbike)
 }
 
 export interface RouteRequest {
@@ -33,6 +34,7 @@ export interface RouteRequest {
   steps?: boolean
   annotations?: boolean
   mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base'
+  vehicle?: 'car' | 'motorbike'  // Vehicle type (default: motorbike)
 }
 
 export interface Maneuver {
