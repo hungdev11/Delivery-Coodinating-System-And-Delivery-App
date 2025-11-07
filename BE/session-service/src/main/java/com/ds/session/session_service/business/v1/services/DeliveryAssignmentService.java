@@ -139,21 +139,31 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     public PageResponse<DeliveryAssignmentResponse> getDailyTasks(
         UUID deliveryManId, List<String> status, int page, int size
     ) {
+        log.info("Starting getDailyTasks for deliveryManId: {}, status: {}, page: {}, size: {}", 
+                  deliveryManId, status, page, size);
+        
         // 1. Xây dựng đối tượng phân trang
         // (Mặc định sắp xếp theo thời gian quét (scanedAt) mới nhất)
         Pageable pageable = PageUtil.build(page, size, "scanedAt", "desc", DeliveryAssignment.class);
+        log.info("Pageable created: page={}, size={}", page, size);
 
         // 2. Xây dựng Specification (Tiêu chí lọc)
         Specification<DeliveryAssignment> spec = Specification
             .where(AssignmentSpecification.byDeliveryManId(deliveryManId))
             .and(AssignmentSpecification.bySessionStatus(SessionStatus.IN_PROGRESS))
             .and(AssignmentSpecification.hasAssignmentStatusIn(status));
+        log.info("Specification created for filtering");
 
         // 3. Gọi Repository
+        log.info("Querying database for tasks...");
         Page<DeliveryAssignment> tasksPage = deliveryAssignmentRepository.findAll(spec, pageable);
+        log.info("Found {} tasks from database (total: {})", tasksPage.getNumberOfElements(), tasksPage.getTotalElements());
 
         // 4. Ánh xạ kết quả sang DTO
-        return getEnrichedTasks(tasksPage);
+        log.info("Enriching tasks with parcel information...");
+        PageResponse<DeliveryAssignmentResponse> response = getEnrichedTasks(tasksPage);
+        log.info("Returning {} enriched tasks", response.getContent().size());
+        return response;
     }
 
     /**
@@ -201,7 +211,25 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             .distinct()
             .toList();
 
-        Map<String, ParcelResponse> parcelResponseMap = parcelServiceClient.fetchParcelsBulk(parcelIds);
+        // 2. Fetch parcel information from parcel-service with error handling
+        Map<String, ParcelResponse> parcelResponseMap = Collections.emptyMap();
+        if (parcelIds.isEmpty()) {
+            log.warn("No parcel IDs to fetch from parcel-service");
+        } else {
+            log.info("Fetching {} parcels from parcel-service...", parcelIds.size());
+            long startTime = System.currentTimeMillis();
+            try {
+                parcelResponseMap = parcelServiceClient.fetchParcelsBulk(parcelIds);
+                long duration = System.currentTimeMillis() - startTime;
+                log.info("Successfully fetched {} parcels from parcel-service in {}ms", parcelResponseMap.size(), duration);
+            } catch (Exception ex) {
+                long duration = System.currentTimeMillis() - startTime;
+                log.error("Failed to fetch parcels from parcel-service after {}ms: {}. Error type: {}. Returning tasks without parcel details.", 
+                         duration, ex.getMessage(), ex.getClass().getSimpleName(), ex);
+                // Return empty response - tasks will be filtered out below
+                // This prevents the entire request from failing when parcel-service is unavailable
+            }
+        }
         
         Map<String, ParcelInfo> parcelInfoMap = parcelResponseMap.entrySet().stream()
             .filter(entry -> entry.getValue() != null)
@@ -216,10 +244,11 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         // 4. TODO: Lấy tên Người nhận
         String receiverName = null; // Tạm thời
 
-        // 5. Map dữ liệu
+        // 5. Map dữ liệu - only include tasks where we successfully fetched parcel info
         List<DeliveryAssignmentResponse> dtoList = tasks.stream().map(t -> {
             ParcelInfo parcelInfo = parcelInfoMap.get(t.getParcelId());
             if (parcelInfo == null) {
+                log.warn("Parcel info not available for parcelId: {}. Skipping task.", t.getParcelId());
                 return null; 
             }
             return DeliveryAssignmentResponse.from(t, parcelInfo, t.getSession(), deliveryManPhone, receiverName);
@@ -332,4 +361,3 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         return parcelMapper.toParcelInfo(response);
     }
 }
-

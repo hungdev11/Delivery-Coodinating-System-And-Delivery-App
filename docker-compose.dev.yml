@@ -87,6 +87,67 @@ services:
       retries: 120
       start_period: 30s
 
+  # Parcel Service
+  parcel-service:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/parcel-service
+      dockerfile: Dockerfile
+    container_name: dss-parcel-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      PARCEL_DB_NAME: ${PARCEL_DB_NAME:-ds_parcel_service}
+      SERVER_PORT: 21506
+    ports:
+      - "21506:21506"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:21506/actuator/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
+  # Session Service
+  session-service:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/session-service
+      dockerfile: Dockerfile
+    container_name: dss-session-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SESSION_DB_NAME: ${SESSION_DB_NAME:-ds_session_service}
+      # Support both Docker and localhost parcel-service
+      PARCEL_SERVICE_URL: ${PARCEL_SERVICE_URL:-http://parcel-service:21506}
+      SERVER_PORT: 21505
+    ports:
+      - "21505:21505"
+    depends_on:
+      parcel-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:21505/actuator/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
   # Zone Service
   zone-service:
     restart: on-failure
@@ -146,6 +207,8 @@ services:
       USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
       SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:-http://settings-service:21502}
       ZONE_SERVICE_URL: ${ZONE_SERVICE_URL:-http://zone-service:21503}
+      SESSION_SERVICE_URL: ${SESSION_SERVICE_URL:-http://session-service:21505}
+      PARCEL_SERVICE_URL: ${PARCEL_SERVICE_URL:-http://parcel-service:21506}
       SERVER_PORT: 21500
     ports:
       - "21500:21500"
@@ -153,6 +216,10 @@ services:
       user-service:
         condition: service_healthy
       settings-service:
+        condition: service_healthy
+      session-service:
+        condition: service_healthy
+      parcel-service:
         condition: service_healthy
       # Comment out zone-service dependency if running zone-service locally
       # zone-service:

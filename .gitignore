@@ -33,3 +33,6 @@ build/
 
 .claude
 **/.claude
+
+cloudflared/*
+!cloudflared/.gitkeep

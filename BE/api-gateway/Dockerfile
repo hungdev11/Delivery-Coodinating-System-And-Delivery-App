@@ -11,6 +11,11 @@ RUN mvn clean package -DskipTests
 
 FROM eclipse-temurin:22-jre-jammy
 
+# Install wget for health checks
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends wget && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY --from=build /app/target/*.jar api-gateway.jar
