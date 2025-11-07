@@ -66,3 +66,4 @@ export function isFilterGroup(item: FilterItemV2): item is FilterGroupItemV2 {
   return item.type === FilterItemType.GROUP
 }
 
+
