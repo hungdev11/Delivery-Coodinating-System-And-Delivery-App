@@ -129,9 +129,15 @@ export class QueryParserV2 {
         // Nested field (e.g., center.name)
         let current = fieldCondition;
         for (let i = fieldParts.length - 1; i > 0; i--) {
-          current = { [fieldParts[i]]: current };
+          const part = fieldParts[i];
+          if (part) {
+            current = { [part]: current };
+          }
         }
-        prismaCondition[fieldParts[0]] = current;
+        const firstPart = fieldParts[0];
+        if (firstPart) {
+          prismaCondition[firstPart] = current;
+        }
       } else {
         // Simple field
         prismaCondition[field] = fieldCondition;

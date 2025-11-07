@@ -9,6 +9,7 @@ import {
   onMounted,
   defineAsyncComponent,
   ref,
+  reactive,
   computed,
   watch,
   resolveComponent,
@@ -21,10 +22,10 @@ import type { ZoneDto } from './model.type'
 import { storeToRefs } from 'pinia'
 import { useTemplateRef } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
-import AdvancedFilterDrawer from '../../common/components/filters/AdvancedFilterDrawer.vue'
+import AdvancedFilterDrawer from '@/common/components/filters/AdvancedFilterDrawer.vue'
 import type { SortingState } from '@tanstack/table-core'
-import type { FilterCondition, FilterGroup, FilterableColumn } from '../../common/types/filter'
-import TableHeaderCell from '../../common/components/TableHeaderCell.vue'
+import type { FilterCondition, FilterGroup, FilterableColumn, SortConfig } from '../../common/types/filter'
+import TableHeaderCell from '@/common/components/TableHeaderCell.vue'
 
 // Dynamic imports to avoid TypeScript issues
 const PageHeader = defineAsyncComponent(() => import('../../common/components/PageHeader.vue'))
@@ -41,10 +42,9 @@ const overlay = useOverlay()
 const table = useTemplateRef('table')
 
 // Composables
+const zonesStore = useZonesStore()
+
 const {
-  page,
-  pageSize,
-  total,
   loadZones,
   loadCenters,
   create,
@@ -52,17 +52,27 @@ const {
   remove,
   bulkDelete,
   handleSearch,
-} = useZonesStore()
+  setFilters,
+  setSorts,
+  setPage,
+} = zonesStore
 
 const {
+  page,
+  pageSize,
+  total,
   zones,
   loading,
-} = storeToRefs(useZonesStore())
+  filters: storeFilters,
+  sorts: storeSorts,
+} = storeToRefs(zonesStore)
 
 // Table state
 const selected = ref<ZoneDto[]>([])
 const sorting = ref<Array<{ id: string; desc: boolean }>>([])
 const activeFilters = ref<FilterCondition[]>([])
+const columnFiltersState = reactive<Record<string, FilterCondition[]>>({})
+const advancedFiltersGroup = ref<FilterGroup | undefined>(undefined)
 
 // Search and filter state
 const searchValue = ref('')
@@ -116,32 +126,31 @@ const setupHeader = ({
 }: {
   column: any // eslint-disable-line @typescript-eslint/no-explicit-any
   config: {
-    variant?: 'ghost' | 'solid' | 'outline' | 'soft' | 'link'
+    variant: 'ghost' | 'solid' | 'outline' | 'soft' | 'link'
     label: string
-    class?: string
+    class: string
     activeColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
     inactiveColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
     filterable?: boolean
   }
-}) => h(TableHeaderCell<ZoneDto>, {
-  column,
-  config,
-  filterableColumns: filterableColumns,
-  activeFilters: activeFilters.value,
-  'onUpdate:filters': handleFiltersUpdate
-})
+}) =>
+  h(TableHeaderCell<ZoneDto>, {
+    column,
+    config,
+    filterableColumns: filterableColumns,
+    activeFilters: activeFilters.value,
+    'onUpdate:filters': handleFiltersUpdate,
+  })
 
 // Filter and sort state
-const sorts = ref([])
-const filters = ref<FilterGroup | undefined>(undefined)
 
 const getAllActiveFilters = (): FilterCondition[] | undefined => {
-  if (!filters.value || !filters.value.conditions) return undefined
-  return filters.value.conditions.filter((item): item is FilterCondition => 'field' in item)
+  if (!storeFilters.value || !storeFilters.value.conditions) return undefined
+  return storeFilters.value.conditions.filter((item): item is FilterCondition => 'field' in item)
 }
 
 const getFilterStructure = (): string => {
-  if (!filters.value || !filters.value.conditions) return ''
+  if (!storeFilters.value || !storeFilters.value.conditions) return ''
 
   const formatItem = (item: FilterCondition | FilterGroup): string => {
     if ('field' in item) {
@@ -151,25 +160,29 @@ const getFilterStructure = (): string => {
     } else if ('conditions' in item) {
       // It's a FilterGroup
       const group = item as FilterGroup
-      const groupContent = group.conditions.map((subItem, subIndex) => {
-        const itemStr = formatItem(subItem)
-        // Add logic operator between items (except first item)
-        return subIndex > 0 && subItem.logic ? `${subItem.logic} ${itemStr}` : itemStr
-      }).join(' ')
+      const groupContent = group.conditions
+        .map((subItem: FilterCondition | FilterGroup, subIndex: number) => {
+          const itemStr = formatItem(subItem)
+          // Add logic operator between items (except first item)
+          return subIndex > 0 && subItem.logic ? `${subItem.logic} ${itemStr}` : itemStr
+        })
+        .join(' ')
       return `(${groupContent})`
     }
     return ''
   }
 
-  return filters.value.conditions.map((item, index) => {
-    const itemStr = formatItem(item)
-    // Add logic operator between items (except first item)
-    return index > 0 && item.logic ? `${item.logic} ${itemStr}` : itemStr
-  }).join(' ')
+  return storeFilters.value.conditions
+    .map((item: FilterCondition | FilterGroup, index: number) => {
+      const itemStr = formatItem(item)
+      // Add logic operator between items (except first item)
+      return index > 0 && item.logic ? `${item.logic} ${itemStr}` : itemStr
+    })
+    .join(' ')
 }
 
 const getActiveFilterGroup = (): FilterGroup | undefined => {
-  return filters.value
+  return storeFilters.value
 }
 
 const getOperatorLabel = (operator: string): string => {
@@ -190,34 +203,81 @@ const getOperatorLabel = (operator: string): string => {
 }
 
 const handleAdvancedFilterApply = (filterGroup: FilterGroup) => {
-  filters.value = filterGroup
+  advancedFiltersGroup.value =
+    filterGroup && filterGroup.conditions.length > 0 ? filterGroup : undefined
   showAdvancedFilters.value = false
-  loadZones({ filters: filterGroup, sorts: sorts.value }) // Reload data with new filters
+  updateStoreFilters()
 }
 
 const handleAdvancedFilterClear = () => {
-  filters.value = undefined
+  advancedFiltersGroup.value = undefined
+  Object.keys(columnFiltersState).forEach((key) => {
+    delete columnFiltersState[key]
+  })
+  activeFilters.value = []
   showAdvancedFilters.value = false
-  loadZones({ filters: undefined, sorts: sorts.value }) // Reload data without filters
+  setFilters(undefined)
+  setPage(0)
+  loadZones()
+}
+
+const clearFilters = () => {
+  handleAdvancedFilterClear()
+  if (searchTimeout) {
+    clearTimeout(searchTimeout)
+    searchTimeout = null
+  }
+  searchValue.value = ''
+  handleSearch('')
 }
 
 /**
  * Handle filters update from column filters
  */
-const handleFiltersUpdate = (newFilters: FilterCondition[]) => {
-  activeFilters.value = newFilters
+interface ColumnFilterUpdatePayload {
+  columnId: string
+  filters: FilterCondition[]
+}
 
-  // Convert column filters to FilterGroup
-  if (newFilters.length > 0) {
-    filters.value = {
-      logic: 'AND',
-      conditions: newFilters
-    }
-  } else {
-    filters.value = undefined
+const updateStoreFilters = () => {
+  const columnFilters = Object.values(columnFiltersState).flat()
+  activeFilters.value = columnFilters
+
+  const combinedConditions: (FilterCondition | FilterGroup)[] = []
+
+  if (advancedFiltersGroup.value && advancedFiltersGroup.value.conditions.length > 0) {
+    combinedConditions.push({
+      logic: advancedFiltersGroup.value.logic,
+      conditions: [...advancedFiltersGroup.value.conditions],
+      id: advancedFiltersGroup.value.id,
+    })
   }
 
-  loadZones({ filters: filters.value, sorts: sorts.value }) // Reload data with new filters
+  if (columnFilters.length > 0) {
+    combinedConditions.push(...columnFilters.map((filter) => ({ ...filter })))
+  }
+
+  const combinedFilterGroup =
+    combinedConditions.length > 0
+      ? {
+          logic: 'AND' as const,
+          conditions: combinedConditions,
+        }
+      : undefined
+
+  setFilters(combinedFilterGroup)
+  setPage(0)
+  loadZones()
+}
+
+const handleFiltersUpdate = ({ columnId, filters }: ColumnFilterUpdatePayload) => {
+  if (filters.length > 0) {
+    columnFiltersState[columnId] = filters.map((filter) => ({ ...filter }))
+  } else {
+    delete columnFiltersState[columnId]
+  }
+
+  updateStoreFilters()
 }
 
 // Table columns configuration
@@ -302,7 +362,9 @@ const columns: TableColumn<ZoneDto>[] = [
     cell: ({ row }) => {
       const hasPolygon = row.getValue('hasPolygon') as boolean
       const color = hasPolygon ? 'green' : 'gray'
-      return h(UBadge, { class: 'capitalize', variant: 'soft', color }, () => hasPolygon ? 'Yes' : 'No')
+      return h(UBadge, { class: 'capitalize', variant: 'soft', color }, () =>
+        hasPolygon ? 'Yes' : 'No',
+      )
     },
   },
   {
@@ -353,7 +415,7 @@ const filteredZones = computed(() => {
       (zone) =>
         zone.code.toLowerCase().includes(search) ||
         zone.name.toLowerCase().includes(search) ||
-        (zone.centerName && zone.centerName.toLowerCase().includes(search))
+        (zone.centerName && zone.centerName.toLowerCase().includes(search)),
     )
   }
 
@@ -441,13 +503,15 @@ const viewZoneDetail = (zone: ZoneDto) => {
 // Load data on mount
 onMounted(async () => {
   await loadCenters()
-  await loadZones({ filters: filters.value, sorts: sorts.value })
+  await loadZones()
 })
 
 // Watch for search changes with debounce
-let searchTimeout: NodeJS.Timeout
+let searchTimeout: ReturnType<typeof setTimeout> | null = null
 watch(searchValue, (newValue) => {
-  clearTimeout(searchTimeout)
+  if (searchTimeout) {
+    clearTimeout(searchTimeout)
+  }
   searchTimeout = setTimeout(() => {
     handleSearch(newValue)
   }, 300)
@@ -457,20 +521,26 @@ const onSortingChange = (newSorting: SortingState): void => {
   // Convert sorting to store format
   const newSorts = newSorting.map((sort) => ({
     field: sort.id,
-    direction: sort.desc ? 'desc' as const : 'asc' as const,
+    direction: sort.desc ? ('desc' as const) : ('asc' as const),
   }))
 
-  sorts.value = newSorts
+  setSorts(newSorts)
   sorting.value = newSorting
 
-  loadZones({ filters: filters.value, sorts: sorts.value }) // Reload data with new sorting
+  loadZones()
+}
+
+const clearSorting = () => {
+  sorting.value = []
+  setSorts([])
+  loadZones()
 }
 
 // Watch for sorts changes and sync with sorting
 watch(
-  sorts,
-  (newSorts: any[]) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-    const newSorting = newSorts.map((sort: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+  storeSorts,
+  (newSorts: SortConfig[]) => {
+    const newSorting = newSorts.map((sort: SortConfig) => ({
       id: sort.field,
       desc: sort.direction === 'desc',
     }))
@@ -514,15 +584,13 @@ watch(
       <!-- Advanced Filters Button -->
       <div class="flex justify-between items-center">
         <!-- Active Filters Display -->
-        <div v-if="getAllActiveFilters() && getAllActiveFilters()!.length > 0" class="flex items-center gap-2">
+        <div
+          v-if="getAllActiveFilters() && getAllActiveFilters()!.length > 0"
+          class="flex items-center gap-2"
+        >
           <span class="text-sm text-gray-600 dark:text-gray-400">Active filters:</span>
           <div class="flex items-center gap-1">
-            <UBadge
-              color="primary"
-              variant="soft"
-              size="sm"
-              class="max-w-md"
-            >
+            <UBadge color="primary" variant="soft" size="sm" class="max-w-md">
               {{ getFilterStructure() }}
             </UBadge>
           </div>
@@ -575,7 +643,7 @@ watch(
           size="xs"
           color="neutral"
           icon="i-heroicons-x-mark"
-          @click="sorting = []"
+          @click="clearSorting"
           title="Clear all sorting"
         />
       </div>
@@ -583,7 +651,11 @@ watch(
 
     <!-- Bulk Actions -->
     <div
-      v-if="table && table?.tableApi?.getFilteredSelectedRowModel()?.rows && (table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0) > 0"
+      v-if="
+        table &&
+        table?.tableApi?.getFilteredSelectedRowModel()?.rows &&
+        (table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0) > 0
+      "
       class="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
     >
       <div class="flex items-center justify-between">
@@ -633,11 +705,7 @@ watch(
             }}
           </p>
           <div class="mt-6">
-            <UButton
-              v-if="!searchValue"
-              icon="i-heroicons-plus"
-              @click="openCreateModal"
-            >
+            <UButton v-if="!searchValue" icon="i-heroicons-plus" @click="openCreateModal">
               Add Zone
             </UButton>
             <UButton v-else variant="soft" @click="clearFilters"> Clear Filters </UButton>
@@ -647,10 +715,7 @@ watch(
     </UCard>
 
     <!-- Pagination -->
-    <div
-      v-if="!loading && filteredZones.length > 0"
-      class="mt-6 flex items-center justify-between"
-    >
+    <div v-if="!loading && filteredZones.length > 0" class="mt-6 flex items-center justify-between">
       <div class="text-sm text-gray-700 dark:text-gray-300">
         Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
         {{ total }} results

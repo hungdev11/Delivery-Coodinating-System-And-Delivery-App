@@ -6,10 +6,12 @@
 
 import { ref } from 'vue'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
-import { getUsers, createUser, updateUser, deleteUser } from '../api'
+import { getUsers, getUsersV2, createUser, updateUser, deleteUser } from '../api'
 import { UserDto, CreateUserRequest, UpdateUserRequest } from '../model.type'
 import type { FilterGroup, SortConfig, FilterableColumn } from '@/common/types/filter'
 import { createEmptyFilterGroup } from '@/common/utils/query-builder'
+import { convertV1ToV2Filter } from '@/common/utils/filter-v2-converter'
+import type { FilterGroupItemV2 } from '@/common/types/filter-v2'
 
 export function useUsers() {
   const toast = useToast()
@@ -25,6 +27,7 @@ export function useUsers() {
   const filters = ref<FilterGroup>(createEmptyFilterGroup())
   const sorts = ref<SortConfig[]>([])
   const useAdvancedSearch = ref(true)
+  const useV2Api = ref(true) // Use V2 API by default
 
   /**
    * Load users
@@ -32,13 +35,31 @@ export function useUsers() {
   const loadUsers = async () => {
     loading.value = true
     try {
-      const response = await getUsers({
-        filters: filters.value.conditions.length > 0 ? filters.value : undefined,
+      // Convert V1 filter to V2 format if using V2 API
+      let filtersToSend: FilterGroup | FilterGroupItemV2 | undefined = undefined
+
+      if (filters.value.conditions.length > 0) {
+        if (useV2Api.value) {
+          // Convert V1 FilterGroup to V2 FilterGroupItemV2
+          filtersToSend = convertV1ToV2Filter(filters.value)
+        } else {
+          // Use V1 format as-is
+          filtersToSend = filters.value
+        }
+      }
+
+      const params = {
+        filters: filtersToSend,
         sorts: sorts.value.length > 0 ? sorts.value : undefined,
         page: page.value,
         size: pageSize.value,
         search: searchQuery.value || undefined,
-      })
+      }
+
+      // Use V2 API if enabled, otherwise fall back to V1
+      const response = useV2Api.value
+        ? await getUsersV2(params)
+        : await getUsers(params)
 
       if (response.result) {
         users.value = response.result.data.map((u) => new UserDto(u))
@@ -259,6 +280,17 @@ export function useUsers() {
         },
       },
       {
+        field: 'fullName',
+        label: 'Full Name',
+        type: 'string',
+        caseSensitive: false,
+        filterable: true,
+        filterType: 'text',
+        filterConfig: {
+          placeholder: 'Enter full name...',
+        },
+      },
+      {
         field: 'phone',
         label: 'Phone',
         type: 'string',
@@ -351,6 +383,7 @@ export function useUsers() {
     filters,
     sorts,
     useAdvancedSearch,
+    useV2Api,
     loadUsers,
     create,
     update,

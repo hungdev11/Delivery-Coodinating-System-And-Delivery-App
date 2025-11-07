@@ -21,10 +21,17 @@ export const getSettingsByGroup = async (group: string): Promise<GetSettingsResp
 }
 
 /**
- * List settings using POST API call
+ * List settings using POST API call - V1 endpoint
  */
 export const listSettings = async (query: any): Promise<GetSettingsResponse> => {
   return apiClient.post<GetSettingsResponse, any>(`/v1/settings`, query)
+}
+
+/**
+ * List settings using POST API call - V2 endpoint
+ */
+export const listSettingsV2 = async (query: any): Promise<GetSettingsResponse> => {
+  return apiClient.post<GetSettingsResponse, any>(`/v2/settings`, query)
 }
 
 /**

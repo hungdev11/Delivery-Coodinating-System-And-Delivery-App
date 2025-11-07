@@ -5,7 +5,7 @@
  * View for managing system settings with UTable and Nuxt UI v3 best practices
  */
 
-import { onMounted, ref, watch, resolveComponent, h, defineAsyncComponent } from 'vue'
+import { onMounted, ref, watch, reactive, resolveComponent, h, defineAsyncComponent } from 'vue'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
 import { PageHeader } from '@/common/components'
 import { SystemSettingDto } from './model.type'
@@ -15,7 +15,6 @@ import type { TableColumn } from '@nuxt/ui'
 import type { SortingState } from '@tanstack/table-core'
 import { storeToRefs } from 'pinia'
 import TableHeaderCell from '@/common/components/TableHeaderCell.vue'
-import ColumnFilter from '@/common/components/filters/ColumnFilter.vue'
 import type { Column } from '@tanstack/table-core'
 import type { FilterableColumn, FilterCondition } from '@/common/types/filter'
 
@@ -63,6 +62,7 @@ const selected = ref<SystemSettingDto[]>([])
 const sorting = ref<Array<{ id: string; desc: boolean }>>([])
 const visiblePasswords = ref<Set<string>>(new Set())
 const activeFilters = ref<FilterCondition[]>([])
+const columnFiltersState = reactive<Record<string, FilterCondition[]>>({})
 
 // Filterable columns configuration
 const filterableColumns: FilterableColumn[] = [
@@ -292,6 +292,7 @@ const getColumnLabel = (columnId: string): string => {
  */
 const handleSearch = () => {
   settingsStore.setSearch(searchValue.value)
+  settingsStore.setPage(0)
   loadSettings()
 }
 
@@ -314,12 +315,7 @@ const handlePageChange = (page: number) => {
  * Load settings using store
  */
 const loadSettings = async () => {
-  await settingsStore.loadSettings({
-    filters: activeFilters.value.length > 0 ? {
-      logic: 'AND',
-      conditions: activeFilters.value
-    } : undefined
-  })
+  await settingsStore.loadSettings()
 }
 
 /**
@@ -397,40 +393,6 @@ const getTypeColor = (type: string) => {
 }
 
 /**
- * Get display mode color
- */
-const getDisplayModeColor = (displayMode: string) => {
-  const colorMap: Record<string, string> = {
-    TEXT: 'blue',
-    PASSWORD: 'red',
-    CODE: 'purple',
-    NUMBER: 'green',
-    TOGGLE: 'yellow',
-    TEXTAREA: 'indigo',
-    URL: 'cyan',
-    EMAIL: 'pink',
-  }
-  return colorMap[displayMode] || 'gray'
-}
-
-/**
- * Get display mode label
- */
-const getDisplayModeLabel = (displayMode: string) => {
-  const labelMap: Record<string, string> = {
-    TEXT: 'Text',
-    PASSWORD: 'Password',
-    CODE: 'Code',
-    NUMBER: 'Number',
-    TOGGLE: 'Toggle',
-    TEXTAREA: 'Textarea',
-    URL: 'URL',
-    EMAIL: 'Email',
-  }
-  return labelMap[displayMode] || displayMode
-}
-
-/**
  * Get display value based on display mode
  */
 const getDisplayValue = (setting: SystemSettingDto) => {
@@ -461,13 +423,46 @@ const togglePasswordVisibility = (key: string) => {
   }
 }
 
-/**
- * Handle filters update from column filters
- */
-const handleFiltersUpdate = (filters: FilterCondition[]) => {
-  activeFilters.value = filters
+interface ColumnFilterUpdatePayload {
+  columnId: string
+  filters: FilterCondition[]
+}
+
+const applyColumnFilters = () => {
+  const columnFilters = Object.values(columnFiltersState).flat()
+  activeFilters.value = columnFilters
+
+  const filterGroup = columnFilters.length > 0
+    ? {
+        logic: 'AND' as const,
+        conditions: columnFilters,
+      }
+    : undefined
+
+  settingsStore.setFilters(filterGroup)
+  settingsStore.setPage(0)
   loadSettings()
-  console.log('Filters updated:', filters)
+}
+
+const handleFiltersUpdate = ({ columnId, filters }: ColumnFilterUpdatePayload) => {
+  if (filters.length > 0) {
+    columnFiltersState[columnId] = filters.map((filter) => ({ ...filter }))
+  } else {
+    delete columnFiltersState[columnId]
+  }
+
+  applyColumnFilters()
+}
+
+const clearAllFilters = () => {
+  Object.keys(columnFiltersState).forEach((key) => {
+    delete columnFiltersState[key]
+  })
+  activeFilters.value = []
+  settingsStore.clearFilters()
+  settingsStore.setFilters(undefined)
+  settingsStore.setPage(0)
+  loadSettings()
 }
 
 /**
@@ -619,7 +614,7 @@ onMounted(async () => {
             <UButton v-if="!searchValue" icon="i-heroicons-plus" @click="openCreateModal">
               Add Setting
             </UButton>
-            <UButton v-else variant="soft" @click="searchValue = ''"> Clear Filters </UButton>
+            <UButton v-else variant="soft" @click="clearAllFilters"> Clear Filters </UButton>
           </div>
         </div>
       </template>

@@ -11,6 +11,7 @@ import {
   ref,
   computed,
   watch,
+  reactive,
   resolveComponent,
   h,
 } from 'vue'
@@ -22,10 +23,9 @@ import { useTemplateRef } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 import AdvancedFilterDrawer from '../../common/components/filters/AdvancedFilterDrawer.vue'
 import type { SortingState } from '@tanstack/table-core'
-import type { FilterCondition, FilterGroup, FilterableColumn } from '../../common/types/filter'
+import type { FilterCondition, FilterGroup } from '../../common/types/filter'
 import { createSortConfig } from '../../common/utils/query-builder'
 import TableHeaderCell from '../../common/components/TableHeaderCell.vue'
-import ColumnFilter from '../../common/components/filters/ColumnFilter.vue'
 
 // Dynamic imports to avoid TypeScript issues
 const PageHeader = defineAsyncComponent(() => import('../../common/components/PageHeader.vue'))
@@ -40,7 +40,6 @@ const UButton = resolveComponent('UButton')
 const router = useRouter()
 const overlay = useOverlay()
 const table = useTemplateRef('table')
-
 
 // Composables
 const {
@@ -69,6 +68,8 @@ const { exportUsers } = useUserExport()
 const selected = ref<UserDto[]>([])
 const sorting = ref<Array<{ id: string; desc: boolean }>>([])
 const activeFilters = ref<FilterCondition[]>([])
+const columnFiltersState = reactive<Record<string, FilterCondition[]>>({})
+const advancedFiltersGroup = ref<FilterGroup | undefined>(undefined)
 
 // Search and filter state
 const searchValue = ref('')
@@ -94,13 +95,14 @@ const setupHeader = ({
     inactiveColor?: string
     filterable?: boolean
   }
-}) => h(TableHeaderCell<UserDto>, {
-  column,
-  config,
-  filterableColumns: filterableColumns.value,
-  activeFilters: activeFilters.value,
-  'onUpdate:filters': handleFiltersUpdate
-})
+}) =>
+  h(TableHeaderCell<UserDto>, {
+    column,
+    config,
+    filterableColumns: filterableColumns.value,
+    activeFilters: activeFilters.value,
+    'onUpdate:filters': handleFiltersUpdate,
+  })
 
 // Helper function to get all active filters
 const getAllActiveFilters = (): FilterCondition[] | undefined => {
@@ -134,21 +136,25 @@ const getFilterStructure = (): string => {
     } else if ('conditions' in item) {
       // It's a FilterGroup
       const group = item as FilterGroup
-      const groupContent = group.conditions.map((subItem, subIndex) => {
-        const itemStr = formatItem(subItem)
-        // Add logic operator between items (except first item)
-        return subIndex > 0 && subItem.logic ? `${subItem.logic} ${itemStr}` : itemStr
-      }).join(' ')
+      const groupContent = group.conditions
+        .map((subItem, subIndex) => {
+          const itemStr = formatItem(subItem)
+          // Add logic operator between items (except first item)
+          return subIndex > 0 && subItem.logic ? `${subItem.logic} ${itemStr}` : itemStr
+        })
+        .join(' ')
       return `(${groupContent})`
     }
     return ''
   }
 
-  return filters.value.conditions.map((item, index) => {
-    const itemStr = formatItem(item)
-    // Add logic operator between items (except first item)
-    return index > 0 && item.logic ? `${item.logic} ${itemStr}` : itemStr
-  }).join(' ')
+  return filters.value.conditions
+    .map((item, index) => {
+      const itemStr = formatItem(item)
+      // Add logic operator between items (except first item)
+      return index > 0 && item.logic ? `${item.logic} ${itemStr}` : itemStr
+    })
+    .join(' ')
 }
 
 // Helper function to get active filter group
@@ -159,11 +165,17 @@ const getActiveFilterGroup = (): FilterGroup | undefined => {
 
 // Advanced filter handlers
 const handleAdvancedFilterApply = (filterGroup: FilterGroup) => {
-  updateFilters(filterGroup)
+  advancedFiltersGroup.value = filterGroup && filterGroup.conditions.length > 0 ? filterGroup : undefined
+  applyCombinedFilters()
   showAdvancedFilters.value = false
 }
 
 const handleAdvancedFilterClear = () => {
+  advancedFiltersGroup.value = undefined
+  Object.keys(columnFiltersState).forEach((key) => {
+    delete columnFiltersState[key]
+  })
+  activeFilters.value = []
   clearFilters()
   showAdvancedFilters.value = false
 }
@@ -171,9 +183,46 @@ const handleAdvancedFilterClear = () => {
 /**
  * Handle filters update from column filters
  */
-const handleFiltersUpdate = (filters: FilterCondition[]) => {
-  activeFilters.value = filters
-  console.log('Filters updated:', filters)
+interface ColumnFilterUpdatePayload {
+  columnId: string
+  filters: FilterCondition[]
+}
+
+const applyCombinedFilters = () => {
+  const columnFilters = Object.values(columnFiltersState).flat()
+
+  const combinedConditions: (FilterCondition | FilterGroup)[] = []
+
+  if (advancedFiltersGroup.value && advancedFiltersGroup.value.conditions.length > 0) {
+    combinedConditions.push(advancedFiltersGroup.value)
+  }
+
+  if (columnFilters.length > 0) {
+    combinedConditions.push(...columnFilters)
+  }
+
+  if (combinedConditions.length === 0) {
+    clearFilters()
+    return
+  }
+
+  updateFilters({
+    logic: 'AND',
+    conditions: combinedConditions,
+  })
+}
+
+const handleFiltersUpdate = ({ columnId, filters }: ColumnFilterUpdatePayload) => {
+  if (filters.length > 0) {
+    columnFiltersState[columnId] = filters.map((filter) => ({ ...filter }))
+  } else {
+    delete columnFiltersState[columnId]
+  }
+
+  const columnFilters = Object.values(columnFiltersState).flat()
+  activeFilters.value = columnFilters
+
+  applyCombinedFilters()
 }
 
 // Table columns configuration
@@ -338,15 +387,6 @@ const filteredUsers = computed(() => {
 
   return filtered
 })
-
-// Status options for filter
-const statusOptions = [
-  { label: 'All Status', value: '' },
-  { label: 'Active', value: 'ACTIVE' },
-  { label: 'Inactive', value: 'INACTIVE' },
-  { label: 'Suspended', value: 'SUSPENDED' },
-  { label: 'Pending', value: 'PENDING' },
-]
 
 /**
  * Open create modal
@@ -544,15 +584,13 @@ watch(
       <!-- Advanced Filters Button -->
       <div class="flex justify-between items-center">
         <!-- Active Filters Display -->
-        <div v-if="getAllActiveFilters() && getAllActiveFilters()!.length > 0" class="flex items-center gap-2">
+        <div
+          v-if="getAllActiveFilters() && getAllActiveFilters()!.length > 0"
+          class="flex items-center gap-2"
+        >
           <span class="text-sm text-gray-600 dark:text-gray-400">Active filters:</span>
           <div class="flex items-center gap-1">
-            <UBadge
-              color="primary"
-              variant="soft"
-              size="sm"
-              class="max-w-md"
-            >
+            <UBadge color="primary" variant="soft" size="sm" class="max-w-md">
               {{ getFilterStructure() }}
             </UBadge>
           </div>
@@ -613,7 +651,11 @@ watch(
 
     <!-- Bulk Actions -->
     <div
-      v-if="table && table?.tableApi?.getFilteredSelectedRowModel()?.rows && (table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0) > 0"
+      v-if="
+        table &&
+        table?.tableApi?.getFilteredSelectedRowModel()?.rows &&
+        (table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0) > 0
+      "
       class="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
     >
       <div class="flex items-center justify-between">
@@ -685,10 +727,7 @@ watch(
     </UCard>
 
     <!-- Pagination -->
-    <div
-      v-if="!loading && filteredUsers.length > 0"
-      class="mt-6 flex items-center justify-between"
-    >
+    <div v-if="!loading && filteredUsers.length > 0" class="mt-6 flex items-center justify-between">
       <div class="text-sm text-gray-700 dark:text-gray-300">
         Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
         {{ total }} results

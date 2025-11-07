@@ -41,9 +41,19 @@ public interface IUserServiceClient {
     CompletableFuture<Void> deleteUser(String userId);
 
     /**
+     * Get users with filtering/sorting/paging using V0 API (POST)
+     */
+    CompletableFuture<PagedData<UserDto>> getUsersV0(PagingRequest query);
+
+    /**
      * Get users with filtering/sorting/paging (POST)
      */
     CompletableFuture<PagedData<UserDto>> getUsers(PagingRequest query);
+    
+    /**
+     * Get users with filtering/sorting/paging using V2 API (POST)
+     */
+    CompletableFuture<PagedData<UserDto>> getUsersV2(PagingRequest query);
     
     /**
      * Sync user by Keycloak ID (create or update)
