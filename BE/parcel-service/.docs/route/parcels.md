@@ -1,11 +1,116 @@
 # Parcel Routes
 
-Base URL: `http://localhost:<port>/api/v1/parcels`
+## API Versions
 
-## Endpoints
+- **V0**: Simple paging and sorting (no dynamic filters) - `http://localhost:<port>/api/v0/parcels`
+- **V1**: Dynamic filtering with group-level operations - `http://localhost:<port>/api/v1/parcels`
+- **V2**: Enhanced filtering with pair-level operations - `http://localhost:<port>/api/v2/parcels`
+
+## V0 Endpoints (Simple Paging)
+
+### POST /v0/parcels
+- Description: Get all parcels with simple paging and sorting (no dynamic filters).
+- Body:
+```json
+{
+  "page": 0,
+  "size": 10,
+  "sorts": [
+    {
+      "field": "createdAt",
+      "direction": "desc"
+    }
+  ],
+  "search": "optional",
+  "selected": []
+}
+```
+- Response 200:
+```json
+{
+  "result": {
+    "data": [{
+      "id": "uuid",
+      "code": "PARCEL001",
+      "status": "PENDING",
+      "createdAt": "2025-01-15T10:30:00Z"
+    }],
+    "page": { "page": 0, "size": 10, "totalElements": 1, "totalPages": 1, "filters": null, "sorts": [...] }
+  }
+}
+```
+
+## V1 Endpoints (Dynamic Filtering - Group Level)
+
+### POST /v1/parcels (Replaces GET /v1/parcels)
+- Description: Get all parcels with advanced filtering and sorting.
+- Body:
+```json
+{
+  "page": 0,
+  "size": 10,
+  "filters": {
+    "logic": "AND",
+    "conditions": [
+      {
+        "field": "status",
+        "operator": "eq",
+        "value": "PENDING"
+      }
+    ]
+  },
+  "sorts": [
+    {
+      "field": "createdAt",
+      "direction": "desc"
+    }
+  ],
+  "selected": []
+}
+```
+- Response 200: Same as V0
+
+## V2 Endpoints (Enhanced Filtering - Pair Level)
+
+### POST /v2/parcels
+- Description: Get all parcels with enhanced filtering (operations between each pair).
+- Body:
+```json
+{
+  "page": 0,
+  "size": 10,
+  "filters": {
+    "type": "group",
+    "items": [
+      {
+        "type": "condition",
+        "field": "status",
+        "operator": "EQUALS",
+        "value": "PENDING"
+      },
+      {
+        "type": "operator",
+        "value": "OR"
+      },
+      {
+        "type": "condition",
+        "field": "status",
+        "operator": "EQUALS",
+        "value": "IN_TRANSIT"
+      }
+    ]
+  },
+  "sorts": [],
+  "selected": []
+}
+```
+- Response 200: Same as V0
+
+## Common Endpoints (All Versions)
 
 ### POST /parcels
 - Description: Create a new parcel.
+- Base URL: `http://localhost:<port>/api/v1/parcels`
 - Body:
 ```json
 {

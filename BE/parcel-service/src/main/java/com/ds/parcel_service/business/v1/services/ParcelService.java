@@ -198,6 +198,45 @@ public class ParcelService implements IParcelService{
         return PageResponse.from(parcels.map(this::toDto));
     }
 
+    @Override
+    public PageResponse<ParcelResponse> getParcelsV0(com.ds.parcel_service.common.entities.dto.request.PagingRequestV0 request) {
+        // V0: Simple paging with sorting only, no dynamic filters
+        Pageable pageable = PageUtil.build(
+            request.getPage(),
+            request.getSize(),
+            null,
+            "DESC",
+            Parcel.class
+        );
+        
+        Page<Parcel> parcels = parcelRepository.findAll(pageable);
+        return PageResponse.from(parcels.map(this::toDto));
+    }
+
+    @Override
+    public PageResponse<ParcelResponse> getParcelsV2(com.ds.parcel_service.common.entities.dto.request.PagingRequestV2 request) {
+        // V2: Enhanced filtering with operations between each pair
+        Specification<Parcel> spec = Specification.where(null);
+        
+        if (request.getFiltersOrNull() != null) {
+            spec = com.ds.parcel_service.common.utils.EnhancedQueryParserV2.parseFilterGroup(
+                request.getFiltersOrNull(),
+                Parcel.class
+            );
+        }
+
+        Pageable pageable = PageUtil.build(
+            request.getPage(),
+            request.getSize(),
+            null,
+            "DESC",
+            Parcel.class
+        );
+
+        Page<Parcel> parcels = parcelRepository.findAll(spec, pageable);
+        return PageResponse.from(parcels.map(this::toDto));
+    }
+
     private ParcelResponse toDto(Parcel parcel) {
         // [Logic: get phone number here]
         return ParcelResponse.builder()

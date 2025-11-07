@@ -19,17 +19,31 @@ import type { QueryPayload } from '@/common/types/filter'
 const apiClient = new AxiosHttpClient(import.meta.env.VITE_API_URL)
 
 /**
- * Get list of users (paginated) - Legacy endpoint
+ * Get list of users (paginated) - V1 endpoint
  */
 export const getUsers = async (params: QueryPayload): Promise<GetUsersResponse> => {
   return apiClient.post<GetUsersResponse, QueryPayload>('/v1/users', params)
 }
 
 /**
- * Get current user
+ * Get list of users (paginated) - V2 endpoint
+ */
+export const getUsersV2 = async (params: QueryPayload): Promise<GetUsersResponse> => {
+  return apiClient.post<GetUsersResponse, QueryPayload>('/v2/users', params)
+}
+
+/**
+ * Get current user - V1 endpoint
  */
 export const getCurrentUser = async (): Promise<GetUserResponse> => {
   return apiClient.get<GetUserResponse>('/v1/users/me')
+}
+
+/**
+ * Get current user - V2 endpoint
+ */
+export const getCurrentUserV2 = async (): Promise<GetUserResponse> => {
+  return apiClient.get<GetUserResponse>('/v2/users/me')
 }
 
 /**

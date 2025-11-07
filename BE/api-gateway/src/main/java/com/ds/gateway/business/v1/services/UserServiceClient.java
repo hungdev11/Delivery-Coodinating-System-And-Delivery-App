@@ -98,11 +98,39 @@ public class UserServiceClient implements IUserServiceClient {
     
 
     @Override
+    public CompletableFuture<PagedData<UserDto>> getUsersV0(PagingRequest query) {
+        log.debug("Getting users via POST V0 with simple paging/sorting");
+
+        return userServiceWebClient.post()
+            .uri("/api/v0/users")
+            .bodyValue(query)
+            .retrieve()
+            .bodyToMono(new ParameterizedTypeReference<BaseResponse<PagedData<UserDto>>>() {})
+            .map(BaseResponse::getResult)
+            .onErrorMap(ex -> new ServiceUnavailableException("User service unavailable: " + ex.getMessage(), ex))
+            .toFuture();
+    }
+
+    @Override
     public CompletableFuture<PagedData<UserDto>> getUsers(PagingRequest query) {
         log.debug("Getting users via POST with filters/sorts/paging");
 
         return userServiceWebClient.post()
             .uri("/api/v1/users")
+            .bodyValue(query)
+            .retrieve()
+            .bodyToMono(new ParameterizedTypeReference<BaseResponse<PagedData<UserDto>>>() {})
+            .map(BaseResponse::getResult)
+            .onErrorMap(ex -> new ServiceUnavailableException("User service unavailable: " + ex.getMessage(), ex))
+            .toFuture();
+    }
+    
+    @Override
+    public CompletableFuture<PagedData<UserDto>> getUsersV2(PagingRequest query) {
+        log.debug("Getting users via POST V2 with enhanced filtering");
+
+        return userServiceWebClient.post()
+            .uri("/api/v2/users")
             .bodyValue(query)
             .retrieve()
             .bodyToMono(new ParameterizedTypeReference<BaseResponse<PagedData<UserDto>>>() {})

@@ -153,23 +153,11 @@ public class EnhancedQueryParser {
     }
 
     /**
-     * Parse individual filter condition with enhanced logic
+     * Build predicate from operator, value, and path (public for V2 parser)
      */
-    private static <T> Predicate parseFilterCondition(Root<T> root, CriteriaBuilder criteriaBuilder, 
-                                                    FilterCondition condition, Class<T> entityClass) {
+    public static Predicate buildPredicate(CriteriaBuilder criteriaBuilder, Path<?> fieldPath, 
+                                           FilterOperator operator, Object value, Boolean caseSensitive) {
         try {
-            String field = condition.getField();
-            FilterOperator operator = condition.getOperator();
-            Object value = condition.getValue();
-            Boolean caseSensitive = condition.getCaseSensitive();
-
-            // Get field path
-            Path<?> fieldPath = getFieldPath(root, field);
-            if (fieldPath == null) {
-                log.warn("Field path not found: {}", field);
-                return null;
-            }
-
             // Handle different operators
             switch (operator) {
                 case EQUALS:
@@ -237,6 +225,33 @@ public class EnhancedQueryParser {
                     log.warn("Unsupported operator: {}", operator);
                     return null;
             }
+        } catch (Exception e) {
+            log.error("Error building predicate: operator={}, value={}, error={}", 
+                    operator, value, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Parse individual filter condition with enhanced logic
+     */
+    private static <T> Predicate parseFilterCondition(Root<T> root, CriteriaBuilder criteriaBuilder, 
+                                                    FilterCondition condition, Class<T> entityClass) {
+        try {
+            String field = condition.getField();
+            FilterOperator operator = condition.getOperator();
+            Object value = condition.getValue();
+            Boolean caseSensitive = condition.getCaseSensitive();
+
+            // Get field path
+            Path<?> fieldPath = getFieldPath(root, field);
+            if (fieldPath == null) {
+                log.warn("Field path not found: {}", field);
+                return null;
+            }
+
+            // Use the shared buildPredicate method
+            return buildPredicate(criteriaBuilder, fieldPath, operator, value, caseSensitive);
             
         } catch (Exception e) {
             log.error("Error parsing filter condition: field={}, operator={}, value={}, error={}", 

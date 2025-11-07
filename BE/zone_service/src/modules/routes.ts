@@ -14,7 +14,10 @@ const routes = Router();
 
 // Register module routes
 routes.use('/centers', centerRouter);
-routes.use('/zones', zoneRouter);
+
+// Zone routes - V0, V1, V2
+routes.use('/zones', zoneRouter); // V1 (default)
+
 routes.use('/routing', routingRouter);
 routes.use('/addresses', addressRouter);
 routes.use('/osrm', osrmDataRouter);
