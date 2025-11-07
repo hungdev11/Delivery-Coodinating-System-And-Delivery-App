@@ -22,7 +22,7 @@ export interface DemoRouteRequest {
   priorityGroups: PriorityGroup[]
   steps?: boolean
   annotations?: boolean
-  mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base'
+  mode?: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base'
   strategy?: 'strict_urgent' | 'flexible'  // 🚨 Cách xử lý URGENT
   vehicle?: 'car' | 'motorbike'  // Vehicle type (default: motorbike)
 }
@@ -33,7 +33,7 @@ export interface RouteRequest {
   alternatives?: boolean
   steps?: boolean
   annotations?: boolean
-  mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base'
+  mode?: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base'
   vehicle?: 'car' | 'motorbike'  // Vehicle type (default: motorbike)
 }
 
@@ -109,20 +109,59 @@ export interface DemoRouteResponseData {
 export type RouteResponse = IApiResponse<RouteResponseData>
 export type DemoRouteResponse = IApiResponse<DemoRouteResponseData>
 
+// ============================================
+// PRIORITY SYSTEM (1-10 Scale)
+// ============================================
+// New system: 1-10 scale where higher = more urgent
+// 10: URGENT (khẩn cấp - giao ngay)
+// 7-9: EXPRESS (nhanh - ưu tiên cao)
+// 4-6: NORMAL (bình thường)
+// 2-3: ECONOMY (tiết kiệm)
+// 1: LOW (thấp nhất)
+//
+// Legacy support: 0-4 scale is auto-converted to 1-10
+// ============================================
+
 export const PriorityLevel = {
-  URGENT: 0,     // 🚨 Gấp tuyệt đối - phải giao đầu tiên
-  EXPRESS: 1,    // 🔥 Đơn hàng gấp
-  FAST: 2,       // ⚡ Giao nhanh
-  NORMAL: 3,     // 📦 Đơn bình thường
-  ECONOMY: 4,    // 💰 Ưu tiên giá (có thể giao sau)
+  // Legacy (0-4) - backward compatible
+  URGENT: 0,     // Legacy: auto-converts to 10
+  EXPRESS: 1,    // Legacy: auto-converts to 8
+  FAST: 2,       // Legacy: auto-converts to 6
+  NORMAL: 3,     // Legacy: auto-converts to 4
+  ECONOMY: 4,    // Legacy: auto-converts to 2
+
+  // New scale (1-10) - recommended
+  URGENT_10: 10,      // 🚨 Khẩn cấp tuyệt đối - giao ngay
+  EXPRESS_HIGH_9: 9,  // 🔥 Express cao nhất
+  EXPRESS_8: 8,       // 🔥 Express tiêu chuẩn
+  EXPRESS_STANDARD_7: 7, // 🔥 Express cơ bản
+  NORMAL_HIGH_6: 6,   // 📦 Normal cao
+  NORMAL_5: 5,        // 📦 Normal trung bình
+  NORMAL_STANDARD_4: 4, // 📦 Normal tiêu chuẩn
+  ECONOMY_HIGH_3: 3,  // 💰 Economy cao
+  ECONOMY_2: 2,       // 💰 Economy tiêu chuẩn
+  LOW_1: 1,           // 🐢 Thấp nhất
 } as const
 
 export const PriorityLabel = {
+  // Legacy labels (0-4)
   [PriorityLevel.URGENT]: '🚨 Urgent (Gấp tuyệt đối)',
   [PriorityLevel.EXPRESS]: '🔥 Express (Đơn hàng gấp)',
   [PriorityLevel.FAST]: '⚡ Fast (Giao nhanh)',
   [PriorityLevel.NORMAL]: '📦 Normal (Bình thường)',
   [PriorityLevel.ECONOMY]: '💰 Economy (Ưu tiên giá)',
+
+  // New scale labels (1-10)
+  10: '🚨 P10: URGENT (Khẩn cấp tuyệt đối)',
+  9: '🔥 P9: EXPRESS HIGH (Express cao nhất)',
+  8: '🔥 P8: EXPRESS (Express tiêu chuẩn)',
+  7: '🔥 P7: EXPRESS STANDARD (Express cơ bản)',
+  6: '📦 P6: NORMAL HIGH (Normal cao)',
+  5: '📦 P5: NORMAL (Normal trung bình)',
+  4: '📦 P4: NORMAL STANDARD (Normal tiêu chuẩn)',
+  3: '💰 P3: ECONOMY HIGH (Economy cao)',
+  2: '💰 P2: ECONOMY (Economy tiêu chuẩn)',
+  1: '🐢 P1: LOW (Thấp nhất)',
 } as const
 
 export type PriorityLevelType = (typeof PriorityLevel)[keyof typeof PriorityLevel]

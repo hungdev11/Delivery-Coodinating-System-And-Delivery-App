@@ -1,0 +1,200 @@
+# Docker Compose for Development Mode (Linux - Host Network)
+# This config uses network_mode: host for backend services
+# Services run directly on host network, can access localhost services directly
+#
+# ⚠️ LINUX ONLY - This does NOT work on Mac/Windows!
+# For Mac/Windows, use: docker-compose.dev.yml
+#
+# Usage:
+#   Production:  docker-compose up
+#   Development (Linux): docker-compose -f docker-compose.dev-linux.yml up
+#
+# Benefits:
+#   - No need for host.docker.internal
+#   - Services call each other via localhost:port
+#   - Can run any service locally, others in Docker
+#   - Minimal env config needed
+
+services:
+  # Settings Service
+  settings-service:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/Settings_service
+      dockerfile: Dockerfile
+    container_name: dss-settings-service
+    network_mode: host  # Run on host network (Linux only)
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: ${DB_HOST:-localhost}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SETTINGS_DB_NAME: ${SETTINGS_DB_NAME}
+      SERVER_PORT: 21502
+    # No ports needed with host network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:21502/actuator/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
+  # User Service
+  user-service:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/User_service
+      dockerfile: Dockerfile
+    container_name: dss-user-service
+    network_mode: host
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: ${DB_HOST:-localhost}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      USER_DB_NAME: ${USER_DB_NAME}
+      KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: master
+      KEYCLOAK_CLIENT_ID: dss-client
+      KEYCLOAK_CLIENT_SECRET: dss-secret
+      SETTINGS_SERVICE_URL: http://localhost:21502  # All services on localhost
+      SERVER_PORT: 21501
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:21501/actuator/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
+  # Zone Service
+  zone-service:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/zone_service
+      dockerfile: Dockerfile
+    container_name: dss-zone-service
+    network_mode: host
+    environment:
+      NODE_ENV: production
+      DB_HOST: ${DB_HOST:-localhost}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      ZONE_DB_CONNECTION: ${ZONE_DB_CONNECTION}
+      SETTINGS_SERVICE_URL: http://localhost:21502
+      # OSRM URLs - use localhost ports (OSRM runs in bridge network)
+      OSRM_V2_FULL_URL: http://localhost:25920
+      OSRM_V2_RATING_URL: http://localhost:25921
+      OSRM_V2_BLOCKING_URL: http://localhost:25922
+      OSRM_V2_BASE_URL: http://localhost:25923
+      PORT: 21503
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://127.0.0.1:21503/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
+  # API Gateway
+  api-gateway:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/api-gateway
+      dockerfile: Dockerfile
+    container_name: dss-api-gateway
+    network_mode: host
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: master
+      KEYCLOAK_CLIENT_ID: dss-client
+      USER_SERVICE_URL: http://localhost:21501  # All on localhost
+      SETTINGS_SERVICE_URL: http://localhost:21502
+      ZONE_SERVICE_URL: http://localhost:21503
+      SERVER_PORT: 21500
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:21500/actuator/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
+  # ============================================
+  # OSRM INSTANCES (Bridge Network with Port Mapping)
+  # These stay in default bridge network for isolation
+  # ============================================
+
+  # OSRM V2 Services (Simplified Architecture)
+  osrm-v2-full:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-full
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-full:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "25920:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  osrm-v2-rating-only:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-rating-only
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-rating-only:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "25921:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  osrm-v2-blocking-only:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-blocking-only
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-blocking-only:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "25922:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  osrm-v2-base:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-base
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-base:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "25923:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

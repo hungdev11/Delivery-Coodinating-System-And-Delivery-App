@@ -22,9 +22,8 @@ export interface RouteOptions {
   annotations?: boolean;   // Include additional metadata
   continue_straight?: boolean;
   vehicle?: 'car' | 'motorbike';  // Vehicle type (determines which OSRM profile to use)
-  // Routing mode determines WHICH motorbike OSRM instance to query
-
-  mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base';
+  // Routing mode determines WHICH OSRM instance to query (V2 modes only)
+  mode?: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base';
 }
 
 export interface OSRMRoute {
@@ -117,17 +116,11 @@ export class OSRMRouterService {
     // Motorbike clients are created per request based on mode
 
     logger.info(
-      `OSRM Router initialized - ` +
-      `Motorbike modes: strict_priority_with_delta=${process.env.OSRM_STRICT_PRIORITY_WITH_DELTA_URL || 'n/a'}, ` +
-      `flexible_priority_with_delta=${process.env.OSRM_FLEXIBLE_PRIORITY_WITH_DELTA_URL || 'n/a'}, ` +
-      `strict_priority_no_delta=${process.env.OSRM_STRICT_PRIORITY_NO_DELTA_URL || 'n/a'}, ` +
-      `flexible_priority_no_delta=${process.env.OSRM_FLEXIBLE_PRIORITY_NO_DELTA_URL || 'n/a'}, ` +
-      `base=${process.env.OSRM_BASE_URL || 'n/a'} | ` +
-      `Car modes: strict_priority_with_delta=${process.env.OSRM_CAR_STRICT_PRIORITY_WITH_DELTA_URL || 'n/a'}, ` +
-      `flexible_priority_with_delta=${process.env.OSRM_CAR_FLEXIBLE_PRIORITY_WITH_DELTA_URL || 'n/a'}, ` +
-      `strict_priority_no_delta=${process.env.OSRM_CAR_STRICT_PRIORITY_NO_DELTA_URL || 'n/a'}, ` +
-      `flexible_priority_no_delta=${process.env.OSRM_CAR_FLEXIBLE_PRIORITY_NO_DELTA_URL || 'n/a'}, ` +
-      `base=${process.env.OSRM_CAR_BASE_URL || 'n/a'}`
+      `OSRM Router initialized - V2 modes only: ` +
+      `full=${process.env.OSRM_V2_FULL_URL || 'n/a'}, ` +
+      `rating-only=${process.env.OSRM_V2_RATING_URL || 'n/a'}, ` +
+      `blocking-only=${process.env.OSRM_V2_BLOCKING_URL || 'n/a'}, ` +
+      `base=${process.env.OSRM_V2_BASE_URL || 'n/a'}`
     );
 
     // Load active instance from database
@@ -217,44 +210,34 @@ export class OSRMRouterService {
   }
 
   /**
-   * Select motorbike OSRM axios client based on routing mode
+   * Select motorbike OSRM axios client based on routing mode (V2 only)
    */
   private getMotorbikeClientForMode(
-    mode: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base' | undefined
+    mode: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base' | undefined
   ): AxiosInstance {
     const map: Record<string, string | undefined> = {
-      strict_priority_with_delta: process.env.OSRM_STRICT_PRIORITY_WITH_DELTA_URL,
-      flexible_priority_with_delta: process.env.OSRM_FLEXIBLE_PRIORITY_WITH_DELTA_URL,
-      strict_priority_no_delta: process.env.OSRM_STRICT_PRIORITY_NO_DELTA_URL,
-      flexible_priority_no_delta: process.env.OSRM_FLEXIBLE_PRIORITY_NO_DELTA_URL,
-      base: process.env.OSRM_BASE_URL,
+      'v2-full': process.env.OSRM_V2_FULL_URL,
+      'v2-rating-only': process.env.OSRM_V2_RATING_URL,
+      'v2-blocking-only': process.env.OSRM_V2_BLOCKING_URL,
+      'v2-base': process.env.OSRM_V2_BASE_URL,
     };
-    const selected = (mode && map[mode]) || process.env.OSRM_FLEXIBLE_PRIORITY_WITH_DELTA_URL || this.instance2Url;
+    const selected = (mode && map[mode]) || process.env.OSRM_V2_FULL_URL || 'http://localhost:25920';
     return axios.create({ baseURL: selected, timeout: 10000 });
   }
 
   /**
-   * Select car OSRM axios client based on routing mode
+   * Select car OSRM axios client based on routing mode (V2 only)
    */
   private getCarClientForMode(
-    mode: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base' | undefined
+    mode: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base' | undefined
   ): AxiosInstance {
     const map: Record<string, string | undefined> = {
-      strict_priority_with_delta: process.env.OSRM_CAR_STRICT_PRIORITY_WITH_DELTA_URL,
-      flexible_priority_with_delta: process.env.OSRM_CAR_FLEXIBLE_PRIORITY_WITH_DELTA_URL,
-      strict_priority_no_delta: process.env.OSRM_CAR_STRICT_PRIORITY_NO_DELTA_URL,
-      flexible_priority_no_delta: process.env.OSRM_CAR_FLEXIBLE_PRIORITY_NO_DELTA_URL,
-      base: process.env.OSRM_CAR_BASE_URL,
+      'v2-full': process.env.OSRM_V2_FULL_URL,
+      'v2-rating-only': process.env.OSRM_V2_RATING_URL,
+      'v2-blocking-only': process.env.OSRM_V2_BLOCKING_URL,
+      'v2-base': process.env.OSRM_V2_BASE_URL,
     };
-    // Fallback to legacy car instances if new ones not configured
-    const fallbackMap: Record<string, string | undefined> = {
-      strict_priority_with_delta: process.env.OSRM_INSTANCE_1_URL,
-      flexible_priority_with_delta: process.env.OSRM_INSTANCE_1_URL,
-      strict_priority_no_delta: process.env.OSRM_INSTANCE_2_URL,
-      flexible_priority_no_delta: process.env.OSRM_INSTANCE_2_URL,
-      base: process.env.OSRM_INSTANCE_2_URL,
-    };
-    const selected = (mode && map[mode]) || (mode && fallbackMap[mode]) || process.env.OSRM_INSTANCE_1_URL || this.instance1Url;
+    const selected = (mode && map[mode]) || process.env.OSRM_V2_FULL_URL || 'http://localhost:25920';
     return axios.create({ baseURL: selected, timeout: 10000 });
   }
 

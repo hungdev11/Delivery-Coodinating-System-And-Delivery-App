@@ -1,0 +1,233 @@
+# Docker Compose for Development Mode (Mac/Windows - Bridge Network)
+# This config uses host.docker.internal for backend services
+# Containers can access services running on host machine via host.docker.internal
+#
+# ✅ Works on Mac/Windows/Linux (cross-platform)
+# For Linux with better performance, consider: docker-compose.dev-linux.yml
+#
+# Usage:
+#   Production:  docker-compose up
+#   Development (Mac/Windows): docker-compose -f docker-compose.dev.yml up
+#
+# To run zone-service locally (recommended for debugging):
+#   1. Comment out zone-service service in this file (lines 84-120)
+#   2. Comment out zone-service dependency in api-gateway (lines 152-153)
+#   3. Set in .env file: ZONE_SERVICE_URL=http://host.docker.internal:21503
+#   4. Run: docker-compose -f docker-compose.dev.yml up -d
+#   5. Start zone-service locally: cd BE/zone_service && npm run dev
+#
+# ⚠️ IMPORTANT: If zone-service runs locally, you MUST:
+#   - Comment out zone-service service definition
+#   - Comment out zone-service dependency in api-gateway
+#   - Set ZONE_SERVICE_URL=http://host.docker.internal:21503 in .env
+
+services:
+  # Settings Service
+  settings-service:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/Settings_service
+      dockerfile: Dockerfile
+    container_name: dss-settings-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Mac/Windows/Linux support
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SETTINGS_DB_NAME: ${SETTINGS_DB_NAME}
+      SERVER_PORT: 21502
+    ports:
+      - "21502:21502"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:21502/actuator/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
+  # User Service
+  user-service:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/User_service
+      dockerfile: Dockerfile
+    container_name: dss-user-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      USER_DB_NAME: ${USER_DB_NAME}
+      KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: master
+      KEYCLOAK_CLIENT_ID: dss-client
+      KEYCLOAK_CLIENT_SECRET: dss-secret
+      # Support both Docker and localhost settings-service
+      SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:-http://settings-service:21502}
+      SERVER_PORT: 21501
+    ports:
+      - "21501:21501"
+    depends_on:
+      settings-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:21501/actuator/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
+  # Zone Service
+  zone-service:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/zone_service
+      dockerfile: Dockerfile
+    container_name: dss-zone-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      NODE_ENV: production
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      ZONE_DB_CONNECTION: ${ZONE_DB_CONNECTION}
+      # Support both Docker and localhost services
+      SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:-http://settings-service:21502}
+      # OSRM URLs - use localhost ports (OSRM exposes to host)
+      OSRM_V2_FULL_URL: http://host.docker.internal:25920
+      OSRM_V2_RATING_URL: http://host.docker.internal:25921
+      OSRM_V2_BLOCKING_URL: http://host.docker.internal:25922
+      OSRM_V2_BASE_URL: http://host.docker.internal:25923
+      PORT: 21503
+    ports:
+      - "21503:21503"
+    depends_on:
+      settings-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://127.0.0.1:21503/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
+  # API Gateway
+  api-gateway:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/api-gateway
+      dockerfile: Dockerfile
+    container_name: dss-api-gateway
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Enable access to services on host
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: master
+      KEYCLOAK_CLIENT_ID: dss-client
+      # Support both Docker network and localhost services
+      # If zone-service runs locally, set: ZONE_SERVICE_URL=http://host.docker.internal:21503
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
+      SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:-http://settings-service:21502}
+      ZONE_SERVICE_URL: ${ZONE_SERVICE_URL:-http://zone-service:21503}
+      SERVER_PORT: 21500
+    ports:
+      - "21500:21500"
+    depends_on:
+      user-service:
+        condition: service_healthy
+      settings-service:
+        condition: service_healthy
+      # Comment out zone-service dependency if running zone-service locally
+      # zone-service:
+      #   condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:21500/actuator/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
+  # ============================================
+  # OSRM V2 Services (Bridge Network with Port Mapping)
+  # ============================================
+
+  osrm-v2-full:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-full
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-full:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "25920:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  osrm-v2-rating-only:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-rating-only
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-rating-only:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "25921:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  osrm-v2-blocking-only:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-blocking-only
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-blocking-only:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "25922:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  osrm-v2-base:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-base
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-base:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "25923:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

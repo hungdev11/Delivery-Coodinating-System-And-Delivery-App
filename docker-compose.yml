@@ -115,6 +115,11 @@ services:
       OSRM_CAR_STRICT_PRIORITY_NO_DELTA_URL: http://osrm-car-strict-priority-no-delta:5000
       OSRM_CAR_FLEXIBLE_PRIORITY_NO_DELTA_URL: http://osrm-car-flexible-priority-no-delta:5000
       OSRM_CAR_BASE_URL: http://osrm-car-base:5000
+      # OSRM V2 URLs (Simplified Architecture)
+      OSRM_V2_FULL_URL: http://osrm-v2-full:5000
+      OSRM_V2_RATING_URL: http://osrm-v2-rating-only:5000
+      OSRM_V2_BLOCKING_URL: http://osrm-v2-blocking-only:5000
+      OSRM_V2_BASE_URL: http://osrm-v2-base:5000
       PORT: 21503
     ports:
       - "21503:21503"
@@ -142,9 +147,9 @@ services:
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
       KEYCLOAK_REALM: master
       KEYCLOAK_CLIENT_ID: dss-client
-      USER_SERVICE_URL: http://user-service:21501
-      SETTINGS_SERVICE_URL: http://settings-service:21502
-      ZONE_SERVICE_URL: http://zone-service:21503
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
+      SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:-http://settings-service:21502}
+      ZONE_SERVICE_URL: ${ZONE_SERVICE_URL:-http://zone-service:21503}
       SERVER_PORT: 21500
     ports:
       - "21500:21500"
@@ -333,6 +338,78 @@ services:
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
     ports:
       - "25914:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ============================================
+  # OSRM V2 Services (Simplified Architecture)
+  # ============================================
+
+  # OSRM V2 Full (Rating affects weight, Blocking affects speed)
+  osrm-v2-full:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-full
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-full:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "25920:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # OSRM V2 Rating Only (User feedback affects weight)
+  osrm-v2-rating-only:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-rating-only
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-rating-only:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "25921:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # OSRM V2 Blocking Only (Traffic affects speed)
+  osrm-v2-blocking-only:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-blocking-only
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-blocking-only:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "25922:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # OSRM V2 Base (VN motorbike optimized, no modifiers)
+  osrm-v2-base:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-base
+    restart: on-failure
+    volumes:
+      - ./BE/zone_service/osrm_data/osrm-base:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    ports:
+      - "25923:5000"
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s

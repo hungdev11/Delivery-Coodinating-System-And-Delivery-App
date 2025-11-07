@@ -1,6 +1,12 @@
 {
     "configurations": [
         {
+            "command": "cd BE/zone_service; npm run dev",
+            "name": "Run zone-service",
+            "request": "launch",
+            "type": "node-terminal"
+        },
+        {
             "name": "Launch Edge",
             "request": "launch",
             "type": "chrome",
