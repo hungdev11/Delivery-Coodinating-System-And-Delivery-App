@@ -34,6 +34,9 @@ public class DeliveryAssignmentResponse {
     private LocalDateTime createdAt;
     private LocalDateTime completedAt;
     private String failReason;
+
+    private BigDecimal lat;
+    private BigDecimal lon;
     
     public static DeliveryAssignmentResponse from(DeliveryAssignment assignment, ParcelInfo parcel, DeliverySession session, String deliveryManPhone, String receiverName) {
         return DeliveryAssignmentResponse.builder()
@@ -53,6 +56,10 @@ public class DeliveryAssignmentResponse {
                 .createdAt(assignment.getScanedAt())
                 .completedAt(assignment.getUpdatedAt()) // Assuming completedAt is the last updated time
                 .failReason(assignment.getFailReason())
+
+                .lat(parcel.getLat())
+                .lon(parcel.getLon())
+
                 .build();
     }
 }

@@ -7,6 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
+import com.ds.gateway.annotations.AuthRequired;
+
 /**
  * API Gateway proxy for Settings Service
  * Settings are always identified by group/key pair
@@ -65,6 +67,7 @@ public class SettingsProxyController {
      * Requires admin authentication - implement role check
      */
     @PutMapping("/{group}/{key}")
+    @AuthRequired
     public ResponseEntity<?> upsertSetting(
             @PathVariable String group, 
             @PathVariable String key, 
@@ -81,6 +84,7 @@ public class SettingsProxyController {
      * Requires admin authentication - implement role check
      */
     @DeleteMapping("/{group}/{key}")
+    @AuthRequired
     public ResponseEntity<?> deleteSetting(@PathVariable String group, @PathVariable String key) {
         log.info("DELETE /api/v1/settings/{}/{} - Proxying to Settings Service", group, key);
         String url = settingsServiceUrl + "/api/v1/settings/" + group + "/" + key;

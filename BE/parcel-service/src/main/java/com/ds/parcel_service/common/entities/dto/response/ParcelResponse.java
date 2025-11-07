@@ -7,7 +7,10 @@ import java.time.LocalTime;
 import com.ds.parcel_service.common.enums.DeliveryType;
 import com.ds.parcel_service.common.enums.ParcelStatus;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @Builder
@@ -30,4 +33,7 @@ public class ParcelResponse {
     private LocalTime windowStart;
     private LocalTime windowEnd;
     private LocalDateTime deliveredAt;
+
+    private BigDecimal lat;
+    private BigDecimal lon;
 }

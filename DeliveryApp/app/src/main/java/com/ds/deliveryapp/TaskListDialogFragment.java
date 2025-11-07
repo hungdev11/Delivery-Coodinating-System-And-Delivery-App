@@ -153,4 +153,16 @@ public class TaskListDialogFragment extends BottomSheetDialogFragment implements
             actionHandler.handlePermissionResult(requestCode, permissions, grantResults);
         }
     }
+
+    public interface OnTaskSelectedListener {
+        void onTaskSelected(DeliveryAssignment task);
+    }
+
+    // 2. Tạo biến cho listener
+    private OnTaskSelectedListener mListener;
+
+    // 3. Tạo hàm public để MapFragment "đăng ký" làm listener
+    public void setOnTaskSelectedListener(OnTaskSelectedListener listener) {
+        this.mListener = listener;
+    }
 }

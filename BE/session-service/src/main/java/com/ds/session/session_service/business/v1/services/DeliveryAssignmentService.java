@@ -281,6 +281,51 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         }
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<DeliveryAssignmentResponse> getDailyTasksV0(
+        com.ds.session.session_service.common.entities.dto.request.PagingRequestV0 request
+    ) {
+        // V0: Simple paging with sorting only, no dynamic filters
+        Pageable pageable = PageUtil.build(
+            request.getPage(),
+            request.getSize(),
+            "scanedAt",
+            "DESC",
+            DeliveryAssignment.class
+        );
+        
+        Page<DeliveryAssignment> tasksPage = deliveryAssignmentRepository.findAll(pageable);
+        return getEnrichedTasks(tasksPage);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<DeliveryAssignmentResponse> getDailyTasksV2(
+        com.ds.session.session_service.common.entities.dto.request.PagingRequestV2 request
+    ) {
+        // V2: Enhanced filtering with operations between each pair
+        Specification<DeliveryAssignment> spec = Specification.where(null);
+        
+        if (request.getFiltersOrNull() != null) {
+            spec = com.ds.session.session_service.common.utils.EnhancedQueryParserV2.parseFilterGroup(
+                request.getFiltersOrNull(),
+                DeliveryAssignment.class
+            );
+        }
+
+        Pageable pageable = PageUtil.build(
+            request.getPage(),
+            request.getSize(),
+            "scanedAt",
+            "DESC",
+            DeliveryAssignment.class
+        );
+
+        Page<DeliveryAssignment> tasksPage = deliveryAssignmentRepository.findAll(spec, pageable);
+        return getEnrichedTasks(tasksPage);
+    }
+
     private ParcelInfo updateParcelStatusAndMap(UUID parcelId, ParcelEvent event) {
         ParcelResponse response = parcelServiceClient.changeParcelStatus(parcelId.toString(), event);
         log.info("parcel status: {}, event: {}", response.getStatus(), event);

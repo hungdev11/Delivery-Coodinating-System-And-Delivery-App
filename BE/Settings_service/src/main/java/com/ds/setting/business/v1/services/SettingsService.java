@@ -417,4 +417,86 @@ public class SettingsService {
                 .updatedBy(setting.getUpdatedBy())
                 .build();
     }
+
+    public PagedData<SystemSettingDto> getSettingsV0(com.ds.setting.common.entities.dto.request.PagingRequestV0 query) {
+        // V0: Simple paging with sorting only, no dynamic filters
+        int page = query.getPage();
+        int size = query.getSize();
+
+        Sort sort = query.getSortsOrEmpty() != null && !query.getSortsOrEmpty().isEmpty()
+            ? buildSortFromConfigs(query.getSortsOrEmpty())
+            : Sort.by(Sort.Direction.DESC, "key");
+
+        var pageable = PageRequest.of(page, size, sort);
+        var result = settingRepository.findAll(pageable);
+
+        List<SystemSettingDto> data = result.getContent().stream().map(this::toDto).toList();
+
+        PagedData.Paging paging = PagedData.Paging.builder()
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .filters(null)
+                .sorts(query.getSortsOrEmpty())
+                .selected(query.getSelectedOrEmpty())
+                .build();
+
+        return PagedData.<SystemSettingDto>builder()
+                .data(data)
+                .page(paging)
+                .build();
+    }
+
+    public PagedData<SystemSettingDto> getSettingsV2(com.ds.setting.common.entities.dto.request.PagingRequestV2 query) {
+        // V2: Enhanced filtering with operations between each pair
+        int page = query.getPage();
+        int size = query.getSize();
+
+        Specification<SystemSetting> spec = Specification.where(null);
+        if (query.getFiltersOrNull() != null) {
+            spec = com.ds.setting.common.utils.EnhancedQueryParserV2.parseFilterGroup(
+                query.getFiltersOrNull(),
+                SystemSetting.class
+            );
+        }
+
+        Sort sort = query.getSortsOrEmpty() != null && !query.getSortsOrEmpty().isEmpty()
+            ? buildSortFromConfigs(query.getSortsOrEmpty())
+            : Sort.by(Sort.Direction.DESC, "key");
+
+        var pageable = PageRequest.of(page, size, sort);
+        var result = settingRepository.findAll(spec, pageable);
+
+        List<SystemSettingDto> data = result.getContent().stream().map(this::toDto).toList();
+
+        PagedData.Paging paging = PagedData.Paging.builder()
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .filters(null)
+                .sorts(query.getSortsOrEmpty())
+                .selected(query.getSelectedOrEmpty())
+                .build();
+
+        return PagedData.<SystemSettingDto>builder()
+                .data(data)
+                .page(paging)
+                .build();
+    }
+
+    private Sort buildSortFromConfigs(List<com.ds.setting.common.entities.dto.common.SortConfig> sortConfigs) {
+        if (sortConfigs == null || sortConfigs.isEmpty()) {
+            return Sort.by(Sort.Direction.DESC, "key");
+        }
+
+        List<Sort.Order> orders = sortConfigs.stream()
+            .map(s -> "asc".equalsIgnoreCase(s.getDirection()) 
+                ? Sort.Order.asc(s.getField()) 
+                : Sort.Order.desc(s.getField()))
+            .toList();
+
+        return Sort.by(orders);
+    }
 }

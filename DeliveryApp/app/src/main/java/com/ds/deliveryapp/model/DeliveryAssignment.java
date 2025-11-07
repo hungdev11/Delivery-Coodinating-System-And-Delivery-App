@@ -28,10 +28,13 @@ public class DeliveryAssignment implements Serializable {
     private String deliveryManPhone;
     private String receiverName;
     private String receiverPhone;
-    private String deliveryLocation;
     private BigDecimal value;
     private double weight;
     private String createdAt;
     private String completedAt;
     private String failReason;
+
+    private String deliveryLocation;
+    private BigDecimal lat;
+    private BigDecimal lon;
 }

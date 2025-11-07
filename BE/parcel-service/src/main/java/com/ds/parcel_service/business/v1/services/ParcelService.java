@@ -12,6 +12,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import com.ds.parcel_service.app_context.models.Parcel;
+import com.ds.parcel_service.app_context.repositories.ParcelDestinationRepository;
 import com.ds.parcel_service.app_context.repositories.ParcelRepository;
 import com.ds.parcel_service.common.entities.dto.request.ParcelCreateRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelFilterRequest;
@@ -23,7 +24,15 @@ import com.ds.parcel_service.common.enums.ParcelEvent;
 import com.ds.parcel_service.common.enums.ParcelStatus;
 import com.ds.parcel_service.common.exceptions.ResourceNotFound;
 import com.ds.parcel_service.common.interfaces.IParcelService;
-import com.ds.parcel_service.common.parcelstates.*;
+import com.ds.parcel_service.common.parcelstates.DelayedState;
+import com.ds.parcel_service.common.parcelstates.DeliveredState;
+import com.ds.parcel_service.common.parcelstates.DisputeState;
+import com.ds.parcel_service.common.parcelstates.FailedState;
+import com.ds.parcel_service.common.parcelstates.IParcelState;
+import com.ds.parcel_service.common.parcelstates.InWarehouseState;
+import com.ds.parcel_service.common.parcelstates.LostState;
+import com.ds.parcel_service.common.parcelstates.OnRouteState;
+import com.ds.parcel_service.common.parcelstates.SuccededState;
 import com.ds.parcel_service.common.utils.PageUtil;
 import com.ds.parcel_service.common.utils.ParcelSpecification;
 
@@ -37,6 +46,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ParcelService implements IParcelService{
 
     private final ParcelRepository parcelRepository;
+    private final ParcelDestinationRepository parcelDestinationRepository;
 
     private final Map<ParcelStatus, IParcelState> stateMap = Map.of(
         ParcelStatus.IN_WAREHOUSE, new InWarehouseState(),
@@ -122,8 +132,20 @@ public class ParcelService implements IParcelService{
         // find exiting destination from address text, if not found create new one
         // map relationship between parcel and destination
         // call to user service to get receiver/sender info
-
+        //
+        // Destination des = destinationClient.createOrGetDestination(request.getLat(), request.getLon(), request.getSendTo());
+        
         Parcel savedParcel = parcelRepository.save(parcel);
+
+        // ParcelDestination pd = ParcelDestination.builder()
+        //     .destinationId(des.getId())
+        //     .destinationType(DestinationType.PRIMARY)
+        //     .isCurrent(true)
+        //     .isOriginal(true)
+        //     .parcel(savedParcel)
+        //     .build();
+
+        // parcelDestinationRepository.save(pd);
         return toDto(savedParcel);
     }
 
@@ -150,11 +172,15 @@ public class ParcelService implements IParcelService{
 
     @Override
     public ParcelResponse getParcelById(UUID parcelId) {
+        // Destination des = destinationClient.createOrGetDestination(request.getLat(), request.getLon(), request.getSendTo());
+        // return toDtoWithLocation(getParcel(parcelId), des);
         return toDto(getParcel(parcelId));    
     }
 
     @Override
     public ParcelResponse getParcelByCode(String code) {
+        // Destination des = destinationClient.createOrGetDestination(request.getLat(), request.getLon(), request.getSendTo());
+        // return toDtoWithLocation(parcelRepository.findByCode(code).orElseThrow(() -> new ResourceNotFound("Parcel with code not found")), des);
         return toDto(parcelRepository.findByCode(code).orElseThrow(() -> new ResourceNotFound("Parcel with code not found")));
     }
 
@@ -168,6 +194,45 @@ public class ParcelService implements IParcelService{
     )  {
         Pageable pageable = PageUtil.build(page, size, sortBy, direction, Parcel.class);
         Specification<Parcel> spec = ParcelSpecification.buildeSpecification(filter);
+        Page<Parcel> parcels = parcelRepository.findAll(spec, pageable);
+        return PageResponse.from(parcels.map(this::toDto));
+    }
+
+    @Override
+    public PageResponse<ParcelResponse> getParcelsV0(com.ds.parcel_service.common.entities.dto.request.PagingRequestV0 request) {
+        // V0: Simple paging with sorting only, no dynamic filters
+        Pageable pageable = PageUtil.build(
+            request.getPage(),
+            request.getSize(),
+            null,
+            "DESC",
+            Parcel.class
+        );
+        
+        Page<Parcel> parcels = parcelRepository.findAll(pageable);
+        return PageResponse.from(parcels.map(this::toDto));
+    }
+
+    @Override
+    public PageResponse<ParcelResponse> getParcelsV2(com.ds.parcel_service.common.entities.dto.request.PagingRequestV2 request) {
+        // V2: Enhanced filtering with operations between each pair
+        Specification<Parcel> spec = Specification.where(null);
+        
+        if (request.getFiltersOrNull() != null) {
+            spec = com.ds.parcel_service.common.utils.EnhancedQueryParserV2.parseFilterGroup(
+                request.getFiltersOrNull(),
+                Parcel.class
+            );
+        }
+
+        Pageable pageable = PageUtil.build(
+            request.getPage(),
+            request.getSize(),
+            null,
+            "DESC",
+            Parcel.class
+        );
+
         Page<Parcel> parcels = parcelRepository.findAll(spec, pageable);
         return PageResponse.from(parcels.map(this::toDto));
     }
@@ -192,6 +257,13 @@ public class ParcelService implements IParcelService{
                             .windowEnd(parcel.getWindowEnd())
                             .build();
     }
+
+    // private ParcelResponse toDtoWithLocation(Parcel parcel, Destination des) {
+    //     ParcelResponse response = toDto(parcel);
+    //     response.setLat(des.getLat());
+    //     response.setLon(des.getLon());
+    //     return response;
+    // }
 
     private void validateUniqueCode(String code) {
         if (parcelRepository.existsByCode(code)) {

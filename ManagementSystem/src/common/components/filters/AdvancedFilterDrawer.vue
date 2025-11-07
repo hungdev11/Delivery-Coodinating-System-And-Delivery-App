@@ -201,6 +201,7 @@
         <div>
           <label class="block text-sm font-medium mb-2">Field</label>
           <USelect
+            class="w-full"
             v-model="newCondition.field"
             :items="fieldOptions"
             placeholder="Select field"
@@ -211,6 +212,7 @@
         <div>
           <label class="block text-sm font-medium mb-2">Operator</label>
           <USelect
+            class="w-full"
             v-model="newCondition.operator"
             :items="getOperatorOptions(newCondition.field)"
             placeholder="Select operator"
@@ -221,6 +223,7 @@
         <div v-if="needsValue(newCondition.operator)">
           <label class="block text-sm font-medium mb-2">Value</label>
           <UInput
+            class="w-full"
             v-model="newCondition.value"
             :placeholder="getPlaceholder(newCondition.field)"
           />

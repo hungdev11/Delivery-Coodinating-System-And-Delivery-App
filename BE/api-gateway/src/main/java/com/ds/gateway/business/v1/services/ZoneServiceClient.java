@@ -29,11 +29,41 @@ public class ZoneServiceClient implements IZoneServiceClient {
     private WebClient zoneServiceWebClient;
 
     @Override
+    public CompletableFuture<Object> listZonesV0(Object requestBody) {
+        log.debug("Listing zones V0 with simple paging request body: {}", requestBody);
+
+        return zoneServiceWebClient.post()
+                .uri("/api/v0/zones")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromValue(requestBody))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<BaseResponse<PagedData<Object>>>() {})
+                .map(response -> (Object) response.getResult())
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
     public CompletableFuture<Object> listZones(Object requestBody) {
-        log.debug("Listing zones with request body: {}", requestBody);
-        
+        log.debug("Listing zones V1 with request body: {}", requestBody);
+
         return zoneServiceWebClient.post()
                 .uri("/api/v1/zones")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromValue(requestBody))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<BaseResponse<PagedData<Object>>>() {})
+                .map(response -> (Object) response.getResult())
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> listZonesV2(Object requestBody) {
+        log.debug("Listing zones V2 with enhanced filtering body: {}", requestBody);
+
+        return zoneServiceWebClient.post()
+                .uri("/api/v2/zones")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(BodyInserters.fromValue(requestBody))
                 .retrieve()

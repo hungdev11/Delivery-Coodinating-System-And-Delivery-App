@@ -40,8 +40,13 @@ interface Props<TData extends RowData> {
   activeFilters?: FilterCondition[] | undefined
 }
 
+interface ColumnFiltersUpdatePayload {
+  columnId: string
+  filters: FilterCondition[]
+}
+
 interface Emits {
-  (e: 'update:filters', filters: FilterCondition[]): void
+  (e: 'update:filters', payload: ColumnFiltersUpdatePayload): void
 }
 
 const props = defineProps<Props<TData>>()
@@ -87,6 +92,9 @@ const handleSort = () => {
 
 // Handle filter update
 const handleFilterUpdate = (filters: FilterCondition[]) => {
-  emit('update:filters', filters)
+  emit('update:filters', {
+    columnId: String(props.column.id),
+    filters,
+  })
 }
 </script>
