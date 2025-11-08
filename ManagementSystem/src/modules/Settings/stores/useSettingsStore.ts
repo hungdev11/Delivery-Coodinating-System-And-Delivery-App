@@ -4,8 +4,10 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { SystemSettingDto, UpsertSettingRequest, type SettingType, type DisplayMode } from '../model.type'
-import { listSettings, getSettingByKey, upsertSetting, deleteSetting } from '../api'
+import { SystemSettingDto, UpsertSettingRequest } from '../model.type'
+import { listSettingsV2, getSettingByKey, upsertSetting, deleteSetting } from '../api'
+import type { FilterGroup, SortConfig } from '@/common/types/filter'
+import { convertV1ToV2Filter } from '@/common/utils/filter-v2-converter'
 
 export const useSettingsStore = defineStore('settings', () => {
   // State
@@ -14,7 +16,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const error = ref<string | null>(null)
   const selected = ref<string[]>([])
   const searchValue = ref('')
-  const sorting = ref<{ field: string; direction: 'asc' | 'desc' }[]>([])
+  const sorting = ref<SortConfig[]>([])
+  const filters = ref<FilterGroup | undefined>(undefined)
   const pagination = ref({
     page: 0,
     size: 10,
@@ -42,32 +45,62 @@ export const useSettingsStore = defineStore('settings', () => {
   const groups = computed(() => Object.keys(settingsByGroup.value))
 
   // Actions
-  const loadSettings = async (query?: any) => {
+  const loadSettings = async (query?: {
+    filters?: FilterGroup
+    sorts?: SortConfig[]
+    page?: number
+    size?: number
+    search?: string
+  }) => {
     loading.value = true
     error.value = null
 
     try {
-      const response = await listSettings({
-        page: pagination.value.page,
-        size: pagination.value.size,
-        sorts: sorting.value,
-        search: searchValue.value,
-        ...query
+      const filtersToUse = query?.filters ?? filters.value
+      const sortsToUse = query?.sorts ?? sorting.value
+      const pageToUse = query?.page ?? pagination.value.page
+      const sizeToUse = query?.size ?? pagination.value.size
+      const searchToUse = query?.search ?? searchValue.value
+
+      const v2Filters = filtersToUse && filtersToUse.conditions.length > 0
+        ? convertV1ToV2Filter(filtersToUse)
+        : undefined
+
+      const response = await listSettingsV2({
+        page: pageToUse,
+        size: sizeToUse,
+        sorts: sortsToUse && sortsToUse.length > 0 ? sortsToUse : undefined,
+        search: searchToUse || undefined,
+        filters: v2Filters,
       })
 
-      settings.value = response.result.data.map((s: any) => new SystemSettingDto(s))
+      const result = response.result
+
+      if (result?.data) {
+        settings.value = result.data.map((setting: SystemSettingDto) => new SystemSettingDto(setting))
+      } else {
+        settings.value = []
+      }
 
       // Update pagination from response if available
-      if (response.result.page) {
+      if (result?.page) {
         pagination.value = {
-          page: response.result.page.page,
-          size: response.result.page.size,
-          totalElements: response.result.page.totalElements,
-          totalPages: response.result.page.totalPages
+          page: result.page.page,
+          size: result.page.size,
+          totalElements: result.page.totalElements,
+          totalPages: result.page.totalPages
+        }
+      } else {
+        pagination.value = {
+          page: 0,
+          size: sizeToUse,
+          totalElements: 0,
+          totalPages: 0
         }
       }
-    } catch (err: any) {
-      error.value = err.message || 'Failed to load settings'
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load settings'
+      error.value = message
       console.error('Failed to load settings:', err)
     } finally {
       loading.value = false
@@ -81,8 +114,9 @@ export const useSettingsStore = defineStore('settings', () => {
     try {
       const response = await getSettingByKey(group, key)
       return response.result
-    } catch (err: any) {
-      error.value = err.message || 'Failed to load setting'
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load setting'
+      error.value = message
       console.error('Failed to load setting:', err)
       throw err
     } finally {
@@ -96,18 +130,22 @@ export const useSettingsStore = defineStore('settings', () => {
 
     try {
       const response = await upsertSetting(data.group, data.key, data)
+      const resultSetting = response.result
 
-      // Update local state
-      const existingIndex = settings.value.findIndex(s => s.key === data.key && s.group === data.group)
-      if (existingIndex >= 0) {
-        settings.value[existingIndex] = new SystemSettingDto(response.result as any)
-      } else {
-        settings.value.push(new SystemSettingDto(response.result as any))
+      if (resultSetting) {
+        const dto = new SystemSettingDto(resultSetting)
+        const existingIndex = settings.value.findIndex(s => s.key === data.key && s.group === data.group)
+        if (existingIndex >= 0) {
+          settings.value[existingIndex] = dto
+        } else {
+          settings.value.push(dto)
+        }
       }
 
-      return response.result
-    } catch (err: any) {
-      error.value = err.message || 'Failed to save setting'
+      return resultSetting
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save setting'
+      error.value = message
       console.error('Failed to save setting:', err)
       throw err
     } finally {
@@ -133,8 +171,9 @@ export const useSettingsStore = defineStore('settings', () => {
       if (selectedIndex >= 0) {
         selected.value.splice(selectedIndex, 1)
       }
-    } catch (err: any) {
-      error.value = err.message || 'Failed to delete setting'
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete setting'
+      error.value = message
       console.error('Failed to delete setting:', err)
       throw err
     } finally {
@@ -160,8 +199,9 @@ export const useSettingsStore = defineStore('settings', () => {
       // Update local state
       settings.value = settings.value.filter(s => !keys.includes(s.key))
       selected.value = selected.value.filter(key => !keys.includes(key))
-    } catch (err: any) {
-      error.value = err.message || 'Failed to delete settings'
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete settings'
+      error.value = message
       console.error('Failed to delete settings:', err)
       throw err
     } finally {
@@ -190,8 +230,16 @@ export const useSettingsStore = defineStore('settings', () => {
     searchValue.value = value
   }
 
-  const setSorting = (sorts: { field: string; direction: 'asc' | 'desc' }[]) => {
+  const setSorting = (sorts: SortConfig[]) => {
     sorting.value = sorts
+  }
+
+  const setFilters = (filterGroup?: FilterGroup) => {
+    if (filterGroup && filterGroup.conditions.length === 0) {
+      filters.value = undefined
+    } else {
+      filters.value = filterGroup
+    }
   }
 
   const setPage = (page: number) => {
@@ -206,6 +254,7 @@ export const useSettingsStore = defineStore('settings', () => {
     searchValue.value = ''
     sorting.value = []
     selected.value = []
+    filters.value = undefined
   }
 
   const reset = () => {
@@ -231,6 +280,7 @@ export const useSettingsStore = defineStore('settings', () => {
     selected,
     searchValue,
     sorting,
+    filters,
     pagination,
 
     // Getters
@@ -249,6 +299,7 @@ export const useSettingsStore = defineStore('settings', () => {
     clearSelected,
     setSearch,
     setSorting,
+    setFilters,
     setPage,
     setPageSize,
     clearFilters,

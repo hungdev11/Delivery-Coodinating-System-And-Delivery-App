@@ -46,6 +46,7 @@ export function createApp(): Express {
 
   // API routes
   app.use('/api/v1', routes);
+  app.use('/api/v2', routes);
 
   // 404 handler
   app.use(notFoundHandler);

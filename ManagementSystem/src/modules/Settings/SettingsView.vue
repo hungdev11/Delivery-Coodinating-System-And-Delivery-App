@@ -5,7 +5,7 @@
  * View for managing system settings with UTable and Nuxt UI v3 best practices
  */
 
-import { onMounted, ref, watch, resolveComponent, h, defineAsyncComponent } from 'vue'
+import { onMounted, ref, watch, reactive, computed, resolveComponent, h, defineAsyncComponent } from 'vue'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
 import { PageHeader } from '@/common/components'
 import { SystemSettingDto } from './model.type'
@@ -15,9 +15,9 @@ import type { TableColumn } from '@nuxt/ui'
 import type { SortingState } from '@tanstack/table-core'
 import { storeToRefs } from 'pinia'
 import TableHeaderCell from '@/common/components/TableHeaderCell.vue'
-import ColumnFilter from '@/common/components/filters/ColumnFilter.vue'
+import AdvancedFilterDrawer from '@/common/components/filters/AdvancedFilterDrawer.vue'
 import type { Column } from '@tanstack/table-core'
-import type { FilterableColumn, FilterCondition } from '@/common/types/filter'
+import type { FilterableColumn, FilterCondition, FilterGroup } from '@/common/types/filter'
 
 // Lazy load modals
 const LazySettingFormModal = defineAsyncComponent(() => import('./components/SettingFormModal.vue'))
@@ -63,6 +63,12 @@ const selected = ref<SystemSettingDto[]>([])
 const sorting = ref<Array<{ id: string; desc: boolean }>>([])
 const visiblePasswords = ref<Set<string>>(new Set())
 const activeFilters = ref<FilterCondition[]>([])
+const columnFiltersState = reactive<Record<string, FilterCondition[]>>({})
+const advancedFiltersGroup = ref<FilterGroup | undefined>(undefined)
+
+// Advanced filter state
+const showAdvancedFilters = ref(false)
+const filterableColumnsComputed = computed(() => filterableColumns)
 
 // Filterable columns configuration
 const filterableColumns: FilterableColumn[] = [
@@ -292,6 +298,7 @@ const getColumnLabel = (columnId: string): string => {
  */
 const handleSearch = () => {
   settingsStore.setSearch(searchValue.value)
+  settingsStore.setPage(0)
   loadSettings()
 }
 
@@ -314,12 +321,7 @@ const handlePageChange = (page: number) => {
  * Load settings using store
  */
 const loadSettings = async () => {
-  await settingsStore.loadSettings({
-    filters: activeFilters.value.length > 0 ? {
-      logic: 'AND',
-      conditions: activeFilters.value
-    } : undefined
-  })
+  await settingsStore.loadSettings()
 }
 
 /**
@@ -397,40 +399,6 @@ const getTypeColor = (type: string) => {
 }
 
 /**
- * Get display mode color
- */
-const getDisplayModeColor = (displayMode: string) => {
-  const colorMap: Record<string, string> = {
-    TEXT: 'blue',
-    PASSWORD: 'red',
-    CODE: 'purple',
-    NUMBER: 'green',
-    TOGGLE: 'yellow',
-    TEXTAREA: 'indigo',
-    URL: 'cyan',
-    EMAIL: 'pink',
-  }
-  return colorMap[displayMode] || 'gray'
-}
-
-/**
- * Get display mode label
- */
-const getDisplayModeLabel = (displayMode: string) => {
-  const labelMap: Record<string, string> = {
-    TEXT: 'Text',
-    PASSWORD: 'Password',
-    CODE: 'Code',
-    NUMBER: 'Number',
-    TOGGLE: 'Toggle',
-    TEXTAREA: 'Textarea',
-    URL: 'URL',
-    EMAIL: 'Email',
-  }
-  return labelMap[displayMode] || displayMode
-}
-
-/**
  * Get display value based on display mode
  */
 const getDisplayValue = (setting: SystemSettingDto) => {
@@ -461,13 +429,160 @@ const togglePasswordVisibility = (key: string) => {
   }
 }
 
-/**
- * Handle filters update from column filters
- */
-const handleFiltersUpdate = (filters: FilterCondition[]) => {
-  activeFilters.value = filters
+interface ColumnFilterUpdatePayload {
+  columnId: string
+  filters: FilterCondition[]
+}
+
+// Helper function to get all active filters
+const getAllActiveFilters = (): FilterCondition[] | undefined => {
+  const storeFilters = settingsStore.filters
+  if (!storeFilters || !storeFilters.conditions) return undefined
+
+  // Extract all conditions from the filter group structure
+  const extractConditions = (item: FilterCondition | FilterGroup): FilterCondition[] => {
+    if ('field' in item) {
+      // It's a FilterCondition
+      return [item as FilterCondition]
+    } else if ('conditions' in item) {
+      // It's a FilterGroup
+      return item.conditions.flatMap(extractConditions)
+    }
+    return []
+  }
+
+  const allFilters = storeFilters.conditions.flatMap(extractConditions)
+  return allFilters.length > 0 ? allFilters : undefined
+}
+
+// Helper function to get filter structure for display
+const getFilterStructure = (): string => {
+  const storeFilters = settingsStore.filters
+  if (!storeFilters || !storeFilters.conditions) return ''
+
+  const formatItem = (item: FilterCondition | FilterGroup): string => {
+    if ('field' in item) {
+      // It's a FilterCondition
+      const condition = item as FilterCondition
+      return `${getColumnLabel(condition.field)} ${getOperatorLabel(condition.operator)} ${condition.value}`
+    } else if ('conditions' in item) {
+      // It's a FilterGroup
+      const group = item as FilterGroup
+      const groupContent = group.conditions
+        .map((subItem, subIndex) => {
+          const itemStr = formatItem(subItem)
+          // Add logic operator between items (except first item)
+          return subIndex > 0 && subItem.logic ? `${subItem.logic} ${itemStr}` : itemStr
+        })
+        .join(' ')
+      return `(${groupContent})`
+    }
+    return ''
+  }
+
+  return storeFilters.conditions
+    .map((item, index) => {
+      const itemStr = formatItem(item)
+      // Add logic operator between items (except first item)
+      return index > 0 && item.logic ? `${item.logic} ${itemStr}` : itemStr
+    })
+    .join(' ')
+}
+
+// Helper function to get active filter group
+const getActiveFilterGroup = (): FilterGroup | undefined => {
+  const storeFilters = settingsStore.filters
+  if (!storeFilters || !storeFilters.conditions) return undefined
+  return storeFilters
+}
+
+// Get operator label for display
+const getOperatorLabel = (operator: string): string => {
+  const operatorMap: Record<string, string> = {
+    eq: '=',
+    ne: '!=',
+    contains: 'contains',
+    startsWith: 'starts with',
+    endsWith: 'ends with',
+    gt: '>',
+    gte: '>=',
+    lt: '<',
+    lte: '<=',
+    in: 'in',
+    notIn: 'not in',
+  }
+  return operatorMap[operator] || operator
+}
+
+// Advanced filter handlers
+const handleAdvancedFilterApply = (filterGroup: FilterGroup) => {
+  advancedFiltersGroup.value = filterGroup && filterGroup.conditions.length > 0 ? filterGroup : undefined
+  applyCombinedFilters()
+  showAdvancedFilters.value = false
+}
+
+const handleAdvancedFilterClear = () => {
+  advancedFiltersGroup.value = undefined
+  Object.keys(columnFiltersState).forEach((key) => {
+    delete columnFiltersState[key]
+  })
+  activeFilters.value = []
+  settingsStore.clearFilters()
+  settingsStore.setFilters(undefined)
+  settingsStore.setPage(0)
+  showAdvancedFilters.value = false
   loadSettings()
-  console.log('Filters updated:', filters)
+}
+
+const applyCombinedFilters = () => {
+  const columnFilters = Object.values(columnFiltersState).flat()
+  activeFilters.value = columnFilters
+
+  const combinedConditions: (FilterCondition | FilterGroup)[] = []
+
+  if (advancedFiltersGroup.value && advancedFiltersGroup.value.conditions.length > 0) {
+    combinedConditions.push(advancedFiltersGroup.value)
+  }
+
+  if (columnFilters.length > 0) {
+    combinedConditions.push(...columnFilters)
+  }
+
+  const combinedFilterGroup = combinedConditions.length > 0
+    ? {
+        logic: 'AND' as const,
+        conditions: combinedConditions,
+      }
+    : undefined
+
+  settingsStore.setFilters(combinedFilterGroup)
+  settingsStore.setPage(0)
+  loadSettings()
+}
+
+const applyColumnFilters = () => {
+  applyCombinedFilters()
+}
+
+const handleFiltersUpdate = ({ columnId, filters }: ColumnFilterUpdatePayload) => {
+  if (filters.length > 0) {
+    columnFiltersState[columnId] = filters.map((filter) => ({ ...filter }))
+  } else {
+    delete columnFiltersState[columnId]
+  }
+
+  applyColumnFilters()
+}
+
+const clearAllFilters = () => {
+  Object.keys(columnFiltersState).forEach((key) => {
+    delete columnFiltersState[key]
+  })
+  activeFilters.value = []
+  settingsStore.clearFilters()
+  settingsStore.setFilters(undefined)
+  settingsStore.setPage(0)
+  loadSettings()
 }
 
 /**
@@ -508,8 +623,9 @@ onMounted(async () => {
       </template>
     </PageHeader>
 
-    <!-- Search -->
-    <div class="mb-6">
+    <!-- Filters and Search -->
+    <div class="mb-6 space-y-4">
+      <!-- Simple Search -->
       <div class="flex flex-col sm:flex-row gap-4">
         <!-- Search Input -->
         <div class="flex-1">
@@ -519,8 +635,42 @@ onMounted(async () => {
             icon="i-heroicons-magnifying-glass"
             size="lg"
           />
-    </div>
-    </div>
+        </div>
+      </div>
+
+      <!-- Advanced Filters Button -->
+      <div class="flex justify-between items-center">
+        <!-- Active Filters Display -->
+        <div
+          v-if="getAllActiveFilters() && getAllActiveFilters()!.length > 0"
+          class="flex items-center gap-2"
+        >
+          <span class="text-sm text-gray-600 dark:text-gray-400">Active filters:</span>
+          <div class="flex items-center gap-1">
+            <UBadge color="primary" variant="soft" size="sm" class="max-w-md">
+              {{ getFilterStructure() }}
+            </UBadge>
+          </div>
+          <UButton
+            variant="ghost"
+            size="xs"
+            color="neutral"
+            icon="i-heroicons-x-mark"
+            @click="handleAdvancedFilterClear"
+            title="Clear all filters"
+          />
+        </div>
+
+        <!-- Advanced Filters Button -->
+        <UButton
+          variant="soft"
+          color="primary"
+          icon="i-heroicons-cog-6-tooth"
+          @click="showAdvancedFilters = true"
+        >
+          Advanced Filters
+        </UButton>
+      </div>
 
       <!-- Sorting Summary -->
       <div
@@ -545,8 +695,8 @@ onMounted(async () => {
               "
               class="ml-1"
             />
-              </UBadge>
-            </div>
+          </UBadge>
+        </div>
         <UButton
           variant="ghost"
           size="xs"
@@ -556,7 +706,7 @@ onMounted(async () => {
           title="Clear all sorting"
         />
       </div>
-            </div>
+    </div>
 
     <!-- Bulk Actions -->
     <div
@@ -619,7 +769,7 @@ onMounted(async () => {
             <UButton v-if="!searchValue" icon="i-heroicons-plus" @click="openCreateModal">
               Add Setting
             </UButton>
-            <UButton v-else variant="soft" @click="searchValue = ''"> Clear Filters </UButton>
+            <UButton v-else variant="soft" @click="clearAllFilters"> Clear Filters </UButton>
           </div>
         </div>
       </template>
@@ -641,5 +791,15 @@ onMounted(async () => {
       />
     </div>
 
+    <!-- Advanced Filter Drawer -->
+    <AdvancedFilterDrawer
+      :show="showAdvancedFilters"
+      :columns="filterableColumnsComputed"
+      :active-filters="getAllActiveFilters()"
+      :active-filter-group="getActiveFilterGroup()"
+      @apply="handleAdvancedFilterApply"
+      @clear="handleAdvancedFilterClear"
+      @update:show="showAdvancedFilters = $event"
+    />
   </div>
 </template>

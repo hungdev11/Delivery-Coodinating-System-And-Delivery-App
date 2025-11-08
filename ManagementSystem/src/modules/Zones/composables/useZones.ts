@@ -4,12 +4,13 @@
  * Business logic for zone management
  */
 
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
-import { getZones, createZone, updateZone, deleteZone, getCenters } from '../api'
+import { getZonesV2, createZone, updateZone, deleteZone, getCenters } from '../api'
 import { ZoneDto, CenterDto, CreateZoneRequest, UpdateZoneRequest } from '../model.type'
-import type { FilterGroup } from '../../common/types/filter'
+import type { FilterCondition, FilterGroup, SortConfig } from '@/common/types/filter'
+import { convertV1ToV2Filter } from '@/common/utils/filter-v2-converter'
 
 export const useZonesStore = defineStore('zones', () => {
   const toast = useToast()
@@ -23,26 +24,86 @@ export const useZonesStore = defineStore('zones', () => {
   const total = ref(0)
   const searchQuery = ref('')
   const selectedCenterId = ref<string | undefined>(undefined)
+  const filters = ref<FilterGroup | undefined>(undefined)
+  const sorts = ref<SortConfig[]>([])
 
   /**
    * Load zones
    */
-  const loadZones = async (query?: { filters?: FilterGroup; sorts?: any[] }) => {
+  const loadZones = async (query?: {
+    filters?: FilterGroup
+    sorts?: SortConfig[]
+    page?: number
+    size?: number
+    search?: string
+  }) => {
     loading.value = true
     error.value = null
     try {
-      const response = await getZones({
-        page: page.value,
-        size: pageSize.value,
-        search: searchQuery.value || undefined,
-        centerId: selectedCenterId.value,
-        filters: query?.filters,
-        sorts: query?.sorts,
+      const filtersToUse = query?.filters ?? filters.value
+      const sortsToUse = query?.sorts ?? sorts.value
+      const pageToUse = query?.page ?? page.value
+      const sizeToUse = query?.size ?? pageSize.value
+      const searchToUse = query?.search ?? searchQuery.value
+
+      const mergeWithCenterFilter = (base?: FilterGroup): FilterGroup | undefined => {
+        if (!selectedCenterId.value) {
+          return base
+        }
+
+        const centerCondition: FilterCondition = {
+          field: 'centerId',
+          operator: 'eq',
+          value: selectedCenterId.value,
+        }
+
+        if (!base) {
+          return {
+            logic: 'AND',
+            conditions: [centerCondition],
+          }
+        }
+
+        return {
+          logic: 'AND',
+          conditions: [
+            {
+              logic: base.logic,
+              conditions: [...base.conditions],
+            },
+            centerCondition,
+          ],
+        }
+      }
+
+      const combinedFilters = mergeWithCenterFilter(filtersToUse)
+
+      const v2Filters = combinedFilters && combinedFilters.conditions.length > 0
+        ? convertV1ToV2Filter(combinedFilters)
+        : undefined
+
+      const response = await getZonesV2({
+        page: pageToUse,
+        size: sizeToUse,
+        search: searchToUse || undefined,
+        filters: v2Filters,
+        sorts: sortsToUse && sortsToUse.length > 0 ? sortsToUse : undefined,
       })
-      console.log('response', response)
-      if (response?.data) {
-        zones.value = response.data
-        total.value = response.page.totalElements
+
+      const result = response.result
+
+      if (result?.data) {
+        zones.value = result.data.map((zone) => new ZoneDto(zone))
+      } else {
+        zones.value = []
+      }
+
+      if (result?.page) {
+        page.value = result.page.page
+        pageSize.value = result.page.size
+        total.value = result.page.totalElements
+      } else {
+        total.value = zones.value.length
       }
     } catch (err) {
       console.error('Failed to load zones:', err)
@@ -183,6 +244,22 @@ export const useZonesStore = defineStore('zones', () => {
     loadZones()
   }
 
+  const setFilters = (filterGroup?: FilterGroup) => {
+    if (filterGroup && filterGroup.conditions.length === 0) {
+      filters.value = undefined
+    } else {
+      filters.value = filterGroup
+    }
+  }
+
+  const setSorts = (sortConfigs: SortConfig[]) => {
+    sorts.value = sortConfigs
+  }
+
+  const setPage = (pageIndex: number) => {
+    page.value = pageIndex
+  }
+
   return {
     zones,
     centers,
@@ -193,6 +270,8 @@ export const useZonesStore = defineStore('zones', () => {
     total,
     searchQuery,
     selectedCenterId,
+    filters,
+    sorts,
     loadZones,
     loadCenters,
     create,
@@ -202,5 +281,8 @@ export const useZonesStore = defineStore('zones', () => {
     handlePageChange,
     handleSearch,
     filterByCenter,
+    setFilters,
+    setSorts,
+    setPage,
   }
 })

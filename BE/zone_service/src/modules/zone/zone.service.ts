@@ -9,11 +9,115 @@ import { PagedData, Paging as RestfulPaging } from '../../common/types/restful';
 import { createError } from '../../common/middleware/error.middleware';
 import { CreateZoneDto, UpdateZoneDto, ZoneDto, ZonePagingRequest } from './zone.model';
 import { PagingRequest } from '../../common/types/filter';
+import { PagingRequestV0, PagingRequestV2 } from '../../common/types/filter-v2';
 import { QueryParser } from '../../common/utils/query-parser';
+import { QueryParserV2 } from '../../common/utils/query-parser-v2';
 
 export class ZoneService {
   /**
-   * Get zones with advanced filtering and sorting
+   * V0: Get zones with simple paging and sorting (no dynamic filters)
+   */
+  public static async getZonesV0(request: PagingRequestV0): Promise<PagedData<any>> {
+    try {
+      const page = request.page || 0;
+      const size = request.size || 10;
+      const skip = page * size;
+      const take = size;
+
+      // Build orderBy from sorts
+      const orderBy: any = request.sorts && request.sorts.length > 0
+        ? request.sorts.map(sort => ({ [sort.field]: sort.direction }))
+        : [{ id: 'desc' }];
+
+      // Get total count
+      const totalElements = await prisma.zones.count();
+
+      // Get paginated data
+      const data = await prisma.zones.findMany({
+        orderBy,
+        skip,
+        take,
+        include: {
+          centers: true,
+        }
+      });
+
+      const totalPages = Math.ceil(totalElements / take);
+
+      const paging = new RestfulPaging<any>();
+      paging.page = page;
+      paging.size = size;
+      paging.totalElements = totalElements;
+      paging.totalPages = totalPages;
+      paging.filters = null;
+      paging.sorts = request.sorts || [];
+      paging.selected = request.selected || [];
+
+      return {
+        data,
+        page: paging
+      };
+    } catch (error) {
+      logger.error('Failed to get zones (V0)', { error });
+      throw createError('Failed to get zones', 500);
+    }
+  }
+
+  /**
+   * V2: Get zones with enhanced filtering (operations between each pair)
+   */
+  public static async getZonesV2(request: PagingRequestV2): Promise<PagedData<any>> {
+    try {
+      const page = request.page || 0;
+      const size = request.size || 10;
+      const skip = page * size;
+      const take = size;
+
+      // Parse V2 filters
+      const where = request.filters ? QueryParserV2.parseFilterGroup(request.filters) : {};
+
+      // Build orderBy from sorts
+      const orderBy: any = request.sorts && request.sorts.length > 0
+        ? request.sorts.map(sort => ({ [sort.field]: sort.direction }))
+        : [{ id: 'desc' }];
+
+      // Get total count
+      const totalElements = await prisma.zones.count({ where });
+
+      // Get paginated data
+      const data = await prisma.zones.findMany({
+        where,
+        orderBy,
+        skip,
+        take,
+        include: {
+          centers: true,
+        }
+      });
+
+      const totalPages = Math.ceil(totalElements / take);
+
+      const paging = new RestfulPaging<any>();
+      paging.page = page;
+      paging.size = size;
+      paging.totalElements = totalElements;
+      paging.totalPages = totalPages;
+      paging.filters = null; // V2 filters not returned in paging
+      paging.sorts = request.sorts || [];
+      paging.selected = request.selected || [];
+
+      return {
+        data,
+        page: paging
+      };
+    } catch (error) {
+      logger.error('Failed to get zones (V2)', { error });
+      throw createError('Failed to get zones', 500);
+    }
+  }
+
+  /**
+   * Get zones with advanced filtering and sorting (V1)
    */
   public static async getZones(request: PagingRequest): Promise<PagedData<any>> {
     try {

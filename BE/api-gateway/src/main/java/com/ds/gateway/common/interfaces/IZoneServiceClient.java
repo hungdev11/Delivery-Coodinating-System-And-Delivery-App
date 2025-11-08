@@ -8,7 +8,9 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface IZoneServiceClient {
     // Zone endpoints
+    CompletableFuture<Object> listZonesV0(Object requestBody);
     CompletableFuture<Object> listZones(Object requestBody);
+    CompletableFuture<Object> listZonesV2(Object requestBody);
     CompletableFuture<Object> getZoneById(String id);
     CompletableFuture<Object> getZoneByCode(String code);
     CompletableFuture<Object> getZonesByCenter(String centerId);

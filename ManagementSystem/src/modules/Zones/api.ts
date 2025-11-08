@@ -15,6 +15,7 @@ import type {
   DeleteZoneResponse,
   GetCentersResponse,
 } from './model.type'
+import type { QueryPayload } from '@/common/types/filter'
 
 const apiClient = new AxiosHttpClient(import.meta.env.VITE_API_URL)
 
@@ -59,6 +60,13 @@ export const getZones = async (params?: {
   }
 
   return apiClient.post<GetZonesResponse, any>('/v1/zones', requestBody)
+}
+
+/**
+ * Get list of zones (paginated) - V2 endpoint with enhanced filtering
+ */
+export const getZonesV2 = async (params: QueryPayload): Promise<GetZonesResponse> => {
+  return apiClient.post<GetZonesResponse, QueryPayload>('/v2/zones', params)
 }
 
 /**

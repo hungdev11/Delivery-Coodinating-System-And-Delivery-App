@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.ds.session.session_service.common.entities.dto.request.PagingRequestV0;
+import com.ds.session.session_service.common.entities.dto.request.PagingRequestV2;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.PageResponse;
@@ -23,7 +25,7 @@ public interface IDeliveryAssignmentService {
     DeliveryAssignmentResponse postponeByCustomer(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
     
     /**
-     * Lấy các task trong phiên ĐANG HOẠT ĐỘNG (phân trang và lọc)
+     * Lấy các task trong phiên ĐANG HOẠT ĐỘNG (phân trang và lọc) - V1
      */
     PageResponse<DeliveryAssignmentResponse> getDailyTasks(
         UUID deliveryManId, 
@@ -31,6 +33,16 @@ public interface IDeliveryAssignmentService {
         int page, 
         int size
     );
+    
+    /**
+     * V0: Lấy các task với paging đơn giản (không có dynamic filters)
+     */
+    PageResponse<DeliveryAssignmentResponse> getDailyTasksV0(PagingRequestV0 request);
+    
+    /**
+     * V2: Lấy các task với enhanced filtering (operations between pairs)
+     */
+    PageResponse<DeliveryAssignmentResponse> getDailyTasksV2(PagingRequestV2 request);
     
     /**
      * Lấy lịch sử task (phân trang và lọc)
