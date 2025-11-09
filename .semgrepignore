@@ -1,0 +1,8 @@
+# Semgrep ignore patterns
+# This file tells Semgrep to ignore certain files or patterns
+
+# Ignore workflow files that contain pattern strings (not real secrets)
+.github/workflows/secret-scan.yml
+
+# Ignore Android manifest exported activity for LoginActivity (intentional for app launcher)
+DeliveryApp/app/src/main/AndroidManifest.xml

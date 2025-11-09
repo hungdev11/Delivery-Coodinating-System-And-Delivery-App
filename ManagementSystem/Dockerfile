@@ -30,6 +30,9 @@ FROM nginx:alpine
 # Copy built files to nginx html directory
 COPY --from=builder /app/dist /usr/share/nginx/html
 
+# nginx image already runs as non-root user (nginx), so no USER directive needed
+# The nginx:alpine image uses a non-root user by default
+
 # Expose port 80
 EXPOSE 80
 
