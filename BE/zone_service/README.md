@@ -126,7 +126,7 @@ npm run osrm:generate # Export to OSRM format (2 min)
 
 # 7. Start OSRM instances
 cd ../../..
-docker-compose up -d osrm-instance-1 osrm-instance-2
+docker-compose up -d osrm-* 
 
 # 8. Start zone service
 cd BE/zone_service

@@ -65,7 +65,7 @@ services:
       DB_PORT: ${DB_PORT}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
-      USER_DB_NAME: ${USER_DB_NAME}
+      USER_DB_NAME: ${USER_DB_NAME:-ds_user_service}
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
       KEYCLOAK_REALM: master
       KEYCLOAK_CLIENT_ID: dss-client
@@ -323,7 +323,30 @@ services:
       retries: 3
       start_period: 10s
 
-  # Nginx Reverse Proxy
+  # ManagementSystem Frontend (build only - files shared with nginx)
+  # This service builds the frontend and copies files to shared volume, then exits
+  management-system-builder:
+    build:
+      context: ./ManagementSystem
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_WS_URL: ${VITE_WS_URL:-/api/ws}
+        VITE_ENV: ${VITE_ENV:-production}
+        VITE_MAPTILER_API_KEY: ${VITE_MAPTILER_API_KEY:-}
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-/api}
+      VITE_WS_URL: ${VITE_WS_URL:-/api/ws}
+      VITE_ENV: ${VITE_ENV:-production}
+      VITE_MAPTILER_API_KEY: ${VITE_MAPTILER_API_KEY:-}
+    container_name: dss-management-system-builder
+    image: dss-management-system:builder
+    command: ["sh", "-c", "cp -r /app/dist/* /shared/ && echo 'ManagementSystem files copied to shared volume'"]
+    volumes:
+      - management-system-dist:/shared
+    restart: "no"
+
+  # Nginx Reverse Proxy (serves ManagementSystem + proxies API)
   # Nginx sẽ "flatten" response từ API Gateway để loại bỏ double chunked encoding
   # API Gateway đã được fix để không gửi duplicate Transfer-Encoding headers
   nginx-proxy:
@@ -332,11 +355,16 @@ services:
     restart: unless-stopped
     volumes:
       - ./BE/api-gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - management-system-dist:/usr/share/nginx/html:ro
     ports:
       - "8080:8080"
     depends_on:
-      api-gateway:
-        condition: service_healthy
+      - management-system-builder
+      - api-gateway
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-/api}
+      VITE_MAPTILER_API_KEY: ${VITE_MAPTILER_API_KEY:-}
+      VITE_WS_URL: ${VITE_WS_URL:-/api/ws}
     healthcheck:
       test: ["CMD-SHELL", "pgrep nginx || exit 1"]
       interval: 10s
@@ -367,3 +395,6 @@ services:
     # Cloudflared kết nối với Nginx Proxy (không phải API Gateway trực tiếp)
     # Nginx sẽ "flatten" response và loại bỏ chunked encoding
     # Lưu ý: Trong config.yml, sử dụng http://nginx-proxy:8080 (container name)
+
+volumes:
+  management-system-dist:

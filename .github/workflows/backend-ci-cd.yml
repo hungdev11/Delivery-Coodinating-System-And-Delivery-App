@@ -154,7 +154,7 @@ jobs:
         run: |
           npm run build
           # Run optional checks (statistics only) - these are informational, not blocking
-          npm run check:all || echo "Optional checks completed with warnings"
+          # npm run check:all || echo "Optional checks completed with warnings"
 
   # Job 6: Test Parcel Service
   test-parcel-service:

@@ -36,3 +36,4 @@ build/
 
 cloudflared/*
 !cloudflared/.gitkeep
+!cloudflared/config.yml.example

@@ -43,11 +43,6 @@
         "node_modules": "node_modules/*"
     },
     // Additional VSCode Settings for better organization
-    "files.exclude": {
-        "**/.git": false,
-        "**/.DS_Store": true,
-        "**/Thumbs.db": true
-    },
     // Search exclusions
     "search.exclude": {
         "**/node_modules": true,
@@ -61,7 +56,6 @@
     },
     // File associations
     "files.associations": {
-        "*.env*": "dotenv",
         "docker-compose*.yml": "dockercompose",
         "*.prisma": "prisma"
     }

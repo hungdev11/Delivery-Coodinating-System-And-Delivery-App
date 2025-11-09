@@ -7,7 +7,7 @@
 
 import { PrismaClient, TrafficLevel } from '@prisma/client';
 import axios from 'axios';
-import { calculateDeltaWeight, getTrafficMultiplier, recalculateCurrentWeight } from '../utils/weight-calculator.js';
+import { calculateDeltaWeight, getTrafficMultiplier, recalculateCurrentWeight } from '../utils/weight-calculator';
 
 const prisma = new PrismaClient();
 

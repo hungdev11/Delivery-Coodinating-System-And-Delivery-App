@@ -1,4 +1,4 @@
-# Multi-stage build for Parcel Service
+# Multi-stage build for User Service
 FROM eclipse-temurin:21-jdk-alpine AS builder
 
 # Set working directory
