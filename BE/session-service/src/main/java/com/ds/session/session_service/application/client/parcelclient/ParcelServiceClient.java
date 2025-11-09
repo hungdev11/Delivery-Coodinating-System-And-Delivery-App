@@ -17,7 +17,7 @@ import com.ds.session.session_service.common.enums.ParcelEvent;
 
 @FeignClient(
     name = "parcel-service", 
-    url = "http://localhost:21506"
+    url = "${PARCEL_SERVICE_URL:http://localhost:21506}"
 )
 public interface ParcelServiceClient {
     @GetMapping("/api/v1/parcels/{parcelId}")

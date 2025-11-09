@@ -1,5 +1,20 @@
 server:
   port: 21500
+  # Fix for Cloudflare double chunked encoding issue
+  http2:
+    enabled: false
+  # Disable chunked encoding when Content-Length is known
+  compression:
+    enabled: false
+  tomcat:
+    # Force Tomcat to use Content-Length instead of chunked encoding
+    # This helps prevent double chunked encoding issues with Cloudflare
+    max-http-form-post-size: 2097152
+    connection-timeout: 20000
+    max-connections: 8192
+    threads:
+      max: 200
+      min-spare: 10
 
 spring:
   application:
@@ -54,6 +69,8 @@ services:
     base-url: ${SESSION_SERVICE_URL:http://localhost:21505}
   parcel:
     base-url: ${PARCEL_SERVICE_URL:http://localhost:21506}
+  communication:
+    base-url: ${COMMUNICATION_SERVICE_URL:http://localhost:21511}
   # Uncomment and add other services as needed
   # order:
   #   base-url: ${ORDER_SERVICE_URL:http://order-service:8080}

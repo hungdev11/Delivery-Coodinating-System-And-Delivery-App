@@ -1,11 +1,17 @@
 server:
   port: 21505
+  # Fix for Cloudflare double chunked encoding issue
+  http2:
+    enabled: false
+  # Disable chunked encoding when Content-Length is known
+  compression:
+    enabled: false
 
 spring:
   application:
     name: session-service
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${USER_DB_NAME:ds_session_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${SESSION_DB_NAME:ds_session_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -16,3 +22,45 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+logging:
+  level:
+    root: ERROR
+    com.ds.session.session_service: INFO
+    org.springframework: ERROR
+    org.springframework.web: ERROR
+    org.springframework.boot: ERROR
+    org.hibernate: ERROR
+    com.zaxxer.hikari: ERROR
+    feign: INFO
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+
+# External Services Configuration
+services:
+  parcel:
+    base-url: ${PARCEL_SERVICE_URL:http://localhost:21506}
+
+# Feign Client Configuration
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 2000
+        readTimeout: 5000
+        loggerLevel: full
+      parcel-service:
+        connectTimeout: 2000
+        readTimeout: 5000
+  httpclient:
+    connection-timeout: 2000
+    time-to-live: 5000
