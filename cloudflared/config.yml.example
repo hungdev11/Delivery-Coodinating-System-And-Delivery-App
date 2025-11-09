@@ -1,0 +1,7 @@
+tunnel: tunnel-id
+credentials-file: /etc/cloudflared/tunnel-id.json
+
+ingress:
+  - hostname: localserver.phuongy.works
+    service: http://nginx-proxy:8080
+  - service: http_status:404

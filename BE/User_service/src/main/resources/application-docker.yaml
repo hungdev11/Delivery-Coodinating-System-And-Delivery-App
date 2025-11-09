@@ -1,19 +1,30 @@
-# Docker-specific configuration for User Service
-# This profile is used when running in Docker containers
+server:
+  port: 21501
 
 spring:
+  application:
+    name: user-service
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${USER_DB_NAME:ds_user_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: update  # Auto-migrate schema in Docker
-    show-sql: false
+      ddl-auto: ${JPA_DDL_AUTO:update}  # Options: create, create-drop, update, validate, none
+    show-sql: ${JPA_SHOW_SQL:false}
     properties:
       hibernate:
         format_sql: true
+        # Auto-migration settings
         hbm2ddl:
           auto: update
+        # Generate DDL on startup
         generate_statistics: false
+        # Better naming strategy
         naming:
           physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        # Additional migration settings
         jdbc:
           batch_size: 20
         order_inserts: true
@@ -22,8 +33,161 @@ spring:
   flyway:
     enabled: false
 
-# Logging for Docker environment
+# Keycloak Configuration (from env.local)
+keycloak:
+  auth-server-url: ${KEYCLOAK_URL:https://keycloak.phuongy.works}
+  realm: ${KEYCLOAK_REALM:delivery-system}
+  resource: ${KEYCLOAK_CLIENT_ID:frontend-client}
+  credentials:
+    username: ${KEYCLOAK_ADMIN_USERNAME:dev}
+    password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
+    secret: ${KEYCLOAK_CLIENT_SECRET:46sGOyba6nyt8UhLkKAQgzmbedF9L042}
+  
+  init:
+    enabled: ${KEYCLOAK_INIT_ENABLED:true}
+    master:
+      realm: ${KEYCLOAK_MASTER_REALM:master}
+      username: ${KEYCLOAK_ADMIN_USERNAME:dev}
+      password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
+    default:
+      realm: ${KEYCLOAK_DEFAULT_REALM:delivery-system}
+      client-id: ${KEYCLOAK_DEFAULT_CLIENT_ID:frontend-client}
+
+    realms:
+      - name: delivery-system
+        displayName: "Delivery System"
+        enabled: true
+        roles:
+          - name: ADMIN
+            description: "System administrator with full access"
+          - name: MANAGER
+            description: "Manager with management access"
+          - name: STAFF
+            description: "Staff member with operational access"
+          - name: SHIPPER
+            description: "Delivery driver/shipper"
+          - name: CLIENT
+            description: "End customer/client"
+
+        clients:
+          - clientId: backend-client
+            name: "Backend Control Client"
+            publicClient: false
+            serviceAccountsEnabled: true
+            standardFlowEnabled: true
+            directAccessGrantsEnabled: true
+            redirectUris: ["*"]
+            webOrigins: ["*"]
+            roles:
+              - admin-service
+              - management-service
+
+          - clientId: frontend-client
+            name: "Frontend User Client"
+            secret: ""  # Will be auto-generated
+            publicClient: false
+            serviceAccountsEnabled: false
+            standardFlowEnabled: true
+            directAccessGrantsEnabled: true
+            redirectUris:
+              - "http://localhost:5173/*"
+              - "http://localhost:3000/*"
+            webOrigins:
+              - "http://localhost:5173"
+              - "http://localhost:3000"
+            roles:
+              - user-service
+              - delivery-service
+
+        users:
+          - username: admin
+            email: admin@delivery-system.com
+            firstName: System
+            lastName: Administrator
+            password: admin123
+            enabled: true
+            emailVerified: true
+            realmRoles: [ADMIN]
+            clientRoles:
+              backend-client: [admin-service]
+
+          - username: manager
+            email: manager@delivery-system.com
+            firstName: Test
+            lastName: Manager
+            password: manager123
+            enabled: true
+            emailVerified: true
+            realmRoles: [MANAGER]
+            clientRoles:
+              backend-client: [management-service]
+
+          - username: staff
+            email: staff@delivery-system.com
+            firstName: Staff
+            lastName: Member
+            password: staff123
+            enabled: true
+            emailVerified: true
+            realmRoles: [STAFF]
+            clientRoles:
+              backend-client: [management-service]
+
+          - username: shipper01
+            email: shipper01@delivery-system.com
+            firstName: John
+            lastName: Shipper
+            password: shipper123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHIPPER]
+            clientRoles:
+              frontend-client: [delivery-service]
+
+          - username: client01
+            email: client01@delivery-system.com
+            firstName: Jane
+            lastName: Customer
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+
+# External Services
+services:
+  settings:
+    base-url: ${SETTINGS_SERVICE_URL:http://settings-service:21502}
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+
+# User Service Settings
+user:
+  settings:
+    service:
+      max-retries: 10
+      retry-delay-seconds: 10
+
+# Logging Configuration
+# Only log errors from frameworks/libraries, keep developer logs at INFO
 logging:
   level:
-    org.hibernate.SQL: INFO  # Show SQL in Docker for debugging
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # Show parameter values
+    root: ERROR                          # All libraries default to ERROR
+    com.ds: INFO                         # Developer logs at INFO level
+    org.springframework: ERROR           # Spring framework errors only
+    org.springframework.web: ERROR       # Spring web errors only
+    org.springframework.boot: ERROR      # Spring Boot errors only
+    org.hibernate: ERROR                 # Hibernate errors only (no SQL logging)
+    org.flywaydb: ERROR                  # Flyway errors only
+    com.zaxxer.hikari: ERROR             # HikariCP errors only
+    org.keycloak: ERROR                  # Keycloak admin client errors only 

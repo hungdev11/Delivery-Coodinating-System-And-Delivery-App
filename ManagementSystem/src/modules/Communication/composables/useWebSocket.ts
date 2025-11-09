@@ -27,13 +27,52 @@ export function useWebSocket() {
   const subscriptions = ref<any[]>([])
 
   /**
-   * Get WebSocket URL from environment
+   * Get WebSocket URL from environment or auto-detect from current domain
+   * Supports:
+   * - Relative paths (e.g., /api/ws) - uses current domain automatically
+   * - Absolute URLs (e.g., ws://localhost:21500/ws or http://domain.com/api/ws)
    */
   const getWebSocketUrl = (): string => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:21500'
-    // Convert http:// to ws:// or https:// to wss://
-    const wsUrl = apiUrl.replace(/^http/, 'ws')
-    return `${wsUrl}/ws`
+    // Check for explicit WebSocket URL in environment
+    const wsUrl = import.meta.env.VITE_WS_URL
+    
+    if (wsUrl) {
+      // If it's a relative path, build full URL from current domain
+      if (wsUrl.startsWith('/')) {
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+        return `${protocol}://${window.location.host}${wsUrl}`
+      }
+      
+      // If it's already an absolute URL (ws:// or wss://), use it directly
+      if (wsUrl.startsWith('ws://') || wsUrl.startsWith('wss://')) {
+        return wsUrl
+      }
+      
+      // If it's http:// or https://, convert to ws:// or wss://
+      if (wsUrl.startsWith('http://') || wsUrl.startsWith('https://')) {
+        return wsUrl.replace(/^http/, 'ws')
+      }
+    }
+    
+    // Fallback: Use VITE_API_URL or auto-detect from current domain
+    const apiUrl = import.meta.env.VITE_API_URL
+    
+    if (apiUrl) {
+      // If API URL is relative path, build WebSocket URL from current domain
+      if (apiUrl.startsWith('/')) {
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+        return `${protocol}://${window.location.host}${apiUrl}/ws`
+      }
+      
+      // If API URL is absolute, convert http/https to ws/wss
+      if (apiUrl.startsWith('http://') || apiUrl.startsWith('https://')) {
+        return apiUrl.replace(/^http/, 'ws') + '/ws'
+      }
+    }
+    
+    // Final fallback: Use current domain with /api/ws
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    return `${protocol}://${window.location.host}/api/ws`
   }
 
   /**
