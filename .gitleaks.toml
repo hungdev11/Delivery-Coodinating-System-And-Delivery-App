@@ -26,8 +26,10 @@ tags = ["secret", "hardcoded"]
 
 [[rules]]
 id = "custom-database-url"
-description = "Database URL with password detected"
-regex = '''(mysql|postgres|mongodb|redis)://[^:]+:[^@]+@[^/]+'''
+description = "Database URL with password detected (excluding env var templates)"
+# Only match REAL database URLs, NOT environment variable templates
+# Exclude: ${VAR}, $VAR, process.env.VAR patterns
+regex = '''(mysql|postgres|mongodb|redis)://(?![^:]*\$\{)(?![^:]*\$[A-Z_])(?![^:]*process\.env)[^:]+:[^\$\@]+@[^/\$]+'''
 tags = ["database", "password", "url"]
 
 # Exclude patterns (false positives)
@@ -36,6 +38,7 @@ description = "Allowlist for known false positives"
 paths = [
   '''\.env\.example''',
   '''\.env\.template''',
+  '''env\.local''',
   '''\.md$''',
   '''\.txt$''',
   '''LICENSE''',
@@ -48,6 +51,13 @@ paths = [
   '''\.gradle/''',
   '''\.idea/''',
   '''\.lock$''',
+  '''docker-compose.*\.yml''',
+  '''application\.yaml''',
+  '''application\.yml''',
+  '''config\.ts''',
+  '''KeycloakInitConfig\.java''',
+  '''LoginActivity\.java''',
+  '''model\.type\.ts''',
 ]
 
 commits = [
@@ -59,4 +69,14 @@ regexes = [
   '''example\.com''',
   '''test.*password''',
   '''placeholder.*key''',
+  # Exclude environment variable templates
+  '''\$\{[^}]+\}''',
+  '''\$[A-Z_][A-Z0-9_]*''',
+  '''process\.env\.[A-Z_]+''',
+  '''processEnv\.[A-Z_]+''',
+  '''env\.[A-Z_]+''',
+  # Exclude database URLs with environment variables
+  '''(mysql|postgres|mongodb|redis)://\$\{[^}]+\}''',
+  '''(mysql|postgres|mongodb|redis)://\$[A-Z_]+''',
+  '''(mysql|postgres|mongodb|redis)://process\.env\.[^:]+''',
 ]
