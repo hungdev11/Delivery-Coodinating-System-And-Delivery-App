@@ -7,6 +7,7 @@ import java.util.List;
  * Routing Request Models
  * DTOs for routing module inputs
  */
+@Data
 public class RoutingRequestDto {
 
     @Data

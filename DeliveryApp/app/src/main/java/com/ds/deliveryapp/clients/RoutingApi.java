@@ -9,7 +9,7 @@ import retrofit2.http.POST;
 
 public interface RoutingApi {
     @POST("/api/v1/routing/demo-route")
-    Call<RoutingResponseDto.RouteResponseDto> getOptimalRoute(
+    Call<RoutingResponseDto> getOptimalRoute(
             @Body RoutingRequestDto.RouteRequestDto request
     );
 }

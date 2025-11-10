@@ -48,4 +48,20 @@ public class WebClientConfig {
                 .baseUrl(baseUrl)
                 .build();
     }
+
+    @Bean("parcelServiceWebClient")
+    public WebClient parcelServiceWebClient(
+            @Value("${services.parcel.base-url}") String baseUrl) {
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .build();
+    }
+
+    @Bean("sessionServiceWebClient")
+    public WebClient sessionServiceWebClient(
+            @Value("${services.session.base-url}") String baseUrl) {
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .build();
+    }
 }
