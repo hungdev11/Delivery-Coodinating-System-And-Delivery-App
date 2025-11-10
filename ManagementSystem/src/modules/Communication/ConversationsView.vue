@@ -147,16 +147,30 @@ const openCreateChat = async () => {
           @click="openChat(conversation)"
         >
           <div class="flex items-center space-x-3">
-            <div
-              class="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-semibold"
-            >
-              {{ conversation.partnerName.charAt(0).toUpperCase() }}
+            <div class="relative">
+              <div
+                class="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-semibold"
+              >
+                {{ conversation.partnerName.charAt(0).toUpperCase() }}
+              </div>
+              <!-- Online status indicator -->
+              <div
+                v-if="conversation.isOnline !== null"
+                class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white"
+                :class="conversation.isOnline ? 'bg-green-500' : 'bg-gray-400'"
+                :title="conversation.isOnline ? 'Online' : 'Offline'"
+              />
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
-                <p class="text-sm font-medium text-gray-900 truncate">
-                  {{ conversation.partnerName }}
-                </p>
+                <div class="flex flex-col">
+                  <p class="text-sm font-medium text-gray-900 truncate">
+                    {{ conversation.partnerName }}
+                  </p>
+                  <p v-if="conversation.partnerUsername" class="text-xs text-gray-500 truncate">
+                    @{{ conversation.partnerUsername }}
+                  </p>
+                </div>
                 <span class="text-xs text-gray-500 ml-2">
                   {{ formatLastMessageTime(conversation.lastMessageTime) }}
                 </span>
