@@ -5,6 +5,7 @@ import com.ds.user.common.entities.common.BaseResponse;
 import com.ds.user.common.entities.common.PagingRequestV2;
 import com.ds.user.common.entities.common.paging.PagedData;
 import com.ds.user.common.entities.dto.user.UserDto;
+import com.ds.user.common.interfaces.IExternalAuthFacade;
 import com.ds.user.common.interfaces.IUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -29,6 +31,7 @@ import java.util.List;
 public class UserControllerV2 {
 
     private final IUserService userService;
+    private final IExternalAuthFacade externalAuthFacade;
 
     @PostMapping
     @Operation(summary = "Get users with enhanced filtering and sorting (V2 - Operations between each pair)")
@@ -42,7 +45,7 @@ public class UserControllerV2 {
             
             // Convert to PagedData<UserDto>
             List<UserDto> userDtos = userPage.getData().stream()
-                    .map(UserDto::from)
+                    .map(this::buildUserDto)
                     .toList();
             
             // Use the existing paging from userPage
@@ -59,5 +62,23 @@ public class UserControllerV2 {
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(BaseResponse.error("Failed to get users: " + e.getMessage()));
         }
+    }
+
+    private UserDto buildUserDto(User user) {
+        if (user == null) {
+            return null;
+        }
+
+        List<String> roles = Collections.emptyList();
+        String keycloakId = user.getKeycloakId();
+        if (keycloakId != null && !keycloakId.isBlank()) {
+            try {
+                roles = externalAuthFacade.getUserRoles(keycloakId);
+            } catch (Exception e) {
+                log.warn("Failed to load roles for user {} (keycloakId={}): {}", user.getUsername(), keycloakId, e.getMessage());
+            }
+        }
+
+        return UserDto.from(user, roles);
     }
 }

@@ -67,7 +67,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       USER_DB_NAME: ${USER_DB_NAME:-ds_user_service}
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
-      KEYCLOAK_REALM: master
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-delivery-system}
       KEYCLOAK_CLIENT_ID: dss-client
       KEYCLOAK_CLIENT_SECRET: dss-secret
       SETTINGS_SERVICE_URL: http://settings-service:21502
@@ -220,7 +220,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
-      KEYCLOAK_REALM: master
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-delivery-system}
       KEYCLOAK_CLIENT_ID: dss-client
       USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
       SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:-http://settings-service:21502}

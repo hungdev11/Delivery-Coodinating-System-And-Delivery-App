@@ -2,7 +2,6 @@ package com.ds.user.common.entities.base;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -14,10 +13,9 @@ import java.util.UUID;
 
 @Entity
 @Table(
-    name = "users",
+    name = "delivery_mans",
     uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"email", "keycloak_id", "username"}),
-        @UniqueConstraint(columnNames = {"username"})
+        @UniqueConstraint(columnNames = {"user_id"})
     }
 )
 @Getter
@@ -26,7 +24,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class User {
+public class DeliveryMan {
     @Id
     @JdbcTypeCode(Types.VARCHAR)
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -47,22 +45,19 @@ public class User {
         }
     }
 
-    private String keycloakId;
+    /**
+     * One-to-One relationship with User.
+     * Each delivery man is associated with exactly one user account.
+     */
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false, unique = true, updatable = false)
+    private User user;
 
-    private String firstName;
-    private String lastName;
+    @Column(name = "vehicle_type", nullable = false)
+    private String vehicleType;
 
-    private String email;
-    private String phone;
-    private String address;
-    private String identityNumber;
-
-    @Column(unique = true, nullable = false)
-    private String username;
-
-    @Enumerated(EnumType.ORDINAL)
-    @ColumnDefault("1")
-    private UserStatus status;
+    @Column(name = "capacity_kg", nullable = false)
+    private Double capacityKg;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
@@ -75,16 +70,5 @@ public class User {
     @PreUpdate
     public void preUpdateTimestamps() {
         updatedAt = LocalDateTime.now();
-    }
-
-    /**
-     * One-to-One relationship with DeliveryMan.
-     * A user can optionally be a delivery man (shipper).
-     */
-    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    private DeliveryMan deliveryMan;
-
-    public enum UserStatus {
-        BLOCKED, ACTIVE, PENDING
     }
 }

@@ -143,6 +143,10 @@ keycloak:
             realmRoles: [SHIPPER]
             clientRoles:
               frontend-client: [delivery-service]
+            deliveryMan:
+              enabled: true
+              vehicleType: MOTORBIKE
+              capacityKg: 120
 
           - username: client01
             email: client01@delivery-system.com
@@ -180,14 +184,38 @@ user:
 
 # Logging Configuration
 # Only log errors from frameworks/libraries, keep developer logs at INFO
+# Suppress verbose output from Java/Spring libraries to reduce log noise
 logging:
   level:
     root: ERROR                          # All libraries default to ERROR
     com.ds: INFO                         # Developer logs at INFO level
+    # Spring Framework - suppress verbose startup/component scanning
     org.springframework: ERROR           # Spring framework errors only
     org.springframework.web: ERROR       # Spring web errors only
     org.springframework.boot: ERROR      # Spring Boot errors only
-    org.hibernate: ERROR                 # Hibernate errors only (no SQL logging)
+    org.springframework.context: ERROR   # Component scanning noise
+    org.springframework.beans: ERROR      # Bean creation noise
+    org.springframework.core: ERROR       # Core framework noise
+    # Database/JPA - suppress SQL and connection pool noise
+    org.hibernate: ERROR                  # Hibernate errors only (no SQL logging)
+    org.hibernate.SQL: OFF                # Explicitly disable SQL logging
+    org.hibernate.type.descriptor.sql: OFF # Disable SQL parameter logging
     org.flywaydb: ERROR                  # Flyway errors only
     com.zaxxer.hikari: ERROR             # HikariCP errors only
-    org.keycloak: ERROR                  # Keycloak admin client errors only 
+    # Keycloak - suppress verbose admin client logs
+    org.keycloak: ERROR                  # Keycloak admin client errors only
+    org.jboss.resteasy: ERROR            # RESTEasy (Keycloak client) errors only
+    # HTTP/Network - suppress connection pool and HTTP client noise
+    org.apache.http: ERROR               # Apache HTTP client errors only
+    org.apache.catalina: ERROR           # Tomcat errors only
+    org.apache.tomcat: ERROR             # Tomcat errors only
+    # JAX-RS/Jersey - suppress REST client verbose logs
+    org.jboss.resteasy.client: ERROR     # RESTEasy client errors only
+    # Jackson/JSON - suppress serialization noise
+    com.fasterxml.jackson: ERROR         # Jackson errors only
+    # Other common noisy libraries
+    org.reflections: ERROR                # Reflections library errors only
+    io.netty: ERROR                      # Netty (used by HTTP clients) errors only
+    reactor.netty: ERROR                 # Reactor Netty errors only
+    # Logback configuration
+    ch.qos.logback: ERROR                # Logback errors only 

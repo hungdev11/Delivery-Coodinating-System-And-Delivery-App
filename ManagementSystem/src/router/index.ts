@@ -3,6 +3,7 @@ import { roleGuard } from '@/common/guards/roleGuard.guard'
 import { loginScreenRoutes } from '@/modules/LoginScreen/LoginScreen.routes'
 import { routes } from '@/modules/common/routes'
 import { usersRoutes } from '@/modules/Users/Users.routes'
+import { deliveryRoutes } from '@/modules/Delivery/Delivery.routes'
 import { zonesRoutes } from '@/modules/Zones/Zones.routes'
 import { settingsRoutes } from '@/modules/Settings/Settings.routes'
 import { addressesRoutes } from '@/modules/Addresses/Addresses.routes'
@@ -14,6 +15,7 @@ const router = createRouter({
     ...loginScreenRoutes,
     ...routes,
     ...usersRoutes,
+    ...deliveryRoutes,
     ...zonesRoutes,
     ...settingsRoutes,
     ...addressesRoutes,

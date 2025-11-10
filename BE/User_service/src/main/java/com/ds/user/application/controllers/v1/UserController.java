@@ -8,6 +8,7 @@ import com.ds.user.common.entities.dto.auth.SyncUserRequest;
 import com.ds.user.common.entities.dto.user.CreateUserRequest;
 import com.ds.user.common.entities.dto.user.UpdateUserRequest;
 import com.ds.user.common.entities.dto.user.UserDto;
+import com.ds.user.common.interfaces.IExternalAuthFacade;
 import com.ds.user.common.interfaces.IUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,6 +35,7 @@ import java.util.UUID;
 public class UserController {
 
     private final IUserService userService;
+    private final IExternalAuthFacade externalAuthFacade;
 
     @PostMapping("/create")
     @Operation(summary = "Create a new user")
@@ -52,7 +55,7 @@ public class UserController {
                 .build();
         
         User created = userService.createUser(user);
-        UserDto dto = UserDto.from(created);
+        UserDto dto = buildUserDto(created);
         
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -71,7 +74,7 @@ public class UserController {
             Optional<User> userOpt = userService.getUser(userId);
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
-                UserDto dto = UserDto.from(user);
+                UserDto dto = buildUserDto(user);
                 log.info("Found user: {} with ID: {} (original request: {})", user.getUsername(), user.getId(), id);
                 return ResponseEntity.ok(BaseResponse.success(dto));
             } else {
@@ -106,7 +109,7 @@ public class UserController {
         log.info("GET /api/v1/users/username/{} - Get user by username", username);
         
         return userService.getUserByUsername(username)
-                .map(user -> ResponseEntity.ok(BaseResponse.success(UserDto.from(user))))
+                .map(user -> ResponseEntity.ok(BaseResponse.success(buildUserDto(user))))
                 .orElse(ResponseEntity
                         .status(HttpStatus.NOT_FOUND)
                         .body(BaseResponse.error("User not found")));
@@ -124,7 +127,7 @@ public class UserController {
             
             // Convert to PagedData<UserDto>
             List<UserDto> userDtos = userPage.getData().stream()
-                    .map(UserDto::from)
+                    .map(this::buildUserDto)
                     .toList();
             
             // Use the existing paging from userPage
@@ -164,7 +167,7 @@ public class UserController {
                     .build();
             
             User updated = userService.updateUser(userId, user);
-            UserDto dto = UserDto.from(updated);
+            UserDto dto = buildUserDto(updated);
             
             return ResponseEntity.ok(BaseResponse.success(dto, "User updated successfully"));
         } catch (IllegalArgumentException e) {
@@ -224,7 +227,25 @@ public class UserController {
             request.getLastName()
         );
         
-        UserDto dto = UserDto.from(result);
+        UserDto dto = buildUserDto(result);
         return ResponseEntity.ok(BaseResponse.success(dto, "User synced successfully"));
+    }
+
+    private UserDto buildUserDto(User user) {
+        if (user == null) {
+            return null;
+        }
+
+        List<String> roles = Collections.emptyList();
+        String keycloakId = user.getKeycloakId();
+        if (keycloakId != null && !keycloakId.isBlank()) {
+            try {
+                roles = externalAuthFacade.getUserRoles(keycloakId);
+            } catch (Exception e) {
+                log.warn("Failed to load roles for user {} (keycloakId={}): {}", user.getUsername(), keycloakId, e.getMessage());
+            }
+        }
+
+        return UserDto.from(user, roles);
     }
 }

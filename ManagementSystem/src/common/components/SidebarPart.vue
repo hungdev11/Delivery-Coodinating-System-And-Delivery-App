@@ -158,6 +158,17 @@ const navigationItems = computed<NavigationMenuItem[][]>(() => {
         ],
       },
       {
+        label: 'Delivery',
+        icon: 'i-heroicons-truck',
+        children: [
+          {
+            label: 'Shippers',
+            to: '/delivery/shippers',
+            icon: 'i-heroicons-truck',
+          },
+        ],
+      },
+      {
         label: 'Zones',
         icon: 'i-heroicons-map',
         children: [

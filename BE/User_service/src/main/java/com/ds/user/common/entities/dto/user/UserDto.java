@@ -7,6 +7,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -29,11 +31,16 @@ public class UserDto {
     private User.UserStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private List<String> roles;
     
     /**
      * Convert from User entity to DTO
      */
     public static UserDto from(User user) {
+        return from(user, null);
+    }
+
+    public static UserDto from(User user, List<String> roles) {
         if (user == null) return null;
         
         return UserDto.builder()
@@ -49,6 +56,7 @@ public class UserDto {
                 .status(user.getStatus())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
+                .roles(roles != null ? List.copyOf(roles) : Collections.emptyList())
                 .build();
     }
 }

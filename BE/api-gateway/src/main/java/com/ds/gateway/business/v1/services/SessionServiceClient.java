@@ -13,6 +13,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -60,14 +61,13 @@ public class SessionServiceClient implements ISessionServiceClient {
         return callPost(uri, createSessionRequest);
     }
 
-
     @Override
     public ResponseEntity<?> getDailyTasks(UUID deliveryManId, List<String> status, int page, int size) {
         String uri = UriComponentsBuilder
                 .fromPath("/api/v1/assignments/session/delivery-man/{id}/tasks/today")
                 .queryParam("page", page)
                 .queryParam("size", size)
-                .queryParamIfPresent("status", status == null ? null : java.util.Optional.of(status))
+                .queryParamIfPresent("status", Optional.ofNullable(status))
                 .build(deliveryManId)
                 .toString();
 
@@ -77,19 +77,24 @@ public class SessionServiceClient implements ISessionServiceClient {
 
     @Override
     public ResponseEntity<?> getTasksHistory(UUID deliveryManId, List<String> status,
-                                             String createdAtStart, String createdAtEnd,
-                                             String completedAtStart, String completedAtEnd,
-                                             int page, int size) {
+            String createdAtStart, String createdAtEnd,
+            String completedAtStart, String completedAtEnd,
+            int page, int size) {
         UriComponentsBuilder builder = UriComponentsBuilder
                 .fromPath("/api/v1/assignments/session/delivery-man/{id}/tasks")
                 .queryParam("page", page)
                 .queryParam("size", size);
 
-        if (status != null && !status.isEmpty()) builder.queryParam("status", status.toArray());
-        if (createdAtStart != null) builder.queryParam("createdAtStart", createdAtStart);
-        if (createdAtEnd != null) builder.queryParam("createdAtEnd", createdAtEnd);
-        if (completedAtStart != null) builder.queryParam("completedAtStart", completedAtStart);
-        if (completedAtEnd != null) builder.queryParam("completedAtEnd", completedAtEnd);
+        if (status != null && !status.isEmpty())
+            builder.queryParam("status", status.toArray());
+        if (createdAtStart != null)
+            builder.queryParam("createdAtStart", createdAtStart);
+        if (createdAtEnd != null)
+            builder.queryParam("createdAtEnd", createdAtEnd);
+        if (completedAtStart != null)
+            builder.queryParam("completedAtStart", completedAtStart);
+        if (completedAtEnd != null)
+            builder.queryParam("completedAtEnd", completedAtEnd);
 
         String uri = builder.build(deliveryManId).toString();
         log.info("WebClient: GET -> {}", uri);
@@ -124,6 +129,13 @@ public class SessionServiceClient implements ISessionServiceClient {
     public ResponseEntity<?> lastestShipperForParcel(UUID parcelId) {
         String uri = String.format("/api/v1/assignments/current-shipper/parcels/%s", parcelId);
         return callGet(uri);
+    }
+
+    @Override
+    public ResponseEntity<?> updateAssignmentStatus(UUID sessionId, UUID assignmentId, Object statusUpdateRequest) {
+        String uri = String.format("/api/v1/sessions/%s/assignments/%s/status", sessionId, assignmentId);
+        log.info("WebClient: PUT -> {}", uri);
+        return callPut(uri, statusUpdateRequest);
     }
 
     // --------------------------------------------------
@@ -161,6 +173,24 @@ public class SessionServiceClient implements ISessionServiceClient {
 
         } catch (WebClientResponseException e) {
             log.error("POST {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
+            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        }
+    }
+
+    private ResponseEntity<?> callPut(String uri, Object body) {
+        try {
+            Object responseBody = webClient.put()
+                    .uri(uri)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .bodyValue(body != null ? body : new Object())
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+
+            return ResponseEntity.ok(responseBody);
+
+        } catch (WebClientResponseException e) {
+            log.error("PUT {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
         }
     }

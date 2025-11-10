@@ -2,6 +2,7 @@ package com.ds.user.business.v1.services;
 
 import com.ds.user.common.entities.dto.auth.ExternalUserDto;
 import com.ds.user.common.interfaces.IIdentityProvider;
+import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.core.Response;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RealmResource;
@@ -12,15 +13,18 @@ import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 /**
  * Keycloak implementation of IIdentityProvider
@@ -37,11 +41,35 @@ public class KeycloakIdentityProvider implements IIdentityProvider {
     private String clientId;
     
     @Autowired
-    private Keycloak keycloak;
+    @Qualifier("keycloakAdmin")
+    private Keycloak keycloakAdmin; // Use master realm admin for admin operations
     
+    @Autowired(required = false)
+    @Qualifier("keycloak")
+    private Keycloak keycloak; // Optional: for client-specific operations
+    
+    @PostConstruct
+    public void logConfiguration() {
+        log.info("[KeycloakIdentity] KeycloakIdentityProvider initialized - Realm: '{}', Client: '{}'", realm, clientId);
+    }
+    
+    /**
+     * Get users resource using master realm admin connection
+     * This ensures we have admin privileges for all operations
+     */
     private UsersResource getUsersResource() {
-        RealmResource realmResource = keycloak.realm(realm);
+        // Use master realm admin to access the target realm
+        log.debug("[KeycloakIdentity] Accessing realm: {}", realm);
+        RealmResource realmResource = keycloakAdmin.realm(realm);
         return realmResource.users();
+    }
+    
+    /**
+     * Get realm resource using master realm admin connection
+     */
+    private RealmResource getRealmResource() {
+        log.debug("[KeycloakIdentity] Accessing realm: {}", realm);
+        return keycloakAdmin.realm(realm);
     }
     
     @Override
@@ -217,25 +245,68 @@ public class KeycloakIdentityProvider implements IIdentityProvider {
             throw new IllegalArgumentException("External ID must not be null");
         }
         
+        log.info("[KeycloakIdentity] Getting roles for user externalId={} in realm={}", externalId, realm);
+        
         try {
+            // First verify the user exists
             UserResource userResource = getUsersResource().get(externalId);
-            
-            // Get client
-            var client = keycloak.realm(realm).clients().findByClientId(clientId).stream().findFirst();
-            if (client.isEmpty()) {
-                log.error("[KeycloakIdentity] Client '{}' not found in realm '{}'", clientId, realm);
+            try {
+                UserRepresentation user = userResource.toRepresentation();
+                log.info("[KeycloakIdentity] Found user: {} (username: {}) in realm: {}", 
+                    externalId, user.getUsername(), realm);
+            } catch (NotFoundException e) {
+                log.warn("[KeycloakIdentity] User not found in Keycloak realm '{}': externalId={}. " +
+                    "This may indicate the user was deleted from Keycloak or exists in a different realm.", realm, externalId);
                 return Collections.emptyList();
             }
             
-            String clientUuid = client.get().getId();
-            List<RoleRepresentation> roles = userResource.roles().clientLevel(clientUuid).listAll();
-            
-            return roles.stream()
-                .map(RoleRepresentation::getName)
-                .collect(Collectors.toList());
+            Set<String> roles = new LinkedHashSet<>();
+
+            // Realm-level roles
+            try {
+                List<RoleRepresentation> realmRoles = userResource.roles().realmLevel().listAll();
+                for (RoleRepresentation role : realmRoles) {
+                    roles.add(role.getName());
+                }
+                log.debug("[KeycloakIdentity] Found {} realm-level roles for user {}", roles.size(), externalId);
+            } catch (NotFoundException e) {
+                log.warn("[KeycloakIdentity] Cannot access realm-level roles for user {}: {}", externalId, e.getMessage());
+            } catch (Exception e) {
+                log.warn("[KeycloakIdentity] Error getting realm-level roles for user {}: {}", externalId, e.getMessage());
+            }
+
+            // Client-level roles - use master realm admin to access clients
+            try {
+                var client = getRealmResource().clients().findByClientId(clientId).stream().findFirst();
+                if (client.isEmpty()) {
+                    log.warn("[KeycloakIdentity] Client '{}' not found in realm '{}'", clientId, realm);
+                } else {
+                    String clientUuid = client.get().getId();
+                    List<RoleRepresentation> clientRoles = userResource.roles().clientLevel(clientUuid).listAll();
+                    int clientRoleCount = clientRoles.size();
+                    for (RoleRepresentation role : clientRoles) {
+                        roles.add(role.getName());
+                    }
+                    log.debug("[KeycloakIdentity] Found {} client-level roles for user {} (client: {})", 
+                        clientRoleCount, externalId, clientId);
+                }
+            } catch (NotFoundException e) {
+                log.warn("[KeycloakIdentity] Cannot access client-level roles for user {} (client: {}): {}", 
+                    externalId, clientId, e.getMessage());
+            } catch (Exception e) {
+                log.warn("[KeycloakIdentity] Error getting client-level roles for user {} (client: {}): {}", 
+                    externalId, clientId, e.getMessage());
+            }
+
+            log.debug("[KeycloakIdentity] Total roles found for user {}: {}", externalId, roles.size());
+            return new ArrayList<>(roles);
                 
+        } catch (NotFoundException e) {
+            log.warn("[KeycloakIdentity] User not found in Keycloak (404): externalId={}", externalId);
+            return Collections.emptyList();
         } catch (Exception e) {
-            log.error("[KeycloakIdentity] Error getting user roles: {}", e.getMessage(), e);
+            log.error("[KeycloakIdentity] Unexpected error getting user roles for externalId={}: {}", 
+                externalId, e.getMessage(), e);
             return Collections.emptyList();
         }
     }
@@ -254,15 +325,15 @@ public class KeycloakIdentityProvider implements IIdentityProvider {
         try {
             UserResource userResource = getUsersResource().get(externalId);
             
-            // Get client
-            var client = keycloak.realm(realm).clients().findByClientId(clientId).stream().findFirst();
+            // Get client using master realm admin
+            var client = getRealmResource().clients().findByClientId(clientId).stream().findFirst();
             if (client.isEmpty()) {
                 log.error("[KeycloakIdentity] Client '{}' not found in realm '{}'", clientId, realm);
                 return;
             }
             
             String clientUuid = client.get().getId();
-            var clientRolesResource = keycloak.realm(realm).clients().get(clientUuid).roles();
+            var clientRolesResource = getRealmResource().clients().get(clientUuid).roles();
             
             List<RoleRepresentation> toAssign = new ArrayList<>();
             for (String roleName : roles) {

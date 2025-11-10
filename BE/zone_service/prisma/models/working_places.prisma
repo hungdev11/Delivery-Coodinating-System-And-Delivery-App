@@ -1,9 +1,13 @@
 model working_places {
   working_places_id String    @id @default(uuid())
-  delivery_man_id   String
+  delivery_man_id   String    // NOTE: Should validate against User_service delivery_mans table
   start_at          DateTime
   end_at            DateTime?
 
   zone_id String
   zones   zones  @relation(fields: [zone_id], references: [zone_id])
+  
+  // TODO: Add validation to check if delivery_man_id exists in User_service
+  // This should be done via API call or gRPC when creating/updating working_places
+  // to warn shipper when assigned wrong zone (just warn, not block)
 }
