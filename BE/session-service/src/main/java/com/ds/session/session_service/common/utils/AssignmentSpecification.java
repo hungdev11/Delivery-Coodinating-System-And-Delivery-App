@@ -12,7 +12,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
 
 import com.ds.session.session_service.app_context.models.DeliveryAssignment;
-import com.ds.session.session_service.app_context.models.DeliverySession; 
+import com.ds.session.session_service.app_context.models.DeliverySession;
 import com.ds.session.session_service.common.enums.AssignmentStatus; 
 import com.ds.session.session_service.common.enums.SessionStatus;
 

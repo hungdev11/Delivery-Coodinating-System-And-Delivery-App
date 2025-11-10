@@ -188,12 +188,12 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             .where(AssignmentSpecification.byDeliveryManId(deliveryManId))
             //.and(AssignmentSpecification.bySessionStatusIn(terminalStatuses)) // Lọc theo trạng thái Session
             .and(AssignmentSpecification.hasAssignmentStatusIn(status)) // Lọc theo trạng thái Task
-            .and(AssignmentSpecification.isCreatedAtBetween(createdAtStart, createdAtEnd)) // Lọc theo ngày tạo task
-            .and(AssignmentSpecification.isCompletedAtBetween(completedAtStart, completedAtEnd)); // Lọc theo ngày hoàn thành
+            .and(AssignmentSpecification.isCreatedAtBetween(createdAtStart, createdAtEnd)); // Lọc theo ngày tạo task
+            //.and(AssignmentSpecification.isCompletedAtBetween(completedAtStart, completedAtEnd)); // Lọc theo ngày hoàn thành
 
         // 3. Gọi Repository
         Page<DeliveryAssignment> tasksPage = deliveryAssignmentRepository.findAll(spec, pageable);
-        
+        log.info("Found {} tasks matching criteriasa", tasksPage.getTotalElements());
         // 4. Ánh xạ
         return getEnrichedTasks(tasksPage);
     }

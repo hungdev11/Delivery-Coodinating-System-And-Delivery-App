@@ -109,58 +109,58 @@
                         android:paddingStart="16dp"/>
                 </LinearLayout>
 
-                <TextView
-                    android:textColor="@android:color/black"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Ngày hoàn thành:"
-                    android:textSize="14sp"
-                    android:layout_marginTop="12dp"/>
+<!--                <TextView-->
+<!--                    android:textColor="@android:color/black"-->
+<!--                    android:layout_width="wrap_content"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:text="Ngày hoàn thành:"-->
+<!--                    android:textSize="14sp"-->
+<!--                    android:layout_marginTop="12dp"/>-->
 
-                <LinearLayout
-                    android:id="@+id/layout_completed_at_dates"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
+<!--                <LinearLayout-->
+<!--                    android:id="@+id/layout_completed_at_dates"-->
+<!--                    android:layout_width="match_parent"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:orientation="horizontal"-->
+<!--                    android:gravity="center_vertical">-->
 
-                    <TextView
-                        android:id="@+id/tv_completed_at_start"
-                        android:layout_width="0dp"
-                        android:layout_weight="1"
-                        android:layout_height="wrap_content"
-                        android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:textColor="@android:color/black"
-                        tools:text="14/10/2025"/>
+<!--                    <TextView-->
+<!--                        android:id="@+id/tv_completed_at_start"-->
+<!--                        android:layout_width="0dp"-->
+<!--                        android:layout_weight="1"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:textSize="16sp"-->
+<!--                        android:textStyle="bold"-->
+<!--                        android:textColor="@android:color/black"-->
+<!--                        tools:text="14/10/2025"/>-->
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text=" - "
-                        android:textSize="16sp"
-                        android:textColor="@android:color/black"
-                        android:paddingStart="4dp"
-                        android:paddingEnd="4dp"/>
+<!--                    <TextView-->
+<!--                        android:layout_width="wrap_content"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:text=" - "-->
+<!--                        android:textSize="16sp"-->
+<!--                        android:textColor="@android:color/black"-->
+<!--                        android:paddingStart="4dp"-->
+<!--                        android:paddingEnd="4dp"/>-->
 
-                    <TextView
-                        android:id="@+id/tv_completed_at_end"
-                        android:layout_width="0dp"
-                        android:layout_weight="1"
-                        android:layout_height="wrap_content"
-                        android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:textColor="@android:color/black"
-                        tools:text="15/10/2025"/>
+<!--                    <TextView-->
+<!--                        android:id="@+id/tv_completed_at_end"-->
+<!--                        android:layout_width="0dp"-->
+<!--                        android:layout_weight="1"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:textSize="16sp"-->
+<!--                        android:textStyle="bold"-->
+<!--                        android:textColor="@android:color/black"-->
+<!--                        tools:text="15/10/2025"/>-->
 
-                    <ImageView
-                        android:id="@+id/img_completed_at_picker"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_calendar"
-                        android:contentDescription="Chọn ngày hoàn thành"
-                        android:paddingStart="16dp"/>
-                </LinearLayout>
+<!--                    <ImageView-->
+<!--                        android:id="@+id/img_completed_at_picker"-->
+<!--                        android:layout_width="24dp"-->
+<!--                        android:layout_height="24dp"-->
+<!--                        android:src="@drawable/ic_calendar"-->
+<!--                        android:contentDescription="Chọn ngày hoàn thành"-->
+<!--                        android:paddingStart="16dp"/>-->
+<!--                </LinearLayout>-->
 
                 <Button
                     android:id="@+id/btn_apply_filters"

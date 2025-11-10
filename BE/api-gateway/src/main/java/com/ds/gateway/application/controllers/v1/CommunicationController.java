@@ -2,10 +2,19 @@ package com.ds.gateway.application.controllers.v1;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
 import com.ds.gateway.annotations.AuthRequired;
+import com.ds.gateway.common.entities.dto.communicate.ConversationRequest;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +58,16 @@ public class CommunicationController {
             @RequestParam("user1") String userId1,
             @RequestParam("user2") String userId2) {
         log.info("GET /api/v1/conversations/find-by-users?user1={}&user2={} - Proxying to Communication Service", userId1, userId2);
+        String url = communicationServiceUrl + "/api/v1/conversations/find-by-users?user1=" + userId1 + "&user2=" + userId2;
+        return ResponseEntity.ok(restTemplate.getForObject(url, Object.class));
+    }
+
+    @PostMapping("/conversations/find-by-users")
+    @AuthRequired
+    public ResponseEntity<?> getConversationByTwoUsersUsePost(@RequestBody ConversationRequest request) {
+        String userId1 = request.getUserId1();
+        String userId2 = request.getUserId2();
+        log.info("POST /api/v1/conversations/find-by-users?user1={}&user2={} - Proxying to Communication Service", userId1, userId2);
         String url = communicationServiceUrl + "/api/v1/conversations/find-by-users?user1=" + userId1 + "&user2=" + userId2;
         return ResponseEntity.ok(restTemplate.getForObject(url, Object.class));
     }
