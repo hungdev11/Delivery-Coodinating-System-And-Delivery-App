@@ -1,7 +1,7 @@
 package com.ds.gateway.business.v1.services;
 
-import com.ds.gateway.common.interfaces.ISessionServiceClient;
-import lombok.extern.slf4j.Slf4j;
+import java.util.List;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
@@ -12,9 +12,9 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
+import com.ds.gateway.common.interfaces.ISessionServiceClient;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @Slf4j
@@ -71,6 +71,40 @@ public class SessionServiceClient implements ISessionServiceClient {
                 .build(deliveryManId)
                 .toString();
 
+        // String url =
+        // String.format("%s/api/v1/assignments/session/delivery-man/%s/tasks/today",
+        // sessionServiceUrl, deliveryManId);
+
+        // // Xây dựng URL với các query param
+        // UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
+        // .queryParam("page", page)
+        // .queryParam("size", size);
+
+        // if (status != null && !status.isEmpty()) {
+        // // Gửi 'status' lặp lại (ví dụ: ?status=PENDING&status=PROCESSING)
+        // builder.queryParam("status", status.toArray());
+        // }
+
+        // String fullUrl = builder.toUriString();
+        // log.info("Gateway: Proxying 'getDailyTasks' to {}", fullUrl);
+
+        // // Fully deserialize response to avoid chunked encoding issues with
+        // Cloudflare
+        // ResponseEntity<Object> response = restTemplate.exchange(fullUrl,
+        // HttpMethod.GET, null, Object.class);
+
+        // // Remove Transfer-Encoding header to prevent duplicate headers
+        // // Spring Boot will calculate Content-Length from the body
+        // org.springframework.http.HttpHeaders headers = new
+        // org.springframework.http.HttpHeaders();
+        // headers.putAll(response.getHeaders());
+        // headers.remove("Transfer-Encoding"); // Remove to prevent duplicate headers
+
+        // // Create new ResponseEntity with cleaned headers
+        // return ResponseEntity.status(response.getStatusCode())
+        // .headers(headers)
+        // .body(response.getBody());
+
         log.info("WebClient: GET -> {}", uri);
         return callGet(uri);
     }
@@ -96,7 +130,8 @@ public class SessionServiceClient implements ISessionServiceClient {
         if (completedAtEnd != null)
             builder.queryParam("completedAtEnd", completedAtEnd);
 
-        String uri = builder.build(deliveryManId).toString();
+        String uri = builder.buildAndExpand(deliveryManId).toUriString();
+
         log.info("WebClient: GET -> {}", uri);
         return callGet(uri);
     }

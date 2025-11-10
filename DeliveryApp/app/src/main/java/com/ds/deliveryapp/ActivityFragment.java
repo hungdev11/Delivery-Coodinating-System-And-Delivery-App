@@ -104,7 +104,7 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         setupStatusSpinnerLogic();
 
         imgCreatedAtPicker.setOnClickListener(v -> showDatePickerDialog(true, true));
-        imgCompletedAtPicker.setOnClickListener(v -> showDatePickerDialog(false, true));
+//        imgCompletedAtPicker.setOnClickListener(v -> showDatePickerDialog(false, true));
         btnApplyFilters.setOnClickListener(v -> resetPaginationAndFetchTasks());
 
         fetchTasks(currentPage);
@@ -120,9 +120,9 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         tvCreatedAtStart = view.findViewById(R.id.tv_created_at_start);
         tvCreatedAtEnd = view.findViewById(R.id.tv_created_at_end);
         imgCreatedAtPicker = view.findViewById(R.id.img_created_at_picker);
-        tvCompletedAtStart = view.findViewById(R.id.tv_completed_at_start);
-        tvCompletedAtEnd = view.findViewById(R.id.tv_completed_at_end);
-        imgCompletedAtPicker = view.findViewById(R.id.img_completed_at_picker);
+//        tvCompletedAtStart = view.findViewById(R.id.tv_completed_at_start);
+//        tvCompletedAtEnd = view.findViewById(R.id.tv_completed_at_end);
+//        imgCompletedAtPicker = view.findViewById(R.id.img_completed_at_picker);
         spinnerStatus = view.findViewById(R.id.spinner_status);
         btnApplyFilters = view.findViewById(R.id.btn_apply_filters);
     }
@@ -160,7 +160,7 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         completedAtStart = null;
         completedAtEnd = null;
         updateDateDisplay(true);
-        updateDateDisplay(false);
+        //updateDateDisplay(false);
     }
 
     private void updateDateDisplay(boolean isCreatedAt) {

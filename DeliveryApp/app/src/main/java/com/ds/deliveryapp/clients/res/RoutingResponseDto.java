@@ -9,6 +9,7 @@ import java.util.Map;
  * Routing Response Models
  * DTOs for routing module outputs
  */
+@Data
 public class RoutingResponseDto {
 
     // JSON gốc có dạng { "result": { ... } }

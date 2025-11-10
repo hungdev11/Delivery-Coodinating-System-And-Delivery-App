@@ -3,6 +3,7 @@ package com.ds.session.session_service.application.controllers;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,11 +14,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.ds.session.session_service.common.entities.dto.request.TaskFailRequest;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
+import com.ds.session.session_service.common.entities.dto.request.TaskFailRequest;
+import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.PageResponse;
 import com.ds.session.session_service.common.entities.dto.response.ShipperInfo;
-import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
 import com.ds.session.session_service.common.interfaces.IDeliveryAssignmentService;
 
 import jakarta.validation.Valid;
@@ -67,6 +68,8 @@ public class DeliveryAssignmentController {
         @RequestParam(defaultValue = "10") int size
     ) {
         log.info("Fetching tasks history for shipper {} with filters.", deliveryManId);
+        log.info("Status: {}, CreatedAt: {} to {}, CompletedAt: {} to {}", 
+            status, createdAtStart, createdAtEnd, completedAtStart, completedAtEnd);
         PageResponse<DeliveryAssignmentResponse> response = assignmentService.getTasksBetween(
             deliveryManId, status, 
             createdAtStart, createdAtEnd, 
