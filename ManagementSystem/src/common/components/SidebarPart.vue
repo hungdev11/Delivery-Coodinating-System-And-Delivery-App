@@ -107,73 +107,101 @@
 
 <script setup lang="ts">
 import { useSidebarStore } from '@/common/store/sidebar.store'
-import { getCurrentUser } from '@/common/guards/roleGuard.guard'
+import { getCurrentUser, getUserRoles } from '@/common/guards/roleGuard.guard'
 import type { NavigationMenuItem } from '@nuxt/ui'
 import { storeToRefs } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 const sidebarStore = useSidebarStore()
 const { isCollapsed } = storeToRefs(sidebarStore)
 const { toggleSidebar } = sidebarStore
 
+// Get current user roles
+const userRoles = computed(() => getUserRoles())
+const isAdmin = computed(() => userRoles.value.includes('ADMIN'))
+
 // Navigation items
-const navigationItems = ref<NavigationMenuItem[][]>([
-  [
+const navigationItems = computed<NavigationMenuItem[][]>(() => {
+  const communicationChildren: NavigationMenuItem[] = [
     {
-      label: 'Dashboard',
-      to: '/',
-      icon: 'i-heroicons-home',
+      label: 'Conversations',
+      to: '/communication',
+      icon: 'i-heroicons-chat-bubble-left-right',
     },
-    {
-      label: 'Users',
-      icon: 'i-heroicons-user-group',
-      children: [
-        {
-          label: 'List',
-          to: '/users',
-          icon: 'i-heroicons-user-group',
-        },
-      ],
-    },
-    {
-      label: 'Zones',
-      icon: 'i-heroicons-map',
-      children: [
-        {
-          label: 'List',
-          to: '/zones',
-          icon: 'i-heroicons-rectangle-stack',
-        },
-        {
-          label: 'Map',
-          to: '/zones/map',
-          icon: 'i-heroicons-map',
-        },
-        {
-          label: 'Demo Routing',
-          to: '/zones/map/demo-routing',
-          icon: 'i-heroicons-arrow-path-rounded-square',
-        },
-      ],
-    },
-    {
-      label: 'Addresses',
-      icon: 'i-heroicons-map-pin',
-      children: [
-        {
-          label: 'Picker',
-          to: '/addresses/picker',
-          icon: 'i-heroicons-map-pin',
-        },
-      ],
-    },
-    {
-      label: 'Settings',
-      to: '/settings',
+  ]
+
+  // Add Proposal Configs only for Admin
+  if (isAdmin.value) {
+    communicationChildren.push({
+      label: 'Proposal Configs',
+      to: '/communication/proposals/configs',
       icon: 'i-heroicons-cog-6-tooth',
-    },
-  ],
-])
+    })
+  }
+
+  return [
+    [
+      {
+        label: 'Dashboard',
+        to: '/',
+        icon: 'i-heroicons-home',
+      },
+      {
+        label: 'Users',
+        icon: 'i-heroicons-user-group',
+        children: [
+          {
+            label: 'List',
+            to: '/users',
+            icon: 'i-heroicons-user-group',
+          },
+        ],
+      },
+      {
+        label: 'Zones',
+        icon: 'i-heroicons-map',
+        children: [
+          {
+            label: 'List',
+            to: '/zones',
+            icon: 'i-heroicons-rectangle-stack',
+          },
+          {
+            label: 'Map',
+            to: '/zones/map',
+            icon: 'i-heroicons-map',
+          },
+          {
+            label: 'Demo Routing',
+            to: '/zones/map/demo-routing',
+            icon: 'i-heroicons-arrow-path-rounded-square',
+          },
+        ],
+      },
+      {
+        label: 'Addresses',
+        icon: 'i-heroicons-map-pin',
+        children: [
+          {
+            label: 'Picker',
+            to: '/addresses/picker',
+            icon: 'i-heroicons-map-pin',
+          },
+        ],
+      },
+      {
+        label: 'Communication',
+        icon: 'i-heroicons-chat-bubble-left-right',
+        children: communicationChildren,
+      },
+      {
+        label: 'Settings',
+        to: '/settings',
+        icon: 'i-heroicons-cog-6-tooth',
+      },
+    ],
+  ]
+})
 
 const currentUser = computed(() => {
   try {

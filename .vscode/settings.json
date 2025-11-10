@@ -1,0 +1,62 @@
+{
+    // File Nesting: Group related files together for cleaner explorer
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.expand": false,
+    "explorer.fileNesting.patterns": {
+        // Java/Maven Projects - Group under pom.xml
+        "pom.xml": "pom.xml, mvnw, mvnw.cmd, Dockerfile, *.md, README.*, .env*, *.yaml, *.yml, *.json, *.sql, *.properties, *.sh, *.bash, target",
+        // Node.js Projects - Group under package.json
+        "package.json": "package-lock.json, yarn.lock, pnpm-lock.yaml, .npmrc, .nvmrc, tsconfig*.json, vite.config.*, nest-cli.json, .eslintrc*, eslint.config.*, prettier.config.*, .prettierrc*, jest.config.*, vitest.config.*, Dockerfile, *.md, README.*, .env*, .env.example, env.d.ts, auto-imports.d.ts, components.d.ts, dist, node_modules",
+        // Gradle Projects - Group under build.gradle
+        "build.gradle": "settings.gradle, gradle.properties, gradlew, gradlew.bat, gradle-wrapper.properties, gradle-wrapper.jar, proguard-rules.pro, local.properties, *.md, README.*, Dockerfile",
+        // Docker Compose Files
+        "docker-compose.yml": "docker-compose.*.yml, .dockerignore, Dockerfile, env.local, .env*",
+        "docker-compose.prod.yml": "docker-compose.*.yml, .dockerignore, Dockerfile, env.local, .env*",
+        "docker-compose.test.yml": "docker-compose.*.yml, .dockerignore, Dockerfile, env.local, .env*",
+        "docker-compose.dev.yml": "docker-compose.*.yml, .dockerignore, Dockerfile, env.local, .env*",
+        // Dockerfile
+        "Dockerfile": ".dockerignore, docker-compose*.yml, env.local, .env*",
+        // Configuration Files
+        ".env": ".env.*, env.local, env.example, env.template",
+        "env.local": ".env*, env.example, env.template",
+        ".gitignore": ".gitattributes, .gitkeep",
+        ".gitleaks.toml": ".semgrepignore, .secretlintrc*",
+        // TypeScript Config
+        "tsconfig.json": "tsconfig.*.json, jsconfig.json",
+        // GitHub Workflows
+        "*.yml": "*.yaml",
+        ".github/workflows/*.yml": "*.yaml",
+        // Documentation
+        "README.md": "*.md, ARCHITECTURE.md, CHANGELOG.md, CONTRIBUTING.md, LICENSE, LICENSE.*",
+        // Prisma
+        "schema.prisma": "prisma/migrations, prisma/models, prisma.ts",
+        // Android
+        "AndroidManifest.xml": "build.gradle, proguard-rules.pro, gradle.properties",
+        // Nginx
+        "nginx.conf": "*.conf, *.nginx",
+        // Logs
+        "*.log": "logs",
+        // Build outputs
+        "target": "target/*",
+        "dist": "dist/*",
+        "build": "build/*",
+        "node_modules": "node_modules/*"
+    },
+    // Additional VSCode Settings for better organization
+    // Search exclusions
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/target": true,
+        "**/dist": true,
+        "**/build": true,
+        "**/.gradle": true,
+        "**/osrm_data": true,
+        "**/raw_data": true,
+        "**/*.log": true
+    },
+    // File associations
+    "files.associations": {
+        "docker-compose*.yml": "dockercompose",
+        "*.prisma": "prisma"
+    }
+}

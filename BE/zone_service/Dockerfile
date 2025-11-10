@@ -22,13 +22,28 @@ COPY utils ./utils
 COPY raw_data ./raw_data
 
 # Create OSRM data directory structure (empty, will be populated at runtime)
-RUN mkdir -p osrm_data/osrm-instance-1 osrm_data/osrm-instance-2
+# Motorbike instances
+RUN mkdir -p osrm_data/osrm-strict-priority-with-delta \
+    osrm_data/osrm-flexible-priority-with-delta \
+    osrm_data/osrm-strict-priority-no-delta \
+    osrm_data/osrm-flexible-priority-no-delta \
+    osrm_data/osrm-base
+# Car instances
+RUN mkdir -p osrm_data/osrm-car-strict-priority-with-delta \
+    osrm_data/osrm-car-flexible-priority-with-delta \
+    osrm_data/osrm-car-strict-priority-no-delta \
+    osrm_data/osrm-car-flexible-priority-no-delta \
+    osrm_data/osrm-car-base
 
 # Build application
 RUN npm run build
 
 # Production stage
 FROM node:20-alpine AS production
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
 
 WORKDIR /app
 
@@ -47,7 +62,21 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/raw_data ./raw_data
 
 # Create OSRM data directory structure (empty, will be populated at runtime)
-RUN mkdir -p osrm_data/osrm-instance-1 osrm_data/osrm-instance-2
+# Motorbike instances
+RUN mkdir -p osrm_data/osrm-strict-priority-with-delta \
+    osrm_data/osrm-flexible-priority-with-delta \
+    osrm_data/osrm-strict-priority-no-delta \
+    osrm_data/osrm-flexible-priority-no-delta \
+    osrm_data/osrm-base
+# Car instances
+RUN mkdir -p osrm_data/osrm-car-strict-priority-with-delta \
+    osrm_data/osrm-car-flexible-priority-with-delta \
+    osrm_data/osrm-car-strict-priority-no-delta \
+    osrm_data/osrm-car-flexible-priority-no-delta \
+    osrm_data/osrm-car-base
+
+# Change ownership to non-root user
+RUN chown -R nodejs:nodejs /app
 
 # Set environment
 ENV NODE_ENV=production
@@ -59,6 +88,9 @@ EXPOSE 21503
 ENV OSRM_DATA_PATH=/app/osrm_data
 ENV OSM_RAW_DATA_PATH=/app/raw_data/vietnam
 ENV NODE_ENV=production
+
+# Switch to non-root user
+USER nodejs
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

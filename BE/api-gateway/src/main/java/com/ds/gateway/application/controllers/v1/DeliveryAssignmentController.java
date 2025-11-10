@@ -66,7 +66,19 @@ public class DeliveryAssignmentController {
         String fullUrl = builder.toUriString();
         log.info("Gateway: Proxying 'getDailyTasks' to {}", fullUrl);
         
-        return restTemplate.exchange(fullUrl, HttpMethod.GET, null, Object.class);
+        // Fully deserialize response to avoid chunked encoding issues with Cloudflare
+        ResponseEntity<Object> response = restTemplate.exchange(fullUrl, HttpMethod.GET, null, Object.class);
+        
+        // Remove Transfer-Encoding header to prevent duplicate headers
+        // Spring Boot will calculate Content-Length from the body
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.putAll(response.getHeaders());
+        headers.remove("Transfer-Encoding"); // Remove to prevent duplicate headers
+        
+        // Create new ResponseEntity with cleaned headers
+        return ResponseEntity.status(response.getStatusCode())
+                .headers(headers)
+                .body(response.getBody());
     }
 
     /**

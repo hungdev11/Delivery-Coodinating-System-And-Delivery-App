@@ -2,7 +2,7 @@
  * Test TomTom Traffic Service
  */
 
-import { TomTomTrafficService } from '../services/tomtom-traffic-service.js';
+import { TomTomTrafficService } from '../services/tomtom-traffic-service';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();

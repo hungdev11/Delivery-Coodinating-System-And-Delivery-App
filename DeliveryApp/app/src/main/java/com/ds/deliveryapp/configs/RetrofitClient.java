@@ -14,9 +14,9 @@ public class RetrofitClient {
     private static Retrofit authRetrofit;
 
     private static Retrofit chatRetrofit;
-    private static final String BASE_URL = "http://192.168.1.6";
-    private static final String CHAT_BASE_URL = BASE_URL + ":21511/api/v1/";
-    private static final String GATEWAY_BASE_URL = BASE_URL + ":21500/api/v1/";
+    private static final String BASE_URL = "https://localserver.phuongy.works";
+    private static final String CHAT_BASE_URL = BASE_URL + "/api/v1/";
+    private static final String GATEWAY_BASE_URL = BASE_URL + "/api/v1/";
 
     public static Retrofit getRetrofitInstance(Context context) {
         if (sessionRetrofit == null) {

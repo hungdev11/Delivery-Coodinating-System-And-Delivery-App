@@ -12,7 +12,7 @@
 
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { OSMParser } from '../utils/osm-parser.js';
+import { OSMParser } from '../utils/osm-parser';
 
 async function extractThuDucRoads() {
   console.log('='.repeat(60));

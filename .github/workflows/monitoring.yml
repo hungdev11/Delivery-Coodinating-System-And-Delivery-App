@@ -19,6 +19,7 @@ on:
         - zone-service
         - parcel-service
         - session-service
+        - communication-service
 
 env:
   REGISTRY: ghcr.io
@@ -138,6 +139,25 @@ jobs:
           # curl -f http://staging-session-service.example.com:21505/actuator/health || exit 1
           echo "Session Service health check passed"
 
+  health-check-communication-service:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.check_type == 'all' || github.event.inputs.check_type == 'communication-service' || github.event_name == 'schedule'
+    
+    steps:
+      - name: Check Communication Service Health
+        run: |
+          echo "Checking Communication Service health..."
+          # Add actual health check commands here
+          # curl -f http://staging-communication-service.example.com:21506/actuator/health || exit 1
+          echo "Communication Service health check passed"
+
+      - name: Check Communication Service Metrics
+        run: |
+          echo "Checking Communication Service metrics..."
+          # Add metrics check commands here
+          # curl -f http://staging-communication-service.example.com:21506/actuator/metrics || exit 1
+          echo "Communication Service metrics check passed"
+
   performance-check:
     runs-on: ubuntu-latest
     if: github.event.inputs.check_type == 'all' || github.event_name == 'schedule'
@@ -175,8 +195,8 @@ jobs:
 
   notify-failures:
     runs-on: ubuntu-latest
-    needs: [health-check-api-gateway, health-check-user-service, health-check-settings-service, health-check-zone-service, health-check-parcel-service, health-check-session-service, performance-check, security-check]
-    if: always() && (needs.health-check-api-gateway.result == 'failure' || needs.health-check-user-service.result == 'failure' || needs.health-check-settings-service.result == 'failure' || needs.health-check-zone-service.result == 'failure' || needs.health-check-parcel-service.result == 'failure' || needs.health-check-session-service.result == 'failure' || needs.performance-check.result == 'failure' || needs.security-check.result == 'failure')
+    needs: [health-check-api-gateway, health-check-user-service, health-check-settings-service, health-check-zone-service, health-check-parcel-service, health-check-session-service, health-check-communication-service, performance-check, security-check]
+    if: always() && (needs.health-check-api-gateway.result == 'failure' || needs.health-check-user-service.result == 'failure' || needs.health-check-settings-service.result == 'failure' || needs.health-check-zone-service.result == 'failure' || needs.health-check-parcel-service.result == 'failure' || needs.health-check-session-service.result == 'failure' || needs.health-check-communication-service.result == 'failure' || needs.performance-check.result == 'failure' || needs.security-check.result == 'failure')
     
     steps:
       - name: Send Failure Notification
@@ -188,6 +208,7 @@ jobs:
           echo "Zone Service: ${{ needs.health-check-zone-service.result }}"
           echo "Parcel Service: ${{ needs.health-check-parcel-service.result }}"
           echo "Session Service: ${{ needs.health-check-session-service.result }}"
+          echo "Communication Service: ${{ needs.health-check-communication-service.result }}"
           echo "Performance: ${{ needs.performance-check.result }}"
           echo "Security: ${{ needs.security-check.result }}"
           # Add actual notification logic here (Slack, email, etc.)

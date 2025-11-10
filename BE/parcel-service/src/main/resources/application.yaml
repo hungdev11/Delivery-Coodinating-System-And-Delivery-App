@@ -5,7 +5,7 @@ spring:
   application:
     name: parcel-service
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${USER_DB_NAME:ds_parcel_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${PARCEL_DB_NAME:ds_parcel_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -16,3 +16,24 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+logging:
+  level:
+    root: ERROR
+    com.ds.parcel_service: INFO
+    org.springframework: ERROR
+    org.springframework.web: ERROR
+    org.springframework.boot: ERROR
+    org.hibernate: ERROR
+    com.zaxxer.hikari: ERROR
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
