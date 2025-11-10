@@ -69,6 +69,7 @@ public class MessageService implements IMessageService{
         InteractiveProposalResponseDTO res = message.getProposal() != null ? InteractiveProposalResponseDTO.from(message.getProposal()) : null;
         return MessageResponse.builder()
             .id(message.getId().toString()) 
+            .conversationId(message.getConversation().getId().toString()) // Include conversationId
             .content(message.getContent())
             .type(message.getType())
             .senderId(message.getSenderId())

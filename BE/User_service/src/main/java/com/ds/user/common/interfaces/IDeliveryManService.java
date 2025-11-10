@@ -15,7 +15,7 @@ public interface IDeliveryManService {
     DeliveryManDto updateDeliveryMan(UUID id, UpdateDeliveryManRequest request);
     void deleteDeliveryMan(UUID id);
     Optional<DeliveryManDto> getDeliveryMan(UUID id);
-    Optional<DeliveryManDto> getDeliveryManByUserId(UUID userId);
+    Optional<DeliveryManDto> getDeliveryManByUserId(String userId); // Changed from UUID to String
     PagedData<DeliveryManDto> getDeliveryMans(PagingRequest query);
     PagedData<DeliveryManDto> getDeliveryMansV2(PagingRequestV2 query);
 }

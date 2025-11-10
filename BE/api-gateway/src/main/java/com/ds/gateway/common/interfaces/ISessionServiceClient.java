@@ -28,4 +28,9 @@ public interface ISessionServiceClient {
      * This is used by API gateway for nested queries
      */
     ResponseEntity<?> updateAssignmentStatus(UUID sessionId, UUID assignmentId, Object statusUpdateRequest);
+    
+    /**
+     * Generate QR code
+     */
+    ResponseEntity<?> generateQR(String data);
 }

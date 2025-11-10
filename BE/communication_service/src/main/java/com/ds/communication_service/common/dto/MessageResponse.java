@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class MessageResponse {
     private String id;
+    private String conversationId; // Add conversationId to help frontend filter messages
     private String senderId;
     private String content;
     private LocalDateTime sentAt;

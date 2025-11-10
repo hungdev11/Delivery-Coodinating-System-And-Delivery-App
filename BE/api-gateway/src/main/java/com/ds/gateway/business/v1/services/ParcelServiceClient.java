@@ -90,6 +90,57 @@ public class ParcelServiceClient implements IParcelServiceClient {
         return ResponseEntity.ok(response);
     }
 
+    @Override
+    public ResponseEntity<?> getParcelsV2(Object request) {
+        try {
+            Object response = parcelServiceWebClient.post()
+                    .uri("/api/v2/parcels")
+                    .bodyValue(request)
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error during getParcelsV2 request: {}", e.getMessage());
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
+    @Override
+    public ResponseEntity<?> changeParcelStatus(UUID parcelId, String event) {
+        try {
+            String uri = UriComponentsBuilder.fromUriString("/api/v1/parcels/change-status/{parcelId}")
+                    .queryParam("event", event)
+                    .buildAndExpand(parcelId)
+                    .toUriString();
+            
+            Object response = parcelServiceWebClient.put()
+                    .uri(uri)
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error during changeParcelStatus request: {}", e.getMessage());
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
+    @Override
+    public ResponseEntity<?> deleteParcel(UUID parcelId) {
+        try {
+            parcelServiceWebClient.delete()
+                    .uri("/api/v1/parcels/{id}", parcelId)
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block();
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            log.error("Error during deleteParcel request: {}", e.getMessage());
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
     private Object executeGet(String url) {
         try {
             return parcelServiceWebClient.get()
@@ -107,5 +158,3 @@ public class ParcelServiceClient implements IParcelServiceClient {
         }
     }
 }
-
-

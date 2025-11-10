@@ -34,6 +34,7 @@ export interface ConversationResponse {
   partnerId: string
   partnerName: string
   partnerAvatar?: string | null
+  lastMessageTime?: string | null // ISO date string of last message time
 }
 
 /**
@@ -41,6 +42,7 @@ export interface ConversationResponse {
  */
 export interface MessageResponse {
   id: string
+  conversationId?: string // Optional for backward compatibility
   senderId: string
   content: string
   sentAt: string

@@ -42,12 +42,32 @@ public class ChatController {
 
         MessageResponse savedMessage = messageService.processAndSaveMessage(payload, senderId);
 
-        // Gửi đến "/user/{recipientId}/queue/messages"
-        // (recipientId phải là dạng String)
+        // CRITICAL: Send message to BOTH recipient and sender
+        // This ensures both users receive the message via WebSocket immediately
+        // Recipient receives the message, sender receives confirmation
+        
+        // Gửi đến recipient (người nhận)
+        String recipientDestination = "/user/" + payload.getRecipientId() + "/queue/messages";
+        log.info("📤 Sending message to RECIPIENT: userId={}, destination={}, messageId={}", 
+            payload.getRecipientId(), recipientDestination, savedMessage.getId());
         messagingTemplate.convertAndSendToUser(
             payload.getRecipientId(),        
             "/queue/messages",             
             savedMessage             
         );
+        
+        // Also send to sender for confirmation (matching ChatActivity.java behavior)
+        // This ensures sender sees their own message immediately via WebSocket
+        String senderDestination = "/user/" + senderId + "/queue/messages";
+        log.info("📤 Sending message to SENDER: userId={}, destination={}, messageId={}", 
+            senderId, senderDestination, savedMessage.getId());
+        messagingTemplate.convertAndSendToUser(
+            senderId,
+            "/queue/messages",             
+            savedMessage             
+        );
+        
+        log.info("✅ Message {} sent to both users: sender={}, recipient={}", 
+            savedMessage.getId(), senderId, payload.getRecipientId());
     }
 }

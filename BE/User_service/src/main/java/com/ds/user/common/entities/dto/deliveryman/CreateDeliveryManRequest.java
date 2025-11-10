@@ -8,15 +8,13 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateDeliveryManRequest {
     @NotNull(message = "User ID is required")
-    private UUID userId;
+    private String userId; // Changed from UUID to String (User.id is now String)
 
     @NotBlank(message = "Vehicle type is required")
     private String vehicleType;

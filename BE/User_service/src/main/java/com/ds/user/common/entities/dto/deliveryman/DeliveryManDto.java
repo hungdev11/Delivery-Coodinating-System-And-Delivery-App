@@ -13,8 +13,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class DeliveryManDto {
-    private UUID id;
-    private UUID userId;
+    private UUID id; // DeliveryMan ID is still UUID
+    private String userId; // Changed from UUID to String (User.id is now String)
     private String vehicleType;
     private Double capacityKg;
     private LocalDateTime createdAt;

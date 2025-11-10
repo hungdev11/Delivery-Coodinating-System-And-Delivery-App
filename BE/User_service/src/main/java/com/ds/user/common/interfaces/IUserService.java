@@ -8,13 +8,12 @@ import com.ds.user.common.entities.common.paging.PagedData;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 public interface IUserService {
     User createUser(User user);
-    User updateUser(UUID id, User user);
-    void deleteUser(UUID id);
-    Optional<User> getUser(UUID id);
+    User updateUser(String id, User user); // Changed from UUID to String
+    void deleteUser(String id); // Changed from UUID to String
+    Optional<User> getUser(String id); // Changed from UUID to String
     
     /**
      * V1 API - Get users with filtering and sorting (existing)

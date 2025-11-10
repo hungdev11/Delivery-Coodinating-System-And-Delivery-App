@@ -26,8 +26,8 @@ const apiClient = new AxiosHttpClient(import.meta.env.VITE_API_URL)
 /**
  * Get conversations for a user
  */
-export const getConversations = async (userId: string): Promise<GetConversationsResponse> => {
-  return apiClient.get<GetConversationsResponse>(`/v1/conversations/user/${userId}`)
+export const getConversations = async (userId: string): Promise<GetConversationsResponse | ConversationResponse[]> => {
+  return apiClient.get<GetConversationsResponse | ConversationResponse[]>(`/v1/conversations/user/${userId}`)
 }
 
 /**

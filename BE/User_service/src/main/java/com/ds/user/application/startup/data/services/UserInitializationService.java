@@ -196,22 +196,23 @@ public class UserInitializationService {
     
     /**
      * Sync user from Keycloak to User Service database
+     * The user ID in the database will be the same as the Keycloak user ID
      */
     private void syncUserToDatabase(String keycloakUserId, KeycloakInitConfig.UserConfig userConfig) {
         try {
-            // Check if user already exists in database
-            Optional<User> existingUser = userRepository.findByKeycloakId(keycloakUserId);
+            // Check if user already exists in database (by Keycloak ID, which is now the primary key)
+            Optional<User> existingUser = userRepository.findById(keycloakUserId);
             if (existingUser.isPresent()) {
                 User user = existingUser.get();
-                log.info("✓ Database: User '{}' already synced (keycloakId: {})",
+                log.info("✓ Database: User '{}' already synced (id: {})",
                     userConfig.getUsername(), keycloakUserId);
                 ensureDeliveryManSynced(user, userConfig);
                 return;
             }
             
-            // Create user in database
+            // Create user in database with Keycloak ID as the primary key
             User user = User.builder()
-                    .keycloakId(keycloakUserId)
+                    .id(keycloakUserId) // Use Keycloak ID as the primary key
                     .username(userConfig.getUsername())
                     .email(userConfig.getEmail())
                     .firstName(userConfig.getFirstName())
@@ -220,7 +221,7 @@ public class UserInitializationService {
                     .build();
             
             User savedUser = userRepository.save(user);
-            log.info("✓ Database: User '{}' synced successfully (keycloakId: {})", 
+            log.info("✓ Database: User '{}' synced successfully (id: {})", 
                 userConfig.getUsername(), keycloakUserId);
             ensureDeliveryManSynced(savedUser, userConfig);
                 

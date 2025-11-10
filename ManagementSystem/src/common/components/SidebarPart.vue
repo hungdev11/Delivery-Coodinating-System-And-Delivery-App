@@ -201,6 +201,17 @@ const navigationItems = computed<NavigationMenuItem[][]>(() => {
         ],
       },
       {
+        label: 'Parcels',
+        icon: 'i-heroicons-cube',
+        children: [
+          {
+            label: 'List',
+            to: '/parcels',
+            icon: 'i-heroicons-cube',
+          },
+        ],
+      },
+      {
         label: 'Communication',
         icon: 'i-heroicons-chat-bubble-left-right',
         children: communicationChildren,

@@ -38,7 +38,7 @@ class UserControllerTest {
     @BeforeEach
     void setUp() {
         testUser = User.builder()
-                .keycloakId(KEYCLOAK_ID)
+                .id(KEYCLOAK_ID)
                 .username("testuser")
                 .email("test@example.com")
                 .firstName("Test")

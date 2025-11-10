@@ -12,7 +12,10 @@ import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Component;
 
+import lombok.extern.slf4j.Slf4j;
+
 @Component
+@Slf4j
 public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
     /**
@@ -25,11 +28,24 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
         StompHeaderAccessor accessor =
                 MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
 
-        // 2. Chúng ta CHỈ quan tâm đến lệnh "CONNECT"
-        // (Không cần xác thực mỗi tin nhắn, chỉ cần lúc kết nối)
-        if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+        if (accessor == null) {
+            return message;
+        }
 
-            // 3. Đọc header "Authorization" mà client Android gửi
+        StompCommand command = accessor.getCommand();
+        
+        // Log heartbeat frames (they don't have a command, but we can detect them)
+        if (command == null) {
+            // This might be a heartbeat frame
+            log.debug("WebSocket frame received (possibly heartbeat)");
+        } else {
+            log.debug("WebSocket command: {}", command);
+        }
+
+        // 2. Chúng ta CHỈ quan tâm đến lệnh "CONNECT" và "SUBSCRIBE"
+        if (StompCommand.CONNECT.equals(command)) {
+
+            // 3. Đọc header "Authorization" mà client gửi
             // (Client đang gửi: "Bearer <USER_ID>")
             String authHeader = accessor.getFirstNativeHeader("Authorization");
 
@@ -51,11 +67,39 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
                     // 6. Gán Principal vào session WebSocket này
                     accessor.setUser(authToken);
+                    log.info("WebSocket CONNECT: User {} authenticated, Principal name={}", userId, authToken.getName());
+                } else {
+                    log.warn("WebSocket CONNECT: Empty userId in Authorization header");
                 }
+            } else {
+                log.warn("WebSocket CONNECT: Missing or invalid Authorization header");
+            }
+        } else if (StompCommand.SUBSCRIBE.equals(command)) {
+            // Log subscription attempts
+            String destination = accessor.getDestination();
+            Principal user = accessor.getUser();
+            if (user != null) {
+                log.info("WebSocket SUBSCRIBE: User {} subscribing to {}", user.getName(), destination);
+            } else {
+                log.warn("WebSocket SUBSCRIBE: No Principal found for subscription to {}", destination);
             }
         }
         
         // 7. Cho phép tin nhắn tiếp tục được xử lý
         return message;
+    }
+
+    /**
+     * Called after a message is sent (outgoing messages from server to client)
+     */
+    @Override
+    public void postSend(Message<?> message, MessageChannel channel, boolean sent) {
+        StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+        if (accessor != null) {
+            String destination = accessor.getDestination();
+            if (destination != null && destination.contains("/queue/messages")) {
+                log.info("📤 WebSocket message sent: destination={}, sent={}", destination, sent);
+            }
+        }
     }
 }

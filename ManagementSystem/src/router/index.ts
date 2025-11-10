@@ -8,6 +8,7 @@ import { zonesRoutes } from '@/modules/Zones/Zones.routes'
 import { settingsRoutes } from '@/modules/Settings/Settings.routes'
 import { addressesRoutes } from '@/modules/Addresses/Addresses.routes'
 import { communicationRoutes } from '@/modules/Communication/Communication.routes'
+import { parcelsRoutes } from '@/modules/Parcels/Parcels.routes'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -20,6 +21,7 @@ const router = createRouter({
     ...settingsRoutes,
     ...addressesRoutes,
     ...communicationRoutes,
+    ...parcelsRoutes,
     {
       path: '/:pathMatch(.*)*',
       component: () => import('@/modules/common/NotFoundPage.vue'),

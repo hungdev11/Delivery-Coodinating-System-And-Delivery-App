@@ -10,13 +10,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.sql.Types;
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(
     name = "users",
     uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"email", "keycloak_id", "username"}),
+        @UniqueConstraint(columnNames = {"email", "username"}),
         @UniqueConstraint(columnNames = {"username"})
     }
 )
@@ -29,14 +28,14 @@ import java.util.UUID;
 public class User {
     @Id
     @JdbcTypeCode(Types.VARCHAR)
-    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(length = 36, nullable = false, updatable = false)
-    private UUID id;
+    private String id; // Keycloak user ID (UUID format as string)
 
     @PrePersist
     public void prePersist() {
+        // ID must be set from Keycloak ID before persisting
         if (id == null) {
-            id = UUID.randomUUID();
+            throw new IllegalStateException("User ID must be set from Keycloak ID before persisting");
         }
         LocalDateTime now = LocalDateTime.now();
         if (createdAt == null) {
@@ -46,8 +45,6 @@ public class User {
             updatedAt = now;
         }
     }
-
-    private String keycloakId;
 
     private String firstName;
     private String lastName;

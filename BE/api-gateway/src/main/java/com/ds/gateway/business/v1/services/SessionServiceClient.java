@@ -229,4 +229,28 @@ public class SessionServiceClient implements ISessionServiceClient {
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
         }
     }
+
+    @Override
+    public ResponseEntity<?> generateQR(String data) {
+        String uri = UriComponentsBuilder
+                .fromPath("/api/v1/qr/generate")
+                .queryParam("data", data)
+                .build()
+                .toUriString();
+        log.info("WebClient: GET -> {}", uri);
+        try {
+            byte[] qrImage = webClient.get()
+                    .uri(uri)
+                    .accept(MediaType.IMAGE_PNG)
+                    .retrieve()
+                    .bodyToMono(byte[].class)
+                    .block();
+            return ResponseEntity.ok()
+                    .contentType(MediaType.IMAGE_PNG)
+                    .body(qrImage);
+        } catch (WebClientResponseException e) {
+            log.error("GET {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
+            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        }
+    }
 }

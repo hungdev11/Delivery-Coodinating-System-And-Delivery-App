@@ -36,6 +36,7 @@ export interface UserDto {
   phone?: string
   address?: string
   identityNumber?: string
+  roles?: string[] // Roles from login response
   status: 'ACTIVE' | 'BLOCKED' | 'PENDING'
   createdAt: string
   updatedAt: string

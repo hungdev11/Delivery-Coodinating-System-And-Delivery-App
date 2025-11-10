@@ -90,7 +90,7 @@ public class DeliveryManService implements IDeliveryManService {
     }
 
     @Override
-    public Optional<DeliveryManDto> getDeliveryManByUserId(UUID userId) {
+    public Optional<DeliveryManDto> getDeliveryManByUserId(String userId) { // Changed from UUID to String
         return deliveryManRepository.findByUserId(userId)
                 .map(this::mapToDto);
     }

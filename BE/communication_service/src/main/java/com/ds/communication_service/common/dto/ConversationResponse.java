@@ -1,5 +1,7 @@
 package com.ds.communication_service.common.dto;
 
+import java.time.LocalDateTime;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,5 +15,6 @@ public class ConversationResponse {
     private String conversationId;
     private String partnerId;
     private String partnerName;
-    private String partnerAvatar; 
+    private String partnerAvatar;
+    private LocalDateTime lastMessageTime; // Time of last message in conversation
 }

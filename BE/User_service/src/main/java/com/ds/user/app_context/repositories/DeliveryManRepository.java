@@ -15,8 +15,8 @@ import org.springframework.data.repository.query.Param;
 import com.ds.user.common.entities.base.DeliveryMan;
 
 public interface DeliveryManRepository extends JpaRepository<DeliveryMan, UUID>, JpaSpecificationExecutor<DeliveryMan> {
-    Optional<DeliveryMan> findByUserId(UUID userId);
-    boolean existsByUserId(UUID userId);
+    Optional<DeliveryMan> findByUserId(String userId); // Changed from UUID to String (User.id is now String)
+    boolean existsByUserId(String userId); // Changed from UUID to String (User.id is now String)
     
     @EntityGraph(attributePaths = {"user"})
     @Query("SELECT dm FROM DeliveryMan dm WHERE dm.id = :id")

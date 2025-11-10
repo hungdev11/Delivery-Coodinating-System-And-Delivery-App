@@ -25,60 +25,70 @@ export function useWebSocket() {
   const connecting = ref(false)
   const stompClient = ref<StompClient | null>(null)
   const subscriptions = ref<any[]>([])
+  const reconnectAttempts = ref(0)
+  const maxReconnectAttempts = 10
+  const reconnectTimer = ref<number | null>(null)
+  const keepAliveTimer = ref<number | null>(null)
+  const currentUserId = ref<string | null>(null)
+  const messageCallback = ref<((message: MessageResponse) => void) | null>(null)
+  const onReconnectCallback = ref<(() => void) | null>(null)
 
   /**
    * Get WebSocket URL from environment or auto-detect from current domain
-   * Supports:
-   * - Relative paths (e.g., /api/ws) - uses current domain automatically
-   * - Absolute URLs (e.g., ws://localhost:21500/ws or http://domain.com/api/ws)
+   * Note: SockJS requires HTTP/HTTPS URLs, not ws:// or wss://
+   * SockJS will handle the WebSocket upgrade internally
+   * WebSocket endpoint is at /ws (not /api/ws)
    */
   const getWebSocketUrl = (): string => {
     // Check for explicit WebSocket URL in environment
     const wsUrl = import.meta.env.VITE_WS_URL
     
     if (wsUrl) {
+      // Handle legacy /api/ws path - convert to /ws
+      if (wsUrl === '/api/ws' || wsUrl.endsWith('/api/ws')) {
+        return `${window.location.protocol}//${window.location.host}/ws`
+      }
+
       // If it's a relative path, build full URL from current domain
       if (wsUrl.startsWith('/')) {
-        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-        return `${protocol}://${window.location.host}${wsUrl}`
+        return `${window.location.protocol}//${window.location.host}${wsUrl}`
       }
       
-      // If it's already an absolute URL (ws:// or wss://), use it directly
-      if (wsUrl.startsWith('ws://') || wsUrl.startsWith('wss://')) {
+      // If it's already an absolute URL (http:// or https://), use it directly
+      if (wsUrl.startsWith('http://') || wsUrl.startsWith('https://')) {
+        // Check if it contains /api/ws and convert to /ws
+        if (wsUrl.includes('/api/ws')) {
+          return wsUrl.replace('/api/ws', '/ws')
+        }
         return wsUrl
       }
       
-      // If it's http:// or https://, convert to ws:// or wss://
-      if (wsUrl.startsWith('http://') || wsUrl.startsWith('https://')) {
-        return wsUrl.replace(/^http/, 'ws')
+      // If it's ws:// or wss://, convert to http:// or https://
+      if (wsUrl.startsWith('ws://')) {
+        const httpUrl = wsUrl.replace(/^ws:/, 'http:')
+        // Convert /api/ws to /ws if present
+        return httpUrl.includes('/api/ws') ? httpUrl.replace('/api/ws', '/ws') : httpUrl
+      }
+      if (wsUrl.startsWith('wss://')) {
+        const httpsUrl = wsUrl.replace(/^wss:/, 'https:')
+        // Convert /api/ws to /ws if present
+        return httpsUrl.includes('/api/ws') ? httpsUrl.replace('/api/ws', '/ws') : httpsUrl
       }
     }
     
-    // Fallback: Use VITE_API_URL or auto-detect from current domain
-    const apiUrl = import.meta.env.VITE_API_URL
-    
-    if (apiUrl) {
-      // If API URL is relative path, build WebSocket URL from current domain
-      if (apiUrl.startsWith('/')) {
-        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-        return `${protocol}://${window.location.host}${apiUrl}/ws`
-      }
-      
-      // If API URL is absolute, convert http/https to ws/wss
-      if (apiUrl.startsWith('http://') || apiUrl.startsWith('https://')) {
-        return apiUrl.replace(/^http/, 'ws') + '/ws'
-      }
-    }
-    
-    // Final fallback: Use current domain with /api/ws
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    return `${protocol}://${window.location.host}/api/ws`
+    // Default: Use /ws directly (not /api/ws)
+    // The WebSocket endpoint is proxied directly at /ws by nginx
+    return `${window.location.protocol}//${window.location.host}/ws`
   }
 
   /**
    * Connect to WebSocket
    */
-  const connect = async (userId: string, onMessageReceived?: (message: MessageResponse) => void) => {
+  const connect = async (
+    userId: string, 
+    onMessageReceived?: (message: MessageResponse) => void,
+    onReconnect?: () => void
+  ) => {
     if (connected.value || connecting.value) {
       return
     }
@@ -108,27 +118,81 @@ export function useWebSocket() {
           Authorization: `Bearer ${userId}`, // Communication service expects userId in Bearer token
         },
         reconnectDelay: 5000,
-        heartbeatIncoming: 10000,
-        heartbeatOutgoing: 10000,
-        debug: (str) => {
-          console.log('STOMP:', str)
+        heartbeatIncoming: 10000, // Server heartbeat every 10 seconds
+        heartbeatOutgoing: 10000, // Client heartbeat every 10 seconds
+        // Note: Heartbeat callbacks are handled via debug() function
+        // Enable automatic reconnection
+        connectionTimeout: 5000,
+        // Keep connection alive
+        beforeConnect: () => {
+          console.log('STOMP: Attempting to connect...')
         },
-        onConnect: () => {
-          console.log('WebSocket connected')
+        debug: (str) => {
+          // Log important messages including heartbeats
+          if (
+            str.includes('error') ||
+            str.includes('disconnect') ||
+            str.includes('connect') ||
+            str.includes('heartbeat') ||
+            str.includes('SUBSCRIBE') ||
+            str.includes('MESSAGE')
+          ) {
+            console.log('STOMP:', str)
+            // Log heartbeat specifically
+            if (str.includes('heartbeat')) {
+              console.log('💓 Heartbeat:', str)
+            }
+          }
+        },
+        onConnect: (frame) => {
+          console.log('✅ WebSocket connected successfully', {
+            userId,
+            connectedHeaders: frame.headers,
+          })
           connected.value = true
           connecting.value = false
+          reconnectAttempts.value = 0 // Reset reconnect attempts on successful connection
+
+          // Clear any existing reconnect timer
+          if (reconnectTimer.value) {
+            clearTimeout(reconnectTimer.value)
+            reconnectTimer.value = null
+          }
+
+          // Start keep-alive mechanism
+          startKeepAlive()
+
+          // Call reconnect callback if this is a reconnection
+          if (onReconnectCallback.value && reconnectAttempts.value > 0) {
+            onReconnectCallback.value()
+          }
 
           // Subscribe to user's message queue
           if (onMessageReceived && client) {
-            const subscription = client.subscribe(`/user/${userId}/queue/messages`, (message) => {
+            const destination = `/user/${userId}/queue/messages`
+            console.log(`📡 Subscribing to: ${destination}`)
+            
+            const subscription = client.subscribe(destination, (message) => {
               try {
+                console.log('📨 Message received via WebSocket:', {
+                  destination: message.headers.destination,
+                  messageId: message.headers['message-id'],
+                })
                 const messageData: MessageResponse = JSON.parse(message.body)
+                console.log('📨 Parsed message:', {
+                  id: messageData.id,
+                  senderId: messageData.senderId,
+                  content: messageData.content?.substring(0, 50),
+                })
                 onMessageReceived(messageData)
               } catch (error) {
-                console.error('Failed to parse message:', error)
+                console.error('❌ Failed to parse message:', error, message.body)
               }
             })
             subscriptions.value.push(subscription)
+            console.log(`✅ Successfully subscribed to ${destination}`)
+          } else {
+            console.warn('⚠️ No message callback provided, skipping subscription')
           }
         },
         onStompError: (frame) => {
@@ -145,24 +209,105 @@ export function useWebSocket() {
           console.log('WebSocket disconnected')
           connected.value = false
           connecting.value = false
+          stopKeepAlive()
+          // Attempt to reconnect if we have a user ID
+          if (currentUserId.value && reconnectAttempts.value < maxReconnectAttempts) {
+            scheduleReconnect()
+          }
         },
         onDisconnect: () => {
           console.log('STOMP disconnected')
           connected.value = false
           connecting.value = false
+          stopKeepAlive()
+          // Attempt to reconnect if we have a user ID
+          if (currentUserId.value && reconnectAttempts.value < maxReconnectAttempts) {
+            scheduleReconnect()
+          }
         },
       })
 
       client.activate()
       stompClient.value = client as any
+      currentUserId.value = userId
+      messageCallback.value = onMessageReceived || null
+      onReconnectCallback.value = onReconnect || null
     } catch (error) {
       console.error('Failed to connect WebSocket:', error)
       connecting.value = false
+      reconnectAttempts.value++
+
+      if (reconnectAttempts.value < maxReconnectAttempts) {
+        scheduleReconnect()
+      } else {
       toast.add({
         title: 'Connection Error',
-        description: 'Failed to initialize WebSocket connection',
+          description: 'Failed to initialize WebSocket connection after multiple attempts',
         color: 'error',
       })
+      }
+    }
+  }
+
+  /**
+   * Schedule reconnection attempt
+   */
+  const scheduleReconnect = () => {
+    if (reconnectTimer.value) {
+      clearTimeout(reconnectTimer.value)
+    }
+
+    reconnectAttempts.value++
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.value), 30000) // Exponential backoff, max 30s
+
+    console.log(`Scheduling reconnect attempt ${reconnectAttempts.value} in ${delay}ms`)
+
+    reconnectTimer.value = window.setTimeout(() => {
+      if (!connected.value && currentUserId.value && messageCallback.value) {
+        console.log('Attempting to reconnect WebSocket...')
+        connect(currentUserId.value, messageCallback.value, onReconnectCallback.value || undefined)
+      }
+    }, delay)
+  }
+
+  /**
+   * Start keep-alive mechanism
+   * Logs connection status periodically (STOMP handles heartbeats automatically)
+   */
+  const startKeepAlive = () => {
+    stopKeepAlive() // Clear any existing timer
+
+    // Log connection status every 30 seconds (heartbeats are handled by STOMP)
+    keepAliveTimer.value = window.setInterval(() => {
+      if (stompClient.value && connected.value) {
+        const client = stompClient.value as any
+        console.log('💓 Keep-alive check: WebSocket connection active', {
+          connected: connected.value,
+          userId: currentUserId.value,
+          subscriptions: subscriptions.value.length,
+        })
+        
+        // Verify we can still access the client
+        if (!client.connected && !client.active) {
+          console.warn('⚠️ WebSocket client appears disconnected, scheduling reconnect')
+          connected.value = false
+          if (currentUserId.value && messageCallback.value) {
+            scheduleReconnect()
+          }
+        }
+      } else {
+        console.warn('⚠️ Keep-alive check: WebSocket not connected')
+      }
+    }, 30000) // Every 30 seconds
+  }
+
+  /**
+   * Stop keep-alive mechanism
+   */
+  const stopKeepAlive = () => {
+    if (keepAliveTimer.value) {
+      clearInterval(keepAliveTimer.value)
+      keepAliveTimer.value = null
     }
   }
 
@@ -207,6 +352,13 @@ export function useWebSocket() {
    * Disconnect from WebSocket
    */
   const disconnect = () => {
+    stopKeepAlive()
+
+    if (reconnectTimer.value) {
+      clearTimeout(reconnectTimer.value)
+      reconnectTimer.value = null
+    }
+
     if (stompClient.value) {
       // Unsubscribe from all subscriptions
       subscriptions.value.forEach((subscription) => {
@@ -239,11 +391,35 @@ export function useWebSocket() {
       }
       stompClient.value = null
     }
+
+    currentUserId.value = null
+    messageCallback.value = null
+    onReconnectCallback.value = null
+    reconnectAttempts.value = 0
+  }
+
+  /**
+   * Handle visibility change - reconnect when tab becomes visible
+   */
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible' && !connected.value && currentUserId.value && messageCallback.value) {
+      console.log('Tab became visible, attempting to reconnect WebSocket...')
+      reconnectAttempts.value = 0 // Reset attempts
+      connect(currentUserId.value, messageCallback.value)
+    }
+  }
+
+  // Listen for visibility changes
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', handleVisibilityChange)
   }
 
   // Cleanup on unmount
   onUnmounted(() => {
     disconnect()
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   })
 
   return {

@@ -70,12 +70,13 @@ public class UserControllerV2 {
         }
 
         List<String> roles = Collections.emptyList();
-        String keycloakId = user.getKeycloakId();
-        if (keycloakId != null && !keycloakId.isBlank()) {
+        // User ID is now the Keycloak ID
+        String userId = user.getId();
+        if (userId != null && !userId.isBlank()) {
             try {
-                roles = externalAuthFacade.getUserRoles(keycloakId);
+                roles = externalAuthFacade.getUserRoles(userId);
             } catch (Exception e) {
-                log.warn("Failed to load roles for user {} (keycloakId={}): {}", user.getUsername(), keycloakId, e.getMessage());
+                log.warn("Failed to load roles for user {} (id={}): {}", user.getUsername(), userId, e.getMessage());
             }
         }
 

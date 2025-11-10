@@ -16,8 +16,9 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
-    "@internationalized/date": "^3.4.0",
+    "@internationalized/date": "^3.10.0",
     "@nuxt/ui": "^3.3.3",
+    "@stomp/stompjs": "^7.0.0",
     "@turf/turf": "^7.2.0",
     "@vueuse/core": "^13.9.0",
     "@vueuse/head": "^2.0.0",
@@ -25,7 +26,6 @@
     "maplibre-gl": "^5.9.0",
     "pinia": "^3.0.3",
     "sockjs-client": "^1.6.1",
-    "@stomp/stompjs": "^7.0.0",
     "universal-cookie": "^7.2.2",
     "vue": "^3.5.18",
     "vue-router": "^4.5.1",

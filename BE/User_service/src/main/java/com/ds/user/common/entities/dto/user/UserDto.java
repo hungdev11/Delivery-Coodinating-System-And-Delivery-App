@@ -9,7 +9,6 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * DTO for User entity
@@ -19,8 +18,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class UserDto {
-    private String id;
-    private String keycloakId;
+    private String id; // This is now the Keycloak ID
     private String firstName;
     private String lastName;
     private String email;
@@ -44,8 +42,7 @@ public class UserDto {
         if (user == null) return null;
         
         return UserDto.builder()
-                .id(user.getId() != null ? user.getId().toString() : null)
-                .keycloakId(user.getKeycloakId())
+                .id(user.getId()) // ID is now String (Keycloak ID)
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
                 .email(user.getEmail())

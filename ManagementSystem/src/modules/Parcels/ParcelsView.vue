@@ -1,0 +1,841 @@
+<script setup lang="ts">
+/**
+ * Parcels List View
+ *
+ * Main view for managing parcels with UTable and Nuxt UI v3 best practices
+ */
+
+import {
+  onMounted,
+  defineAsyncComponent,
+  ref,
+  computed,
+  watch,
+  reactive,
+  resolveComponent,
+  h,
+} from 'vue'
+import { useRouter } from 'vue-router'
+import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
+import { useParcels } from './composables'
+import type { ParcelDto, ParcelStatus } from './model.type'
+import { useTemplateRef } from 'vue'
+import type { TableColumn } from '@nuxt/ui'
+import AdvancedFilterDrawer from '../../common/components/filters/AdvancedFilterDrawer.vue'
+import type { SortingState, Column } from '@tanstack/table-core'
+import type { FilterCondition, FilterGroup } from '../../common/types/filter'
+import { createSortConfig } from '../../common/utils/query-builder'
+import TableHeaderCell from '../../common/components/TableHeaderCell.vue'
+
+// Dynamic imports to avoid TypeScript issues
+const PageHeader = defineAsyncComponent(() => import('../../common/components/PageHeader.vue'))
+
+// Lazy load modals
+const LazyParcelFormModal = defineAsyncComponent(() => import('./components/ParcelFormModal.vue'))
+const LazyParcelDeleteModal = defineAsyncComponent(() => import('./components/ParcelDeleteModal.vue'))
+const LazyParcelQRModal = defineAsyncComponent(() => import('./components/ParcelQRModal.vue'))
+const UCheckbox = resolveComponent('UCheckbox')
+const UBadge = resolveComponent('UBadge')
+const UButton = resolveComponent('UButton')
+
+const router = useRouter()
+const overlay = useOverlay()
+const table = useTemplateRef('table')
+
+// Composables
+const {
+  parcels,
+  loading,
+  page,
+  pageSize,
+  total,
+  filters,
+  sorts,
+  loadParcels,
+  create,
+  update,
+  remove,
+  changeStatus,
+  bulkDelete,
+  handleSearch,
+  updateFilters,
+  updateSorts,
+  clearFilters,
+  getFilterableColumns,
+} = useParcels()
+
+// Table state
+const selected = ref<ParcelDto[]>([])
+const sorting = ref<Array<{ id: string; desc: boolean }>>([])
+const activeFilters = ref<FilterCondition[]>([])
+const columnFiltersState = reactive<Record<string, FilterCondition[]>>({})
+const advancedFiltersGroup = ref<FilterGroup | undefined>(undefined)
+
+// Search and filter state
+const searchValue = ref('')
+const statusFilter = ref<ParcelStatus | ''>('')
+
+// Advanced filter state
+const showAdvancedFilters = ref(false)
+const filterableColumns = computed(() => getFilterableColumns())
+
+/**
+ * Setup header component for table columns
+ */
+type HeaderConfig = {
+  variant: 'link' | 'solid' | 'outline' | 'soft' | 'ghost'
+  label: string
+  class: string
+  activeColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+  inactiveColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+  filterable?: boolean
+}
+
+type HeaderColumn = Column<ParcelDto, unknown>
+
+const setupHeader = ({
+  column,
+  config,
+}: {
+  column: HeaderColumn
+  config: HeaderConfig
+}) =>
+  h(TableHeaderCell<ParcelDto>, {
+    column,
+    config,
+    filterableColumns: filterableColumns.value,
+    activeFilters: activeFilters.value,
+    'onUpdate:filters': handleFiltersUpdate,
+  })
+
+// Helper function to get all active filters
+const getAllActiveFilters = (): FilterCondition[] | undefined => {
+  if (!filters.value || !filters.value.conditions) return undefined
+
+  // Extract all conditions from the filter group structure
+  const extractConditions = (item: FilterCondition | FilterGroup): FilterCondition[] => {
+    if ('field' in item) {
+      // It's a FilterCondition
+      return [item as FilterCondition]
+    } else if ('conditions' in item) {
+      // It's a FilterGroup
+      return item.conditions.flatMap(extractConditions)
+    }
+    return []
+  }
+
+  const allFilters = filters.value.conditions.flatMap(extractConditions)
+  return allFilters.length > 0 ? allFilters : undefined
+}
+
+// Helper function to get filter structure for display
+const getFilterStructure = (): string => {
+  if (!filters.value || !filters.value.conditions) return ''
+
+  const formatItem = (item: FilterCondition | FilterGroup): string => {
+    if ('field' in item) {
+      // It's a FilterCondition
+      const condition = item as FilterCondition
+      return `${getColumnLabel(condition.field)} ${getOperatorLabel(condition.operator)} ${condition.value}`
+    } else if ('conditions' in item) {
+      // It's a FilterGroup
+      const group = item as FilterGroup
+      const groupContent = group.conditions
+        .map((subItem, subIndex) => {
+          const itemStr = formatItem(subItem)
+          // Add logic operator between items (except first item)
+          return subIndex > 0 && subItem.logic ? `${subItem.logic} ${itemStr}` : itemStr
+        })
+        .join(' ')
+      return `(${groupContent})`
+    }
+    return ''
+  }
+
+  return filters.value.conditions
+    .map((item, index) => {
+      const itemStr = formatItem(item)
+      // Add logic operator between items (except first item)
+      return index > 0 && item.logic ? `${item.logic} ${itemStr}` : itemStr
+    })
+    .join(' ')
+}
+
+// Helper function to get active filter group
+const getActiveFilterGroup = (): FilterGroup | undefined => {
+  if (!filters.value || !filters.value.conditions) return undefined
+  return filters.value
+}
+
+// Advanced filter handlers
+const handleAdvancedFilterApply = (filterGroup: FilterGroup) => {
+  advancedFiltersGroup.value = filterGroup && filterGroup.conditions.length > 0 ? filterGroup : undefined
+  applyCombinedFilters()
+  showAdvancedFilters.value = false
+}
+
+const handleAdvancedFilterClear = () => {
+  advancedFiltersGroup.value = undefined
+  Object.keys(columnFiltersState).forEach((key) => {
+    delete columnFiltersState[key]
+  })
+  activeFilters.value = []
+  clearFilters()
+  showAdvancedFilters.value = false
+}
+
+/**
+ * Handle filters update from column filters
+ */
+interface ColumnFilterUpdatePayload {
+  columnId: string
+  filters: FilterCondition[]
+}
+
+const applyCombinedFilters = () => {
+  const columnFilters = Object.values(columnFiltersState).flat()
+
+  const combinedConditions: (FilterCondition | FilterGroup)[] = []
+
+  if (advancedFiltersGroup.value && advancedFiltersGroup.value.conditions.length > 0) {
+    combinedConditions.push(advancedFiltersGroup.value)
+  }
+
+  if (columnFilters.length > 0) {
+    combinedConditions.push(...columnFilters)
+  }
+
+  if (combinedConditions.length === 0) {
+    clearFilters()
+    return
+  }
+
+  updateFilters({
+    logic: 'AND',
+    conditions: combinedConditions,
+  })
+}
+
+const handleFiltersUpdate = ({ columnId, filters }: ColumnFilterUpdatePayload) => {
+  if (filters.length > 0) {
+    columnFiltersState[columnId] = filters.map((filter) => ({ ...filter }))
+  } else {
+    delete columnFiltersState[columnId]
+  }
+
+  const columnFilters = Object.values(columnFiltersState).flat()
+  activeFilters.value = columnFilters
+
+  applyCombinedFilters()
+}
+
+// Table columns configuration
+const columns: TableColumn<ParcelDto>[] = [
+  {
+    id: 'select',
+    header: ({ table }) =>
+      h(UCheckbox, {
+        modelValue: table.getIsSomePageRowsSelected()
+          ? 'indeterminate'
+          : table.getIsAllPageRowsSelected(),
+        'onUpdate:modelValue': (value: boolean | 'indeterminate') =>
+          table.toggleAllPageRowsSelected(!!value),
+        'aria-label': 'Select all',
+      }),
+    cell: ({ row }) =>
+      h(UCheckbox, {
+        modelValue: row.getIsSelected(),
+        'onUpdate:modelValue': (value: boolean | 'indeterminate') => row.toggleSelected(!!value),
+        'aria-label': 'Select row',
+      }),
+  },
+  {
+    accessorKey: 'code',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost',
+          label: 'Code',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: true,
+        },
+      }),
+  },
+  {
+    accessorKey: 'senderId',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost',
+          label: 'Sender ID',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: true,
+        },
+      }),
+  },
+  {
+    accessorKey: 'receiverId',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost',
+          label: 'Receiver ID',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: true,
+        },
+      }),
+  },
+  {
+    accessorKey: 'deliveryType',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost',
+          label: 'Delivery Type',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: true,
+        },
+      }),
+    cell: ({ row }) => {
+      const deliveryType = row.getValue('deliveryType') as string
+      return h(UBadge, { variant: 'soft', color: 'primary', size: 'sm' }, () => deliveryType)
+    },
+  },
+  {
+    accessorKey: 'status',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost',
+          label: 'Status',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: true,
+        },
+      }),
+    cell: ({ row }) => {
+      const status = row.getValue('status') as ParcelStatus
+      const color = getStatusColor(status)
+      const displayStatus = getDisplayStatus(status)
+      return h(UBadge, { class: 'capitalize', variant: 'soft', color }, () => displayStatus)
+    },
+  },
+  {
+    accessorKey: 'weight',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost',
+          label: 'Weight',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: true,
+        },
+      }),
+    cell: ({ row }) => {
+      const weight = row.getValue('weight') as number
+      return h('span', `${weight} kg`)
+    },
+  },
+  {
+    accessorKey: 'value',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost',
+          label: 'Value',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: true,
+        },
+      }),
+    cell: ({ row }) => {
+      const value = row.getValue('value') as number
+      return h('span', new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value))
+    },
+  },
+  {
+    accessorKey: 'lat',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost',
+          label: 'Latitude',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: true,
+        },
+      }),
+    cell: ({ row }) => {
+      const lat = row.getValue('lat') as number | undefined
+      return h('span', lat !== undefined ? lat.toFixed(6) : '-')
+    },
+  },
+  {
+    accessorKey: 'lon',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost',
+          label: 'Longitude',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: true,
+        },
+      }),
+    cell: ({ row }) => {
+      const lon = row.getValue('lon') as number | undefined
+      return h('span', lon !== undefined ? lon.toFixed(6) : '-')
+    },
+  },
+  {
+    accessorKey: 'id',
+    header: 'ID',
+  },
+  {
+    accessorKey: 'actions',
+    header: 'Actions',
+    cell: ({ row }) => {
+      const parcel = row.original
+      return h('div', { class: 'flex space-x-2' }, [
+        h(UButton, {
+          icon: 'i-heroicons-qr-code',
+          size: 'sm',
+          variant: 'ghost',
+          title: 'Show QR Code',
+          onClick: () => openQRModal(parcel),
+        }),
+        h(UButton, {
+          icon: 'i-heroicons-pencil',
+          size: 'sm',
+          variant: 'ghost',
+          title: 'Edit parcel',
+          onClick: () => openEditModal(parcel),
+        }),
+        h(UButton, {
+          icon: 'i-heroicons-trash',
+          size: 'sm',
+          variant: 'ghost',
+          color: 'error',
+          title: 'Delete parcel',
+          onClick: () => openDeleteModal(parcel),
+        }),
+      ])
+    },
+  },
+]
+
+// Client-side filtering for simple mode
+const filteredParcels = computed(() => {
+  let filtered = [...parcels.value]
+
+  // Apply search filter
+  if (searchValue.value) {
+    const search = searchValue.value.toLowerCase()
+    filtered = filtered.filter(
+      (parcel) =>
+        parcel.code.toLowerCase().includes(search) ||
+        parcel.senderId.toLowerCase().includes(search) ||
+        parcel.receiverId.toLowerCase().includes(search) ||
+        parcel.receiveFrom.toLowerCase().includes(search) ||
+        parcel.targetDestination.toLowerCase().includes(search),
+    )
+  }
+
+  // Apply status filter
+  if (statusFilter.value) {
+    filtered = filtered.filter((parcel) => parcel.status === statusFilter.value)
+  }
+
+  return filtered
+})
+
+/**
+ * Open create modal
+ */
+const openCreateModal = async () => {
+  const modal = overlay.create(LazyParcelFormModal)
+  const instance = modal.open({ mode: 'create' })
+  const formData = await instance.result
+
+  if (formData) {
+    await create(formData)
+  }
+}
+
+/**
+ * Open edit modal
+ */
+const openEditModal = async (parcel: ParcelDto) => {
+  const modal = overlay.create(LazyParcelFormModal)
+  const instance = modal.open({ mode: 'edit', parcel })
+  const formData = await instance.result
+
+  if (formData) {
+    await update(parcel.id, formData)
+  }
+}
+
+/**
+ * Open delete modal
+ */
+const openDeleteModal = async (parcel: ParcelDto) => {
+  const modal = overlay.create(LazyParcelDeleteModal)
+  const instance = modal.open({ parcelCode: parcel.code })
+  const confirmed = await instance.result
+
+  if (confirmed) {
+    await remove(parcel.id)
+  }
+}
+
+/**
+ * Open QR code modal
+ */
+const openQRModal = async (parcel: ParcelDto) => {
+  const modal = overlay.create(LazyParcelQRModal)
+  const instance = modal.open({ parcelId: parcel.id, parcelCode: parcel.code })
+  await instance.result
+}
+
+/**
+ * Handle bulk delete
+ */
+const handleBulkDelete = async () => {
+  if (selected.value.length === 0) return
+
+  const modal = overlay.create(LazyParcelDeleteModal)
+  const instance = modal.open({ count: selected.value.length })
+  const confirmed = await instance.result
+
+  if (confirmed) {
+    const ids = selected.value.map((parcel) => parcel.id)
+    await bulkDelete(ids)
+    selected.value = []
+  }
+}
+
+/**
+ * Get status color
+ */
+const getStatusColor = (
+  status: ParcelStatus,
+): 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral' => {
+  const colorMap: Record<
+    ParcelStatus,
+    'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+  > = {
+    IN_WAREHOUSE: 'info',
+    ON_ROUTE: 'primary',
+    DELIVERED: 'success',
+    SUCCEEDED: 'success',
+    FAILED: 'error',
+    DELAYED: 'warning',
+    DISPUTE: 'error',
+    LOST: 'error',
+  }
+  return colorMap[status] || 'neutral'
+}
+
+/**
+ * Get display status
+ */
+const getDisplayStatus = (status: ParcelStatus): string => {
+  const statusMap: Record<ParcelStatus, string> = {
+    IN_WAREHOUSE: 'In Warehouse',
+    ON_ROUTE: 'On Route',
+    DELIVERED: 'Delivered',
+    SUCCEEDED: 'Succeeded',
+    FAILED: 'Failed',
+    DELAYED: 'Delayed',
+    DISPUTE: 'Dispute',
+    LOST: 'Lost',
+  }
+  return statusMap[status] || status
+}
+
+/**
+ * Get column label for sorting summary
+ */
+const getColumnLabel = (columnId: string): string => {
+  const labelMap: Record<string, string> = {
+    code: 'Code',
+    senderId: 'Sender ID',
+    receiverId: 'Receiver ID',
+    deliveryType: 'Delivery Type',
+    status: 'Status',
+    weight: 'Weight',
+    value: 'Value',
+    lat: 'Latitude',
+    lon: 'Longitude',
+    createdAt: 'Created At',
+    updatedAt: 'Updated At',
+  }
+  return labelMap[columnId] || columnId
+}
+
+/**
+ * Get operator label for display
+ */
+const getOperatorLabel = (operator: string): string => {
+  const operatorMap: Record<string, string> = {
+    eq: '=',
+    ne: '!=',
+    contains: 'contains',
+    startsWith: 'starts with',
+    endsWith: 'ends with',
+    gt: '>',
+    gte: '>=',
+    lt: '<',
+    lte: '<=',
+    in: 'in',
+    notIn: 'not in',
+  }
+  return operatorMap[operator] || operator
+}
+
+// Load parcels on mount
+onMounted(async () => {
+  await loadParcels()
+})
+
+// Watch for search changes with debounce
+let searchTimeout: NodeJS.Timeout
+watch(searchValue, (newValue) => {
+  clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    handleSearch(newValue)
+  }, 300)
+})
+
+const onSortingChange = (newSorting: SortingState): void => {
+  const newSorts = newSorting.map((sort) => createSortConfig(sort.id, sort.desc ? 'desc' : 'asc'))
+  updateSorts(newSorts)
+  sorting.value = newSorting
+}
+
+// Watch for sorts changes and sync with sorting
+watch(
+  sorts,
+  (newSorts) => {
+    const newSorting = newSorts.map((sort) => ({
+      id: sort.field,
+      desc: sort.direction === 'desc',
+    }))
+    sorting.value = newSorting
+  },
+  { deep: true },
+)
+</script>
+
+<template>
+  <div class="container mx-auto px-4 py-6">
+    <PageHeader title="Parcels" description="Manage system parcels">
+      <template #actions>
+        <UButton icon="i-heroicons-plus" @click="openCreateModal"> Add Parcel </UButton>
+      </template>
+    </PageHeader>
+
+    <!-- Filters and Search -->
+    <div class="mb-6 space-y-4">
+      <!-- Simple Search -->
+      <div class="flex flex-col sm:flex-row gap-4">
+        <!-- Search Input -->
+        <div class="flex-1">
+          <UInput
+            v-model="searchValue"
+            placeholder="Search parcels..."
+            icon="i-heroicons-magnifying-glass"
+            size="lg"
+          />
+        </div>
+      </div>
+
+      <!-- Advanced Filters Button -->
+      <div class="flex justify-between items-center">
+        <!-- Active Filters Display -->
+        <div
+          v-if="getAllActiveFilters() && getAllActiveFilters()!.length > 0"
+          class="flex items-center gap-2"
+        >
+          <span class="text-sm text-gray-600 dark:text-gray-400">Active filters:</span>
+          <div class="flex items-center gap-1">
+            <UBadge color="primary" variant="soft" size="sm" class="max-w-md">
+              {{ getFilterStructure() }}
+            </UBadge>
+          </div>
+          <UButton
+            variant="ghost"
+            size="xs"
+            color="neutral"
+            icon="i-heroicons-x-mark"
+            @click="handleAdvancedFilterClear"
+            title="Clear all filters"
+          />
+        </div>
+
+        <!-- Advanced Filters Button -->
+        <UButton
+          variant="soft"
+          color="primary"
+          icon="i-heroicons-cog-6-tooth"
+          @click="showAdvancedFilters = true"
+        >
+          Advanced Filters
+        </UButton>
+      </div>
+
+      <!-- Sorting Summary -->
+      <div
+        v-if="sorting.length > 0"
+        class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400"
+      >
+        <span>Sorted by:</span>
+        <div class="flex items-center gap-1">
+          <UBadge
+            v-for="sort in sorting"
+            :key="sort.id"
+            :color="sort.desc ? 'error' : 'success'"
+            variant="soft"
+            size="sm"
+          >
+            {{ getColumnLabel(sort.id) }}
+            <UIcon
+              :name="
+                sort.desc ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-narrow-wide'
+              "
+              class="ml-1"
+            />
+          </UBadge>
+        </div>
+        <UButton
+          variant="ghost"
+          size="xs"
+          color="neutral"
+          icon="i-heroicons-x-mark"
+          @click="sorting = []"
+          title="Clear all sorting"
+        />
+      </div>
+    </div>
+
+    <!-- Bulk Actions -->
+    <div
+      v-if="
+        table &&
+        table?.tableApi?.getFilteredSelectedRowModel()?.rows &&
+        (table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0) > 0
+      "
+      class="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
+    >
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-gray-600 dark:text-gray-400">
+          {{ table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0 }} of
+          {{ table?.tableApi?.getFilteredRowModel()?.rows?.length || 0 }} row(s) selected.
+        </span>
+        <div class="flex space-x-2">
+          <UButton
+            size="sm"
+            variant="soft"
+            icon="i-heroicons-arrow-down-tray"
+            @click="handleBulkExport"
+          >
+            Export
+          </UButton>
+          <UButton
+            size="sm"
+            variant="soft"
+            color="error"
+            icon="i-heroicons-trash"
+            @click="handleBulkDelete"
+          >
+            Delete
+          </UButton>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <UCard>
+      <UTable
+        ref="table"
+        :sorting="sorting"
+        :data="filteredParcels"
+        :columns="columns"
+        :loading="loading"
+        :manual-sorting="true"
+        enable-multi-sort
+        @update:sorting="onSortingChange($event)"
+      />
+
+      <!-- Empty State -->
+      <template v-if="!loading && filteredParcels.length === 0">
+        <div class="text-center py-12">
+          <div class="mx-auto h-12 w-12 text-gray-400">
+            <UIcon name="i-heroicons-cube" class="h-12 w-12" />
+          </div>
+          <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No parcels found</h3>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {{
+              searchValue || statusFilter
+                ? 'Try adjusting your search or filter criteria.'
+                : 'Get started by creating a new parcel.'
+            }}
+          </p>
+          <div class="mt-6">
+            <UButton
+              v-if="!searchValue && !statusFilter"
+              icon="i-heroicons-plus"
+              @click="openCreateModal"
+            >
+              Add Parcel
+            </UButton>
+            <UButton v-else variant="soft" @click="clearFilters"> Clear Filters </UButton>
+          </div>
+        </div>
+      </template>
+    </UCard>
+
+    <!-- Pagination -->
+    <div v-if="!loading && filteredParcels.length > 0" class="mt-6 flex items-center justify-between">
+      <div class="text-sm text-gray-700 dark:text-gray-300">
+        Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
+        {{ total }} results
+      </div>
+      <UPagination v-model="page" :items-per-page="pageSize" :total="total" />
+    </div>
+
+    <!-- Advanced Filter Drawer -->
+    <AdvancedFilterDrawer
+      :show="showAdvancedFilters"
+      :columns="filterableColumns"
+      :active-filters="getAllActiveFilters()"
+      :active-filter-group="getActiveFilterGroup()"
+      @apply="handleAdvancedFilterApply"
+      @clear="handleAdvancedFilterClear"
+      @update:show="showAdvancedFilters = $event"
+    />
+  </div>
+</template>
