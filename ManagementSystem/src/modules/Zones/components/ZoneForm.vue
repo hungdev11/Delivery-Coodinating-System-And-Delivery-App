@@ -81,7 +81,7 @@ const initializeForm = () => {
  * Parse polygon input string
  */
 const parsePolygonInput = (input: string): any => {
-  // eslint-disable-line @typescript-eslint/no-explicit-any
+   
   if (!input.trim()) return null
 
   try {

@@ -168,8 +168,10 @@ export function useWebSocket() {
           }
 
           // Subscribe to user's message queue
+          // IMPORTANT: Spring's convertAndSendToUser() automatically prepends /user/{userId}
+          // So we subscribe to /queue/messages and Spring routes it to the correct user
           if (onMessageReceived && client) {
-            const destination = `/user/${userId}/queue/messages`
+            const destination = `/user/queue/messages`
             console.log(`📡 Subscribing to: ${destination}`)
             
             const subscription = client.subscribe(destination, (message) => {
