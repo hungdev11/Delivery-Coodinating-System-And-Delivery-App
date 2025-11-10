@@ -12,6 +12,7 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.PopupMenu;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -50,6 +51,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private ProgressBar progressBar;
     private Button btnScanOrder;
     private ImageButton btnSessionMenu;
+    private TextView tvEmptyState;
 
     private int currentPage = 0;
     private final int pageSize = 10;
@@ -84,6 +86,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         rvTasks.setLayoutManager(layoutManager);
         rvTasks.setAdapter(adapter);
         progressBar = view.findViewById(R.id.progress_bar);
+        tvEmptyState = view.findViewById(R.id.tv_empty_state);
 
         btnScanOrder = view.findViewById(R.id.btnScanOrder);
         btnScanOrder.setOnClickListener(v -> {
@@ -125,7 +128,10 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         if (isLoading || isLastPage) return;
 
         isLoading = true;
-        if (page == 0) progressBar.setVisibility(View.VISIBLE);
+        if (page == 0) {
+            progressBar.setVisibility(View.VISIBLE);
+            if (tvEmptyState != null) tvEmptyState.setVisibility(View.GONE);
+        }
 
         SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
         List<String> statusFilter = Arrays.asList("IN_PROGRESS");
@@ -160,9 +166,17 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     }
 
                     if (tasks.isEmpty() && page == 0) {
-                        Toast.makeText(getContext(), "Không có nhiệm vụ nào.", Toast.LENGTH_SHORT).show();
+                        // Show empty state UI
+                        if (tvEmptyState != null) {
+                            tvEmptyState.setVisibility(View.VISIBLE);
+                        }
                         if (btnSessionMenu != null) btnSessionMenu.setVisibility(View.GONE);
+                        Log.d(TAG, "No tasks found. Showing empty state.");
                     } else {
+                        // Hide empty state UI when there are tasks
+                        if (tvEmptyState != null) {
+                            tvEmptyState.setVisibility(View.GONE);
+                        }
                         Log.d(TAG, "Tasks loaded: Page " + page + ", Size " + newTasks.size());
                     }
 

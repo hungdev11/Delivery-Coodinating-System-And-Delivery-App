@@ -39,16 +39,16 @@ keycloak:
   realm: ${KEYCLOAK_REALM:delivery-system}
   resource: ${KEYCLOAK_CLIENT_ID:frontend-client}
   credentials:
-    username: ${KEYCLOAK_ADMIN_USERNAME:dev}
-    password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
+    username: ${KEYCLOAK_ADMIN_USERNAME}
+    password: ${KEYCLOAK_ADMIN_PASSWORD}
     secret: ${KEYCLOAK_CLIENT_SECRET:46sGOyba6nyt8UhLkKAQgzmbedF9L042}
   
   init:
     enabled: ${KEYCLOAK_INIT_ENABLED:true}
     master:
       realm: ${KEYCLOAK_MASTER_REALM:master}
-      username: ${KEYCLOAK_ADMIN_USERNAME:dev}
-      password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
+      username: ${KEYCLOAK_ADMIN_USERNAME}
+      password: ${KEYCLOAK_ADMIN_PASSWORD}
     default:
       realm: ${KEYCLOAK_DEFAULT_REALM:delivery-system}
       client-id: ${KEYCLOAK_DEFAULT_CLIENT_ID:frontend-client}

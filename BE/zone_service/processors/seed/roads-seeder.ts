@@ -11,9 +11,9 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { OSMParser, calculateLineLength, findLatestVietnamPBF } from '../../utils/osm-parser.js';
-import { findIntersections, generateSegments } from '../../utils/intersection-finder.js';
-import { calculateBaseWeight } from '../../utils/weight-calculator.js';
+import { OSMParser, calculateLineLength, findLatestVietnamPBF } from '../../utils/osm-parser';
+import { findIntersections, generateSegments } from '../../utils/intersection-finder';
+import { calculateBaseWeight } from '../../utils/weight-calculator';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
@@ -198,14 +198,25 @@ async function seedRoads() {
     const segments = generateSegments(roads, intersections);
     console.log(`✓ Generated ${segments.length} segments\n`);
 
-    // Step 11: Collect ALL unique nodes from segments
-    console.log('Step 11: Collecting all segment endpoint nodes...');
+    // Step 11: Collect ALL unique nodes from road ways (not just segment endpoints)
+    // OSRM annotations may reference any node in the road geometry, so we need ALL nodes
+    console.log('Step 11: Collecting all nodes from road ways...');
     const usedNodeIds = new Set<string>();
+    
+    // Collect from segments (endpoints) - these are definitely needed
     for (const segment of segments) {
       usedNodeIds.add(segment.fromNodeId);
       usedNodeIds.add(segment.toNodeId);
     }
-    console.log(`✓ Found ${usedNodeIds.size} unique nodes\n`);
+    
+    // Also collect ALL nodes from all road ways - OSRM may use intermediate nodes
+    for (const way of roadWays) {
+      for (const nodeId of way.nodes) {
+        usedNodeIds.add(nodeId);
+      }
+    }
+    
+    console.log(`✓ Found ${usedNodeIds.size} unique nodes (${segments.length * 2} from segments + ${roadWays.reduce((sum, w) => sum + w.nodes.length, 0)} from ways)\n`);
 
     // Step 12: Prepare nodes for batch insert
     console.log('Step 12: Preparing nodes data...');
@@ -217,6 +228,11 @@ async function seedRoads() {
       zone_id: string | null;
     }> = [];
 
+    // Build intersection node ID set for fast lookup
+    const intersectionNodeIds = new Set(
+      intersections.map(i => i.nodeId)
+    );
+    
     for (const osmNodeId of usedNodeIds) {
       const osmNode = osmData.nodes.get(osmNodeId);
       if (!osmNode) {
@@ -224,6 +240,7 @@ async function seedRoads() {
         continue;
       }
 
+      // Determine node type: INTERSECTION if it's in intersections list with 3+ roads, otherwise WAYPOINT
       const intersection = intersections.find(i => i.nodeId === osmNodeId);
       const nodeType = intersection && intersection.roads.length >= 3 ? 'INTERSECTION' : 'WAYPOINT';
 

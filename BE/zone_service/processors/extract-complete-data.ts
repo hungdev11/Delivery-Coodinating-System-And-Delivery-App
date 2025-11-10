@@ -15,8 +15,8 @@
  *   npm run extract:complete
  */
 
-import { OsmiumWrapper } from '../utils/osmium-wrapper.js';
-import { findLatestVietnamPBF } from '../utils/osm-parser.js';
+import { OsmiumWrapper } from '../utils/osmium-wrapper';
+import { findLatestVietnamPBF } from '../utils/osm-parser';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
@@ -101,4 +101,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 export { extractCompleteData };
-

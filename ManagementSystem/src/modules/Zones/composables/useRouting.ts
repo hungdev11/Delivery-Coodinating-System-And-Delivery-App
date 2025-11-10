@@ -31,8 +31,9 @@ export const useRoutingStore = defineStore('routing', () => {
   const routeResult = ref<DemoRouteResponseData | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
-  const routingMode = ref<'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base'>('flexible_priority_with_delta')
+  const routingMode = ref<'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base'>('v2-full')
   const routingStrategy = ref<'strict_urgent' | 'flexible'>('strict_urgent')
+  const vehicleType = ref<'car' | 'motorbike'>('motorbike')  // Vehicle type selector
 
   // Computed
   const hasStartPoint = computed(() => startPoint.value !== null)
@@ -144,6 +145,7 @@ export const useRoutingStore = defineStore('routing', () => {
         annotations: true,
         mode: routingMode.value,
         strategy: routingStrategy.value,
+        vehicle: vehicleType.value,
       })
 
       if (response.result && response.result.code === 'Ok') {

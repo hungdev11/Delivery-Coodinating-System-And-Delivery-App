@@ -65,7 +65,7 @@ services:
       DB_PORT: ${DB_PORT}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
-      USER_DB_NAME: ${USER_DB_NAME}
+      USER_DB_NAME: ${USER_DB_NAME:-ds_user_service}
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
       KEYCLOAK_REALM: master
       KEYCLOAK_CLIENT_ID: dss-client
@@ -103,11 +103,11 @@ services:
       DB_PASSWORD: ${DB_PASSWORD} # not using
       ZONE_DB_CONNECTION: ${ZONE_DB_CONNECTION}
       SETTINGS_SERVICE_URL: http://settings-service:21502
-      OSRM_STRICT_PRIORITY_WITH_DELTA_URL: http://osrm-strict-priority-with-delta:5000
-      OSRM_FLEXIBLE_PRIORITY_WITH_DELTA_URL: http://osrm-flexible-priority-with-delta:5000
-      OSRM_STRICT_PRIORITY_NO_DELTA_URL: http://osrm-strict-priority-no-delta:5000
-      OSRM_FLEXIBLE_PRIORITY_NO_DELTA_URL: http://osrm-flexible-priority-no-delta:5000
-      OSRM_BASE_URL: http://osrm-base:5000
+      # OSRM V2 URLs (Simplified Architecture)
+      OSRM_V2_FULL_URL: http://osrm-v2-full:5000
+      OSRM_V2_RATING_URL: http://osrm-v2-rating-only:5000
+      OSRM_V2_BLOCKING_URL: http://osrm-v2-blocking-only:5000
+      OSRM_V2_BASE_URL: http://osrm-v2-base:5000
       PORT: 21503
     ports:
       - "21503:21503"
@@ -121,6 +121,7 @@ services:
       retries: 120
       start_period: 30s
 
+  # Parcel Service
   parcel-service:
     restart: on-failure
     env_file:
@@ -135,13 +136,11 @@ services:
       DB_PORT: ${DB_PORT}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
-      PARCEL_DB_NAME: ${PARCEL_DB_NAME}
+      PARCEL_DB_NAME: ${PARCEL_DB_NAME:-ds_parcel_service}
       SERVER_PORT: 21506
     ports:
       - "21506:21506"
-    depends_on:
-      settings-service:
-        condition: service_healthy
+    depends_on: {}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21506/actuator/health"]
       interval: 10s
@@ -149,6 +148,7 @@ services:
       retries: 120
       start_period: 30s
 
+  # Session Service
   session-service:
     restart: on-failure
     env_file:
@@ -163,12 +163,13 @@ services:
       DB_PORT: ${DB_PORT}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
-      PARCEL_DB_NAME: ${SESSION_DB_NAME}
+      SESSION_DB_NAME: ${SESSION_DB_NAME:-ds_session_service}
+      PARCEL_SERVICE_URL: ${PARCEL_SERVICE_URL:-http://parcel-service:21506}
       SERVER_PORT: 21505
     ports:
       - "21505:21505"
     depends_on:
-      settings-service:
+      parcel-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21505/actuator/health"]
@@ -177,6 +178,7 @@ services:
       retries: 120
       start_period: 30s
 
+  # Communication Service
   communication-service:
     restart: on-failure
     env_file:
@@ -191,12 +193,13 @@ services:
       DB_PORT: ${DB_PORT}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
-      PARCEL_DB_NAME: ${COMMUNICATION_DB_NAME}
+      COMMUNICATION_DB_NAME: ${COMMUNICATION_DB_NAME:-ds_communication_service}
+      SESSION_SERVICE_URL: ${SESSION_SERVICE_URL:-http://session-service:21505}
       SERVER_PORT: 21511
     ports:
       - "21511:21511"
     depends_on:
-      settings-service:
+      session-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21511/actuator/health"]
@@ -219,12 +222,12 @@ services:
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
       KEYCLOAK_REALM: master
       KEYCLOAK_CLIENT_ID: dss-client
-      USER_SERVICE_URL: http://user-service:21501
-      SETTINGS_SERVICE_URL: http://settings-service:21502
-      ZONE_SERVICE_URL: http://zone-service:21503
-      SESSION_SERVICE_URL: http://session-service:21505
-      PARCEL_SERVICE_URL: http://parcel-service:21506
-      COMMUNICATION_SERVICE_URL: http://communication-service:21511
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
+      SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:-http://settings-service:21502}
+      ZONE_SERVICE_URL: ${ZONE_SERVICE_URL:-http://zone-service:21503}
+      SESSION_SERVICE_URL: ${SESSION_SERVICE_URL:-http://session-service:21505}
+      PARCEL_SERVICE_URL: ${PARCEL_SERVICE_URL:-http://parcel-service:21506}
+      COMMUNICATION_SERVICE_URL: ${COMMUNICATION_SERVICE_URL:-http://communication-service:21511}
       SERVER_PORT: 21500
     ports:
       - "21500:21500"
@@ -235,29 +238,33 @@ services:
         condition: service_healthy
       zone-service:
         condition: service_healthy
-      # session-service:
-      #   condition: service_healthy
-      # parcel-service:
-      #   condition: service_healthy
-      # communication-service:
-      #   condition: service_healthy
+      session-service:
+        condition: service_healthy
+      parcel-service:
+        condition: service_healthy
+      communication-service:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:21500/actuator/health"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:21500/api/v1/health || exit 1"]
       interval: 10s
-      timeout: 10s
-      retries: 120
+      timeout: 5s
+      retries: 3
       start_period: 30s
 
-  # OSRM Strict Priority With Delta (Motorbike - Always follow priority, with AI delta/point_score)
-  osrm-strict-priority-with-delta:
+  # ============================================
+  # OSRM V2 Services (Simplified Architecture)
+  # ============================================
+
+  # OSRM V2 Full (Rating affects weight, Blocking affects speed)
+  osrm-v2-full:
     image: osrm/osrm-backend:latest
-    container_name: dss-osrm-strict-priority-with-delta
+    container_name: dss-osrm-v2-full
     restart: on-failure
     volumes:
-      - ./BE/zone_service/osrm_data/osrm-strict-priority-with-delta:/data:ro
+      - ./BE/zone_service/osrm_data/osrm-full:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
     ports:
-      - "5000:5000"
+      - "25920:5000"
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
@@ -265,16 +272,16 @@ services:
       retries: 3
       start_period: 10s
 
-  # OSRM Flexible Priority With Delta (Motorbike - Flexible priority, allows lower priority if convenient, with AI)
-  osrm-flexible-priority-with-delta:
+  # OSRM V2 Rating Only (User feedback affects weight)
+  osrm-v2-rating-only:
     image: osrm/osrm-backend:latest
-    container_name: dss-osrm-flexible-priority-with-delta
+    container_name: dss-osrm-v2-rating-only
     restart: on-failure
     volumes:
-      - ./BE/zone_service/osrm_data/osrm-flexible-priority-with-delta:/data:ro
+      - ./BE/zone_service/osrm_data/osrm-rating-only:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
     ports:
-      - "5001:5000"
+      - "25921:5000"
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
@@ -282,16 +289,16 @@ services:
       retries: 3
       start_period: 10s
 
-  # OSRM Strict Priority No Delta (Motorbike - Always follow priority, NO AI recommendations)
-  osrm-strict-priority-no-delta:
+  # OSRM V2 Blocking Only (Traffic affects speed)
+  osrm-v2-blocking-only:
     image: osrm/osrm-backend:latest
-    container_name: dss-osrm-strict-priority-no-delta
+    container_name: dss-osrm-v2-blocking-only
     restart: on-failure
     volumes:
-      - ./BE/zone_service/osrm_data/osrm-strict-priority-no-delta:/data:ro
+      - ./BE/zone_service/osrm_data/osrm-blocking-only:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
     ports:
-      - "5002:5000"
+      - "25922:5000"
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
@@ -299,36 +306,95 @@ services:
       retries: 3
       start_period: 10s
 
-  # OSRM Flexible Priority No Delta (Motorbike - Flexible priority, NO AI recommendations)
-  osrm-flexible-priority-no-delta:
+  # OSRM V2 Base (VN motorbike optimized, no modifiers)
+  osrm-v2-base:
     image: osrm/osrm-backend:latest
-    container_name: dss-osrm-flexible-priority-no-delta
-    restart: on-failure
-    volumes:
-      - ./BE/zone_service/osrm_data/osrm-flexible-priority-no-delta:/data:ro
-    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
-    ports:
-      - "5003:5000"
-    healthcheck:
-      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  # OSRM Base (Motorbike - No overrides, pure base weights)
-  osrm-base:
-    image: osrm/osrm-backend:latest
-    container_name: dss-osrm-base
+    container_name: dss-osrm-v2-base
     restart: on-failure
     volumes:
       - ./BE/zone_service/osrm_data/osrm-base:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
     ports:
-      - "5004:5000"
+      - "25923:5000"
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # ManagementSystem Frontend (build only - files shared with nginx)
+  # This service builds the frontend and copies files to shared volume, then exits
+  management-system-builder:
+    build:
+      context: ./ManagementSystem
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_WS_URL: ${VITE_WS_URL:-/api/ws}
+        VITE_ENV: ${VITE_ENV:-production}
+        VITE_MAPTILER_API_KEY: ${VITE_MAPTILER_API_KEY:-}
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-/api}
+      VITE_WS_URL: ${VITE_WS_URL:-/api/ws}
+      VITE_ENV: ${VITE_ENV:-production}
+      VITE_MAPTILER_API_KEY: ${VITE_MAPTILER_API_KEY:-}
+    container_name: dss-management-system-builder
+    image: dss-management-system:builder
+    command: ["sh", "-c", "cp -r /app/dist/* /shared/ && echo 'ManagementSystem files copied to shared volume'"]
+    volumes:
+      - management-system-dist:/shared
+    restart: "no"
+
+  # Nginx Reverse Proxy (serves ManagementSystem + proxies API)
+  # Nginx sẽ "flatten" response từ API Gateway để loại bỏ double chunked encoding
+  # API Gateway đã được fix để không gửi duplicate Transfer-Encoding headers
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: dss-nginx-proxy
+    restart: unless-stopped
+    volumes:
+      - ./BE/api-gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - management-system-dist:/usr/share/nginx/html:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - management-system-builder
+      - api-gateway
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-/api}
+      VITE_MAPTILER_API_KEY: ${VITE_MAPTILER_API_KEY:-}
+      VITE_WS_URL: ${VITE_WS_URL:-/api/ws}
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep nginx || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Cloudflare Tunnel
+  # Expose API Gateway qua Nginx Proxy để tránh double chunked encoding
+  # Prerequisites:
+  #   1. Thư mục ./cloudflared/ đã có config.yml và credentials file (.json)
+  #   2. Config.yml đã được cấu hình đúng với service: http://nginx-proxy:8080
+  # 
+  # File structure:
+  #   ./cloudflared/
+  #     ├── config.yml
+  #     └── <tunnel-id>.json
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: dss-cloudflared
+    restart: unless-stopped
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      nginx-proxy:
+        condition: service_healthy
+    # Cloudflared kết nối với Nginx Proxy (không phải API Gateway trực tiếp)
+    # Nginx sẽ "flatten" response và loại bỏ chunked encoding
+    # Lưu ý: Trong config.yml, sử dụng http://nginx-proxy:8080 (container name)
+
+volumes:
+  management-system-dist:

@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { OsmiumWrapper, parseOsmiumGeoJson } from './osmium-wrapper.js';
+import { OsmiumWrapper, parseOsmiumGeoJson } from './osmium-wrapper';
 
 export interface OSMNode {
   id: string;

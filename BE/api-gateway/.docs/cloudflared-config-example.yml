@@ -1,0 +1,24 @@
+# Ví dụ config.yml cho Cloudflare Tunnel local trong Docker
+# File này sẽ được mount từ C:\cloudflared\config.yml vào container
+
+# Tên tunnel (phải khớp với tunnel đã tạo)
+tunnel: my-tcp-tunnel
+
+# Đường dẫn credentials file TRONG CONTAINER (không phải Windows path)
+# Khi mount C:\cloudflared vào /etc/cloudflared, file .json sẽ ở /etc/cloudflared/<tunnel-id>.json
+credentials-file: /etc/cloudflared/<tunnel-id>.json
+
+# Cấu hình ingress rules
+ingress:
+  # Rule 1: Route traffic từ domain tới API Gateway
+  - hostname: localserver.phuongy.works
+    service: http://api-gateway:21500
+    # Lưu ý: Sử dụng container name "api-gateway" thay vì localhost
+    #        vì cloudflared chạy trong Docker container cùng network
+  
+  # Rule 2: Catch-all rule (phải đặt cuối cùng)
+  - service: http_status:404
+
+# Optional: Logging configuration
+# logLevel: info
+# logFile: /etc/cloudflared/cloudflared.log

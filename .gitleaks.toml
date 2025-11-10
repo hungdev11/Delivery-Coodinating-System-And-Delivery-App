@@ -1,0 +1,82 @@
+# Gitleaks configuration for secret scanning
+title = "Delivery System Secret Detection"
+
+[extend]
+# Use default rules
+useDefault = true
+
+# Additional rules can be added here
+[[rules]]
+id = "custom-hardcoded-password"
+description = "Hardcoded password detected"
+regex = '''password\s*[=:]\s*['"]?[a-zA-Z0-9]{8,}['"]?'''
+tags = ["password", "hardcoded"]
+
+[[rules]]
+id = "custom-api-key"
+description = "API key detected"
+regex = '''api[_-]?key\s*[=:]\s*['"]?[a-zA-Z0-9]{20,}['"]?'''
+tags = ["api-key", "hardcoded"]
+
+[[rules]]
+id = "custom-secret-key"
+description = "Secret key detected"
+regex = '''secret[_-]?key\s*[=:]\s*['"]?[a-zA-Z0-9]{20,}['"]?'''
+tags = ["secret", "hardcoded"]
+
+[[rules]]
+id = "custom-database-url"
+description = "Database URL with password detected (excluding env var templates)"
+# Only match REAL database URLs, NOT environment variable templates
+# Exclude: ${VAR}, $VAR, process.env.VAR patterns
+regex = '''(mysql|postgres|mongodb|redis)://(?![^:]*\$\{)(?![^:]*\$[A-Z_])(?![^:]*process\.env)[^:]+:[^\$\@]+@[^/\$]+'''
+tags = ["database", "password", "url"]
+
+# Exclude patterns (false positives)
+[allowlist]
+description = "Allowlist for known false positives"
+paths = [
+  '''\.env\.example''',
+  '''\.env\.template''',
+  '''env\.local''',
+  '''\.md$''',
+  '''\.txt$''',
+  '''LICENSE''',
+  '''\.github/workflows/secret-scan\.yml''',
+  '''\.gitleaks\.toml''',
+  '''node_modules/''',
+  '''dist/''',
+  '''build/''',
+  '''target/''',
+  '''\.gradle/''',
+  '''\.idea/''',
+  '''\.lock$''',
+  '''docker-compose.*\.yml''',
+  '''application\.yaml''',
+  '''application\.yml''',
+  '''config\.ts''',
+  '''KeycloakInitConfig\.java''',
+  '''LoginActivity\.java''',
+  '''model\.type\.ts''',
+]
+
+commits = [
+  "Initial commit",
+  "Update README",
+]
+
+regexes = [
+  '''example\.com''',
+  '''test.*password''',
+  '''placeholder.*key''',
+  # Exclude environment variable templates
+  '''\$\{[^}]+\}''',
+  '''\$[A-Z_][A-Z0-9_]*''',
+  '''process\.env\.[A-Z_]+''',
+  '''processEnv\.[A-Z_]+''',
+  '''env\.[A-Z_]+''',
+  # Exclude database URLs with environment variables
+  '''(mysql|postgres|mongodb|redis)://\$\{[^}]+\}''',
+  '''(mysql|postgres|mongodb|redis)://\$[A-Z_]+''',
+  '''(mysql|postgres|mongodb|redis)://process\.env\.[^:]+''',
+]

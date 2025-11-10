@@ -54,8 +54,8 @@ export class RouteRequestDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['strict_priority_with_delta', 'flexible_priority_with_delta', 'strict_priority_no_delta', 'flexible_priority_no_delta', 'base'])
-  mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base';
+  @IsIn(['v2-full', 'v2-rating-only', 'v2-blocking-only', 'v2-base'])
+  mode?: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base';
 }
 
 /**
@@ -180,8 +180,8 @@ export class DemoRouteRequestDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['strict_priority_with_delta', 'flexible_priority_with_delta', 'strict_priority_no_delta', 'flexible_priority_no_delta', 'base'])
-  mode?: 'strict_priority_with_delta' | 'flexible_priority_with_delta' | 'strict_priority_no_delta' | 'flexible_priority_no_delta' | 'base';
+  @IsIn(['v2-full', 'v2-rating-only', 'v2-blocking-only', 'v2-base'])
+  mode?: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base';
 
   @IsOptional()
   @IsString()

@@ -21,6 +21,7 @@ import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.KeycloakUserInfoDto;
 import com.ds.deliveryapp.clients.res.LoginResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
+import com.ds.deliveryapp.utils.SessionManager;
 
 import java.util.List;
 
@@ -35,6 +36,7 @@ public class LoginActivity extends AppCompatActivity {
 
     private AuthManager authManager;
     private AuthClient authClient;
+    private SessionManager sessionManager;
 
     private static final String TAG = "LoginActivity";
 
@@ -46,6 +48,7 @@ public class LoginActivity extends AppCompatActivity {
 
         // Khởi tạo các đối tượng quản lý
         authManager = new AuthManager(this);
+        sessionManager = new SessionManager(this);
         authClient = RetrofitClient.getAuthRetrofitInstance().create(AuthClient.class);
 
         initViews();
@@ -158,7 +161,11 @@ public class LoginActivity extends AppCompatActivity {
                             user.getRoles()
                     );
 
+                    // Lưu driverId vào SessionManager (sử dụng Keycloak user ID làm driverId)
+                    sessionManager.saveDriverId(user.getSub());
+
                     Log.i(TAG, "User info fetched and tokens saved. UserID: " + user.getSub() + ", Roles: " + user.getRoles());
+                    Log.i(TAG, "DriverId saved to SessionManager: " + user.getSub());
 
                     // 2. Điều hướng dựa trên roles
                     navigateToMainApp(user.getRoles());
@@ -167,6 +174,7 @@ public class LoginActivity extends AppCompatActivity {
                     showLoading(false);
                     Log.e(TAG, "Failed to fetch user info (API Error: " + response.code() + "). Token might be expired.");
                     authManager.clearAuthData(); // Xóa token cũ
+                    sessionManager.clear(); // Xóa driverId
                     // (Nếu lỗi xảy ra khi tự động đăng nhập, người dùng sẽ ở lại màn hình Login)
                 }
             }
@@ -178,6 +186,7 @@ public class LoginActivity extends AppCompatActivity {
                 Log.e(TAG, "Network error on /auth/me: " + t.getMessage());
                 Toast.makeText(LoginActivity.this, "Lỗi mạng khi lấy thông tin tài khoản.", Toast.LENGTH_SHORT).show();
                 authManager.clearAuthData(); // Xóa token
+                sessionManager.clear(); // Xóa driverId
             }
         });
     }
@@ -201,6 +210,7 @@ public class LoginActivity extends AppCompatActivity {
             Log.e(TAG, "No valid role found. Staying on Login.");
             Toast.makeText(this, "Tài khoản không có quyền hợp lệ.", Toast.LENGTH_SHORT).show();
             authManager.clearAuthData(); // Xóa token
+            sessionManager.clear(); // Xóa driverId
             return;
         }
 
@@ -226,4 +236,3 @@ public class LoginActivity extends AppCompatActivity {
         }
     }
 }
-

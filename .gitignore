@@ -33,3 +33,7 @@ build/
 
 .claude
 **/.claude
+
+cloudflared/*
+!cloudflared/.gitkeep
+!cloudflared/config.yml.example

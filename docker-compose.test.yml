@@ -12,6 +12,7 @@ services:
       - "3307:3306"
     volumes:
       - mysql_test_data:/var/lib/mysql
+      - ./BE/scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 20s
@@ -43,7 +44,7 @@ services:
   # Settings Service
   settings-service:
     build:
-      context: ./Settings_service
+      context: ./BE/Settings_service
       dockerfile: Dockerfile
     container_name: dss-settings-service-test
     environment:
@@ -66,7 +67,7 @@ services:
   # User Service
   user-service:
     build:
-      context: ./User_service
+      context: ./BE/User_service
       dockerfile: Dockerfile
     container_name: dss-user-service-test
     environment:
@@ -98,7 +99,7 @@ services:
   # API Gateway
   api-gateway:
     build:
-      context: ./api-gateway
+      context: ./BE/api-gateway
       dockerfile: Dockerfile
     container_name: dss-api-gateway-test
     environment:
