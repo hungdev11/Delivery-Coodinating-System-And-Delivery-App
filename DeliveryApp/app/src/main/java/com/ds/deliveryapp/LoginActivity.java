@@ -60,7 +60,7 @@ public class LoginActivity extends AppCompatActivity {
             showLoading(true);
             // Nếu đã có token, gọi /auth/me ngay để lấy roles và điều hướng
             // Truyền null cho refreshToken vì chúng ta sẽ dùng lại token cũ
-            fetchUserInfoAndNavigate(existingToken, null);
+            fetchUserInfoAndNavigate(existingToken, null, authManager.getUserId());
         } else {
             Log.d(TAG, "Không có token. Chờ người dùng đăng nhập.");
             // Nếu không có token, mới gán listener cho nút login
@@ -106,7 +106,8 @@ public class LoginActivity extends AppCompatActivity {
                     // 2. Gọi /auth/me ngay lập tức, truyền cả 2 token
                     fetchUserInfoAndNavigate(
                             loginResponse.getAccessToken(),
-                            loginResponse.getRefreshToken()
+                            loginResponse.getRefreshToken(),
+                            loginResponse.getUser().getId()
                     );
 
                 } else {
@@ -139,7 +140,7 @@ public class LoginActivity extends AppCompatActivity {
      * @param accessToken Access token (mới hoặc cũ)
      * @param refreshToken Refresh token (mới nếu vừa login, null nếu tự động login)
      */
-    private void fetchUserInfoAndNavigate(String accessToken, @Nullable String refreshToken) {
+    private void fetchUserInfoAndNavigate(String accessToken, @Nullable String refreshToken, String userId) {
         String authorizationHeader = "Bearer " + accessToken;
 
         authClient.getUserInfo(authorizationHeader).enqueue(new Callback<BaseResponse<KeycloakUserInfoDto>>() {
@@ -157,15 +158,15 @@ public class LoginActivity extends AppCompatActivity {
                     authManager.saveTokens(
                             accessToken,
                             finalRefreshToken,
-                            user.getSub(),
+                            userId,
                             user.getRoles()
                     );
 
                     // Lưu driverId vào SessionManager (sử dụng Keycloak user ID làm driverId)
-                    sessionManager.saveDriverId(user.getSub());
+                    sessionManager.saveDriverId(userId);
 
-                    Log.i(TAG, "User info fetched and tokens saved. UserID: " + user.getSub() + ", Roles: " + user.getRoles());
-                    Log.i(TAG, "DriverId saved to SessionManager: " + user.getSub());
+                    Log.i(TAG, "User info fetched and tokens saved. UserID: " + userId + ", Roles: " + user.getRoles());
+                    Log.i(TAG, "DriverId saved to SessionManager: " + userId);
 
                     // 2. Điều hướng dựa trên roles
                     navigateToMainApp(user.getRoles());

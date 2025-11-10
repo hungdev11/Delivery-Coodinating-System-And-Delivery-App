@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.ds.deliveryapp.adapter.MessageAdapter;
 import com.ds.deliveryapp.auth.AuthManager;
 import com.ds.deliveryapp.clients.ChatClient;
+import com.ds.deliveryapp.clients.UserClient;
 import com.ds.deliveryapp.clients.req.ChatMessagePayload;
 import com.ds.deliveryapp.clients.req.CreateProposalDTO;
 import com.ds.deliveryapp.clients.req.ProposalResponseRequest;
@@ -30,6 +31,7 @@ import com.ds.deliveryapp.clients.res.Message;
 import com.ds.deliveryapp.clients.res.InteractiveProposal;
 import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.clients.res.ProposalTypeConfig;
+import com.ds.deliveryapp.clients.res.UserInfo;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.enums.ContentType;
 import com.ds.deliveryapp.utils.ChatWebSocketListener;
@@ -77,6 +79,8 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     // Networking & Auth
     private ChatWebSocketManager mWebSocketManager;
     private ChatClient mChatClient;
+
+    private UserClient mUserClient;
     private AuthManager mAuthManager;
     // State Data
     private String mJwtToken;
@@ -198,6 +202,7 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
 
     private void initRetrofitClients() {
         mChatClient = RetrofitClient.getChatRetrofitInstance().create(ChatClient.class);
+        mUserClient = RetrofitClient.getRetrofitInstance(getApplicationContext()).create(UserClient.class);
     }
     /**
      * Lấy ID cuộc trò chuyện (gọi API /conversations/find-by-users).
@@ -220,7 +225,7 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                     mConversationId = conversation.getConversationId();
                     Log.i(TAG, "✅ Conversation ID fetched/found: " + mConversationId);
 
-                    mRecipientName = conversation.getPartnerName();
+                    getPartnerInfo(conversation.getPartnerId());
                     mRecipientAvatarUrl = conversation.getPartnerAvatar();
 
                     if (mAdapter != null) {
@@ -258,6 +263,22 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         });
     }
 
+    private void getPartnerInfo(String partnerId) {
+        Call<UserInfo> call = mUserClient.getUserInfoById(partnerId);
+        call.enqueue(new Callback<UserInfo>() {
+            @Override
+            public void onResponse(@NonNull Call<UserInfo> call, @NonNull Response<UserInfo> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
+                    UserInfo.UserBasicInfo userInfo = response.body().getResult();
+                    mRecipientName = userInfo.getFirstName() + " " + userInfo.getLastName();
+                }
+            }
+            @Override
+            public void onFailure(@NonNull Call<UserInfo> call, @NonNull Throwable t) {
+                Log.e(TAG, "Network error loading user info", t);
+            }
+        });
+    }
     /**
      * Tải lịch sử chat (gọi API /conversations/{id}/messages).
      */

@@ -90,7 +90,7 @@ public class SendOrdersFragment extends Fragment implements ParcelAdapter.OnItem
 
         // Gọi lại API mỗi khi fragment hiển thị lại
         if (viewModel != null) {
-            viewModel.fetchMyParcels();
+            viewModel.fetchMySentParcels();
         }
     }
     @Override

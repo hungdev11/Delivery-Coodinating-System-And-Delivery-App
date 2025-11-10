@@ -38,17 +38,17 @@ public class DeliveryAssignmentResponse {
     private BigDecimal lat;
     private BigDecimal lon;
     
-    public static DeliveryAssignmentResponse from(DeliveryAssignment assignment, ParcelInfo parcel, DeliverySession session, String deliveryManPhone, String receiverName) {
+    public static DeliveryAssignmentResponse from(DeliveryAssignment assignment, ParcelInfo parcel, DeliverySession session, UserInfo shipperInfo, UserInfo clientInfo) {
         return DeliveryAssignmentResponse.builder()
                 .parcelId(assignment.getParcelId())
                 .parcelCode(parcel.getCode()) 
                 .deliveryType(parcel.getDeliveryType())
                 .status(assignment.getStatus().name())
                 .deliveryManAssignedId(session.getDeliveryManId())
-                .deliveryManPhone(deliveryManPhone) 
-                .receiverName(receiverName)
+                .deliveryManPhone(shipperInfo.getResult().getPhone()) 
+                .receiverName(clientInfo.getResult().getFirstName() + " " + clientInfo.getResult().getLastName())
                 .receiverId(parcel.getReceiverId())
-                .receiverPhone(parcel.getReceiverPhoneNumber())
+                .receiverPhone(clientInfo.getResult().getPhone())
                 .deliveryLocation(parcel.getTargetDestination()) // Mapping targetDestination as deliveryLocation
                 .value(parcel.getValue())
                 .sessionId(session.getId().toString())

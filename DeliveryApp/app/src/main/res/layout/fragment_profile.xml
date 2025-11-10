@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:orientation="vertical"
     android:gravity="center_horizontal"
     android:padding="16dp"
@@ -12,22 +13,63 @@
         android:layout_width="100dp"
         android:layout_height="100dp"
         android:src="@mipmap/ic_launcher"
-        android:layout_marginTop="40dp" />
+        android:layout_marginTop="40dp"
+        android:contentDescription="Avatar" />
+
+    <!-- ProgressBar sẽ hiển thị khi tải dữ liệu -->
+    <ProgressBar
+        android:id="@+id/pbLoading"
+        style="?android:attr/progressBarStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:visibility="visible" /> <!-- Bắt đầu với visible, sẽ bị ẩn khi có dữ liệu -->
 
     <TextView
         android:id="@+id/tvDriverName"
-        android:text="Nguyễn Văn A"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:layout_marginTop="12dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_width="wrap_content"/>
+        android:layout_marginTop="12dp"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/black"
+        android:visibility="gone"
+        tools:text="Nguyễn Văn A"
+        tools:visibility="visible"/>
+
+    <TextView
+        android:id="@+id/tvEmail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textSize="16sp"
+        android:textColor="@android:color/darker_gray"
+        android:visibility="gone"
+        tools:text="nguyenvana@example.com"
+        tools:visibility="visible"/>
+
+    <TextView
+        android:id="@+id/tvPhone"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textSize="16sp"
+        android:textColor="@android:color/darker_gray"
+        android:visibility="gone"
+        tools:text="0901234567"
+        tools:visibility="visible"/>
+
+    <!-- Spacer: Đẩy button xuống dưới cùng -->
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
 
     <Button
         android:id="@+id/btnLogout"
         android:layout_width="match_parent"
         android:layout_height="50dp"
-        android:layout_marginTop="40dp"
+        android:layout_marginTop="24dp"
         android:backgroundTint="#E74C3C"
         android:text="Đăng xuất"
         android:textColor="#FFFFFF"

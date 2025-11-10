@@ -89,8 +89,10 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         if (tvReceiverName != null) tvReceiverName.setText(task.getReceiverName() != null ? task.getReceiverName() : "Khách hàng");
         if (tvDeliveryLocation != null) tvDeliveryLocation.setText("Địa chỉ: " + task.getDeliveryLocation());
         if (tvParcelValue != null) tvParcelValue.setText(FormaterUtil.formatCurrency(task.getValue()));
-        if (tvDeliveryType != null) tvDeliveryType.setText(DeliveryType.NORMAL.equals(task.getDeliveryType()) ? "Giao Hàng Tiêu Chuẩn" : "Giao Hàng Nhanh");
-        if (tvWeight != null) tvWeight.setText(formatWeight(task.getWeight()));
+        if (tvDeliveryType != null) {
+            String deliveryText = getDeliveryTypeString(DeliveryType.valueOf(task.getDeliveryType()));
+            tvDeliveryType.setText(deliveryText);
+        }        if (tvWeight != null) tvWeight.setText(formatWeight(task.getWeight()));
         if (tvParcelId != null) tvParcelId.setText(task.getParcelCode());
         String formatCreatedAt = FormaterUtil.formatDateTime(task.getCreatedAt());
         String formatCompletedAt = FormaterUtil.formatDateTime(task.getCompletedAt());
@@ -140,10 +142,31 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         }
     }
 
+    private String getDeliveryTypeString(DeliveryType type) {
+        if (type == null) {
+            return "Không xác định"; // Hoặc một giá trị mặc định nào đó
+        }
+
+        switch (type) {
+            case URGENT:
+                return "Giao Hàng Hỏa Tốc";
+            case EXPRESS:
+                return "Giao Hàng Chuyển Phát Nhanh";
+            case FAST:
+                return "Giao Hàng Nhanh";
+            case NORMAL:
+                return "Giao Hàng Tiêu Chuẩn";
+            case ECONOMY:
+                return "Giao Hàng Tiết Kiệm";
+            default:
+                return "Không xác định"; // Xử lý cho trường hợp enum thêm mới mà quên cập nhật
+        }
+    }
+
     private void setupEventListeners(DeliveryAssignment task) {
         if (btnCallReceiver != null) {
             btnCallReceiver.setOnClickListener(v -> {
-                String phone = "0935960974"; // task.getReceiverPhone();
+                String phone = task.getReceiverPhone();
                 if (phone != null && !phone.isEmpty()) {
                     String anonymousPhone = "#31#" + phone;
 
