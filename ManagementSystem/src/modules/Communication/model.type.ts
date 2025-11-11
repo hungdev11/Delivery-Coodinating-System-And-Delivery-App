@@ -34,6 +34,8 @@ export interface ConversationResponse {
   partnerId: string
   partnerName: string
   partnerAvatar?: string | null
+  partnerUsername?: string | null // Add username for display
+  isOnline?: boolean | null // Online status (null if unavailable)
   lastMessageTime?: string | null // ISO date string of last message time
 }
 

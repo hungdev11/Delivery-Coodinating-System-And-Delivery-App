@@ -31,6 +31,8 @@ const overlay = useOverlay()
 
 const conversationId = computed(() => route.params.conversationId as string)
 const partnerId = computed(() => route.query.partnerId as string)
+const partnerName = ref<string>('')
+const partnerUsername = ref<string>('')
 
 const currentUser = getCurrentUser()
 const currentUserId = computed(() => currentUser?.id || '')
@@ -60,11 +62,31 @@ const postponeType = ref<'SPECIFIC' | 'BEFORE' | 'AFTER' | null>(null)
 onMounted(async () => {
   if (conversationId.value && currentUserId.value) {
     await loadMessages(conversationId.value, currentUserId.value)
+    await loadPartnerInfo()
     await loadAvailableProposalConfigs()
     await connectWebSocket()
     scrollToBottom()
   }
 })
+
+/**
+ * Load partner information from conversations list
+ */
+const loadPartnerInfo = async () => {
+  if (currentUserId.value) {
+    await loadConversations(currentUserId.value)
+  }
+  // Find the current conversation to get partner info
+  const { conversations } = useConversations()
+  const currentConv = conversations.value.find(c => c.conversationId === conversationId.value)
+  if (currentConv) {
+    partnerName.value = currentConv.partnerName
+    partnerUsername.value = currentConv.partnerUsername || ''
+  } else {
+    // Fallback to partnerId
+    partnerName.value = partnerId.value || 'Unknown User'
+  }
+}
 
 /**
  * Cleanup on unmount
@@ -473,11 +495,12 @@ const isMyMessage = (message: MessageResponse) => {
         <div
           class="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-semibold"
         >
-          {{ partnerId?.charAt(0).toUpperCase() || '?' }}
+          {{ (partnerName || partnerId || '?').charAt(0).toUpperCase() }}
         </div>
         <div>
-          <p class="font-semibold">Chat</p>
-          <p class="text-sm text-gray-500">{{ partnerId }}</p>
+          <p class="font-semibold">{{ partnerName || partnerId || 'Chat' }}</p>
+          <p v-if="partnerUsername" class="text-sm text-gray-500">@{{ partnerUsername }}</p>
+          <p v-else-if="!partnerName && partnerId" class="text-sm text-gray-500">{{ partnerId }}</p>
         </div>
       </div>
       <div class="flex items-center space-x-2">

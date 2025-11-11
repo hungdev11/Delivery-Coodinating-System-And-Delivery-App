@@ -16,5 +16,7 @@ public class ConversationResponse {
     private String partnerId;
     private String partnerName;
     private String partnerAvatar;
+    private String partnerUsername; // Add username for display
+    private Boolean isOnline; // Online status (null if unavailable)
     private LocalDateTime lastMessageTime; // Time of last message in conversation
 }

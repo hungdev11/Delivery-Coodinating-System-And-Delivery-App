@@ -20,20 +20,25 @@ import com.ds.communication_service.app_context.models.Conversation;
 import com.ds.communication_service.common.dto.ConversationResponse;
 import com.ds.communication_service.common.dto.MessageResponse;
 import com.ds.communication_service.common.dto.PageResponse;
+import com.ds.communication_service.common.dto.UserInfoDto;
 import com.ds.communication_service.common.interfaces.IConversationService;
 import com.ds.communication_service.common.interfaces.IMessageService;
 import com.ds.communication_service.app_context.repositories.MessageRepository;
+import com.ds.communication_service.business.v1.services.UserServiceClient;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/conversations")
+@Slf4j
 public class ConversationApiController {
 
     private final IMessageService messageService;
     private final IConversationService conversationService;
     private final MessageRepository messageRepository;
+    private final UserServiceClient userServiceClient;
 
     @GetMapping("/{conversationId}/messages")
     public ResponseEntity<PageResponse<MessageResponse>> getMessages(
@@ -79,11 +84,27 @@ public class ConversationApiController {
             .findLastMessageTimeByConversationId(conversation.getId())
             .orElse(conversation.getCreatedAt());
         
+        // Fetch user info from User Service
+        UserInfoDto userInfo = userServiceClient.getUserById(partnerId);
+        
+        String partnerName;
+        String partnerUsername = null;
+        if (userInfo != null) {
+            partnerName = userInfo.getFullName();
+            partnerUsername = userInfo.getUsername();
+        } else {
+            // Fallback if user service is unavailable
+            partnerName = "User " + partnerId.substring(0, Math.min(4, partnerId.length()));
+            log.warn("Could not fetch user info for partnerId: {}, using fallback name", partnerId);
+        }
+        
         ConversationResponse dto = ConversationResponse.builder()
             .conversationId(conversation.getId().toString())
             .partnerId(partnerId)
-            .partnerName("User " + partnerId.substring(0, Math.min(4, partnerId.length())))
-            .partnerAvatar(null)
+            .partnerName(partnerName)
+            .partnerUsername(partnerUsername)
+            .partnerAvatar(null) // TODO: Add avatar support when available
+            .isOnline(null) // TODO: Implement online status tracking
             .lastMessageTime(lastMessageTime)
             .build();
 
