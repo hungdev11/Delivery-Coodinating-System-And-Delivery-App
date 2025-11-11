@@ -5,10 +5,17 @@ import com.ds.deliveryapp.clients.req.ChatMessagePayload;
 import com.ds.deliveryapp.clients.req.ProposalUpdateDTO;
 import com.ds.deliveryapp.clients.res.Message;
 import com.google.gson.Gson;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.disposables.Disposable;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.Interceptor;
 import ua.naiksoftware.stomp.Stomp;
 import ua.naiksoftware.stomp.StompClient;
 import ua.naiksoftware.stomp.dto.StompHeader;
@@ -16,20 +23,30 @@ import ua.naiksoftware.stomp.dto.StompHeader;
 public class ChatWebSocketManager {
 
     private static final String TAG = "ChatWebSocketManager";
+    // Subscription destinations (without user ID - Spring's SimpleBroker handles user routing)
     private static final String WS_SUB_MESSAGES = "/user/queue/messages";
     private static final String WS_SUB_PROPOSAL_UPDATES = "/user/queue/proposal-updates";
+    private static final String WS_SUB_STATUS_UPDATES = "/user/queue/status-updates";
+    private static final String WS_SUB_TYPING = "/user/queue/typing";
+    private static final String WS_SUB_NOTIFICATIONS = "/user/queue/notifications";
+    // Send destinations
     private static final String WS_SEND_MESSAGE = "/app/chat.send";
+    private static final String WS_SEND_TYPING = "/app/chat.typing";
+    private static final String WS_SEND_READ = "/app/chat.read";
+    private static final String WS_SEND_QUICK_ACTION = "/app/chat.quick-action";
 
     private StompClient mStompClient;
     private CompositeDisposable mComposite;
     private final Gson mGson = new Gson();
     private final String mWebSocketUrl;
     private final String mJwtToken;
+    private final String mUserId;
     private ChatWebSocketListener mListener; // Listener (chính là ChatActivity)
 
-    public ChatWebSocketManager(String webSocketUrl, String jwtToken) {
+    public ChatWebSocketManager(String webSocketUrl, String jwtToken, String userId) {
         this.mWebSocketUrl = webSocketUrl;
         this.mJwtToken = jwtToken;
+        this.mUserId = userId;
     }
 
     public void setListener(ChatWebSocketListener listener) {
@@ -44,9 +61,9 @@ public class ChatWebSocketManager {
      * Kết nối đến server WebSocket.
      */
     public void connect() {
-        if (mJwtToken == null) {
-            Log.e(TAG, "Cannot connect WebSocket: Token is null.");
-            if (mListener != null) mListener.onWebSocketError("Token is null");
+        if (mUserId == null || mUserId.isEmpty()) {
+            Log.e(TAG, "Cannot connect WebSocket: User ID is null or empty.");
+            if (mListener != null) mListener.onWebSocketError("User ID is null or empty");
             return;
         }
         if (isConnected()) {
@@ -57,10 +74,48 @@ public class ChatWebSocketManager {
         Log.d(TAG, "Connecting WebSocket to " + mWebSocketUrl);
         mComposite = new CompositeDisposable();
 
-        List<StompHeader> headers = new ArrayList<>();
-        headers.add(new StompHeader("Authorization", "Bearer " + mJwtToken));
+        // Create OkHttpClient with network interceptor to add Authorization header to WebSocket handshake
+        // Network interceptors are called for both HTTP and WebSocket requests
+        // Note: Server expects "Bearer <USER_ID>" not "Bearer <JWT_TOKEN>" per WebSocketAuthInterceptor
+        OkHttpClient okHttpClient = new OkHttpClient.Builder()
+                .addNetworkInterceptor(new Interceptor() {
+                    @Override
+                    public Response intercept(Chain chain) throws IOException {
+                        Request originalRequest = chain.request();
+                        Request.Builder requestBuilder = originalRequest.newBuilder();
+                        
+                        // Add Authorization header to WebSocket handshake request
+                        // Server expects userId, not JWT token (per WebSocketAuthInterceptor)
+                        if (mUserId != null) {
+                            String authValue = "Bearer " + mUserId;
+                            String existingAuth = originalRequest.header("Authorization");
+                            if (!authValue.equals(existingAuth)) {
+                                requestBuilder.header("Authorization", authValue);
+                                Log.d(TAG, "Adding Authorization header to WebSocket handshake: Bearer " + mUserId);
+                            }
+                        }
+                        
+                        Request newRequest = requestBuilder.build();
+                        return chain.proceed(newRequest);
+                    }
+                })
+                .build();
 
-        mStompClient = Stomp.over(Stomp.ConnectionProvider.OKHTTP, mWebSocketUrl);
+        // Create headers map for WebSocket handshake
+        // Server expects userId, not JWT token (per WebSocketAuthInterceptor)
+        Map<String, String> handshakeHeaders = new HashMap<>();
+        if (mUserId != null) {
+            handshakeHeaders.put("Authorization", "Bearer " + mUserId);
+        }
+
+        // Use Stomp.over() with ConnectionProvider.OKHTTP, URL, headers map, and custom OkHttpClient
+        // STOMP CONNECT headers - server expects userId, not JWT token
+        List<StompHeader> headers = new ArrayList<>();
+        if (mUserId != null) {
+            headers.add(new StompHeader("Authorization", "Bearer " + mUserId));
+        }
+
+        mStompClient = Stomp.over(Stomp.ConnectionProvider.OKHTTP, mWebSocketUrl, handshakeHeaders, okHttpClient);
         mStompClient.withClientHeartbeat(15000).withServerHeartbeat(15000);
         mStompClient.connect(headers);
 
@@ -93,13 +148,24 @@ public class ChatWebSocketManager {
     }
 
     /**
-     * Đăng ký 2 kênh: Tin nhắn mới và Cập nhật proposal.
+     * Subscribe to WebSocket topics.
+     * Note: Subscription paths do NOT include user ID in the path.
+     * Spring's SimpleBroker automatically routes /user/queue/messages to the correct user session
+     * based on the authenticated Principal set during STOMP CONNECT.
      */
     private void subscribeToTopics() {
         if (!isConnected()) {
             Log.e(TAG, "Cannot subscribe: StompClient not connected.");
             return;
         }
+
+        if (mUserId == null || mUserId.isEmpty()) {
+            Log.e(TAG, "Cannot subscribe: User ID is null or empty.");
+            return;
+        }
+
+        // Use constants directly - SimpleBroker handles user-specific routing
+        Log.d(TAG, "📡 Subscribing to topics for user: " + mUserId);
 
         // Kênh 1: Tin nhắn mới (Text và Proposal)
         Disposable topicDisposable = mStompClient.topic(WS_SUB_MESSAGES)
@@ -144,6 +210,53 @@ public class ChatWebSocketManager {
                         }
                 );
         mComposite.add(proposalUpdateDisposable);
+
+        // Kênh 3: Cập nhật trạng thái tin nhắn (SENT, DELIVERED, READ)
+        Disposable statusDisposable = mStompClient.topic(WS_SUB_STATUS_UPDATES)
+                .subscribe(
+                        stompMessage -> {
+                            Log.d(TAG, "<<< Received STOMP (Status Update): " + stompMessage.getPayload());
+                            if (mListener != null) {
+                                mListener.onStatusUpdateReceived(stompMessage.getPayload());
+                            }
+                        },
+                        throwable -> {
+                            Log.e(TAG, "Error on STOMP topic (" + WS_SUB_STATUS_UPDATES + ")", throwable);
+                        }
+                );
+        mComposite.add(statusDisposable);
+
+        // Kênh 4: Typing indicators
+        Disposable typingDisposable = mStompClient.topic(WS_SUB_TYPING)
+                .subscribe(
+                        stompMessage -> {
+                            Log.d(TAG, "<<< Received STOMP (Typing): " + stompMessage.getPayload());
+                            if (mListener != null) {
+                                mListener.onTypingIndicatorReceived(stompMessage.getPayload());
+                            }
+                        },
+                        throwable -> {
+                            Log.e(TAG, "Error on STOMP topic (" + WS_SUB_TYPING + ")", throwable);
+                        }
+                );
+        mComposite.add(typingDisposable);
+
+        // Kênh 5: Notifications
+        Disposable notificationsDisposable = mStompClient.topic(WS_SUB_NOTIFICATIONS)
+                .subscribe(
+                        stompMessage -> {
+                            Log.d(TAG, "<<< Received STOMP (Notification): " + stompMessage.getPayload());
+                            if (mListener != null) {
+                                mListener.onNotificationReceived(stompMessage.getPayload());
+                            }
+                        },
+                        throwable -> {
+                            Log.e(TAG, "Error on STOMP topic (" + WS_SUB_NOTIFICATIONS + ")", throwable);
+                        }
+                );
+        mComposite.add(notificationsDisposable);
+        
+        Log.d(TAG, "✅ All subscriptions created successfully for user: " + mUserId);
     }
 
     /**
@@ -169,6 +282,82 @@ public class ChatWebSocketManager {
                             Log.e(TAG, "Error sending STOMP message", throwable);
                             callback.onError(throwable);
                         }
+                );
+        mComposite.add(sendDisposable);
+    }
+
+    /**
+     * Send typing indicator
+     */
+    public void sendTypingIndicator(String conversationId, boolean isTyping) {
+        if (!isConnected()) {
+            Log.e(TAG, "Cannot send typing indicator: Not connected.");
+            return;
+        }
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("conversationId", conversationId);
+        payload.put("isTyping", isTyping);
+        payload.put("timestamp", System.currentTimeMillis());
+
+        String jsonPayload = mGson.toJson(payload);
+        Log.d(TAG, ">>> Sending typing indicator to " + WS_SEND_TYPING);
+
+        Disposable sendDisposable = mStompClient.send(WS_SEND_TYPING, jsonPayload)
+                .subscribe(
+                        () -> Log.d(TAG, "Typing indicator sent successfully."),
+                        throwable -> Log.e(TAG, "Error sending typing indicator", throwable)
+                );
+        mComposite.add(sendDisposable);
+    }
+
+    /**
+     * Mark messages as read
+     */
+    public void markMessagesAsRead(String[] messageIds, String conversationId) {
+        if (!isConnected()) {
+            Log.e(TAG, "Cannot mark as read: Not connected.");
+            return;
+        }
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("messageIds", messageIds);
+        payload.put("conversationId", conversationId);
+
+        String jsonPayload = mGson.toJson(payload);
+        Log.d(TAG, ">>> Sending read receipt to " + WS_SEND_READ);
+
+        Disposable sendDisposable = mStompClient.send(WS_SEND_READ, jsonPayload)
+                .subscribe(
+                        () -> Log.d(TAG, "Read receipt sent successfully."),
+                        throwable -> Log.e(TAG, "Error sending read receipt", throwable)
+                );
+        mComposite.add(sendDisposable);
+    }
+
+    /**
+     * Send quick action for proposal
+     */
+    public void sendQuickAction(String proposalId, String action, Map<String, Object> data) {
+        if (!isConnected()) {
+            Log.e(TAG, "Cannot send quick action: Not connected.");
+            return;
+        }
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("proposalId", proposalId);
+        payload.put("action", action);
+        if (data != null) {
+            payload.putAll(data);
+        }
+
+        String jsonPayload = mGson.toJson(payload);
+        Log.d(TAG, ">>> Sending quick action to " + WS_SEND_QUICK_ACTION);
+
+        Disposable sendDisposable = mStompClient.send(WS_SEND_QUICK_ACTION, jsonPayload)
+                .subscribe(
+                        () -> Log.d(TAG, "Quick action sent successfully."),
+                        throwable -> Log.e(TAG, "Error sending quick action", throwable)
                 );
         mComposite.add(sendDisposable);
     }

@@ -19,6 +19,37 @@ export class AddressController {
   constructor(private service: AddressService) {}
 
   /**
+   * POST /addresses/get-or-create
+   * Get existing address by coordinates or create new one
+   * Finds nearest address within threshold (default 50m), if found returns it, otherwise creates new
+   */
+  getOrCreateAddress = async (req: Request, res: Response) => {
+    try {
+      const dto: CreateAddressDto = req.body
+      const thresholdMeters = req.query.threshold 
+        ? parseInt(req.query.threshold as string) 
+        : 50
+
+      // Validation
+      if (!dto.name || !dto.lat || !dto.lon) {
+        return res.status(400).json(BaseResponse.error('Missing required fields: name, lat, lon'))
+      }
+
+      // Validate coordinates
+      if (dto.lat < -90 || dto.lat > 90 || dto.lon < -180 || dto.lon > 180) {
+        return res.status(400).json(BaseResponse.error('Invalid coordinates'))
+      }
+
+      const address = await this.service.getOrCreateAddress(dto, thresholdMeters)
+
+      return res.json(BaseResponse.success(address, 'Address retrieved or created successfully'))
+    } catch (error: any) {
+      console.error('Error getting or creating address:', error)
+      return res.status(500).json(BaseResponse.error(error.message || 'Failed to get or create address'))
+    }
+  }
+
+  /**
    * POST /addresses
    * Create a new address
    */

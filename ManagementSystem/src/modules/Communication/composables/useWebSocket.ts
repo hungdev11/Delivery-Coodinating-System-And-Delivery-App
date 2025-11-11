@@ -32,12 +32,15 @@ export function useWebSocket() {
   const currentUserId = ref<string | null>(null)
   const messageCallback = ref<((message: MessageResponse) => void) | null>(null)
   const onReconnectCallback = ref<(() => void) | null>(null)
+  const statusUpdateCallback = ref<((statusUpdate: any) => void) | null>(null)
+  const typingCallback = ref<((typingIndicator: any) => void) | null>(null)
+  const notificationCallback = ref<((notification: any) => void) | null>(null)
 
   /**
    * Get WebSocket URL from environment or auto-detect from current domain
-   * Note: SockJS requires HTTP/HTTPS URLs, not ws:// or wss://
-   * SockJS will handle the WebSocket upgrade internally
-   * WebSocket endpoint is at /ws (not /api/ws)
+   * Note: For SockJS connection, use HTTP/HTTPS URL (e.g., https://domain/ws)
+   * SockJS client will automatically append /websocket and upgrade to WebSocket
+   * For native WebSocket, use the full path: wss://domain/ws/websocket
    */
   const getWebSocketUrl = (): string => {
     // Check for explicit WebSocket URL in environment
@@ -78,6 +81,7 @@ export function useWebSocket() {
     
     // Default: Use /ws directly (not /api/ws)
     // The WebSocket endpoint is proxied directly at /ws by nginx
+    // SockJS will handle the /websocket upgrade internally
     return `${window.location.protocol}//${window.location.host}/ws`
   }
 
@@ -87,7 +91,10 @@ export function useWebSocket() {
   const connect = async (
     userId: string, 
     onMessageReceived?: (message: MessageResponse) => void,
-    onReconnect?: () => void
+    onReconnect?: () => void,
+    onStatusUpdate?: (statusUpdate: any) => void,
+    onTypingIndicator?: (typingIndicator: any) => void,
+    onNotification?: (notification: any) => void
   ) => {
     if (connected.value || connecting.value) {
       return
@@ -196,6 +203,57 @@ export function useWebSocket() {
           } else {
             console.warn('⚠️ No message callback provided, skipping subscription')
           }
+
+          // Subscribe to status updates
+          if (onStatusUpdate && client) {
+            const statusDest = `/user/queue/status-updates`
+            console.log(`📡 Subscribing to status updates: ${statusDest}`)
+            
+            const statusSub = client.subscribe(statusDest, (message) => {
+              try {
+                const statusUpdate = JSON.parse(message.body)
+                console.log('📊 Status update received:', statusUpdate)
+                onStatusUpdate(statusUpdate)
+              } catch (error) {
+                console.error('❌ Failed to parse status update:', error)
+              }
+            })
+            subscriptions.value.push(statusSub)
+          }
+
+          // Subscribe to typing indicators
+          if (onTypingIndicator && client) {
+            const typingDest = `/user/queue/typing`
+            console.log(`📡 Subscribing to typing indicators: ${typingDest}`)
+            
+            const typingSub = client.subscribe(typingDest, (message) => {
+              try {
+                const typingIndicator = JSON.parse(message.body)
+                console.log('📝 Typing indicator received:', typingIndicator)
+                onTypingIndicator(typingIndicator)
+              } catch (error) {
+                console.error('❌ Failed to parse typing indicator:', error)
+              }
+            })
+            subscriptions.value.push(typingSub)
+          }
+
+          // Subscribe to notifications
+          if (onNotification && client) {
+            const notifDest = `/user/queue/notifications`
+            console.log(`📡 Subscribing to notifications: ${notifDest}`)
+            
+            const notifSub = client.subscribe(notifDest, (message) => {
+              try {
+                const notification = JSON.parse(message.body)
+                console.log('🔔 Notification received:', notification)
+                onNotification(notification)
+              } catch (error) {
+                console.error('❌ Failed to parse notification:', error)
+              }
+            })
+            subscriptions.value.push(notifSub)
+          }
         },
         onStompError: (frame) => {
           console.error('STOMP error:', frame)
@@ -234,6 +292,9 @@ export function useWebSocket() {
       currentUserId.value = userId
       messageCallback.value = onMessageReceived || null
       onReconnectCallback.value = onReconnect || null
+      statusUpdateCallback.value = onStatusUpdate || null
+      typingCallback.value = onTypingIndicator || null
+      notificationCallback.value = onNotification || null
     } catch (error) {
       console.error('Failed to connect WebSocket:', error)
       connecting.value = false
@@ -267,7 +328,14 @@ export function useWebSocket() {
     reconnectTimer.value = window.setTimeout(() => {
       if (!connected.value && currentUserId.value && messageCallback.value) {
         console.log('Attempting to reconnect WebSocket...')
-        connect(currentUserId.value, messageCallback.value, onReconnectCallback.value || undefined)
+        connect(
+          currentUserId.value, 
+          messageCallback.value, 
+          onReconnectCallback.value || undefined,
+          statusUpdateCallback.value || undefined,
+          typingCallback.value || undefined,
+          notificationCallback.value || undefined
+        )
       }
     }, delay)
   }
@@ -351,6 +419,98 @@ export function useWebSocket() {
   }
 
   /**
+   * Send typing indicator
+   */
+  const sendTyping = (conversationId: string, isTyping: boolean) => {
+    if (!stompClient.value || !connected.value) {
+      return false
+    }
+
+    try {
+      const client = stompClient.value as any
+      const payload = {
+        conversationId,
+        isTyping,
+        timestamp: Date.now(),
+      }
+
+      if (client.publish) {
+        client.publish({
+          destination: '/app/chat.typing',
+          body: JSON.stringify(payload),
+        })
+      } else if (client.send) {
+        client.send('/app/chat.typing', {}, JSON.stringify(payload))
+      }
+      return true
+    } catch (error) {
+      console.error('Failed to send typing indicator:', error)
+      return false
+    }
+  }
+
+  /**
+   * Mark messages as read
+   */
+  const markAsRead = (messageIds: string[], conversationId: string) => {
+    if (!stompClient.value || !connected.value) {
+      return false
+    }
+
+    try {
+      const client = stompClient.value as any
+      const payload = {
+        messageIds,
+        conversationId,
+      }
+
+      if (client.publish) {
+        client.publish({
+          destination: '/app/chat.read',
+          body: JSON.stringify(payload),
+        })
+      } else if (client.send) {
+        client.send('/app/chat.read', {}, JSON.stringify(payload))
+      }
+      return true
+    } catch (error) {
+      console.error('Failed to mark messages as read:', error)
+      return false
+    }
+  }
+
+  /**
+   * Send quick action for proposals
+   */
+  const sendQuickAction = (proposalId: string, action: 'ACCEPT' | 'REJECT' | 'POSTPONE', data?: any) => {
+    if (!stompClient.value || !connected.value) {
+      return false
+    }
+
+    try {
+      const client = stompClient.value as any
+      const payload = {
+        proposalId,
+        action,
+        ...data,
+      }
+
+      if (client.publish) {
+        client.publish({
+          destination: '/app/chat.quick-action',
+          body: JSON.stringify(payload),
+        })
+      } else if (client.send) {
+        client.send('/app/chat.quick-action', {}, JSON.stringify(payload))
+      }
+      return true
+    } catch (error) {
+      console.error('Failed to send quick action:', error)
+      return false
+    }
+  }
+
+  /**
    * Disconnect from WebSocket
    */
   const disconnect = () => {
@@ -397,6 +557,9 @@ export function useWebSocket() {
     currentUserId.value = null
     messageCallback.value = null
     onReconnectCallback.value = null
+    statusUpdateCallback.value = null
+    typingCallback.value = null
+    notificationCallback.value = null
     reconnectAttempts.value = 0
   }
 
@@ -407,7 +570,14 @@ export function useWebSocket() {
     if (document.visibilityState === 'visible' && !connected.value && currentUserId.value && messageCallback.value) {
       console.log('Tab became visible, attempting to reconnect WebSocket...')
       reconnectAttempts.value = 0 // Reset attempts
-      connect(currentUserId.value, messageCallback.value)
+      connect(
+        currentUserId.value, 
+        messageCallback.value,
+        onReconnectCallback.value || undefined,
+        statusUpdateCallback.value || undefined,
+        typingCallback.value || undefined,
+        notificationCallback.value || undefined
+      )
     }
   }
 
@@ -429,6 +599,9 @@ export function useWebSocket() {
     connecting,
     connect,
     sendMessage,
+    sendTyping,
+    markAsRead,
+    sendQuickAction,
     disconnect,
   }
 }

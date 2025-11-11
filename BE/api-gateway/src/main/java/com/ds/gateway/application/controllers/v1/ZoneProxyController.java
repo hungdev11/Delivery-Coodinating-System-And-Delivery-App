@@ -193,6 +193,13 @@ public class ZoneProxyController {
         return zoneServiceClient.createAddress(requestBody).thenApply(ResponseEntity::ok).join();
     }
 
+    @PostMapping("/addresses/get-or-create")
+    public ResponseEntity<?> getOrCreateAddress(@RequestBody Object requestBody, HttpServletRequest request) {
+        Map<String, String> params = extractQueryParams(request);
+        log.info("POST /api/v1/addresses/get-or-create with params: {}", params);
+        return zoneServiceClient.getOrCreateAddress(requestBody, params).thenApply(ResponseEntity::ok).join();
+    }
+
     @PutMapping("/addresses/{id}")
     public ResponseEntity<?> updateAddress(@PathVariable String id, @RequestBody Object requestBody) {
         log.info("PUT /api/v1/addresses/{}", id);

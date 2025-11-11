@@ -313,9 +313,11 @@ export function useParcels() {
         label: 'Delivery Type',
         type: 'enum',
         enumOptions: [
-          { label: 'Standard', value: 'STANDARD' },
+          { label: 'Economy', value: 'ECONOMY' },
+          { label: 'Normal', value: 'NORMAL' },
+          { label: 'Fast', value: 'FAST' },
           { label: 'Express', value: 'EXPRESS' },
-          { label: 'Same Day', value: 'SAME_DAY' },
+          { label: 'Urgent', value: 'URGENT' },
         ],
         filterable: true,
         filterType: 'select',

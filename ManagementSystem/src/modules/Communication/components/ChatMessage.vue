@@ -6,6 +6,7 @@
  */
 
 import type { MessageResponse } from '../model.type'
+import MessageStatusIndicator from './MessageStatusIndicator.vue'
 
 interface Props {
   message: MessageResponse
@@ -34,11 +35,19 @@ const formatMessageTime = (dateString: string) => {
     "
   >
     <p class="text-sm whitespace-pre-wrap break-words">{{ message.content }}</p>
-    <p
-      class="text-xs mt-1"
-      :class="isMyMessage ? 'text-blue-100' : 'text-gray-500'"
-    >
-      {{ formatMessageTime(message.sentAt) }}
-    </p>
+    <div class="flex items-center justify-between mt-1 space-x-2">
+      <p
+        class="text-xs"
+        :class="isMyMessage ? 'text-blue-100' : 'text-gray-500'"
+      >
+        {{ formatMessageTime(message.sentAt) }}
+      </p>
+      <!-- Status indicator for my messages -->
+      <MessageStatusIndicator 
+        v-if="isMyMessage && message.status" 
+        :status="message.status"
+        size="xs"
+      />
+    </div>
   </div>
 </template>

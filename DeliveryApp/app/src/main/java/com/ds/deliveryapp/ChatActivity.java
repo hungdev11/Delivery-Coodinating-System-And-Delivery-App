@@ -55,7 +55,7 @@ import retrofit2.Response;
 public class ChatActivity extends AppCompatActivity implements MessageAdapter.OnProposalActionListener, ChatWebSocketListener {
 
     private static final String TAG = "ChatActivity";
-    private static final String SERVER_WEBSOCKET_URL = "ws://192.168.1.6:21511/ws";
+    private static final String SERVER_WEBSOCKET_URL = "wss://localweb.phuongy.works/ws/websocket";
 
     // Views
     private RecyclerView rvMessages;
@@ -270,7 +270,7 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             public void onResponse(@NonNull Call<PageResponse<Message>> call, @NonNull Response<PageResponse<Message>> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().content() != null) {
                     List<Message> history = response.body().content();
-                    Collections.reverse(history);
+//                    Collections.reverse(history);
                     runOnUiThread(() -> {
                         if (mAdapter != null) mAdapter.setMessages(history);
                         scrollToBottom();
@@ -317,8 +317,20 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             return;
         }
 
+        if (mJwtToken == null) {
+            Log.e(TAG, "Cannot connect WebSocket: JWT token is null.");
+            showErrorToast("Authentication token missing. Please login again.");
+            return;
+        }
+
+        if (mCurrentUserId == null || mCurrentUserId.isEmpty()) {
+            Log.e(TAG, "Cannot connect WebSocket: User ID is null or empty.");
+            showErrorToast("User ID missing. Please login again.");
+            return;
+        }
+
         Log.d(TAG, "Initializing WebSocket Manager...");
-        mWebSocketManager = new ChatWebSocketManager(SERVER_WEBSOCKET_URL, mCurrentUserId);
+        mWebSocketManager = new ChatWebSocketManager(SERVER_WEBSOCKET_URL, mJwtToken, mCurrentUserId);
         mWebSocketManager.setListener(this); // <-- Gán Activity này làm listener
         mWebSocketManager.connect(); // Bắt đầu kết nối
     }
@@ -354,8 +366,18 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             @Override
             public void onSuccess() {
                 Log.d(TAG, "STOMP message sent successfully.");
+                // Create optimistic message with all required fields
                 Message selfMessage = new Message(
-                        null, mCurrentUserId, content, null, ContentType.TEXT, null
+                        null,                    // id (will be set by server)
+                        mConversationId,         // conversationId
+                        mCurrentUserId,          // senderId
+                        content,                 // content
+                        null,                    // sentAt (will be set by server)
+                        ContentType.TEXT,        // type
+                        "SENT",                  // status (initial status)
+                        null,                    // deliveredAt
+                        null,                    // readAt
+                        null                     // proposal
                 );
                 runOnUiThread(() -> {
                     etMessage.setText("");
@@ -724,6 +746,70 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                         update.getNewStatus(),
                         resultData
                 );
+            }
+        });
+    }
+
+    @Override
+    public void onStatusUpdateReceived(String statusUpdateJson) {
+        runOnUiThread(() -> {
+            try {
+                Log.d(TAG, "Status update received: " + statusUpdateJson);
+                // Parse the status update and update message UI
+                JSONObject statusUpdate = new JSONObject(statusUpdateJson);
+                String messageId = statusUpdate.optString("messageId");
+                String status = statusUpdate.optString("status");
+                
+                if (messageId != null && !messageId.isEmpty() && mAdapter != null) {
+                    mAdapter.updateMessageStatus(messageId, status);
+                    Log.d(TAG, "Updated message " + messageId + " status to " + status);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error parsing status update", e);
+            }
+        });
+    }
+
+    @Override
+    public void onTypingIndicatorReceived(String typingIndicatorJson) {
+        runOnUiThread(() -> {
+            try {
+                Log.d(TAG, "Typing indicator received: " + typingIndicatorJson);
+                // Parse typing indicator and update UI
+                JSONObject typingIndicator = new JSONObject(typingIndicatorJson);
+                String userId = typingIndicator.optString("userId");
+                boolean isTyping = typingIndicator.optBoolean("isTyping", false);
+                
+                // Only show typing indicator for the other user (not self)
+                if (!userId.equals(mCurrentUserId)) {
+                    if (isTyping) {
+                        tvRecipientStatus.setText(mRecipientName + " is typing...");
+                    } else {
+                        tvRecipientStatus.setText(""); // Clear typing indicator
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error parsing typing indicator", e);
+            }
+        });
+    }
+
+    @Override
+    public void onNotificationReceived(String notificationJson) {
+        runOnUiThread(() -> {
+            try {
+                Log.d(TAG, "Notification received: " + notificationJson);
+                // Parse notification and show toast or update UI
+                JSONObject notification = new JSONObject(notificationJson);
+                String title = notification.optString("title");
+                String content = notification.optString("content");
+                
+                // Show notification as toast (in-app notification)
+                if (title != null && !title.isEmpty()) {
+                    Toast.makeText(this, title + ": " + content, Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error parsing notification", e);
             }
         });
     }

@@ -40,6 +40,7 @@ public interface IZoneServiceClient {
     CompletableFuture<Object> getAddressesByPoint(Map<String, String> queryParams);
     CompletableFuture<Object> searchAddresses(Map<String, String> queryParams);
     CompletableFuture<Object> createAddress(Object requestBody);
+    CompletableFuture<Object> getOrCreateAddress(Object requestBody, Map<String, String> queryParams);
     CompletableFuture<Object> updateAddress(String id, Object requestBody);
     CompletableFuture<Void> deleteAddress(String id);
     CompletableFuture<Object> batchImportAddresses(Object requestBody);

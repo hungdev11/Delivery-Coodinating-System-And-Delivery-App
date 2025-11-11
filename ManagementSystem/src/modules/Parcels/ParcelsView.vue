@@ -18,6 +18,7 @@ import {
 import { useRouter } from 'vue-router'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
 import { useParcels } from './composables'
+import { useParcelExport } from './composables/useParcelExport'
 import type { ParcelDto, ParcelStatus } from './model.type'
 import { useTemplateRef } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
@@ -41,6 +42,9 @@ const UButton = resolveComponent('UButton')
 const router = useRouter()
 const overlay = useOverlay()
 const table = useTemplateRef('table')
+
+// Export composable
+const { exportParcels } = useParcelExport()
 
 // Composables
 const {
@@ -535,6 +539,21 @@ const handleBulkDelete = async () => {
     await bulkDelete(ids)
     selected.value = []
   }
+}
+
+/**
+ * Handle bulk export
+ */
+const handleBulkExport = () => {
+  if (!table.value?.tableApi?.getFilteredSelectedRowModel()?.rows) return
+  
+  const selectedParcels = table.value.tableApi
+    .getFilteredSelectedRowModel()
+    .rows.map((row) => row.original)
+  
+  if (selectedParcels.length === 0) return
+  
+  exportParcels(selectedParcels)
 }
 
 /**

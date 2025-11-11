@@ -22,6 +22,13 @@ const router = Router()
 router.post('/', addressController.createAddress)
 
 /**
+ * @route POST /api/v1/addresses/get-or-create
+ * @desc Get existing address by coordinates or create new one
+ * @access Public
+ */
+router.post('/get-or-create', addressController.getOrCreateAddress)
+
+/**
  * @route POST /api/v1/addresses/batch
  * @desc Batch import addresses
  * @access Public

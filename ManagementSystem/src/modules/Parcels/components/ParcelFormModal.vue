@@ -9,6 +9,8 @@
 import { computed, ref, watch } from 'vue'
 import type { ParcelDto, DeliveryType } from '../model.type'
 import AddressPicker from './AddressPicker.vue'
+import { getOrCreateAddress } from '@/modules/Addresses/api'
+import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 
 interface Props {
   parcel?: ParcelDto
@@ -17,21 +19,22 @@ interface Props {
 
 const props = defineProps<Props>()
 const emit = defineEmits<{ close: [result: typeof form.value | null] }>()
+const toast = useToast()
 
 // Form state
 const form = ref({
   code: '',
   senderId: '',
   receiverId: '',
-  deliveryType: 'STANDARD' as DeliveryType,
+  deliveryType: 'NORMAL' as DeliveryType,
   receiveFrom: '',
   sendTo: '',
   weight: 0,
   value: 0,
   windowStart: '',
   windowEnd: '',
-  lat: undefined as number | undefined,
-  lon: undefined as number | undefined,
+  senderDestinationId: '',
+  receiverDestinationId: '',
 })
 
 // Address picker states
@@ -58,15 +61,15 @@ watch(
         code: parcelData.code || '',
         senderId: parcelData.senderId || '',
         receiverId: parcelData.receiverId || '',
-        deliveryType: parcelData.deliveryType || 'STANDARD',
+        deliveryType: parcelData.deliveryType || 'NORMAL',
         receiveFrom: parcelData.receiveFrom || '',
         sendTo: parcelData.targetDestination || '',
         weight: parcelData.weight || 0,
         value: parcelData.value || 0,
         windowStart: parcelData.windowStart || '',
         windowEnd: parcelData.windowEnd || '',
-        lat: parcelData.lat,
-        lon: parcelData.lon,
+        senderDestinationId: '',
+        receiverDestinationId: '',
       }
 
       // Initialize address pickers
@@ -96,11 +99,6 @@ watch(
     if (newValue.addressText) {
       form.value.receiveFrom = newValue.addressText
     }
-    // Use receiveFrom coordinates for lat/lon if sendTo doesn't have them
-    if (newValue.lat && newValue.lon && !sendToAddress.value.lat) {
-      form.value.lat = newValue.lat
-      form.value.lon = newValue.lon
-    }
   },
   { deep: true },
 )
@@ -111,11 +109,6 @@ watch(
     if (newValue.addressText) {
       form.value.sendTo = newValue.addressText
     }
-    // Prefer sendTo coordinates for lat/lon (destination)
-    if (newValue.lat && newValue.lon) {
-      form.value.lat = newValue.lat
-      form.value.lon = newValue.lon
-    }
   },
   { deep: true },
 )
@@ -123,18 +116,85 @@ watch(
 const submitting = ref(false)
 
 const deliveryTypeOptions = [
-  { label: 'Standard', value: 'STANDARD' },
+  { label: 'Economy', value: 'ECONOMY' },
+  { label: 'Normal', value: 'NORMAL' },
+  { label: 'Fast', value: 'FAST' },
   { label: 'Express', value: 'EXPRESS' },
-  { label: 'Same Day', value: 'SAME_DAY' },
+  { label: 'Urgent', value: 'URGENT' },
 ]
 
 const isEditMode = computed(() => props.mode === 'edit')
 
 const handleSubmit = async () => {
+  // Stage 1: Get or create destinations for sender and receiver
+  if (!receiveFromAddress.value.lat || !receiveFromAddress.value.lon) {
+    toast.add({
+      title: 'Error',
+      description: 'Please select sender address coordinates (Receive From)',
+      color: 'error',
+    })
+    return
+  }
+
+  if (!sendToAddress.value.lat || !sendToAddress.value.lon) {
+    toast.add({
+      title: 'Error',
+      description: 'Please select receiver address coordinates (Send To)',
+      color: 'error',
+    })
+    return
+  }
+
   submitting.value = true
   try {
-    // Emit close with form data
+    // Get or create sender destination
+    const senderResponse = await getOrCreateAddress({
+      name: form.value.receiveFrom || 'Sender Address',
+      addressText: form.value.receiveFrom,
+      lat: receiveFromAddress.value.lat,
+      lon: receiveFromAddress.value.lon,
+    })
+
+    if (!senderResponse.result?.id) {
+      toast.add({
+        title: 'Error',
+        description: 'Failed to get or create sender destination',
+        color: 'error',
+      })
+      return
+    }
+
+    // Get or create receiver destination
+    const receiverResponse = await getOrCreateAddress({
+      name: form.value.sendTo || 'Receiver Address',
+      addressText: form.value.sendTo,
+      lat: sendToAddress.value.lat,
+      lon: sendToAddress.value.lon,
+    })
+
+    if (!receiverResponse.result?.id) {
+      toast.add({
+        title: 'Error',
+        description: 'Failed to get or create receiver destination',
+        color: 'error',
+      })
+      return
+    }
+
+    // Stage 2: Set destination IDs and emit form data
+    form.value.senderDestinationId = senderResponse.result.id
+    form.value.receiverDestinationId = receiverResponse.result.id
+
+    // Emit close with form data (now includes destination IDs)
     emit('close', form.value)
+  } catch (error: unknown) {
+    console.error('Failed to get or create destinations:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Failed to process addresses'
+    toast.add({
+      title: 'Error',
+      description: errorMessage,
+      color: 'error',
+    })
   } finally {
     submitting.value = false
   }
@@ -169,7 +229,7 @@ const handleCancel = () => {
         </div>
 
         <UFormField label="Delivery Type" name="deliveryType" required>
-          <USelect class="w-full" v-model="form.deliveryType" :options="deliveryTypeOptions" />
+          <USelect class="w-full" v-model="form.deliveryType" :items="deliveryTypeOptions" />
         </UFormField>
 
         <AddressPicker
@@ -213,28 +273,6 @@ const handleCancel = () => {
 
           <UFormField label="Window End" name="windowEnd">
             <UInput class="w-full" v-model="form.windowEnd" type="time" />
-          </UFormField>
-        </div>
-
-        <div class="grid grid-cols-2 gap-4">
-          <UFormField label="Latitude" name="lat">
-            <UInput
-              class="w-full"
-              v-model.number="form.lat"
-              type="number"
-              step="0.000001"
-              placeholder="Enter latitude"
-            />
-          </UFormField>
-
-          <UFormField label="Longitude" name="lon">
-            <UInput
-              class="w-full"
-              v-model.number="form.lon"
-              type="number"
-              step="0.000001"
-              placeholder="Enter longitude"
-            />
           </UFormField>
         </div>
       </form>

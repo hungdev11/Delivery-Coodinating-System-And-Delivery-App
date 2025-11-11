@@ -23,7 +23,7 @@ public class UserServiceClient {
 
     private final RestTemplate restTemplate;
 
-    @Value("${user.service.url:http://api-gateway:21500/api}")
+    @Value("${user.service.url:http://api-gateway:21500}")
     private String userServiceUrl;
 
     /**
@@ -33,7 +33,7 @@ public class UserServiceClient {
      */
     public UserInfoDto getUserById(String userId) {
         try {
-            String url = userServiceUrl + "/v1/users/" + userId;
+            String url = userServiceUrl + "/api/v1/users/" + userId;
             log.debug("Fetching user info from: {}", url);
             
             ResponseEntity<BaseResponse<UserInfoDto>> response = restTemplate.exchange(
@@ -45,9 +45,9 @@ public class UserServiceClient {
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 BaseResponse<UserInfoDto> body = response.getBody();
-                if (body.isSuccess() && body.getResult() != null) {
+                if (body.isSuccess() && body.getData() != null) {
                     log.debug("Successfully fetched user info for userId: {}", userId);
-                    return body.getResult();
+                    return body.getData();
                 }
             }
             

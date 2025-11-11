@@ -8,7 +8,14 @@
 import { onMounted, onUnmounted, ref, computed, watch, nextTick, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
-import { useConversations, useWebSocket, useProposals } from './composables'
+import { 
+  useConversations, 
+  useWebSocket, 
+  useProposals,
+  useMessageStatus,
+  useTypingIndicator,
+  useNotifications
+} from './composables'
 import type {
   MessageResponse,
   ChatMessagePayload,
@@ -16,9 +23,12 @@ import type {
   ProposalType,
 } from './model.type'
 import { getCurrentUser, getUserRoles } from '@/common/guards/roleGuard.guard'
+import { useChatHistoryStore } from '@/stores/chatHistory'
 import ChatMessage from './components/ChatMessage.vue'
 import ProposalMessage from './components/ProposalMessage.vue'
 import ProposalMenu from './components/ProposalMenu.vue'
+import TypingIndicator from './components/TypingIndicator.vue'
+import NotificationCenter from './components/NotificationCenter.vue'
 
 // Lazy load modals
 const LazyDateTimePickerModal = defineAsyncComponent(() => import('./components/DateTimePickerModal.vue'))
@@ -40,18 +50,32 @@ const currentUserRoles = computed(() => getUserRoles())
 
 const { messages, loadMessages, addMessage, clearConversation, loadConversations, loadMissedMessages } =
   useConversations()
-const { connected, connecting, connect, sendMessage, disconnect } = useWebSocket()
+const { connected, connecting, connect, sendMessage, sendTyping, disconnect } = useWebSocket()
 const {
   availableConfigs,
   loadAvailableConfigs,
   create: createProposal,
   respond: respondToProposal,
 } = useProposals()
+const { handleStatusUpdate } = useMessageStatus()
+const { handleTypingIndicator, getTypingUsers, clearConversationTyping } = useTypingIndicator()
+const { handleNotification } = useNotifications()
+const chatHistoryStore = useChatHistoryStore()
 
 const messageInput = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
 const sending = ref(false)
 const loadingProposals = ref(false)
+const typingTimer = ref<number | null>(null)
+const isTyping = ref(false)
+
+// Get typing users for this conversation
+const typingUsers = computed(() => {
+  if (!conversationId.value || !currentUserId.value) return []
+  return getTypingUsers(conversationId.value, currentUserId.value)
+})
+
+const isPartnerTyping = computed(() => typingUsers.value.length > 0)
 
 const selectedProposalConfig = ref<ProposalTypeConfig | null>(null)
 const postponeType = ref<'SPECIFIC' | 'BEFORE' | 'AFTER' | null>(null)
@@ -94,6 +118,12 @@ const loadPartnerInfo = async () => {
 onUnmounted(() => {
   clearConversation()
   disconnect()
+  if (conversationId.value) {
+    clearConversationTyping(conversationId.value)
+  }
+  if (typingTimer.value) {
+    clearTimeout(typingTimer.value)
+  }
 })
 
 /**
@@ -129,7 +159,7 @@ const connectWebSocket = async () => {
       // We need to verify it belongs to the current conversation
       const isFromPartner = message.senderId === partnerId.value
       const isFromMe = message.senderId === currentUserId.value
-      const belongsToConversation = 
+      const belongsToConversation =
         !message.conversationId || // Backward compatibility: if no conversationId, check by sender
         message.conversationId === conversationId.value
 
@@ -140,6 +170,12 @@ const connectWebSocket = async () => {
           currentConversationId: conversationId.value,
         })
         addMessage(message)
+        
+        // Save to local storage
+        if (conversationId.value) {
+          chatHistoryStore.addMessage(conversationId.value, message)
+        }
+        
         nextTick(() => scrollToBottom())
 
         // Reload conversations list to update lastMessageTime
@@ -157,6 +193,9 @@ const connectWebSocket = async () => {
       }
     },
     handleReconnect, // Callback for reconnection
+    handleStatusUpdate, // Status update callback
+    handleTypingIndicator, // Typing indicator callback
+    handleNotification // Notification callback
   )
 }
 
@@ -172,6 +211,32 @@ const handleReconnect = async () => {
 }
 
 /**
+ * Handle input change - send typing indicator
+ */
+const handleInputChange = () => {
+  if (!conversationId.value || !connected.value) return
+  
+  // Send typing indicator
+  if (!isTyping.value) {
+    isTyping.value = true
+    sendTyping(conversationId.value, true)
+  }
+  
+  // Reset typing timer
+  if (typingTimer.value) {
+    clearTimeout(typingTimer.value)
+  }
+  
+  // Stop typing after 3 seconds of inactivity
+  typingTimer.value = window.setTimeout(() => {
+    if (isTyping.value) {
+      isTyping.value = false
+      sendTyping(conversationId.value!, false)
+    }
+  }, 3000)
+}
+
+/**
  * Send message
  */
 const handleSendMessage = async () => {
@@ -179,6 +244,15 @@ const handleSendMessage = async () => {
 
   sending.value = true
   const content = messageInput.value.trim()
+
+  // Stop typing indicator
+  if (isTyping.value && conversationId.value) {
+    isTyping.value = false
+    sendTyping(conversationId.value, false)
+  }
+  if (typingTimer.value) {
+    clearTimeout(typingTimer.value)
+  }
 
   // Create optimistic message for immediate display
   const optimisticMessage: MessageResponse = {
@@ -188,6 +262,7 @@ const handleSendMessage = async () => {
     content,
     sentAt: new Date().toISOString(),
     type: 'TEXT',
+    status: 'SENT', // Initial status
   }
 
   // Add message immediately for optimistic UI update
@@ -198,6 +273,7 @@ const handleSendMessage = async () => {
   const payload: ChatMessagePayload = {
     content,
     recipientId: partnerId.value,
+    conversationId: conversationId.value,
   }
 
   const success = sendMessage(payload)
@@ -504,6 +580,9 @@ const isMyMessage = (message: MessageResponse) => {
         </div>
       </div>
       <div class="flex items-center space-x-2">
+        <!-- Notification Center -->
+        <NotificationCenter />
+        
         <UBadge
           :color="connected ? 'success' : 'neutral'"
           variant="subtle"
@@ -547,6 +626,13 @@ const isMyMessage = (message: MessageResponse) => {
           @respond="handleProposalResponse"
         />
       </div>
+      
+      <!-- Typing Indicator -->
+      <TypingIndicator 
+        v-if="isPartnerTyping" 
+        :show="isPartnerTyping" 
+        :user-name="partnerName || 'Partner'"
+      />
     </div>
 
     <!-- Message Input -->
@@ -564,6 +650,7 @@ const isMyMessage = (message: MessageResponse) => {
           class="flex-1"
           placeholder="Type a message..."
           :disabled="!connected || sending"
+          @input="handleInputChange"
           @keyup.enter="handleSendMessage"
         />
         <UButton

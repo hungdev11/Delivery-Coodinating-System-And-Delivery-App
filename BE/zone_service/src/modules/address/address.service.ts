@@ -422,6 +422,33 @@ export class AddressService {
   }
 
   /**
+   * Get or create address by coordinates
+   * - Finds nearest address within threshold (default 50m)
+   * - If found, returns existing address
+   * - If not found, creates new address
+   */
+  async getOrCreateAddress(dto: CreateAddressDto, thresholdMeters: number = 50): Promise<AddressDto> {
+    // First, try to find existing address within threshold
+    const nearest = await this.findNearestAddresses({
+      lat: dto.lat,
+      lon: dto.lon,
+      limit: 1,
+      maxDistance: thresholdMeters,
+    })
+
+    // If found within threshold, return existing
+    if (nearest.length > 0 && nearest[0] && nearest[0].distance <= thresholdMeters) {
+      const existing = await this.getAddress(nearest[0].id)
+      if (existing) {
+        return existing
+      }
+    }
+
+    // Not found within threshold, create new
+    return await this.createAddress(dto)
+  }
+
+  /**
    * Find address by point with local-first strategy, fallback to TrackAsia Nearby Search
    */
   async findByPointWithFallback(params: {

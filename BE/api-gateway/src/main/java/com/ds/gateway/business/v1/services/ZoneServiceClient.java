@@ -337,6 +337,25 @@ public class ZoneServiceClient implements IZoneServiceClient {
     }
 
     @Override
+    public CompletableFuture<Object> getOrCreateAddress(Object requestBody, Map<String, String> queryParams) {
+        log.debug("Getting or creating address with params: {}", queryParams);
+        WebClient.RequestBodyUriSpec req = zoneServiceWebClient.post();
+        WebClient.RequestBodySpec spec = req.uri(uriBuilder -> {
+            var builder = uriBuilder.path("/api/v1/addresses/get-or-create");
+            if (queryParams != null) {
+                queryParams.forEach(builder::queryParam);
+            }
+            return builder.build();
+        });
+        return spec.contentType(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromValue(requestBody))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
     public CompletableFuture<Object> updateAddress(String id, Object requestBody) {
         return zoneServiceWebClient.put()
                 .uri("/api/v1/addresses/{id}", id)

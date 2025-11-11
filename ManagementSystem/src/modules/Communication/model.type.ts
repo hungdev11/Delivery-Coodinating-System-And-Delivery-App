@@ -49,6 +49,9 @@ export interface MessageResponse {
   content: string
   sentAt: string
   type: ContentType
+  status?: 'SENT' | 'DELIVERED' | 'READ' // Message status
+  deliveredAt?: string // When message was delivered
+  readAt?: string // When message was read
   proposal?: InteractiveProposalResponseDTO
 }
 
@@ -124,6 +127,7 @@ export interface PageResponse<T> {
 export interface ChatMessagePayload {
   content: string
   recipientId: string
+  conversationId?: string // Optional conversation ID for tracking
 }
 
 /**

@@ -82,7 +82,7 @@ export type ParcelStatus =
 /**
  * Delivery Type
  */
-export type DeliveryType = 'STANDARD' | 'EXPRESS' | 'SAME_DAY'
+export type DeliveryType = 'URGENT' | 'EXPRESS' | 'FAST' | 'NORMAL' | 'ECONOMY'
 
 /**
  * Parcel Event (for status changes)
@@ -111,8 +111,8 @@ export class CreateParcelRequest {
   value: number
   windowStart?: string
   windowEnd?: string
-  lat?: number
-  lon?: number
+  senderDestinationId: string
+  receiverDestinationId: string
 
   constructor(data: CreateParcelRequest) {
     this.code = data.code
@@ -125,8 +125,8 @@ export class CreateParcelRequest {
     this.value = data.value
     this.windowStart = data.windowStart
     this.windowEnd = data.windowEnd
-    this.lat = data.lat
-    this.lon = data.lon
+    this.senderDestinationId = data.senderDestinationId
+    this.receiverDestinationId = data.receiverDestinationId
   }
 }
 

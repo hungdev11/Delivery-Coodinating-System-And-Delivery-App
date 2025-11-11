@@ -43,11 +43,31 @@
         },
         {
             "type": "java",
+            "name": "Spring Boot-ParcelServiceApplication<parcel_service>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.ds.parcel_service.ParcelServiceApplication",
+            "projectName": "parcel_service",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "java",
             "name": "Spring Boot-SettingsServiceApplication<setting>",
             "request": "launch",
             "cwd": "${workspaceFolder}",
             "mainClass": "com.ds.setting.SettingsServiceApplication",
             "projectName": "setting",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "java",
+            "name": "Spring Boot-CommunicationServiceApplication<communication>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.ds.communication_service.CommunicationServiceApplication",
+            "projectName": "communication_service",
             "args": "",
             "envFile": "${workspaceFolder}/.env"
         }

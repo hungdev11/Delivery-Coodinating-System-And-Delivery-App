@@ -157,6 +157,23 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         }
     }
 
+    /**
+     * Update message status (SENT, DELIVERED, READ)
+     */
+    public void updateMessageStatus(String messageId, String newStatus) {
+        if (messageList == null) return;
+
+        for (int i = 0; i < messageList.size(); i++) {
+            Message msg = messageList.get(i);
+            if (msg.getId() != null && msg.getId().equals(messageId)) {
+                msg.setStatus(newStatus);
+                notifyItemChanged(i);
+                Log.d("MessageAdapter", "Updated message " + messageId + " status to " + newStatus);
+                return;
+            }
+        }
+    }
+
     /* --- VIEWHOLDERS --- */
 
     // 1. ViewHolder cho tin nhắn GỬI (Text)
