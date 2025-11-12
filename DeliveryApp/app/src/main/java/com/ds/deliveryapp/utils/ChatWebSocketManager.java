@@ -273,6 +273,51 @@ public class ChatWebSocketManager {
         
         Log.d(TAG, "✅ All subscriptions created successfully for user: " + mUserId);
     }
+    
+    /**
+     * Subscribe to session messages (for shippers to monitor client messages)
+     * Shippers can call this when they start a session to receive all client messages
+     */
+    public void subscribeToSessionMessages() {
+        if (!isConnected()) {
+            Log.e(TAG, "Cannot subscribe to session messages: Not connected.");
+            return;
+        }
+        
+        if (mUserId == null || mUserId.isEmpty()) {
+            Log.e(TAG, "Cannot subscribe to session messages: User ID is null or empty.");
+            return;
+        }
+        
+        // Subscribe to shipper's session monitoring topic
+        String sessionTopic = "/topic/shipper/" + mUserId + "/session-messages";
+        Log.d(TAG, "📡 Subscribing to session messages: " + sessionTopic);
+        
+        Disposable sessionMessagesDisposable = mStompClient.topic(sessionTopic)
+                .subscribe(
+                        stompMessage -> {
+                            Log.d(TAG, "<<< Received STOMP (Session Message): " + stompMessage.getPayload());
+                            try {
+                                Message message = mGson.fromJson(stompMessage.getPayload(), Message.class);
+                                if (message != null && mListener != null) {
+                                    // Notify listener about session message
+                                    mListener.onSessionMessageReceived(message);
+                                }
+                            } catch (Exception e) {
+                                Log.e(TAG, "Error parsing session message JSON", e);
+                            }
+                        },
+                        throwable -> {
+                            Log.e(TAG, "Error on STOMP topic (" + sessionTopic + ")", throwable);
+                            if (mListener != null) {
+                                mListener.onWebSocketError("Session subscription error: " + throwable.getMessage());
+                            }
+                        }
+                );
+        mComposite.add(sessionMessagesDisposable);
+        
+        Log.d(TAG, "✅ Session messages subscription created for shipper: " + mUserId);
+    }
 
     /**
      * Gửi tin nhắn TEXT (logic chat cũ).

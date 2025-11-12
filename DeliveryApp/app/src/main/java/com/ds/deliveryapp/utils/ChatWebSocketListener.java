@@ -16,4 +16,10 @@ public interface ChatWebSocketListener {
     void onStatusUpdateReceived(String statusUpdateJson);
     void onTypingIndicatorReceived(String typingIndicatorJson);
     void onNotificationReceived(String notificationJson);
+    
+    /**
+     * Called when a session message is received (shipper monitoring client messages)
+     * This is used by shippers to monitor all client communications in their active session
+     */
+    void onSessionMessageReceived(Message message);
 }

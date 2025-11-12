@@ -85,8 +85,32 @@ public class ChatController {
             log.error("❌ Failed to send to SENDER: {}", e.getMessage(), e);
         }
         
+        // NEW: If recipient is a shipper, also broadcast to session monitoring topic
+        // This allows shippers to monitor all client messages in their active session
+        broadcastToShipperSession(savedMessage, senderId, payload.getRecipientId());
+        
         log.info("✅ Message {} sent to both users: sender={}, recipient={}", 
             savedMessage.getId(), senderId, payload.getRecipientId());
+    }
+    
+    /**
+     * Broadcast message to shipper session monitoring topic
+     * Allows shippers to monitor all incoming client messages
+     */
+    private void broadcastToShipperSession(MessageResponse message, String senderId, String recipientId) {
+        try {
+            // If recipient is a shipper with an active session, broadcast to session topic
+            // Topic format: /topic/shipper/{shipperId}/session-messages
+            // Shippers can subscribe to this to monitor all client communications
+            String sessionTopic = "/topic/shipper/" + recipientId + "/session-messages";
+            
+            log.debug("📡 Broadcasting message to shipper session topic: {}", sessionTopic);
+            messagingTemplate.convertAndSend(sessionTopic, message);
+            
+        } catch (Exception e) {
+            // Don't fail the whole message send if broadcast fails
+            log.warn("⚠️ Failed to broadcast to shipper session: {}", e.getMessage());
+        }
     }
 
     /**
