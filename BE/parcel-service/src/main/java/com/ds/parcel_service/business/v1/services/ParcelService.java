@@ -316,6 +316,9 @@ public class ParcelService implements IParcelService{
                             .deliveredAt(parcel.getDeliveredAt())
                             .windowStart(parcel.getWindowStart())
                             .windowEnd(parcel.getWindowEnd())
+                            .priority(parcel.getPriority())
+                            .isDelayed(parcel.getIsDelayed())
+                            .delayedUntil(parcel.getDelayedUntil())
                             .build();
     }
 
@@ -372,6 +375,47 @@ public class ParcelService implements IParcelService{
         Page<Parcel> parcels = parcelRepository.findByReceiverId(customerId, pageable);
         
         return PageResponse.from(parcels.map(this::toDto));
+    }
+
+    @Override
+    @Transactional
+    public ParcelResponse updateParcelPriority(UUID parcelId, Integer priority) {
+        Parcel parcel = parcelRepository.findById(parcelId)
+            .orElseThrow(() -> new ResourceNotFound("Parcel not found with id: " + parcelId));
+        
+        log.info("Updating priority for parcel {} from {} to {}", parcelId, parcel.getPriority(), priority);
+        parcel.setPriority(priority);
+        
+        Parcel updatedParcel = parcelRepository.save(parcel);
+        return toDto(updatedParcel);
+    }
+
+    @Override
+    @Transactional
+    public ParcelResponse delayParcel(UUID parcelId, LocalDateTime delayedUntil) {
+        Parcel parcel = parcelRepository.findById(parcelId)
+            .orElseThrow(() -> new ResourceNotFound("Parcel not found with id: " + parcelId));
+        
+        log.info("Delaying parcel {} until {}", parcelId, delayedUntil);
+        parcel.setIsDelayed(true);
+        parcel.setDelayedUntil(delayedUntil);
+        
+        Parcel updatedParcel = parcelRepository.save(parcel);
+        return toDto(updatedParcel);
+    }
+
+    @Override
+    @Transactional
+    public ParcelResponse undelayParcel(UUID parcelId) {
+        Parcel parcel = parcelRepository.findById(parcelId)
+            .orElseThrow(() -> new ResourceNotFound("Parcel not found with id: " + parcelId));
+        
+        log.info("Undelaying parcel {}", parcelId);
+        parcel.setIsDelayed(false);
+        parcel.setDelayedUntil(null);
+        
+        Parcel updatedParcel = parcelRepository.save(parcel);
+        return toDto(updatedParcel);
     }
 
     //update address

@@ -27,6 +27,7 @@ public class ChatController {
     private final IMessageService messageService;
     private final MessageStatusService messageStatusService;
     private final TypingService typingService;
+    private final com.ds.communication_service.common.interfaces.IProposalService proposalService;
 
     /**
      * Nhận tin nhắn từ client (Android)
@@ -155,10 +156,68 @@ public class ChatController {
         log.info("⚡ Quick action received: userId={}, action={}, proposalId={}", 
             userId, quickAction.getAction(), quickAction.getProposalId());
         
-        // TODO: Implement quick action handling
-        // This will be implemented in Phase 4 (Notification System)
-        // For now, just log the action
-        log.info("Quick action processing not yet implemented. Action: {}", quickAction.getAction());
+        try {
+            // Build result data based on action type
+            String resultData = buildResultData(quickAction);
+            
+            // Process the proposal response
+            proposalService.respondToProposal(
+                java.util.UUID.fromString(quickAction.getProposalId()), 
+                userId, 
+                resultData
+            );
+            
+            log.info("✅ Quick action processed successfully: action={}, proposalId={}", 
+                quickAction.getAction(), quickAction.getProposalId());
+                
+        } catch (Exception e) {
+            log.error("❌ Failed to process quick action: {}", e.getMessage(), e);
+            // TODO: Send error notification to user
+        }
+    }
+    
+    /**
+     * Build result data JSON for proposal response based on action type
+     */
+    private String buildResultData(QuickActionRequest quickAction) {
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        com.fasterxml.jackson.databind.node.ObjectNode resultNode = mapper.createObjectNode();
+        
+        switch (quickAction.getAction()) {
+            case ACCEPT:
+                resultNode.put("approved", true);
+                if (quickAction.getNote() != null) {
+                    resultNode.put("note", quickAction.getNote());
+                }
+                break;
+                
+            case REJECT:
+                resultNode.put("approved", false);
+                if (quickAction.getNote() != null) {
+                    resultNode.put("reason", quickAction.getNote());
+                }
+                break;
+                
+            case POSTPONE:
+                resultNode.put("postponed", true);
+                if (quickAction.getPostponeWindowStart() != null) {
+                    resultNode.put("windowStart", quickAction.getPostponeWindowStart().toString());
+                }
+                if (quickAction.getPostponeWindowEnd() != null) {
+                    resultNode.put("windowEnd", quickAction.getPostponeWindowEnd().toString());
+                }
+                if (quickAction.getNote() != null) {
+                    resultNode.put("note", quickAction.getNote());
+                }
+                break;
+        }
+        
+        try {
+            return mapper.writeValueAsString(resultNode);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            log.error("Failed to serialize result data", e);
+            return "{}";
+        }
     }
 
     /**

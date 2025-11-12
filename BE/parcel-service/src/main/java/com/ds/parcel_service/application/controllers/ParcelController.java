@@ -1,6 +1,7 @@
 package com.ds.parcel_service.application.controllers;
 
 import java.security.Principal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -223,5 +224,50 @@ public class ParcelController {
     @PostMapping("/bulk")
     ResponseEntity<Map<String, ParcelResponse>> fetchParcelsBulk(@RequestBody List<UUID> parcelIds) {
         return ResponseEntity.ok(parcelService.fetchParcelsBulk(parcelIds));
+    }
+
+    /**
+     * API to update parcel priority.
+     * Priority affects routing order (higher priority = delivered first).
+     * @param parcelId UUID of the parcel
+     * @param priority New priority value (e.g., 1-10)
+     * @return Updated parcel response
+     */
+    @PutMapping("/{parcelId}/priority")
+    public ResponseEntity<ParcelResponse> updateParcelPriority(
+            @PathVariable UUID parcelId,
+            @RequestParam Integer priority) {
+        log.info("Updating priority for parcel {} to {}", parcelId, priority);
+        ParcelResponse response = parcelService.updateParcelPriority(parcelId, priority);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * API to delay/postpone a parcel.
+     * When delayed, parcel is temporarily hidden from routing until specified time.
+     * @param parcelId UUID of the parcel
+     * @param delayedUntil Time when parcel should be available again (optional)
+     * @return Updated parcel response
+     */
+    @PutMapping("/{parcelId}/delay")
+    public ResponseEntity<ParcelResponse> delayParcel(
+            @PathVariable UUID parcelId,
+            @RequestParam(required = false) LocalDateTime delayedUntil) {
+        log.info("Delaying parcel {} until {}", parcelId, delayedUntil);
+        ParcelResponse response = parcelService.delayParcel(parcelId, delayedUntil);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * API to undelay/resume a parcel.
+     * Makes a delayed parcel available for routing again.
+     * @param parcelId UUID of the parcel
+     * @return Updated parcel response
+     */
+    @PutMapping("/{parcelId}/undelay")
+    public ResponseEntity<ParcelResponse> undelayParcel(@PathVariable UUID parcelId) {
+        log.info("Undelaying parcel {}", parcelId);
+        ParcelResponse response = parcelService.undelayParcel(parcelId);
+        return ResponseEntity.ok(response);
     }
 }
