@@ -6,6 +6,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -45,9 +46,35 @@ public class ConversationApiController {
             @PathVariable String conversationId,
             @RequestParam String userId,
             @PageableDefault(size = 30, sort = "sentAt", direction = Sort.Direction.DESC) Pageable pageable
-    ) {        
+    ) {
+        // Ensure DESC sort by sentAt (fix for incorrect sorting)
+        // If pageable doesn't have sort or has wrong direction, force DESC
+        Pageable sortedPageable = pageable;
+        Sort.Order sentAtOrder = pageable.getSort().getOrderFor("sentAt");
+        if (pageable.getSort().isUnsorted() || 
+            sentAtOrder == null ||
+            sentAtOrder.getDirection() != Sort.Direction.DESC) {
+            log.info("🔧 Fixing sort order: forcing DESC by sentAt. Original sort: {}", pageable.getSort());
+            sortedPageable = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "sentAt")
+            );
+        } else {
+            log.debug("✅ Sort order is correct: {}", pageable.getSort());
+        }
+        
         Page<MessageResponse> messages =
-                messageService.getMessagesForConversation(UUID.fromString(conversationId), userId, pageable);
+                messageService.getMessagesForConversation(UUID.fromString(conversationId), userId, sortedPageable);
+        
+        // Log first and last message timestamps for debugging
+        if (messages.hasContent()) {
+            MessageResponse first = messages.getContent().get(0);
+            MessageResponse last = messages.getContent().get(messages.getContent().size() - 1);
+            log.info("📋 Messages returned: total={}, first sentAt={}, last sentAt={}", 
+                    messages.getTotalElements(), first.getSentAt(), last.getSentAt());
+        }
+        
         return ResponseEntity.ok(PageResponse.from(messages));
     }
 

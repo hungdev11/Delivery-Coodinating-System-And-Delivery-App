@@ -8,6 +8,7 @@ import { ref, onUnmounted } from 'vue'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { useCookies } from '@vueuse/integrations/useCookies'
 import type { MessageResponse, ChatMessagePayload } from '../model.type'
+import { ErrorLog } from '@/common/utils/debug'
 
 // STOMP client type (simplified)
 interface StompClient {
@@ -35,6 +36,7 @@ export function useWebSocket() {
   const statusUpdateCallback = ref<((statusUpdate: any) => void) | null>(null)
   const typingCallback = ref<((typingIndicator: any) => void) | null>(null)
   const notificationCallback = ref<((notification: any) => void) | null>(null)
+  const proposalUpdateCallback = ref<((proposalUpdate: any) => void) | null>(null)
 
   /**
    * Get WebSocket URL from environment or auto-detect from current domain
@@ -44,8 +46,8 @@ export function useWebSocket() {
    */
   const getWebSocketUrl = (): string => {
     // Check for explicit WebSocket URL in environment
-    const wsUrl = import.meta.env.VITE_WS_URL
-    
+    const wsUrl = import.meta.env.VITE_WS_URL || import.meta.env.VITE_API_URL
+
     if (wsUrl) {
       // Handle legacy /api/ws path - convert to /ws
       if (wsUrl === '/api/ws' || wsUrl.endsWith('/api/ws')) {
@@ -56,7 +58,7 @@ export function useWebSocket() {
       if (wsUrl.startsWith('/')) {
         return `${window.location.protocol}//${window.location.host}${wsUrl}`
       }
-      
+
       // If it's already an absolute URL (http:// or https://), use it directly
       if (wsUrl.startsWith('http://') || wsUrl.startsWith('https://')) {
         // Check if it contains /api/ws and convert to /ws
@@ -65,7 +67,7 @@ export function useWebSocket() {
         }
         return wsUrl
       }
-      
+
       // If it's ws:// or wss://, convert to http:// or https://
       if (wsUrl.startsWith('ws://')) {
         const httpUrl = wsUrl.replace(/^ws:/, 'http:')
@@ -78,7 +80,7 @@ export function useWebSocket() {
         return httpsUrl.includes('/api/ws') ? httpsUrl.replace('/api/ws', '/ws') : httpsUrl
       }
     }
-    
+
     // Default: Use /ws directly (not /api/ws)
     // The WebSocket endpoint is proxied directly at /ws by nginx
     // SockJS will handle the /websocket upgrade internally
@@ -89,12 +91,13 @@ export function useWebSocket() {
    * Connect to WebSocket
    */
   const connect = async (
-    userId: string, 
+    userId: string,
     onMessageReceived?: (message: MessageResponse) => void,
     onReconnect?: () => void,
     onStatusUpdate?: (statusUpdate: any) => void,
     onTypingIndicator?: (typingIndicator: any) => void,
-    onNotification?: (notification: any) => void
+    onNotification?: (notification: any) => void,
+    onProposalUpdate?: (proposalUpdate: any) => void
   ) => {
     if (connected.value || connecting.value) {
       return
@@ -180,7 +183,7 @@ export function useWebSocket() {
           if (onMessageReceived && client) {
             const destination = `/user/queue/messages`
             console.log(`📡 Subscribing to: ${destination}`)
-            
+
             const subscription = client.subscribe(destination, (message) => {
               try {
                 console.log('📨 Message received via WebSocket:', {
@@ -208,7 +211,7 @@ export function useWebSocket() {
           if (onStatusUpdate && client) {
             const statusDest = `/user/queue/status-updates`
             console.log(`📡 Subscribing to status updates: ${statusDest}`)
-            
+
             const statusSub = client.subscribe(statusDest, (message) => {
               try {
                 const statusUpdate = JSON.parse(message.body)
@@ -225,7 +228,7 @@ export function useWebSocket() {
           if (onTypingIndicator && client) {
             const typingDest = `/user/queue/typing`
             console.log(`📡 Subscribing to typing indicators: ${typingDest}`)
-            
+
             const typingSub = client.subscribe(typingDest, (message) => {
               try {
                 const typingIndicator = JSON.parse(message.body)
@@ -242,7 +245,7 @@ export function useWebSocket() {
           if (onNotification && client) {
             const notifDest = `/user/queue/notifications`
             console.log(`📡 Subscribing to notifications: ${notifDest}`)
-            
+
             const notifSub = client.subscribe(notifDest, (message) => {
               try {
                 const notification = JSON.parse(message.body)
@@ -253,6 +256,23 @@ export function useWebSocket() {
               }
             })
             subscriptions.value.push(notifSub)
+          }
+
+          // Subscribe to proposal updates
+          if (onProposalUpdate && client) {
+            const proposalDest = `/user/queue/proposal-updates`
+            console.log(`📡 Subscribing to proposal updates: ${proposalDest}`)
+
+            const proposalSub = client.subscribe(proposalDest, (message) => {
+              try {
+                const proposalUpdate = JSON.parse(message.body)
+                console.log('📋 Proposal update received:', proposalUpdate)
+                onProposalUpdate(proposalUpdate)
+              } catch (error) {
+                console.error('❌ Failed to parse proposal update:', error)
+              }
+            })
+            subscriptions.value.push(proposalSub)
           }
         },
         onStompError: (frame) => {
@@ -295,8 +315,9 @@ export function useWebSocket() {
       statusUpdateCallback.value = onStatusUpdate || null
       typingCallback.value = onTypingIndicator || null
       notificationCallback.value = onNotification || null
+      proposalUpdateCallback.value = onProposalUpdate || null
     } catch (error) {
-      console.error('Failed to connect WebSocket:', error)
+      console.error(ErrorLog('❌ Failed to connect WebSocket', error))
       connecting.value = false
       reconnectAttempts.value++
 
@@ -329,8 +350,8 @@ export function useWebSocket() {
       if (!connected.value && currentUserId.value && messageCallback.value) {
         console.log('Attempting to reconnect WebSocket...')
         connect(
-          currentUserId.value, 
-          messageCallback.value, 
+          currentUserId.value,
+          messageCallback.value,
           onReconnectCallback.value || undefined,
           statusUpdateCallback.value || undefined,
           typingCallback.value || undefined,
@@ -356,7 +377,7 @@ export function useWebSocket() {
           userId: currentUserId.value,
           subscriptions: subscriptions.value.length,
         })
-        
+
         // Verify we can still access the client
         if (!client.connected && !client.active) {
           console.warn('⚠️ WebSocket client appears disconnected, scheduling reconnect')
@@ -571,7 +592,7 @@ export function useWebSocket() {
       console.log('Tab became visible, attempting to reconnect WebSocket...')
       reconnectAttempts.value = 0 // Reset attempts
       connect(
-        currentUserId.value, 
+        currentUserId.value,
         messageCallback.value,
         onReconnectCallback.value || undefined,
         statusUpdateCallback.value || undefined,

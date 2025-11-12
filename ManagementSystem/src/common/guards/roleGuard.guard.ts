@@ -85,35 +85,10 @@ export function createRoleGuard(config: RoleGuardConfig = {}) {
     from: RouteLocationNormalized,
     next: NavigationGuardNext,
   ) => {
-    console.log(
-      Info(
-        'Route Guard Check started',
-        {
-          from: from.path,
-          to: to.path,
-          routeName: to.name,
-        },
-        DebugContexts.ROUTER,
-      ),
-    )
-
     const meta = to.meta as RouteGuardMeta
     const requiredRoles = meta.requiredRoles || config.requiredRoles || []
     const redirectTo = meta.redirectTo || config.redirectTo || '/login'
     const allowUnauthenticated = meta.requiresAuth === false || config.allowUnauthenticated
-
-    console.log(
-      Debug(
-        'Guard configuration',
-        {
-          requiredRoles,
-          redirectTo,
-          allowUnauthenticated,
-          requiresAuth: meta.requiresAuth,
-        },
-        DebugContexts.ROUTER,
-      ),
-    )
 
     // If no authentication required, allow access
     if (allowUnauthenticated) {
@@ -137,30 +112,10 @@ export function createRoleGuard(config: RoleGuardConfig = {}) {
 
     // Check if user has required roles
     if (!hasRequiredRoles(requiredRoles)) {
-      console.log(
-        ErrorLog(
-          'User lacks required roles - redirecting to unauthorized',
-          {
-            requiredRoles,
-            currentUser: getCurrentUser(),
-          },
-          DebugContexts.ROUTER,
-        ),
-      )
       return next('/unauthorized')
     }
 
     // Allow access
-    console.log(
-      Info(
-        'Access granted',
-        {
-          user: getCurrentUser()?.firstName + ' ' + getCurrentUser()?.lastName,
-          roles: getUserRoles(),
-        },
-        DebugContexts.ROUTER,
-      ),
-    )
     next()
   }
 }

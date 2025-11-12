@@ -18,17 +18,6 @@ export interface DecodedToken {
  * @returns Decoded token object with header, payload, and signature
  */
 export function decodeJWT(token: string): DecodedToken | null {
-  console.log(
-    Debug(
-      'Decoding JWT token',
-      {
-        tokenLength: token.length,
-        tokenPreview: token.substring(0, 20) + '...',
-      },
-      DebugContexts.UTILS,
-    ),
-  )
-
   try {
     const parts = token.split('.')
     if (parts.length !== 3) {
@@ -49,18 +38,6 @@ export function decodeJWT(token: string): DecodedToken | null {
 
     const header = JSON.parse(atob(headerB64))
     const payload = JSON.parse(atob(payloadB64))
-
-    console.log(
-      Debug(
-        'JWT decoded successfully',
-        {
-          headerKeys: Object.keys(header),
-          payloadKeys: Object.keys(payload),
-          hasSignature: !!signature,
-        },
-        DebugContexts.UTILS,
-      ),
-    )
 
     return {
       header,
@@ -98,19 +75,6 @@ export function isTokenExpired(token: string): boolean {
   const currentTime = Math.floor(Date.now() / 1000)
   const isExpired = payload.exp < currentTime
 
-  console.log(
-    Debug(
-      'Token expiration check',
-      {
-        currentTime,
-        expirationTime: payload.exp,
-        isExpired,
-        timeRemaining: payload.exp - currentTime,
-      },
-      DebugContexts.UTILS,
-    ),
-  )
-
   return isExpired
 }
 
@@ -122,18 +86,6 @@ export function isTokenExpired(token: string): boolean {
 export function getUserRoles(token: string): string[] {
   const payload = getJWTPayload(token)
   const roles = payload?.roles || []
-
-  console.log(
-    Debug(
-      'User roles extracted',
-      {
-        roles,
-        rolesCount: roles.length,
-        hasRoles: roles.length > 0,
-      },
-      DebugContexts.UTILS,
-    ),
-  )
 
   return roles
 }
@@ -158,19 +110,6 @@ export function hasRole(token: string, role: string): boolean {
 export function hasAnyRole(token: string, roles: string[]): boolean {
   const userRoles = getUserRoles(token)
   const hasRole = roles.some((role) => userRoles.includes(role))
-
-  console.log(
-    Debug(
-      'Role check (any)',
-      {
-        requiredRoles: roles,
-        userRoles,
-        hasAnyRole: hasRole,
-        matchingRoles: roles.filter((role) => userRoles.includes(role)),
-      },
-      DebugContexts.UTILS,
-    ),
-  )
 
   return hasRole
 }
@@ -207,18 +146,6 @@ export function isValidToken(token: string): boolean {
   }
 
   const isValid = !isTokenExpired(token)
-
-  console.log(
-    Debug(
-      'Token validation',
-      {
-        hasToken: !!token,
-        tokenLength: token.length,
-        isValid,
-      },
-      DebugContexts.UTILS,
-    ),
-  )
 
   return isValid
 }

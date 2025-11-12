@@ -9,12 +9,12 @@ import type { IApiResponse } from '@/common/types'
 /**
  * Content Type
  */
-export type ContentType = 'TEXT' | 'PROPOSAL'
+export type ContentType = 'TEXT' | 'PROPOSAL' | 'INTERACTIVE_PROPOSAL' | 'IMAGE' | 'FILE'
 
 /**
  * Proposal Status
  */
-export type ProposalStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED'
+export type ProposalStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED'
 
 /**
  * Proposal Type
@@ -73,9 +73,13 @@ export interface InteractiveProposalResponseDTO {
  * Create Proposal Request
  */
 export interface CreateProposalRequest {
-  type: ProposalType
+  conversationId: string // UUID as string
   recipientId: string
+  type: ProposalType
   data: string // JSON string
+  fallbackContent?: string // Optional: text content to display in message
+  senderId: string
+  senderRoles: string[] // Array of role strings
 }
 
 /**
@@ -86,15 +90,26 @@ export interface ProposalResponseRequest {
 }
 
 /**
+ * Proposal Update DTO (from WebSocket)
+ */
+export interface ProposalUpdateDTO {
+  proposalId: string
+  newStatus: ProposalStatus // "ACCEPTED", "REJECTED", "PENDING", "CANCELLED"
+  conversationId?: string
+  resultData?: string | null
+}
+
+/**
  * Proposal Type Config
  */
 export interface ProposalTypeConfig {
   id: string
   type: ProposalType
   requiredRole: string
-  actionType: ProposalActionType
-  template: string // JSON template
+  creationActionType: ProposalActionType // UI for sender when creating proposal
+  responseActionType: ProposalActionType // UI for receiver when responding to proposal
   description?: string
+  defaultTimeoutMinutes?: number
 }
 
 /**

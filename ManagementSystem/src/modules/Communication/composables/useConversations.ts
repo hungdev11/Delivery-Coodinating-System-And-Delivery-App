@@ -21,10 +21,15 @@ export function useConversations() {
   const messages = ref<MessageResponse[]>([])
   const loading = ref(false)
   const messagesLoading = ref(false)
-  
+
+  // Pagination state
+  const currentPage = ref(0)
+  const hasMoreMessages = ref(true)
+  const isLoadingMore = ref(false)
+
   // Request queue to ensure sequential processing
   let currentRequest: Promise<unknown> | null = null
-  
+
   // Track last message time for loading missed messages on reconnect
   const lastMessageTime = ref<string | null>(null)
 
@@ -106,7 +111,7 @@ export function useConversations() {
   }
 
   /**
-   * Load messages for a conversation
+   * Load messages for a conversation (Initial load - page 0)
    */
   const loadMessages = async (
     conversationId: string,
@@ -115,22 +120,26 @@ export function useConversations() {
     size: number = 30,
   ) => {
     messagesLoading.value = true
+    currentPage.value = 0
+    hasMoreMessages.value = true
+
     try {
       const response = await getMessages(conversationId, userId, page, size)
 
       // Handle different response formats
       let messagesArray: MessageResponse[] = []
+      let pageData: PageResponse<MessageResponse> | null = null
 
       // Check if response has result property (wrapped in IApiResponse)
       if ('result' in response && response.result) {
-        const pageData = response.result as PageResponse<MessageResponse>
+        pageData = response.result as PageResponse<MessageResponse>
         if (pageData.content && Array.isArray(pageData.content)) {
           messagesArray = pageData.content
         }
       }
       // Check if response is direct PageResponse format
       else if ('content' in response && Array.isArray((response as unknown as PageResponse<MessageResponse>).content)) {
-        const pageData = response as unknown as PageResponse<MessageResponse>
+        pageData = response as unknown as PageResponse<MessageResponse>
         messagesArray = pageData.content
       }
       // Fallback: direct array
@@ -138,9 +147,15 @@ export function useConversations() {
         messagesArray = response
       }
 
-      // Messages come sorted DESC (newest first), but we want oldest first for display
-      // So we reverse them to show chronologically
-      messages.value = messagesArray
+      // Update pagination state
+      if (pageData) {
+        hasMoreMessages.value = !pageData.last
+        console.log(`📜 Loaded page 0: ${messagesArray.length} messages, hasMore=${hasMoreMessages.value}`)
+      }
+
+      // Messages come sorted DESC (newest first) from backend
+      // Reverse to display oldest first (scroll down to see new messages)
+      messages.value = [...messagesArray].reverse()
 
       // Update lastMessageTime to the latest message
       if (messagesArray.length > 0) {
@@ -157,6 +172,72 @@ export function useConversations() {
       })
     } finally {
       messagesLoading.value = false
+    }
+  }
+
+  /**
+   * Load more messages (Infinite scroll - pagination)
+   */
+  const loadMoreMessages = async (
+    conversationId: string,
+    userId: string,
+    size: number = 30,
+  ) => {
+    if (isLoadingMore.value || !hasMoreMessages.value) {
+      console.log('⏸️ Skip loading more: isLoading=' + isLoadingMore.value + ', hasMore=' + hasMoreMessages.value)
+      return
+    }
+
+    isLoadingMore.value = true
+    const nextPage = currentPage.value + 1
+
+    console.log(`📜 Loading more messages (page ${nextPage})...`)
+
+    try {
+      const response = await getMessages(conversationId, userId, nextPage, size)
+
+      // Handle different response formats
+      let messagesArray: MessageResponse[] = []
+      let pageData: PageResponse<MessageResponse> | null = null
+
+      if ('result' in response && response.result) {
+        pageData = response.result as PageResponse<MessageResponse>
+        if (pageData.content && Array.isArray(pageData.content)) {
+          messagesArray = pageData.content
+        }
+      } else if ('content' in response && Array.isArray((response as unknown as PageResponse<MessageResponse>).content)) {
+        pageData = response as unknown as PageResponse<MessageResponse>
+        messagesArray = pageData.content
+      } else if (Array.isArray(response)) {
+        messagesArray = response
+      }
+
+      if (messagesArray.length > 0) {
+        // Update pagination state
+        currentPage.value = nextPage
+        if (pageData) {
+          hasMoreMessages.value = !pageData.last
+        }
+
+        // Messages come sorted DESC (newest first) from backend
+        // Reverse to display oldest first, then prepend older messages at the BEGINNING
+        const reversedNewMessages = [...messagesArray].reverse()
+        messages.value = [...reversedNewMessages, ...messages.value]
+
+        console.log(`✅ Loaded ${messagesArray.length} more messages, total: ${messages.value.length}, hasMore=${hasMoreMessages.value}`)
+      } else {
+        hasMoreMessages.value = false
+        console.log('📭 No more messages to load')
+      }
+    } catch (error) {
+      console.error('Failed to load more messages:', error)
+      toast.add({
+        title: 'Error',
+        description: 'Failed to load more messages',
+        color: 'error',
+      })
+    } finally {
+      isLoadingMore.value = false
     }
   }
 
@@ -179,23 +260,32 @@ export function useConversations() {
       messages.value.splice(optimisticIndex, 1)
     }
 
+    // If sentAt is null, use current time (for messages just sent)
+    const sentAtValue = message.sentAt || new Date().toISOString()
+    const messageTime = new Date(sentAtValue).getTime()
+
     // Insert message in chronological order (oldest first, newest last)
-    const messageTime = new Date(message.sentAt).getTime()
     let insertIndex = messages.value.length
 
     for (let i = 0; i < messages.value.length; i++) {
-      const currentTime = new Date(messages.value[i].sentAt).getTime()
+      const currentSentAt = messages.value[i].sentAt || new Date().toISOString()
+      const currentTime = new Date(currentSentAt).getTime()
       if (messageTime < currentTime) {
         insertIndex = i
         break
       }
     }
 
+    // Update sentAt if it was null before inserting
+    if (!message.sentAt) {
+      message.sentAt = sentAtValue
+    }
+
     messages.value.splice(insertIndex, 0, message)
 
     // Update lastMessageTime if this message is newer
     if (!lastMessageTime.value || messageTime > new Date(lastMessageTime.value).getTime()) {
-      lastMessageTime.value = message.sentAt
+      lastMessageTime.value = sentAtValue
     }
   }
 
@@ -238,6 +328,7 @@ export function useConversations() {
         // Filter messages that arrived after lastMessageTime
         const lastTime = new Date(lastMessageTime.value).getTime()
         const missedMessages = messagesArray.filter((msg) => {
+          if (!msg.sentAt) return false // Skip messages with null sentAt
           const msgTime = new Date(msg.sentAt).getTime()
           return msgTime > lastTime
         })
@@ -279,9 +370,14 @@ export function useConversations() {
     loadConversations,
     findOrCreateConversation,
     loadMessages,
+    loadMoreMessages, // NEW: Infinite scroll
     loadMissedMessages,
     addMessage,
     clearConversation,
     lastMessageTime,
+    // Pagination
+    currentPage,
+    hasMoreMessages,
+    isLoadingMore,
   }
 }

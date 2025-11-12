@@ -21,6 +21,7 @@ import type {
   ChatMessagePayload,
   ProposalTypeConfig,
   ProposalType,
+  ProposalUpdateDTO,
 } from './model.type'
 import { getCurrentUser, getUserRoles } from '@/common/guards/roleGuard.guard'
 import { useChatHistoryStore } from '@/stores/chatHistory'
@@ -48,8 +49,17 @@ const currentUser = getCurrentUser()
 const currentUserId = computed(() => currentUser?.id || '')
 const currentUserRoles = computed(() => getUserRoles())
 
-const { messages, loadMessages, addMessage, clearConversation, loadConversations, loadMissedMessages } =
-  useConversations()
+const {
+  messages,
+  loadMessages,
+  loadMoreMessages,
+  addMessage,
+  clearConversation,
+  loadConversations,
+  loadMissedMessages,
+  hasMoreMessages,
+  isLoadingMore,
+} = useConversations()
 const { connected, connecting, connect, sendMessage, sendTyping, disconnect } = useWebSocket()
 const {
   availableConfigs,
@@ -95,6 +105,7 @@ onMounted(async () => {
 
 /**
  * Load partner information from conversations list
+ * (CASE 1: Initial load when opening chat)
  */
 const loadPartnerInfo = async () => {
   if (currentUserId.value) {
@@ -128,17 +139,23 @@ onUnmounted(() => {
 
 /**
  * Load available proposal configs for current user roles
+ * If user is ADMIN, also check for undelivered parcels and add USER role if needed
  */
 const loadAvailableProposalConfigs = async () => {
+  console.log('🔍 Loading proposal configs for roles:', currentUserRoles.value)
   if (currentUserRoles.value.length > 0) {
     loadingProposals.value = true
-    await loadAvailableConfigs(currentUserRoles.value)
+    // Pass userId so ADMIN users can get USER role configs if they have undelivered parcels
+    await loadAvailableConfigs(currentUserRoles.value, currentUserId.value)
+    console.log('📋 Available proposal configs loaded:', availableConfigs.value.length, 'configs')
     loadingProposals.value = false
+  } else {
+    console.warn('⚠️ No roles found for current user, cannot load proposal configs')
   }
 }
 
 /**
- * Connect WebSocket
+ * Connect WebSocket (CASE 1: Initial connection)
  */
 const connectWebSocket = async () => {
   if (!currentUserId.value) return
@@ -146,13 +163,6 @@ const connectWebSocket = async () => {
   await connect(
     currentUserId.value,
     async (message: MessageResponse) => {
-      console.log('WebSocket message received:', {
-        id: message.id,
-        senderId: message.senderId,
-        content: message.content,
-        partnerId: partnerId.value,
-        currentUserId: currentUserId.value,
-      })
 
       // Add message if it belongs to this conversation
       // Backend sends messages to both sender and recipient
@@ -178,10 +188,8 @@ const connectWebSocket = async () => {
         
         nextTick(() => scrollToBottom())
 
-        // Reload conversations list to update lastMessageTime
-        if (currentUserId.value) {
-          await loadConversations(currentUserId.value)
-        }
+        // ❌ REMOVED: No need to reload conversations on every message
+        // Conversations list should be updated via WebSocket events, not polling
       } else {
         console.log('⚠️ Message filtered out:', {
           isFromPartner,
@@ -195,18 +203,27 @@ const connectWebSocket = async () => {
     handleReconnect, // Callback for reconnection
     handleStatusUpdate, // Status update callback
     handleTypingIndicator, // Typing indicator callback
-    handleNotification // Notification callback
+    handleNotification, // Notification callback
+    handleProposalUpdate // Proposal update callback
   )
 }
 
 /**
- * Handle WebSocket reconnection - load missed messages
+ * Handle WebSocket reconnection - load missed messages and refresh conversations
  */
 const handleReconnect = async () => {
   if (conversationId.value && currentUserId.value) {
-    console.log('WebSocket reconnected, loading missed messages...')
+    console.log('🔄 WebSocket reconnected!')
+
+    // 1. Load missed messages for current conversation
     await loadMissedMessages(conversationId.value, currentUserId.value)
+
+    // 2. Reload conversations list (one of only 2 cases to call this)
+    await loadConversations(currentUserId.value)
+
     nextTick(() => scrollToBottom())
+
+    console.log('✅ Reconnect complete: missed messages and conversations loaded')
   }
 }
 
@@ -319,7 +336,8 @@ const showPostponeOptionsModal = ref(false)
 const handleProposalSelect = async (config: ProposalTypeConfig) => {
   selectedProposalConfig.value = config
 
-  const actionType = config.actionType
+  // Use creationActionType for sender's UI when creating proposal
+  const actionType = config.creationActionType
   if (actionType === 'DATE_PICKER') {
     showPostponeOptionsModal.value = true
   } else if (actionType === 'TEXT_INPUT') {
@@ -500,13 +518,26 @@ const handleTextInputConfirm = async (text: string) => {
  */
 const sendProposalRequest = async (type: string, data: string) => {
   if (!conversationId.value || !partnerId.value || !currentUserId.value) {
+    console.warn('⚠️ Missing required fields for proposal:', {
+      conversationId: conversationId.value,
+      partnerId: partnerId.value,
+      currentUserId: currentUserId.value,
+    })
     return
   }
 
+  // Find config to get description for fallbackContent
+  const config = availableConfigs.value.find((c) => c.type === type)
+  const fallbackContent = config?.description || `Proposal: ${type}`
+
   const result = await createProposal({
-    type: type as ProposalType,
+    conversationId: conversationId.value,
     recipientId: partnerId.value,
+    type: type as ProposalType,
     data,
+    fallbackContent,
+    senderId: currentUserId.value,
+    senderRoles: currentUserRoles.value,
   })
 
   if (result && conversationId.value) {
@@ -532,11 +563,72 @@ const handleProposalResponse = async (proposalId: string, resultData: string) =>
 }
 
 /**
+ * Handle proposal update from WebSocket
+ */
+const handleProposalUpdate = (update: ProposalUpdateDTO) => {
+  console.log('📋 Proposal update received:', update)
+  
+  // Find message with matching proposal ID and update its status
+  const messageIndex = messages.value.findIndex(
+    (msg) => msg.proposal?.id === update.proposalId
+  )
+  
+  if (messageIndex !== -1) {
+    const message = messages.value[messageIndex]
+    if (message.proposal) {
+      // Update proposal status
+      message.proposal.status = update.newStatus
+      if (update.resultData) {
+        message.proposal.resultData = update.resultData
+      }
+      
+      // Trigger reactivity
+      messages.value[messageIndex] = { ...message }
+      
+      console.log('✅ Updated proposal status:', {
+        proposalId: update.proposalId,
+        newStatus: update.newStatus,
+        messageIndex,
+      })
+    }
+  } else {
+    console.warn('⚠️ Proposal not found in messages:', update.proposalId)
+  }
+}
+
+/**
  * Scroll to bottom of messages
  */
 const scrollToBottom = () => {
   if (messagesContainer.value) {
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
+}
+
+/**
+ * Handle scroll event for infinite scroll
+ */
+const handleScroll = () => {
+  if (!messagesContainer.value || !conversationId.value || !currentUserId.value) return
+
+  const scrollTop = messagesContainer.value.scrollTop
+
+  // Load more when scrolled to top (within 100px)
+  if (scrollTop < 100 && !isLoadingMore.value && hasMoreMessages.value) {
+    console.log('📜 Reached top, loading more messages...')
+
+    // Save current scroll height
+    const oldScrollHeight = messagesContainer.value.scrollHeight
+
+    loadMoreMessages(conversationId.value, currentUserId.value).then(() => {
+      // Restore scroll position after loading
+      nextTick(() => {
+        if (messagesContainer.value) {
+          const newScrollHeight = messagesContainer.value.scrollHeight
+          messagesContainer.value.scrollTop = newScrollHeight - oldScrollHeight
+        }
+      })
+    })
   }
 }
 
@@ -596,13 +688,24 @@ const isMyMessage = (message: MessageResponse) => {
       ref="messagesContainer"
       class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"
       style="scroll-behavior: smooth"
+      @scroll="handleScroll"
     >
+      <!-- Loading More Indicator (at top) -->
+      <div v-if="isLoadingMore" class="flex justify-center py-4">
+        <div class="flex items-center space-x-2 text-gray-500">
+          <UIcon name="i-heroicons-arrow-path" class="animate-spin" />
+          <span class="text-sm">Loading more messages...</span>
+        </div>
+      </div>
+
+      <!-- Empty State -->
       <div v-if="messages.length === 0" class="flex items-center justify-center h-full">
         <div class="text-center text-gray-500">
           <p>No messages yet. Start the conversation!</p>
         </div>
       </div>
 
+      <!-- Messages -->
       <div
         v-for="message in messages"
         :key="message.id"
@@ -618,7 +721,7 @@ const isMyMessage = (message: MessageResponse) => {
 
         <!-- Proposal Message -->
         <ProposalMessage
-          v-else-if="message.type === 'PROPOSAL' && message.proposal"
+          v-else-if="message.type === 'INTERACTIVE_PROPOSAL' && message.proposal"
           :proposal="message.proposal"
           :content="message.content"
           :sent-at="message.sentAt"
@@ -664,7 +767,7 @@ const isMyMessage = (message: MessageResponse) => {
     </div>
 
     <!-- Postpone Options Modal -->
-    <UModal v-model="showPostponeOptionsModal" title="Select Postpone Type">
+    <UModal v-model:open="showPostponeOptionsModal" title="Select Postpone Type">
       <template #body>
         <div class="space-y-2 p-4">
           <UButton block variant="ghost" @click="handlePostponeOption('SPECIFIC')">

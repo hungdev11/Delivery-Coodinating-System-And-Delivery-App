@@ -35,4 +35,18 @@
         app:layout_constraintVertical_bias="0.0"
         app:layout_constraintHorizontal_bias="0.0" />
 
+    <!-- Timestamp for received messages -->
+    <TextView
+        android:id="@+id/tv_timestamp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="4dp"
+        android:text="12:34"
+        android:textSize="10sp"
+        android:textColor="#888888"
+        android:alpha="0.7"
+        app:layout_constraintStart_toEndOf="@id/iv_partner_avatar"
+        app:layout_constraintTop_toBottomOf="@id/tv_message_content" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -65,6 +65,7 @@ public class MessageService implements IMessageService{
         message.setContent(payload.getContent());
         message.setType(ContentType.TEXT);
         message.setStatus(MessageStatus.SENT); // Set initial status
+        message.setSentAt(java.time.LocalDateTime.now()); // Explicitly set sentAt timestamp
 
         Message savedMessage = messageRepository.save(message);
         log.info("✅ Message saved to database with status SENT. MessageId: {}", savedMessage.getId());

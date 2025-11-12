@@ -9,7 +9,7 @@
         {
             "name": "Launch Edge",
             "request": "launch",
-            "type": "chrome",
+            "type": "msedge",
             "url": "http://localhost:5173",
             "webRoot": "${workspaceFolder}/ManagementSystem"
         },

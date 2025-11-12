@@ -1,5 +1,8 @@
 package com.ds.gateway.application.controllers.v1;
 
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -8,13 +11,16 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
 import com.ds.gateway.annotations.AuthRequired;
+import com.ds.gateway.business.v1.services.ConversationEnrichmentService;
 import com.ds.gateway.common.entities.dto.communicate.ConversationRequest;
+import com.ds.gateway.common.entities.dto.communicate.EnrichedConversationResponse;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +36,7 @@ import lombok.extern.slf4j.Slf4j;
 public class CommunicationController {
 
     private final RestTemplate restTemplate;
+    private final ConversationEnrichmentService conversationEnrichmentService;
 
     @Value("${services.communication.base-url}")
     private String communicationServiceUrl;
@@ -39,7 +46,7 @@ public class CommunicationController {
     // ============================================
 
     /**
-     * Get conversations for a user
+     * Get conversations for a user (BASIC - direct proxy)
      */
     @GetMapping("/conversations/user/{userId}")
     @AuthRequired
@@ -47,6 +54,27 @@ public class CommunicationController {
         log.info("GET /api/v1/conversations/user/{} - Proxying to Communication Service", userId);
         String url = communicationServiceUrl + "/api/v1/conversations/user/" + userId;
         return ResponseEntity.ok(restTemplate.getForObject(url, Object.class));
+    }
+
+    /**
+     * Get ENRICHED conversations for Android client
+     * Includes user info, parcel info, and session info
+     * 
+     * Usage: GET /api/v1/conversations?userId={userId}
+     * Header: X-User-Id (extracted from JWT by API Gateway)
+     */
+    @GetMapping("/conversations")
+    @AuthRequired
+    public CompletableFuture<ResponseEntity<List<EnrichedConversationResponse>>> getEnrichedConversations(
+            @RequestParam String userId) {
+        log.info("📱 GET /api/v1/conversations?userId={} - Getting enriched conversations for Android", userId);
+        
+        return conversationEnrichmentService.getEnrichedConversations(userId)
+                .thenApply(ResponseEntity::ok)
+                .exceptionally(ex -> {
+                    log.error("❌ Failed to get enriched conversations: {}", ex.getMessage(), ex);
+                    return ResponseEntity.internalServerError().build();
+                });
     }
 
     /**

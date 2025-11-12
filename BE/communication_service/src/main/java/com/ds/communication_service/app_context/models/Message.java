@@ -53,7 +53,6 @@ public class Message {
     @Column(name = "content", columnDefinition = "TEXT") 
     private String content;
 
-    @CreationTimestamp
     @Column(name = "sent_at", nullable = false, updatable = false)
     private LocalDateTime sentAt;
     

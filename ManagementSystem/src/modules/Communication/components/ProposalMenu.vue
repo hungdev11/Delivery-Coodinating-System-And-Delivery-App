@@ -37,7 +37,7 @@ const handleSelect = (config: ProposalTypeConfig) => {
       variant="ghost"
       :disabled="props.availableConfigs.length === 0 || props.loading"
     />
-    <template #panel>
+    <template #content>
       <div class="p-2 min-w-[200px]">
         <div
           v-if="props.availableConfigs.length === 0"

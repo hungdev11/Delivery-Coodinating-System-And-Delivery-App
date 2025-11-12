@@ -117,6 +117,20 @@ public class ChatWebSocketManager {
 
         mStompClient = Stomp.over(Stomp.ConnectionProvider.OKHTTP, mWebSocketUrl, handshakeHeaders, okHttpClient);
         mStompClient.withClientHeartbeat(15000).withServerHeartbeat(15000);
+        
+        // Listen for CONNECTED frame to trigger subscriptions
+        // Use delay to ensure STOMP CONNECTED frame is processed
+        Disposable connectedDisposable = mStompClient.lifecycle()
+                .filter(lifecycleEvent -> lifecycleEvent.getType() == ua.naiksoftware.stomp.dto.LifecycleEvent.Type.OPENED)
+                .delay(500, java.util.concurrent.TimeUnit.MILLISECONDS) // Wait for CONNECTED frame
+                .subscribe(lifecycleEvent -> {
+                    Log.i(TAG, "✅ STOMP CONNECTED - Ready to subscribe");
+                    subscribeToTopics(); // Subscribe after CONNECTED
+                }, throwable -> {
+                    Log.e(TAG, "Error subscribing after connection", throwable);
+                });
+        mComposite.add(connectedDisposable);
+        
         mStompClient.connect(headers);
 
         // Lắng nghe các sự kiện vòng đời (Connected, Closed, Error)
@@ -125,9 +139,10 @@ public class ChatWebSocketManager {
                         lifecycleEvent -> {
                             switch (lifecycleEvent.getType()) {
                                 case OPENED:
-                                    Log.i(TAG, "STOMP Connection Opened");
+                                    Log.i(TAG, "STOMP Connection Opened (WebSocket handshake complete)");
                                     if (mListener != null) mListener.onWebSocketOpened();
-                                    subscribeToTopics(); // Tự động đăng ký kênh
+                                    // DON'T subscribe here - STOMP CONNECT hasn't completed yet
+                                    // Wait for CONNECTED frame in stompClient.connect() callback
                                     break;
                                 case CLOSED:
                                     Log.i(TAG, "STOMP Connection Closed");

@@ -64,4 +64,12 @@ public class WebClientConfig {
                 .baseUrl(baseUrl)
                 .build();
     }
+
+    @Bean("communicationServiceWebClient")
+    public WebClient communicationServiceWebClient(
+            @Value("${services.communication.base-url}") String baseUrl) {
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .build();
+    }
 }

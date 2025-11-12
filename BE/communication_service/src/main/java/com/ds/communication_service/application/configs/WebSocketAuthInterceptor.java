@@ -29,6 +29,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                 MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
 
         if (accessor == null) {
+            log.debug("WebSocket frame: No StompHeaderAccessor");
             return message;
         }
 
@@ -39,11 +40,14 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             // This might be a heartbeat frame
             log.debug("WebSocket frame received (possibly heartbeat)");
         } else {
-            log.debug("WebSocket command: {}", command);
+            log.info("🔔 WebSocket command: {} from session: {}", command, accessor.getSessionId());
         }
 
         // 2. Chúng ta CHỈ quan tâm đến lệnh "CONNECT" và "SUBSCRIBE"
         if (StompCommand.CONNECT.equals(command)) {
+
+            // DEBUG: Log ALL headers from CONNECT frame
+            log.info("🔍 STOMP CONNECT received. All native headers: {}", accessor.toNativeHeaderMap());
 
             // 3. Đọc header "Authorization" mà client gửi
             // (Client đang gửi: "Bearer <USER_ID>")

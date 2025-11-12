@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * NotificationCenter Component
- * 
+ *
  * Displays in-app notifications with badge and dropdown
  */
 
@@ -21,7 +21,7 @@ const handleNotificationClick = (notification: Notification) => {
   if (!notification.read) {
     markAsRead(notification.id)
   }
-  
+
   // Navigate to action URL if provided
   if (notification.actionUrl) {
     window.location.href = notification.actionUrl
@@ -82,36 +82,36 @@ const formatTime = (timestamp: string) => {
   const date = new Date(timestamp)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
-  
+
   // Less than 1 minute
   if (diff < 60000) {
     return 'Just now'
   }
-  
+
   // Less than 1 hour
   if (diff < 3600000) {
     const minutes = Math.floor(diff / 60000)
     return `${minutes}m ago`
   }
-  
+
   // Less than 24 hours
   if (diff < 86400000) {
     const hours = Math.floor(diff / 3600000)
     return `${hours}h ago`
   }
-  
+
   // More than 24 hours
   const days = Math.floor(diff / 86400000)
   if (days === 1) return 'Yesterday'
   if (days < 7) return `${days} days ago`
-  
+
   // Format as date
   return date.toLocaleDateString()
 }
 </script>
 
 <template>
-  <UDropdown
+  <UDropdownMenu
     :items="[
       [{
         label: 'Notifications',
@@ -140,10 +140,10 @@ const formatTime = (timestamp: string) => {
   >
     <UButton
       icon="i-heroicons-bell"
-      color="gray"
+      color="neutral"
       variant="ghost"
       :badge="hasUnread ? String(unreadCount) : undefined"
-      badge-color="red"
+      badge-color="error"
     >
       <template #badge v-if="hasUnread">
         <span class="absolute -top-1 -right-1 flex h-5 w-5">
@@ -158,7 +158,7 @@ const formatTime = (timestamp: string) => {
     <template #header>
       <div class="flex items-center justify-between px-4 py-2">
         <h3 class="font-semibold">Notifications</h3>
-        <UBadge v-if="hasUnread" color="red" variant="subtle">
+        <UBadge v-if="hasUnread" color="error" variant="subtle">
           {{ unreadCount }}
         </UBadge>
       </div>
@@ -170,13 +170,13 @@ const formatTime = (timestamp: string) => {
         <div class="flex-1 min-w-0">
           <div class="flex items-start justify-between">
             <p class="text-sm font-medium text-gray-900 truncate">{{ item.label }}</p>
-            <UBadge v-if="item.badge" color="blue" variant="solid" size="xs" class="ml-2">New</UBadge>
+            <UBadge v-if="item.badge" color="primary" variant="solid" size="xs" class="ml-2">New</UBadge>
           </div>
           <p class="text-sm text-gray-500 line-clamp-2">{{ item.description }}</p>
         </div>
       </div>
     </template>
-  </UDropdown>
+  </UDropdownMenu>
 </template>
 
 <style scoped>
