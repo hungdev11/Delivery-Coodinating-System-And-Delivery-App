@@ -49,6 +49,8 @@ management:
 services:
   parcel:
     base-url: ${PARCEL_SERVICE_URL:http://localhost:21506}
+  user:
+    base-url: ${USER_SERVICE_URL:http://localhost:21501}
 
 # Feign Client Configuration
 feign:

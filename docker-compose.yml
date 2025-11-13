@@ -165,6 +165,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       SESSION_DB_NAME: ${SESSION_DB_NAME:-ds_session_service}
       PARCEL_SERVICE_URL: ${PARCEL_SERVICE_URL:-http://parcel-service:21506}
+      USER_SERVICE_URL: ${PARCEL_SERVICE_URL:-http://user-service:21501}
       SERVER_PORT: 21505
     ports:
       - "21505:21505"

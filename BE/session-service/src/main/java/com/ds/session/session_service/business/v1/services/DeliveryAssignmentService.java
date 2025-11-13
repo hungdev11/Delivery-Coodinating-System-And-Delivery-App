@@ -20,11 +20,13 @@ import com.ds.session.session_service.app_context.repositories.DeliveryAssignmen
 import com.ds.session.session_service.app_context.repositories.DeliverySessionRepository; 
 import com.ds.session.session_service.application.client.parcelclient.ParcelServiceClient;
 import com.ds.session.session_service.application.client.parcelclient.response.ParcelResponse;
+import com.ds.session.session_service.application.client.userclient.UserServiceClient;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.request.UpdateAssignmentStatusRequest;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.PageResponse;
 import com.ds.session.session_service.common.entities.dto.response.ShipperInfo;
+import com.ds.session.session_service.common.entities.dto.response.UserInfo;
 import com.ds.session.session_service.common.enums.AssignmentStatus;
 import com.ds.session.session_service.common.enums.ParcelEvent;
 import com.ds.session.session_service.common.enums.SessionStatus; 
@@ -50,6 +52,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     private final ParcelServiceClient parcelServiceClient;
     private final ParcelMapper parcelMapper; 
     private final ObjectMapper objectMapper; 
+    private final UserServiceClient userServiceClient;
 
     @Override
     public DeliveryAssignmentResponse completeTask(UUID parcelId, UUID deliveryManId, RouteInfo routeInfo) {
@@ -123,12 +126,10 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         // 7. Lưu
         deliveryAssignmentRepository.save(assignment);
 
-        // 8. Trả về DTO
-        // TODO: Lấy SĐT shipper và tên người nhận từ User-Service.
-        String deliveryManPhone = null; 
-        String receiverName = null; 
-        
-        return DeliveryAssignmentResponse.from(assignment, parcel, assignment.getSession(), deliveryManPhone, receiverName);
+        UserInfo shipperInfo = userServiceClient.fetchUserInfo(session.getDeliveryManId());
+        UserInfo clientInfo = userServiceClient.fetchUserInfo(parcel.getReceiverId());
+
+        return DeliveryAssignmentResponse.from(assignment, parcel, assignment.getSession(), shipperInfo, clientInfo);
     }
 
 
@@ -239,11 +240,8 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 entry -> parcelMapper.toParcelInfo(entry.getValue())
             ));
         
-        // 3. TODO: Lấy SĐT Shipper
-        String deliveryManPhone = null; // Tạm thời
         
-        // 4. TODO: Lấy tên Người nhận
-        String receiverName = null; // Tạm thời
+        UserInfo shipperInfo = userServiceClient.fetchUserInfo(tasks.get(0).getSession().getDeliveryManId());
 
         // 5. Map dữ liệu - only include tasks where we successfully fetched parcel info
         List<DeliveryAssignmentResponse> dtoList = tasks.stream().map(t -> {
@@ -252,7 +250,8 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 log.warn("Parcel info not available for parcelId: {}. Skipping task.", t.getParcelId());
                 return null; 
             }
-            return DeliveryAssignmentResponse.from(t, parcelInfo, t.getSession(), deliveryManPhone, receiverName);
+            UserInfo clientInfo = userServiceClient.fetchUserInfo(parcelInfo.getReceiverId());
+            return DeliveryAssignmentResponse.from(t, parcelInfo, t.getSession(), shipperInfo, clientInfo);
         
         }).filter(response -> response != null)
           .toList();
@@ -274,6 +273,13 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         return latestAssignmentOpt.map(assignment -> {
             String driverId = assignment.getSession().getDeliveryManId();
             log.info("Tìm thấy tài xế: {} cho parcelId: {}", driverId, parcelId);
+            UserInfo shipperInfo = userServiceClient.fetchUserInfo(driverId);
+            if (shipperInfo != null && shipperInfo.getResult() != null) {
+                String firstname = shipperInfo.getResult().getFirstName();
+                String lastname = shipperInfo.getResult().getLastName();
+                String phone = shipperInfo.getResult().getPhone();
+                return new ShipperInfo(driverId, firstname + " " + lastname, phone);
+            }
             return new ShipperInfo(driverId, "Tài xế", "0912312312");
         });
     }
