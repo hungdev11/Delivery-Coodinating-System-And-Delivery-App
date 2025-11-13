@@ -1,6 +1,7 @@
 package com.ds.parcel_service.business.v1.services;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -149,7 +150,7 @@ public class ParcelService implements IParcelService{
         
         Parcel savedParcel = parcelRepository.save(parcel);
 
-        // Link parcel to receiver destination (PRIMARY)
+        // Link parcel to receiver destination (PRIMARY) - this is the current destination
         ParcelDestination receiverPd = ParcelDestination.builder()
             .destinationId(request.getReceiverDestinationId())
             .destinationType(DestinationType.PRIMARY)
@@ -159,9 +160,9 @@ public class ParcelService implements IParcelService{
             .build();
 
         parcelDestinationRepository.save(receiverPd);
-        log.info("Linked parcel {} to receiver destination {}", savedParcel.getId(), request.getReceiverDestinationId());
+        log.info("Linked parcel {} to receiver destination {} (PRIMARY, current)", savedParcel.getId(), request.getReceiverDestinationId());
 
-        // Link parcel to sender destination (SECONDARY)
+        // Link parcel to sender destination (SECONDARY) - not current
         ParcelDestination senderPd = ParcelDestination.builder()
             .destinationId(request.getSenderDestinationId())
             .destinationType(DestinationType.SECONDARY)
@@ -171,7 +172,10 @@ public class ParcelService implements IParcelService{
             .build();
 
         parcelDestinationRepository.save(senderPd);
-        log.info("Linked parcel {} to sender destination {}", savedParcel.getId(), request.getSenderDestinationId());
+        log.info("Linked parcel {} to sender destination {} (SECONDARY)", savedParcel.getId(), request.getSenderDestinationId());
+        
+        // Validate: Ensure only one destination is current
+        validateSingleCurrentDestination(savedParcel);
         
         return toDto(savedParcel);
     }
@@ -336,6 +340,25 @@ public class ParcelService implements IParcelService{
             throw new IllegalStateException("Parcel with code already exists");
         }
     }
+    
+    /**
+     * Validate that only one destination is marked as current for a parcel.
+     * This ensures data integrity for destination management.
+     */
+    private void validateSingleCurrentDestination(Parcel parcel) {
+        List<ParcelDestination> currentDestinations = parcelDestinationRepository.findAllByParcelAndIsCurrentTrue(parcel);
+        if (currentDestinations.size() > 1) {
+            log.error("Data integrity issue: Parcel {} has {} current destinations. Expected 0 or 1.", 
+                parcel.getId(), currentDestinations.size());
+            // Fix: Set all but the first one to false
+            for (int i = 1; i < currentDestinations.size(); i++) {
+                currentDestinations.get(i).setCurrent(false);
+                parcelDestinationRepository.save(currentDestinations.get(i));
+                log.warn("Fixed: Set destination {} to not current for parcel {}", 
+                    currentDestinations.get(i).getId(), parcel.getId());
+            }
+        }
+    }
 
     private Parcel getParcel(UUID id) {
         return parcelRepository.findById(id).orElseThrow(()->{
@@ -345,18 +368,17 @@ public class ParcelService implements IParcelService{
 
     @Override
     public Map<String, ParcelResponse> fetchParcelsBulk(List<UUID> parcelIds) {
-        return parcelIds.stream()
-            .collect(Collectors.toMap(
-                UUID::toString,
-                parcelId -> {
-                    try {
-                        return getParcelById(parcelId);
-                    } catch (Exception e) {
-                        log.error("Failed to fetch parcel info for {}: {}", parcelId, e.getMessage());
-                        return null; // Bỏ qua parcel lỗi
-                    }
-                }
-            ));
+        Map<String, ParcelResponse> result = new HashMap<>();
+        for (UUID parcelId : parcelIds) {
+            try {
+                ParcelResponse parcel = getParcelById(parcelId);
+                result.put(parcelId.toString(), parcel);
+            } catch (Exception e) {
+                log.error("Failed to fetch parcel info for {}: {}", parcelId, e.getMessage(), e);
+                // Skip this parcel and continue with others
+            }
+        }
+        return result;
     }
 
     @Override

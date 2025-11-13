@@ -49,4 +49,34 @@ public class SessionController {
     public ResponseEntity<?> createSessionBatch(@Valid @RequestBody Object createSessionRequest) {
         return sessionServiceClient.createSessionBatch(createSessionRequest);
     }
+
+    /**
+     * Tạo phiên ở trạng thái CREATED (chuẩn bị nhận đơn).
+     * Shipper nhấn "Bắt đầu phiên" để tạo phiên này.
+     */
+    @PostMapping("/drivers/{deliveryManId}/prepare")
+    public ResponseEntity<?> createSessionPrepared(@PathVariable String deliveryManId) {
+        log.info("Creating prepared session (CREATED) for delivery man {}", deliveryManId);
+        return sessionServiceClient.createSessionPrepared(deliveryManId);
+    }
+
+    /**
+     * Chuyển phiên từ CREATED sang IN_PROGRESS (bắt đầu giao hàng).
+     * Shipper nhấn "Bắt đầu giao" để chuyển trạng thái.
+     */
+    @PostMapping("/{sessionId}/start")
+    public ResponseEntity<?> startSession(@PathVariable UUID sessionId) {
+        log.info("Starting session {} (CREATED -> IN_PROGRESS)", sessionId);
+        return sessionServiceClient.startSession(sessionId);
+    }
+
+    /**
+     * Lấy phiên đang hoạt động (CREATED hoặc IN_PROGRESS) của shipper.
+     * Dùng để kiểm tra xem shipper có đang có phiên hoạt động không.
+     */
+    @GetMapping("/drivers/{deliveryManId}/active")
+    public ResponseEntity<?> getActiveSession(@PathVariable String deliveryManId) {
+        log.info("Getting active session for delivery man {}", deliveryManId);
+        return sessionServiceClient.getActiveSession(deliveryManId);
+    }
 }

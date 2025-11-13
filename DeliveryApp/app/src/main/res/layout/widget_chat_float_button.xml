@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:clipChildren="false"
+    android:clipToPadding="false">
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_chat"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@android:drawable/ic_dialog_email"
+        app:backgroundTint="@color/design_default_color_primary"
+        app:fabSize="normal"
+        android:contentDescription="Chat" />
+
+    <!-- Unread indicator dot - positioned at top-right of FAB -->
+    <!-- Must be declared AFTER FAB to appear on top (higher z-order) -->
+    <View
+        android:id="@+id/indicator_dot"
+        android:layout_width="16dp"
+        android:layout_height="16dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="0dp"
+        android:layout_marginEnd="0dp"
+        android:background="@drawable/red_dot_indicator"
+        android:visibility="gone"
+        android:elevation="12dp"
+        android:translationZ="12dp" />
+
+</FrameLayout>

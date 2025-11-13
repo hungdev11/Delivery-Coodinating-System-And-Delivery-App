@@ -57,6 +57,18 @@
         app:layout_constraintBottom_toBottomOf="parent">
 
         <Button
+            android:id="@+id/btnStartDelivery"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Bắt đầu giao hàng"
+            android:backgroundTint="#28A745"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            android:visibility="gone"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
             android:id="@+id/btnScanOrder"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

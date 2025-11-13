@@ -148,18 +148,66 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         Pageable pageable = PageUtil.build(page, size, "scanedAt", "desc", DeliveryAssignment.class);
         log.info("Pageable created: page={}, size={}", page, size);
 
-        // 2. Xây dựng Specification (Tiêu chí lọc)
+        // 2. Parse status strings to SessionStatus enum
+        // Status parameter represents SESSION status (CREATED, IN_PROGRESS), not assignment status
+        List<SessionStatus> sessionStatuses = null;
+        if (status != null && !status.isEmpty()) {
+            try {
+                sessionStatuses = status.stream()
+                    .map(String::toUpperCase)
+                    .map(SessionStatus::valueOf)
+                    .collect(Collectors.toList());
+                log.info("Parsed session statuses: {}", sessionStatuses);
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid session status values provided: {}. Using default: CREATED, IN_PROGRESS", status, e);
+                // Default to CREATED and IN_PROGRESS if invalid status provided
+                sessionStatuses = List.of(SessionStatus.CREATED, SessionStatus.IN_PROGRESS);
+            }
+        } else {
+            // Default: filter by CREATED and IN_PROGRESS sessions
+            sessionStatuses = List.of(SessionStatus.CREATED, SessionStatus.IN_PROGRESS);
+        }
+
+        // 3. Xây dựng Specification (Tiêu chí lọc)
         Specification<DeliveryAssignment> spec = Specification
             .where(AssignmentSpecification.byDeliveryManId(deliveryManId))
-            .and(AssignmentSpecification.bySessionStatus(SessionStatus.IN_PROGRESS))
-            .and(AssignmentSpecification.hasAssignmentStatusIn(status));
+            .and(AssignmentSpecification.bySessionStatusIn(sessionStatuses));
         log.info("Specification created for filtering");
 
-        // 3. Gọi Repository
+        // 4. Gọi Repository
         log.info("Querying database for tasks...");
         Page<DeliveryAssignment> tasksPage = deliveryAssignmentRepository.findAll(spec, pageable);
         log.info("Found {} tasks from database (total: {})", tasksPage.getNumberOfElements(), tasksPage.getTotalElements());
 
+        // 5. Ánh xạ kết quả sang DTO
+        log.info("Enriching tasks with parcel information...");
+        PageResponse<DeliveryAssignmentResponse> response = getEnrichedTasks(tasksPage);
+        log.info("Returning {} enriched tasks", response.getContent().size());
+        return response;
+    }
+
+    /**
+     * Lấy các task của một session cụ thể theo sessionId (phân trang).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<DeliveryAssignmentResponse> getTasksBySessionId(
+        UUID sessionId, int page, int size
+    ) {
+        log.info("Starting getTasksBySessionId for sessionId: {}, page: {}, size: {}", sessionId, page, size);
+        
+        // 1. Xây dựng đối tượng phân trang
+        Pageable pageable = PageUtil.build(page, size, "scanedAt", "desc", DeliveryAssignment.class);
+        
+        // 2. Xây dựng Specification - filter theo sessionId
+        Specification<DeliveryAssignment> spec = Specification
+            .where(AssignmentSpecification.bySessionId(sessionId));
+        
+        // 3. Gọi Repository
+        log.info("Querying database for tasks in session {}...", sessionId);
+        Page<DeliveryAssignment> tasksPage = deliveryAssignmentRepository.findAll(spec, pageable);
+        log.info("Found {} tasks from database (total: {})", tasksPage.getNumberOfElements(), tasksPage.getTotalElements());
+        
         // 4. Ánh xạ kết quả sang DTO
         log.info("Enriching tasks with parcel information...");
         PageResponse<DeliveryAssignmentResponse> response = getEnrichedTasks(tasksPage);

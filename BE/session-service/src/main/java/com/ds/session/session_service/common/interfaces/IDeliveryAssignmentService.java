@@ -42,6 +42,15 @@ public interface IDeliveryAssignmentService {
     );
     
     /**
+     * Lấy các task của một session cụ thể theo sessionId (phân trang).
+     */
+    PageResponse<DeliveryAssignmentResponse> getTasksBySessionId(
+        UUID sessionId,
+        int page,
+        int size
+    );
+    
+    /**
      * V0: Lấy các task với paging đơn giản (không có dynamic filters)
      */
     PageResponse<DeliveryAssignmentResponse> getDailyTasksV0(PagingRequestV0 request);

@@ -61,12 +61,14 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private LinearLayoutManager layoutManager;
 
     private String activeSessionId = null;
+    private String activeSessionStatus = null; // CREATED, IN_PROGRESS, etc.
     private String driverId; // động
 
     private static final int SCAN_REQUEST_CODE = 1001;
     private static final String TAG = "TaskFragment";
 
     private SessionManager sessionManager;
+    private Button btnStartDelivery;
 
     @Nullable
     @Override
@@ -94,13 +96,69 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             startActivityForResult(intent, SCAN_REQUEST_CODE);
         });
 
+        btnStartDelivery = view.findViewById(R.id.btnStartDelivery);
+        btnStartDelivery.setOnClickListener(v -> startSession());
+
         btnSessionMenu = view.findViewById(R.id.btn_session_menu);
         setupSessionMenu();
 
         setupPaginationScrollListener();
-        resetAndFetchTasks();
+        
+        // Check for existing session first, show dashboard if none
+        checkAndShowDashboardOrTasks();
 
         return view;
+    }
+
+    private void checkAndShowDashboardOrTasks() {
+        // First check if there's an active session
+        checkActiveSession();
+    }
+    
+    /**
+     * Check if there's an active session for this driver
+     */
+    private void checkActiveSession() {
+        SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
+        Call<DeliverySession> call = service.getActiveSession(driverId);
+        
+        call.enqueue(new Callback<DeliverySession>() {
+            @Override
+            public void onResponse(Call<DeliverySession> call, Response<DeliverySession> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    // Active session found - show tasks
+                    DeliverySession session = response.body();
+                    activeSessionId = session.getId().toString();
+                    activeSessionStatus = session.getStatus().toString();
+                    Log.d(TAG, "Active session found: " + activeSessionId + ", Status: " + activeSessionStatus);
+                    resetAndFetchTasks();
+                } else if (response.code() == 204) {
+                    // No active session - navigate to dashboard
+                    Log.d(TAG, "No active session found. Navigating to dashboard.");
+                    navigateToDashboard();
+                } else {
+                    // Error - try to fetch tasks anyway
+                    Log.w(TAG, "Error checking active session: " + response.code());
+                    resetAndFetchTasks();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<DeliverySession> call, Throwable t) {
+                Log.e(TAG, "Network error checking active session: " + t.getMessage());
+                // On error, try to fetch tasks anyway
+                resetAndFetchTasks();
+            }
+        });
+    }
+    
+    /**
+     * Navigate to dashboard when no active session
+     */
+    private void navigateToDashboard() {
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).showDashboard();
+        }
     }
 
     private void resetAndFetchTasks() {
@@ -110,8 +168,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         adapter.notifyDataSetChanged();
 
         if (btnSessionMenu != null) btnSessionMenu.setVisibility(View.GONE);
-        activeSessionId = null;
-        fetchTodayTasks(currentPage);
+        fetchSessionTasks(currentPage);
     }
 
     @Override
@@ -124,8 +181,15 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         }
     }
 
-    public void fetchTodayTasks(int page) {
+    public void fetchSessionTasks(int page) {
         if (isLoading || isLastPage) return;
+        
+        // Need activeSessionId to fetch tasks by sessionId
+        if (activeSessionId == null) {
+            Log.w(TAG, "No active session ID. Checking for active session first...");
+            checkActiveSession();
+            return;
+        }
 
         isLoading = true;
         if (page == 0) {
@@ -134,11 +198,10 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         }
 
         SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
-        List<String> statusFilter = Arrays.asList("IN_PROGRESS");
 
-        Call<PageResponse<DeliveryAssignment>> call = service.getTasksToday(
-                driverId, // <-- thay DRIVER_ID tĩnh bằng biến driverId động
-                statusFilter,
+        // Use new endpoint: get tasks by sessionId
+        Call<PageResponse<DeliveryAssignment>> call = service.getTasksBySessionId(
+                activeSessionId,
                 page,
                 pageSize
         );
@@ -162,16 +225,20 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
 
                     if (page == 0 && !tasks.isEmpty()) {
                         activeSessionId = tasks.get(0).getSessionId();
+                        // Try to get session status from first task or fetch session details
+                        fetchSessionStatus();
                         if (btnSessionMenu != null) btnSessionMenu.setVisibility(View.VISIBLE);
                     }
 
                     if (tasks.isEmpty() && page == 0) {
-                        // Show empty state UI
-                        if (tvEmptyState != null) {
-                            tvEmptyState.setVisibility(View.VISIBLE);
+                        // No tasks - check if there's an active session
+                        if (activeSessionId != null) {
+                            // Active session exists but no tasks - show empty state
+                            checkForCreatedSession();
+                        } else {
+                            // No active session - navigate to dashboard
+                            navigateToDashboard();
                         }
-                        if (btnSessionMenu != null) btnSessionMenu.setVisibility(View.GONE);
-                        Log.d(TAG, "No tasks found. Showing empty state.");
                     } else {
                         // Hide empty state UI when there are tasks
                         if (tvEmptyState != null) {
@@ -212,7 +279,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                             && firstVisibleItemPosition >= 0
                             && totalItemCount >= pageSize) {
 
-                        fetchTodayTasks(currentPage);
+                        fetchSessionTasks(currentPage);
                     }
                 }
             }
@@ -264,7 +331,10 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             public void onResponse(Call<DeliverySession> call, Response<DeliverySession> response) {
                 if (response.isSuccessful()) {
                     Toast.makeText(getContext(), "Đã hoàn tất phiên.", Toast.LENGTH_LONG).show();
-                    resetAndFetchTasks();
+                    // Navigate to dashboard after completing session
+                    activeSessionId = null;
+                    activeSessionStatus = null;
+                    navigateToDashboard();
                 } else {
                     Toast.makeText(getContext(), "Lỗi: " + response.code(), Toast.LENGTH_SHORT).show();
                 }
@@ -309,7 +379,10 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             public void onResponse(Call<DeliverySession> call, Response<DeliverySession> response) {
                 if (response.isSuccessful()) {
                     Toast.makeText(getContext(), "Đã báo cáo sự cố. Phiên bị hủy.", Toast.LENGTH_LONG).show();
-                    resetAndFetchTasks();
+                    // Navigate to dashboard after failing session
+                    activeSessionId = null;
+                    activeSessionStatus = null;
+                    navigateToDashboard();
                 } else {
                     Toast.makeText(getContext(), "Lỗi: " + response.code(), Toast.LENGTH_SHORT).show();
                 }
@@ -317,6 +390,113 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
 
             @Override
             public void onFailure(Call<DeliverySession> call, Throwable t) {
+                Toast.makeText(getContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void checkForCreatedSession() {
+        // Check if there's an active session (CREATED or IN_PROGRESS)
+        if (activeSessionId != null) {
+            // Session exists but no tasks - show empty state with appropriate message
+            if (tvEmptyState != null) {
+                if ("CREATED".equals(activeSessionStatus)) {
+                    tvEmptyState.setText("Chưa có nhiệm vụ nào.\nVui lòng quét mã QR để thêm đơn hàng.");
+                    // Show "Start Delivery" button if session is CREATED
+                    updateUIForSessionStatus();
+                } else {
+                    tvEmptyState.setText("Không có nhiệm vụ nào.");
+                    if (btnStartDelivery != null) btnStartDelivery.setVisibility(View.GONE);
+                }
+                tvEmptyState.setVisibility(View.VISIBLE);
+            }
+            // Show session menu if session exists
+            if (btnSessionMenu != null && activeSessionId != null) {
+                btnSessionMenu.setVisibility(View.VISIBLE);
+            }
+            Log.d(TAG, "Active session found but no tasks. Session ID: " + activeSessionId + ", Status: " + activeSessionStatus);
+        } else {
+            // No active session - should navigate to dashboard (handled by checkActiveSession)
+            if (tvEmptyState != null) {
+                tvEmptyState.setVisibility(View.VISIBLE);
+                tvEmptyState.setText("Chưa có phiên làm việc.\nVui lòng bắt đầu phiên để tiếp tục.");
+            }
+            if (btnSessionMenu != null) btnSessionMenu.setVisibility(View.GONE);
+            if (btnStartDelivery != null) btnStartDelivery.setVisibility(View.GONE);
+            Log.d(TAG, "No active session found.");
+        }
+    }
+
+    private void fetchSessionStatus() {
+        if (activeSessionId == null) return;
+
+        SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
+        Call<DeliverySession> call = service.getSessionById(activeSessionId);
+
+        call.enqueue(new Callback<DeliverySession>() {
+            @Override
+            public void onResponse(Call<DeliverySession> call, Response<DeliverySession> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    DeliverySession session = response.body();
+                    activeSessionStatus = session.getStatus();
+                    updateUIForSessionStatus();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<DeliverySession> call, Throwable t) {
+                Log.e(TAG, "Failed to fetch session status: " + t.getMessage());
+            }
+        });
+    }
+
+    private void updateUIForSessionStatus() {
+        if ("CREATED".equals(activeSessionStatus)) {
+            // Show "Start Delivery" button
+            if (btnStartDelivery != null) {
+                btnStartDelivery.setVisibility(View.VISIBLE);
+            }
+        } else {
+            // Hide "Start Delivery" button for IN_PROGRESS sessions
+            if (btnStartDelivery != null) {
+                btnStartDelivery.setVisibility(View.GONE);
+            }
+        }
+    }
+
+    private void startSession() {
+        if (activeSessionId == null) {
+            Toast.makeText(getContext(), "Không tìm thấy phiên.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        btnStartDelivery.setEnabled(false);
+        btnStartDelivery.setText("Đang bắt đầu...");
+
+        SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
+        Call<DeliverySession> call = service.startSession(activeSessionId);
+
+        call.enqueue(new Callback<DeliverySession>() {
+            @Override
+            public void onResponse(Call<DeliverySession> call, Response<DeliverySession> response) {
+                btnStartDelivery.setEnabled(true);
+                btnStartDelivery.setText("Bắt đầu giao hàng");
+
+                if (response.isSuccessful() && response.body() != null) {
+                    DeliverySession session = response.body();
+                    activeSessionStatus = session.getStatus();
+                    Toast.makeText(getContext(), "Đã bắt đầu giao hàng!", Toast.LENGTH_SHORT).show();
+                    updateUIForSessionStatus();
+                    resetAndFetchTasks(); // Refresh to show updated status
+                } else {
+                    Toast.makeText(getContext(), "Lỗi: " + response.code(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<DeliverySession> call, Throwable t) {
+                btnStartDelivery.setEnabled(true);
+                btnStartDelivery.setText("Bắt đầu giao hàng");
                 Toast.makeText(getContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });

@@ -66,6 +66,8 @@ keycloak:
             description: "Staff member with operational access"
           - name: SHIPPER
             description: "Delivery driver/shipper"
+          - name: SHOP
+            description: "Shop/seller who creates delivery orders"
           - name: CLIENT
             description: "End customer/client"
 
@@ -147,6 +149,132 @@ keycloak:
               enabled: true
               vehicleType: MOTORBIKE
               capacityKg: 120
+
+          - username: shipper02
+            email: shipper02@delivery-system.com
+            firstName: Minh
+            lastName: Tran
+            password: shipper123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHIPPER]
+            clientRoles:
+              frontend-client: [delivery-service]
+            deliveryMan:
+              enabled: true
+              vehicleType: MOTORBIKE
+              capacityKg: 150
+
+          - username: shipper03
+            email: shipper03@delivery-system.com
+            firstName: Hung
+            lastName: Nguyen
+            password: shipper123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHIPPER]
+            clientRoles:
+              frontend-client: [delivery-service]
+            deliveryMan:
+              enabled: true
+              vehicleType: BIKE
+              capacityKg: 80
+
+          - username: shipper04
+            email: shipper04@delivery-system.com
+            firstName: Lan
+            lastName: Le
+            password: shipper123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHIPPER]
+            clientRoles:
+              frontend-client: [delivery-service]
+            deliveryMan:
+              enabled: true
+              vehicleType: MOTORBIKE
+              capacityKg: 120
+
+          - username: shipper05
+            email: shipper05@delivery-system.com
+            firstName: Duc
+            lastName: Pham
+            password: shipper123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHIPPER]
+            clientRoles:
+              frontend-client: [delivery-service]
+            deliveryMan:
+              enabled: true
+              vehicleType: MOTORBIKE
+              capacityKg: 200
+
+          - username: shop01
+            email: shop01@delivery-system.com
+            firstName: My
+            lastName: Shop
+            password: shop123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHOP]
+            clientRoles:
+              frontend-client: [user-service]
+
+          - username: shop02
+            email: shop02@delivery-system.com
+            firstName: Fast
+            lastName: Mart
+            password: shop123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHOP]
+            clientRoles:
+              frontend-client: [user-service]
+
+          - username: shop03
+            email: shop03@delivery-system.com
+            firstName: Quick
+            lastName: Store
+            password: shop123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHOP]
+            clientRoles:
+              frontend-client: [user-service]
+
+          - username: shop04
+            email: shop04@delivery-system.com
+            firstName: Best
+            lastName: Shop
+            password: shop123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHOP]
+            clientRoles:
+              frontend-client: [user-service]
+
+          - username: shop05
+            email: shop05@delivery-system.com
+            firstName: Mega
+            lastName: Market
+            password: shop123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHOP]
+            clientRoles:
+              frontend-client: [user-service]
+
+          - username: staff02
+            email: staff02@delivery-system.com
+            firstName: Staff
+            lastName: Two
+            password: staff123
+            enabled: true
+            emailVerified: true
+            realmRoles: [STAFF]
+            clientRoles:
+              backend-client: [management-service]
 
           - username: client01
             email: client01@delivery-system.com

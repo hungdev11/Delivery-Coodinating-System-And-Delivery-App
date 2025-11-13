@@ -87,6 +87,9 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     private MapView mapView;
     private TextView tvInstruction;
     private ProgressBar progressBar;
+    private LinearLayout legNavigationContainer;
+    private ImageButton btnPrevLeg, btnNextLeg;
+    private TextView tvLegInfo;
 
     // --- Dữ liệu & Trạng thái ---
     private List<DeliveryAssignment> mOriginalTasks;
@@ -163,7 +166,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                 if (fragment.mOriginalTasks == null || fragment.mOriginalTasks.isEmpty()) {
                     Log.d(TAG, "Đang lấy danh sách Task...");
                     Response<PageResponse<DeliveryAssignment>> taskResponse = fragment.sessionClient
-                            .getTasksToday(fragment.driverId, List.of("IN_PROGRESS"), 0, 100)
+                            .getSessionTasks(fragment.driverId, List.of("CREATED", "IN_PROGRESS"), 0, 100)
                             .execute();
 
                     if (!taskResponse.isSuccessful() || taskResponse.body() == null || taskResponse.body().content() == null) {
@@ -242,6 +245,10 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                 if (fragment.fabReloadRoute != null) {
                     fragment.fabReloadRoute.setEnabled(true);
                 }
+
+                if (fragment.legNavigationContainer != null) {
+                    fragment.legNavigationContainer.setVisibility(View.GONE);
+                }
                 return;
             }
 
@@ -254,6 +261,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
 
             fragment.currentLegIndex = 0;
             fragment.displayCurrentLeg();
+            fragment.updateLegNavigationUI();
 
             if (!fragment.mSortedTasks.isEmpty()) {
                 fragment.showTaskSnackbar(fragment.mSortedTasks.get(fragment.currentLegIndex));
@@ -281,6 +289,10 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         fabRecenter = view.findViewById(R.id.fab_recenter); // Nút mới
         tvInstruction = view.findViewById(R.id.tv_instruction);
         progressBar = view.findViewById(R.id.progress_bar);
+        legNavigationContainer = view.findViewById(R.id.leg_navigation_container);
+        btnPrevLeg = view.findViewById(R.id.btn_prev_leg);
+        btnNextLeg = view.findViewById(R.id.btn_next_leg);
+        tvLegInfo = view.findViewById(R.id.tv_leg_info);
 
         // --- NÂNG CẤP: Tải icon cho nút điều hướng ---
         iconRecenter = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_mylocation);
@@ -309,6 +321,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
 
         setupOSMMap();
         setupFabListeners();
+        setupLegNavigation();
         checkAndRequestLocation(); // Bắt đầu luồng
         return view;
     }
@@ -662,6 +675,58 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
 
 
     /**
+     * Setup navigation buttons for leg-by-leg navigation
+     */
+    private void setupLegNavigation() {
+        btnPrevLeg.setOnClickListener(v -> navigateToPreviousLeg());
+        btnNextLeg.setOnClickListener(v -> navigateToNextLeg());
+    }
+
+    private void navigateToPreviousLeg() {
+        if (currentLegIndex > 0) {
+            currentLegIndex--;
+            displayCurrentLeg();
+            updateLegNavigationUI();
+        }
+    }
+
+    private void navigateToNextLeg() {
+        if (mSortedTasks != null && currentLegIndex < mSortedTasks.size() - 1) {
+            currentLegIndex++;
+            displayCurrentLeg();
+            updateLegNavigationUI();
+        }
+    }
+
+    private void updateLegNavigationUI() {
+        if (mSortedTasks == null || mSortedTasks.isEmpty()) {
+            if (legNavigationContainer != null) {
+                legNavigationContainer.setVisibility(View.GONE);
+            }
+            return;
+        }
+
+        if (legNavigationContainer != null) {
+            legNavigationContainer.setVisibility(View.VISIBLE);
+        }
+
+        if (tvLegInfo != null) {
+            tvLegInfo.setText((currentLegIndex + 1) + " / " + mSortedTasks.size());
+        }
+
+        // Enable/disable navigation buttons
+        if (btnPrevLeg != null) {
+            btnPrevLeg.setEnabled(currentLegIndex > 0);
+            btnPrevLeg.setAlpha(currentLegIndex > 0 ? 1.0f : 0.5f);
+        }
+
+        if (btnNextLeg != null) {
+            btnNextLeg.setEnabled(currentLegIndex < mSortedTasks.size() - 1);
+            btnNextLeg.setAlpha(currentLegIndex < mSortedTasks.size() - 1 ? 1.0f : 0.5f);
+        }
+    }
+
+    /**
      * Hiển thị chặng hiện tại lên bản đồ.
      */
     private void displayCurrentLeg() {
@@ -741,6 +806,9 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             mapView.getController().animateTo(mCurrentLocation);
             mapView.getController().setZoom(18.0); // Ép zoom 18
         }
+
+        // Update leg navigation UI
+        updateLegNavigationUI();
 
         mapView.invalidate();
     }
@@ -837,6 +905,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         if (foundIndex != -1) {
             currentLegIndex = foundIndex;
             displayCurrentLeg();
+            updateLegNavigationUI();
             showTaskSnackbar(mSortedTasks.get(currentLegIndex));
         }
     }

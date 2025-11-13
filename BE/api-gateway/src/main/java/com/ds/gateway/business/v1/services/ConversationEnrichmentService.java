@@ -91,7 +91,25 @@ public class ConversationEnrichmentService {
     }
 
     /**
-     * Enrich một conversation với thông tin bổ sung
+     * Enrich một conversation với thông tin bổ sung (synchronous version for single conversation)
+     */
+    public EnrichedConversationResponse enrichSingleConversationSync(
+            JsonNode convNode, String currentUserId, String partnerId) {
+        try {
+            return enrichSingleConversation(convNode, currentUserId).get();
+        } catch (Exception e) {
+            log.error("Error enriching conversation synchronously: {}", e.getMessage(), e);
+            // Return basic conversation without enrichment
+            return EnrichedConversationResponse.builder()
+                    .conversationId(convNode.has("conversationId") ? convNode.get("conversationId").asText() : "unknown")
+                    .partnerId(partnerId)
+                    .partnerName("Unknown User")
+                    .build();
+        }
+    }
+
+    /**
+     * Enrich một conversation với thông tin bổ sung (async version)
      */
     private CompletableFuture<EnrichedConversationResponse> enrichSingleConversation(
             JsonNode convNode, String currentUserId) {
@@ -103,21 +121,29 @@ public class ConversationEnrichmentService {
             String partnerName = convNode.has("partnerName") ? convNode.get("partnerName").asText() : null;
             String partnerUsername = convNode.has("partnerUsername") ? convNode.get("partnerUsername").asText() : null;
             String lastMessageTime = convNode.has("lastMessageTime") ? convNode.get("lastMessageTime").asText() : null;
+            String lastMessageContent = convNode.has("lastMessageContent") ? convNode.get("lastMessageContent").asText() : null;
+            Integer unreadCount = convNode.has("unreadCount") ? convNode.get("unreadCount").asInt() : 0;
             
             log.debug("📝 Enriching conversation: {} with partner: {}", conversationId, partnerId);
             
             // Step 2A: Get partner user info from User Service
+            // ALWAYS fetch from User Service to get correct name (ignore fallback from Communication Service)
             return userServiceClient.getUserById(partnerId)
                     .thenCompose(userDto -> {
+                        // Always use User Service data, not the fallback from Communication Service
+                        String actualPartnerName = buildFullName(userDto);
+                        String actualPartnerUsername = userDto != null ? userDto.getUsername() : partnerUsername;
+                        
                         EnrichedConversationResponse.EnrichedConversationResponseBuilder builder = 
                                 EnrichedConversationResponse.builder()
                                 .conversationId(conversationId)
                                 .partnerId(partnerId)
-                                .partnerName(partnerName != null ? partnerName : buildFullName(userDto))
-                                .partnerUsername(partnerUsername != null ? partnerUsername : userDto.getUsername())
+                                .partnerName(actualPartnerName) // Always use User Service name
+                                .partnerUsername(actualPartnerUsername)
                                 .partnerAvatar(null) // TODO: Add avatar when available
                                 .lastMessageTime(lastMessageTime)
-                                .unreadCount(0); // TODO: Calculate unread count
+                                .lastMessageContent(lastMessageContent) // Pass through from Communication Service
+                                .unreadCount(unreadCount != null ? unreadCount : 0); // Use unread count from Communication Service
                         
                         if (userDto != null) {
                             builder.partnerEmail(userDto.getEmail())

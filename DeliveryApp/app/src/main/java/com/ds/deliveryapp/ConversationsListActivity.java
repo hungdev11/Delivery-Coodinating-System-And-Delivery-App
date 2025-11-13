@@ -16,6 +16,7 @@ import com.ds.deliveryapp.auth.AuthManager;
 import com.ds.deliveryapp.clients.ChatClient;
 import com.ds.deliveryapp.clients.res.Conversation;
 import com.ds.deliveryapp.configs.RetrofitClient;
+import com.ds.deliveryapp.service.GlobalChatService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +41,7 @@ public class ConversationsListActivity extends AppCompatActivity {
     private ChatClient mChatClient;
     private AuthManager mAuthManager;
     private String mCurrentUserId;
+    private GlobalChatService globalChatService;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +57,9 @@ public class ConversationsListActivity extends AppCompatActivity {
             return;
         }
 
+        // Initialize GlobalChatService
+        globalChatService = GlobalChatService.getInstance(this);
+        
         initViews();
         initRetrofitClients();
         initRecyclerView();
@@ -102,6 +107,19 @@ public class ConversationsListActivity extends AppCompatActivity {
 
                     mConversations.clear();
                     mConversations.addAll(conversations);
+                    
+                    // Sync unread counts with GlobalChatService
+                    if (globalChatService != null) {
+                        java.util.Map<String, Integer> unreadCounts = new java.util.HashMap<>();
+                        for (Conversation conv : conversations) {
+                            if (conv.getConversationId() != null && conv.getUnreadCount() != null && conv.getUnreadCount() > 0) {
+                                unreadCounts.put(conv.getConversationId(), conv.getUnreadCount());
+                            }
+                        }
+                        globalChatService.syncUnreadCounts(unreadCounts);
+                        Log.d(TAG, "Synced " + unreadCounts.size() + " unread counts with GlobalChatService");
+                    }
+                    
                     mAdapter.notifyDataSetChanged();
                 } else {
                     Log.e(TAG, "❌ Failed to load conversations: " + response.code());

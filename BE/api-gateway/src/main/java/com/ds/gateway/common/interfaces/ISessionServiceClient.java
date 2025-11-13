@@ -33,4 +33,19 @@ public interface ISessionServiceClient {
      * Generate QR code
      */
     ResponseEntity<?> generateQR(String data);
+    
+    /**
+     * Create session in CREATED status (prepare to receive parcels)
+     */
+    ResponseEntity<?> createSessionPrepared(String deliveryManId);
+    
+    /**
+     * Start session (transition from CREATED to IN_PROGRESS)
+     */
+    ResponseEntity<?> startSession(UUID sessionId);
+    
+    /**
+     * Get active session (CREATED or IN_PROGRESS) for a delivery man
+     */
+    ResponseEntity<?> getActiveSession(String deliveryManId);
 }

@@ -1,0 +1,205 @@
+package com.ds.deliveryapp.dialog;
+
+import android.app.Dialog;
+import android.content.Context;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+
+import com.ds.deliveryapp.R;
+import com.ds.deliveryapp.clients.res.InteractiveProposal;
+import com.ds.deliveryapp.clients.res.Message;
+import com.ds.deliveryapp.enums.ContentType;
+import com.ds.deliveryapp.service.GlobalChatService;
+import com.ds.deliveryapp.utils.ChatWebSocketManager;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+
+import java.util.Map;
+
+/**
+ * Popup dialog to display proposal messages.
+ * Shows at top ~10% of screen with height ~20%
+ */
+public class ProposalPopupDialog extends Dialog {
+    private static final String TAG = "ProposalPopupDialog";
+    private Message proposalMessage;
+    private GlobalChatService globalChatService;
+    private Gson gson = new Gson();
+
+    public ProposalPopupDialog(@NonNull Context context, Message proposalMessage) {
+        super(context);
+        this.proposalMessage = proposalMessage;
+        this.globalChatService = GlobalChatService.getInstance(context);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        setContentView(R.layout.dialog_proposal_popup);
+
+        // Set window position and size
+        Window window = getWindow();
+        if (window != null) {
+            WindowManager.LayoutParams params = window.getAttributes();
+            params.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+            params.y = (int) (getContext().getResources().getDisplayMetrics().heightPixels * 0.10); // Top 10%
+            params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+            params.height = (int) (getContext().getResources().getDisplayMetrics().heightPixels * 0.20); // Height 20%
+            window.setAttributes(params);
+        }
+
+        setupUI();
+    }
+
+    private void setupUI() {
+        if (proposalMessage == null || proposalMessage.getProposal() == null) {
+            dismiss();
+            return;
+        }
+
+        InteractiveProposal proposal = proposalMessage.getProposal();
+        TextView tvTitle = findViewById(R.id.tv_proposal_title);
+        TextView tvContent = findViewById(R.id.tv_proposal_content);
+        TextView tvSenderTime = findViewById(R.id.tv_proposal_sender_time);
+        Button btnAccept = findViewById(R.id.btn_proposal_accept);
+        Button btnDecline = findViewById(R.id.btn_proposal_decline);
+        Button btnDismiss = findViewById(R.id.btn_proposal_dismiss);
+
+        // Parse proposal data
+        String title = "";
+        String content = proposalMessage.getContent();
+        String senderId = proposalMessage.getSenderId();
+        String sentAt = proposalMessage.getSentAt();
+        
+        try {
+            JsonObject dataObj = gson.fromJson(proposal.getData(), JsonObject.class);
+            if (dataObj != null) {
+                if (dataObj.has("title")) {
+                    title = dataObj.get("title").getAsString();
+                }
+                if (dataObj.has("content") && content == null) {
+                    content = dataObj.get("content").getAsString();
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing proposal data", e);
+        }
+
+        if (title.isEmpty()) {
+            title = "Yêu cầu mới";
+        }
+
+        tvTitle.setText(title);
+        tvContent.setText(content != null ? content : "");
+        
+        // Display sender and time info
+        String senderTimeText = "";
+        if (senderId != null) {
+            // For now, show sender ID - can be enhanced to fetch sender name from User Service
+            senderTimeText = "Từ: " + senderId.substring(0, Math.min(8, senderId.length()));
+        }
+        if (sentAt != null && !sentAt.isEmpty()) {
+            try {
+                // Parse datetime - handle both with and without timezone
+                java.time.LocalDateTime dateTime;
+                if (sentAt.contains("Z") || sentAt.contains("+") || sentAt.contains("-") && sentAt.lastIndexOf("-") > 10) {
+                    // Has timezone info - parse as Instant
+                    java.time.Instant instant = java.time.Instant.parse(sentAt);
+                    dateTime = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault());
+                } else {
+                    // No timezone info - parse as LocalDateTime directly
+                    // Format: "2025-11-13T19:04:14" or "2025-11-13T19:04:14.123"
+                    if (sentAt.contains("T")) {
+                        dateTime = java.time.LocalDateTime.parse(sentAt.replaceAll("\\.\\d+$", "")); // Remove milliseconds if present
+                    } else {
+                        // Fallback: try to parse as date only
+                        dateTime = java.time.LocalDate.parse(sentAt).atStartOfDay();
+                    }
+                }
+                java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm, dd/MM/yyyy", java.util.Locale.getDefault());
+                String formattedTime = dateTime.format(formatter);
+                if (!senderTimeText.isEmpty()) {
+                    senderTimeText += " • " + formattedTime;
+                } else {
+                    senderTimeText = formattedTime;
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error parsing sentAt: " + sentAt, e);
+                // Fallback: show raw date string (first 19 characters if available)
+                String displayTime = sentAt.length() > 19 ? sentAt.substring(0, 19) : sentAt;
+                if (!senderTimeText.isEmpty()) {
+                    senderTimeText += " • " + displayTime;
+                } else {
+                    senderTimeText = displayTime;
+                }
+            }
+        }
+        tvSenderTime.setText(senderTimeText);
+
+        // Setup action buttons based on proposal type
+        String actionType = proposal.getActionType();
+        if (actionType == null) {
+            actionType = "ACCEPT_DECLINE";
+        }
+
+        switch (actionType) {
+            case "ACCEPT_DECLINE":
+                btnAccept.setVisibility(View.VISIBLE);
+                btnDecline.setVisibility(View.VISIBLE);
+                btnAccept.setOnClickListener(v -> handleProposalAction("ACCEPT"));
+                btnDecline.setOnClickListener(v -> handleProposalAction("DECLINE"));
+                break;
+            case "TEXT_INPUT":
+                // For text input proposals, show input field (can be enhanced)
+                btnAccept.setText("Xác nhận");
+                btnAccept.setVisibility(View.VISIBLE);
+                btnDecline.setVisibility(View.GONE);
+                btnAccept.setOnClickListener(v -> handleProposalAction("CONFIRM"));
+                break;
+            default:
+                btnAccept.setVisibility(View.VISIBLE);
+                btnDecline.setVisibility(View.GONE);
+                btnAccept.setOnClickListener(v -> handleProposalAction("ACCEPT"));
+        }
+
+        btnDismiss.setOnClickListener(v -> dismiss());
+
+        // Auto-dismiss after 30 seconds
+        getWindow().getDecorView().postDelayed(() -> {
+            if (isShowing()) {
+                dismiss();
+            }
+        }, 30000);
+    }
+
+    private void handleProposalAction(String action) {
+        if (proposalMessage == null || proposalMessage.getProposal() == null) {
+            dismiss();
+            return;
+        }
+
+        String proposalId = proposalMessage.getProposal().getId().toString();
+        ChatWebSocketManager webSocketManager = globalChatService.getWebSocketManager();
+
+        if (webSocketManager != null && webSocketManager.isConnected()) {
+            Map<String, Object> data = Map.of(
+                "proposalId", proposalId,
+                "action", action
+            );
+            webSocketManager.sendQuickAction(proposalId, action, data);
+            Log.d(TAG, "Sent proposal action: " + action + " for proposal: " + proposalId);
+        }
+
+        dismiss();
+    }
+}
