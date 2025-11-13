@@ -15,10 +15,12 @@ import com.ds.parcel_service.app_context.models.Parcel;
 import com.ds.parcel_service.app_context.models.ParcelDestination;
 import com.ds.parcel_service.app_context.repositories.ParcelDestinationRepository;
 import com.ds.parcel_service.app_context.repositories.ParcelRepository;
+import com.ds.parcel_service.application.client.CreateDestinationRequest;
 import com.ds.parcel_service.application.client.DesDetail;
 import com.ds.parcel_service.application.client.DestinationResponse;
 import com.ds.parcel_service.application.client.ListAddressResponse;
 import com.ds.parcel_service.application.client.ZoneClient;
+import com.ds.parcel_service.common.entities.dto.common.PagedData;
 import com.ds.parcel_service.common.entities.dto.request.ParcelCreateRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelFilterRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelUpdateRequest;
@@ -122,6 +124,15 @@ public class ParcelService implements IParcelService{
     @Transactional
     public ParcelResponse createParcel(ParcelCreateRequest request) {
         validateUniqueCode(request.getCode());
+        
+        // Validate destination IDs are provided
+        if (request.getSenderDestinationId() == null || request.getSenderDestinationId().isBlank()) {
+            throw new IllegalArgumentException("Sender destination ID is required");
+        }
+        if (request.getReceiverDestinationId() == null || request.getReceiverDestinationId().isBlank()) {
+            throw new IllegalArgumentException("Receiver destination ID is required");
+        }
+        
         Parcel parcel = Parcel.builder()
                             .code(request.getCode())
                             .deliveryType(DeliveryType.valueOf(request.getDeliveryType()))
@@ -135,33 +146,33 @@ public class ParcelService implements IParcelService{
                             .windowStart(request.getWindowStart())
                             .windowEnd(request.getWindowEnd())
                             .build();
-
-        // [Logic: Call zone service, create destination, get receiver info...]
-        // find exiting destination from address text, if not found create new one
-        // map relationship between parcel and destination
-        // call to user service to get receiver/sender info
-
-        // DestinationResponse des = zoneClient.createDestination(
-        //     new CreateDestinationRequest(
-        //         parcel.getSendTo(), parcel.getSendTo(), request.getLat(), request.getLon()
-        //         )
-        //     );
-
-        ListAddressResponse resp = zoneClient.getNearestDestination(request.getLat(), request.getLon());
-
-        DesDetail des = !resp.getResult().isEmpty() ? resp.getResult().get(0) : null;
         
         Parcel savedParcel = parcelRepository.save(parcel);
 
-        ParcelDestination pd = ParcelDestination.builder()
-            .destinationId(des.getId())
+        // Link parcel to receiver destination (PRIMARY)
+        ParcelDestination receiverPd = ParcelDestination.builder()
+            .destinationId(request.getReceiverDestinationId())
             .destinationType(DestinationType.PRIMARY)
             .isCurrent(true)
             .isOriginal(true)
             .parcel(savedParcel)
             .build();
 
-        parcelDestinationRepository.save(pd);
+        parcelDestinationRepository.save(receiverPd);
+        log.info("Linked parcel {} to receiver destination {}", savedParcel.getId(), request.getReceiverDestinationId());
+
+        // Link parcel to sender destination (SECONDARY)
+        ParcelDestination senderPd = ParcelDestination.builder()
+            .destinationId(request.getSenderDestinationId())
+            .destinationType(DestinationType.SECONDARY)
+            .isCurrent(false)
+            .isOriginal(true)
+            .parcel(savedParcel)
+            .build();
+
+        parcelDestinationRepository.save(senderPd);
+        log.info("Linked parcel {} to sender destination {}", savedParcel.getId(), request.getSenderDestinationId());
+        
         return toDto(savedParcel);
     }
 
@@ -255,6 +266,36 @@ public class ParcelService implements IParcelService{
 
         Page<Parcel> parcels = parcelRepository.findAll(spec, pageable);
         return PageResponse.from(parcels.map(this::toDto));
+    }
+    
+    /**
+     * Get parcels V2 with RESTFUL.md compliant response format
+     */
+    public PagedData<ParcelResponse> getParcelsV2Restful(com.ds.parcel_service.common.entities.dto.request.PagingRequestV2 request) {
+        PageResponse<ParcelResponse> pageResponse = getParcelsV2(request);
+        return convertToPagedData(pageResponse, request);
+    }
+    
+    /**
+     * Convert PageResponse to PagedData following RESTFUL.md specification
+     */
+    private PagedData<ParcelResponse> convertToPagedData(
+            PageResponse<ParcelResponse> pageResponse,
+            com.ds.parcel_service.common.entities.dto.request.PagingRequestV2 request) {
+        PagedData.Paging<String> paging = PagedData.Paging.<String>builder()
+                .page(pageResponse.page())
+                .size(pageResponse.size())
+                .totalElements(pageResponse.totalElements())
+                .totalPages(pageResponse.totalPages())
+                .filters(request.getFiltersOrNull())
+                .sorts(request.getSortsOrEmpty())
+                .selected(request.getSelectedOrEmpty())
+                .build();
+        
+        return PagedData.<ParcelResponse>builder()
+                .data(pageResponse.content())
+                .page(paging)
+                .build();
     }
 
     private ParcelResponse toDto(Parcel parcel) {

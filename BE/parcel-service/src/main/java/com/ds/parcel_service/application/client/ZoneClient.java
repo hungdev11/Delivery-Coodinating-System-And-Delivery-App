@@ -19,6 +19,9 @@ public interface ZoneClient {
     
     @PostMapping("/api/v1/addresses")
     DestinationResponse<DesDetail> createDestination(@RequestBody CreateDestinationRequest request);
+    
+    @PostMapping("/api/v1/addresses/get-or-create")
+    DestinationResponse<DesDetail> getOrCreateDestination(@RequestBody CreateDestinationRequest request);
 
     @GetMapping("/api/v1/addresses/nearest")
     ListAddressResponse getNearestDestination(

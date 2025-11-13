@@ -22,5 +22,15 @@ public interface ISessionServiceClient {
     ResponseEntity<?> refuseTask(UUID deliveryManId, UUID parcelId);
     ResponseEntity<?> postponeTask(UUID deliveryManId, UUID parcelId, String addInfo);
     ResponseEntity<?> lastestShipperForParcel(UUID parcelId);
+    
+    /**
+     * Update assignment status by sessionId and assignmentId
+     * This is used by API gateway for nested queries
+     */
+    ResponseEntity<?> updateAssignmentStatus(UUID sessionId, UUID assignmentId, Object statusUpdateRequest);
+    
+    /**
+     * Generate QR code
+     */
+    ResponseEntity<?> generateQR(String data);
 }
-

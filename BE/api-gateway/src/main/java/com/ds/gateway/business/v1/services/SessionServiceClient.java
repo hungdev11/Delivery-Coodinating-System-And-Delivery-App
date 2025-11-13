@@ -12,8 +12,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.Optional;
 import com.ds.gateway.common.interfaces.ISessionServiceClient;
-
 import lombok.extern.slf4j.Slf4j;
 
 @Service
@@ -61,46 +61,49 @@ public class SessionServiceClient implements ISessionServiceClient {
         return callPost(uri, createSessionRequest);
     }
 
-
     @Override
     public ResponseEntity<?> getDailyTasks(UUID deliveryManId, List<String> status, int page, int size) {
         String uri = UriComponentsBuilder
                 .fromPath("/api/v1/assignments/session/delivery-man/{id}/tasks/today")
                 .queryParam("page", page)
                 .queryParam("size", size)
-                .queryParamIfPresent("status", status == null ? null : java.util.Optional.of(status))
+                .queryParamIfPresent("status", Optional.ofNullable(status))
                 .build(deliveryManId)
                 .toString();
 
-        // String url = String.format("%s/api/v1/assignments/session/delivery-man/%s/tasks/today", 
-        //     sessionServiceUrl, deliveryManId);
-        
+        // String url =
+        // String.format("%s/api/v1/assignments/session/delivery-man/%s/tasks/today",
+        // sessionServiceUrl, deliveryManId);
+
         // // Xây dựng URL với các query param
         // UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
-        //     .queryParam("page", page)
-        //     .queryParam("size", size);
-        
+        // .queryParam("page", page)
+        // .queryParam("size", size);
+
         // if (status != null && !status.isEmpty()) {
-        //     // Gửi 'status' lặp lại (ví dụ: ?status=PENDING&status=PROCESSING)
-        //     builder.queryParam("status", status.toArray());
+        // // Gửi 'status' lặp lại (ví dụ: ?status=PENDING&status=PROCESSING)
+        // builder.queryParam("status", status.toArray());
         // }
 
         // String fullUrl = builder.toUriString();
         // log.info("Gateway: Proxying 'getDailyTasks' to {}", fullUrl);
-        
-        // // Fully deserialize response to avoid chunked encoding issues with Cloudflare
-        // ResponseEntity<Object> response = restTemplate.exchange(fullUrl, HttpMethod.GET, null, Object.class);
-        
+
+        // // Fully deserialize response to avoid chunked encoding issues with
+        // Cloudflare
+        // ResponseEntity<Object> response = restTemplate.exchange(fullUrl,
+        // HttpMethod.GET, null, Object.class);
+
         // // Remove Transfer-Encoding header to prevent duplicate headers
         // // Spring Boot will calculate Content-Length from the body
-        // org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        // org.springframework.http.HttpHeaders headers = new
+        // org.springframework.http.HttpHeaders();
         // headers.putAll(response.getHeaders());
         // headers.remove("Transfer-Encoding"); // Remove to prevent duplicate headers
-        
+
         // // Create new ResponseEntity with cleaned headers
         // return ResponseEntity.status(response.getStatusCode())
-        //         .headers(headers)
-        //         .body(response.getBody());
+        // .headers(headers)
+        // .body(response.getBody());
 
         log.info("WebClient: GET -> {}", uri);
         return callGet(uri);
@@ -108,21 +111,24 @@ public class SessionServiceClient implements ISessionServiceClient {
 
     @Override
     public ResponseEntity<?> getTasksHistory(UUID deliveryManId, List<String> status,
-                                             String createdAtStart, String createdAtEnd,
-                                             String completedAtStart, String completedAtEnd,
-                                             int page, int size) {
+            String createdAtStart, String createdAtEnd,
+            String completedAtStart, String completedAtEnd,
+            int page, int size) {
         UriComponentsBuilder builder = UriComponentsBuilder
                 .fromPath("/api/v1/assignments/session/delivery-man/{id}/tasks")
                 .queryParam("page", page)
                 .queryParam("size", size);
 
-        if (status != null && !status.isEmpty()) {
-            status.forEach(s -> builder.queryParam("status", s));
-        }
-        if (createdAtStart != null) builder.queryParam("createdAtStart", createdAtStart);
-        if (createdAtEnd != null) builder.queryParam("createdAtEnd", createdAtEnd);
-        if (completedAtStart != null) builder.queryParam("completedAtStart", completedAtStart);
-        if (completedAtEnd != null) builder.queryParam("completedAtEnd", completedAtEnd);
+        if (status != null && !status.isEmpty())
+            builder.queryParam("status", status.toArray());
+        if (createdAtStart != null)
+            builder.queryParam("createdAtStart", createdAtStart);
+        if (createdAtEnd != null)
+            builder.queryParam("createdAtEnd", createdAtEnd);
+        if (completedAtStart != null)
+            builder.queryParam("completedAtStart", completedAtStart);
+        if (completedAtEnd != null)
+            builder.queryParam("completedAtEnd", completedAtEnd);
 
         String uri = builder.buildAndExpand(deliveryManId).toUriString();
 
@@ -160,6 +166,13 @@ public class SessionServiceClient implements ISessionServiceClient {
         return callGet(uri);
     }
 
+    @Override
+    public ResponseEntity<?> updateAssignmentStatus(UUID sessionId, UUID assignmentId, Object statusUpdateRequest) {
+        String uri = String.format("/api/v1/sessions/%s/assignments/%s/status", sessionId, assignmentId);
+        log.info("WebClient: PUT -> {}", uri);
+        return callPut(uri, statusUpdateRequest);
+    }
+
     // --------------------------------------------------
     // Generic WebClient handlers
     // --------------------------------------------------
@@ -195,6 +208,48 @@ public class SessionServiceClient implements ISessionServiceClient {
 
         } catch (WebClientResponseException e) {
             log.error("POST {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
+            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        }
+    }
+
+    private ResponseEntity<?> callPut(String uri, Object body) {
+        try {
+            Object responseBody = webClient.put()
+                    .uri(uri)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .bodyValue(body != null ? body : new Object())
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+
+            return ResponseEntity.ok(responseBody);
+
+        } catch (WebClientResponseException e) {
+            log.error("PUT {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
+            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        }
+    }
+
+    @Override
+    public ResponseEntity<?> generateQR(String data) {
+        String uri = UriComponentsBuilder
+                .fromPath("/api/v1/qr/generate")
+                .queryParam("data", data)
+                .build()
+                .toUriString();
+        log.info("WebClient: GET -> {}", uri);
+        try {
+            byte[] qrImage = webClient.get()
+                    .uri(uri)
+                    .accept(MediaType.IMAGE_PNG)
+                    .retrieve()
+                    .bodyToMono(byte[].class)
+                    .block();
+            return ResponseEntity.ok()
+                    .contentType(MediaType.IMAGE_PNG)
+                    .body(qrImage);
+        } catch (WebClientResponseException e) {
+            log.error("GET {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
         }
     }

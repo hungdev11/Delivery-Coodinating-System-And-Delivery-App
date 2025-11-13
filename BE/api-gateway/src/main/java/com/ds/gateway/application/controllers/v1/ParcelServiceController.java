@@ -51,4 +51,16 @@ public class ParcelServiceController {
             @RequestParam(defaultValue = "20") int size) {
         return parcelServiceClient.getParcelsReceived(customerId, page, size);
     }
+
+    @PutMapping("/change-status/{parcelId}")
+    public ResponseEntity<?> changeParcelStatus(
+            @PathVariable UUID parcelId,
+            @RequestParam String event) {
+        return parcelServiceClient.changeParcelStatus(parcelId, event);
+    }
+
+    @DeleteMapping("/{parcelId}")
+    public ResponseEntity<?> deleteParcel(@PathVariable UUID parcelId) {
+        return parcelServiceClient.deleteParcel(parcelId);
+    }
 }

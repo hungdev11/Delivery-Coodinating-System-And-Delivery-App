@@ -7,4 +7,8 @@ public enum DeliveryType {
     private DeliveryType(int priority) {
         this.priority = priority;
     }
+    
+    public int getPriority() {
+        return priority;
+    }
 }

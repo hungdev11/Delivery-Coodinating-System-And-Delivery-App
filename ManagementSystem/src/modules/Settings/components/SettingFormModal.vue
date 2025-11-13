@@ -115,14 +115,14 @@ const getValuePlaceholder = () => {
 </script>
 
 <template>
-  <UModal>
-      <template #header>
-        <h3 class="text-lg font-semibold">
-          {{ mode === 'create' ? 'Create Setting' : 'Edit Setting' }}
-        </h3>
-      </template>
-
-      <div class="space-y-4">
+  <UModal
+    :title="mode === 'create' ? 'Create Setting' : 'Edit Setting'"
+    :description="mode === 'create' ? 'Configure a new system setting' : 'Update the selected system setting'"
+    :close="{ onClick: handleCancel }"
+    :ui="{ footer: 'justify-end space-x-2' }"
+  >
+    <template #body>
+      <form class="space-y-4" @submit.prevent="handleSubmit">
         <UFormField label="Key" required>
           <UInput
             v-model="formData.key"
@@ -151,7 +151,10 @@ const getValuePlaceholder = () => {
               :placeholder="getValuePlaceholder()"
               :type="formData.displayMode === 'PASSWORD' ? 'password' : 'text'"
             />
-            <div v-if="mode === 'edit' && props.setting && isSensitiveValue(props.setting)" class="text-sm text-amber-600 dark:text-amber-400">
+            <div
+              v-if="mode === 'edit' && props.setting && isSensitiveValue(props.setting)"
+              class="text-sm text-amber-600 dark:text-amber-400"
+            >
               <UIcon name="i-heroicons-exclamation-triangle" class="inline mr-1" />
               Sensitive value - enter new value to update
             </div>
@@ -173,48 +176,46 @@ const getValuePlaceholder = () => {
           />
         </UFormField>
 
-        <UFormField label="Type">
-          <USelect
-            v-model="formData.type"
-            :options="[
-              { label: 'String', value: 'STRING' },
-              { label: 'Integer', value: 'INTEGER' },
-              { label: 'Boolean', value: 'BOOLEAN' },
-              { label: 'Double', value: 'DOUBLE' },
-              { label: 'JSON', value: 'JSON' },
-            ]"
-          />
-        </UFormField>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <UFormField label="Type">
+            <USelect
+              v-model="formData.type"
+              :options="[
+                { label: 'String', value: 'STRING' },
+                { label: 'Integer', value: 'INTEGER' },
+                { label: 'Boolean', value: 'BOOLEAN' },
+                { label: 'Double', value: 'DOUBLE' },
+                { label: 'JSON', value: 'JSON' },
+              ]"
+            />
+          </UFormField>
 
-        <UFormField label="Display Mode">
-          <USelect
-            v-model="formData.displayMode"
-            :options="[
-              { label: 'Text', value: 'TEXT' },
-              { label: 'Password', value: 'PASSWORD' },
-              { label: 'Code', value: 'CODE' },
-              { label: 'Number', value: 'NUMBER' },
-              { label: 'Toggle', value: 'TOGGLE' },
-              { label: 'Textarea', value: 'TEXTAREA' },
-              { label: 'URL', value: 'URL' },
-              { label: 'Email', value: 'EMAIL' },
-            ]"
-          />
-        </UFormField>
-      </div>
-
-      <template #footer>
-        <div class="flex justify-end space-x-2">
-          <UButton variant="ghost" @click="handleCancel">
-            Cancel
-          </UButton>
-          <UButton
-            :disabled="!isValid"
-            @click="handleSubmit"
-          >
-            {{ mode === 'create' ? 'Create' : 'Update' }}
-          </UButton>
+          <UFormField label="Display Mode">
+            <USelect
+              v-model="formData.displayMode"
+              :options="[
+                { label: 'Text', value: 'TEXT' },
+                { label: 'Password', value: 'PASSWORD' },
+                { label: 'Code', value: 'CODE' },
+                { label: 'Number', value: 'NUMBER' },
+                { label: 'Toggle', value: 'TOGGLE' },
+                { label: 'Textarea', value: 'TEXTAREA' },
+                { label: 'URL', value: 'URL' },
+                { label: 'Email', value: 'EMAIL' },
+              ]"
+            />
+          </UFormField>
         </div>
-      </template>
+      </form>
+    </template>
+
+    <template #footer>
+      <UButton variant="outline" color="neutral" @click="handleCancel">
+        Cancel
+      </UButton>
+      <UButton :disabled="!isValid" @click="handleSubmit">
+        {{ mode === 'create' ? 'Create' : 'Update' }}
+      </UButton>
+    </template>
   </UModal>
 </template>

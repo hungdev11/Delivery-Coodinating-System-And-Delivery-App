@@ -14,4 +14,17 @@
         android:padding="12dp"
         android:text="Đây là tin nhắn gửi"
         android:textColor="@android:color/white" />
+
+    <!-- Timestamp for sent messages -->
+    <TextView
+        android:id="@+id/tv_timestamp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="4dp"
+        android:text="12:34"
+        android:textSize="10sp"
+        android:textColor="#888888"
+        android:alpha="0.7" />
 </LinearLayout>

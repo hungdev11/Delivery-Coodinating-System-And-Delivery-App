@@ -11,4 +11,7 @@ public interface IParcelServiceClient {
     ResponseEntity<?> getParcelByCode(String code);
     ResponseEntity<?> getParcelsSent(String customerId, int page, int size);
     ResponseEntity<?> getParcelsReceived(String customerId, int page, int size);
+    ResponseEntity<?> getParcelsV2(Object request);
+    ResponseEntity<?> changeParcelStatus(UUID parcelId, String event);
+    ResponseEntity<?> deleteParcel(UUID parcelId);
 }

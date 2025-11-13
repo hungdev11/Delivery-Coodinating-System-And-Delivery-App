@@ -60,10 +60,15 @@ public class ProposalController {
     @GetMapping("/available-configs")
     public ResponseEntity<List<ProposalTypeConfig>> getAvailableConfigs(@RequestParam List<String> roles
     ) {
-        roles.forEach(r -> log.info(r));
+        log.info("🔍 GET /available-configs - Roles requested: {}", roles);
         List<ProposalTypeConfig> availableConfigs = 
                 configRepository.findByRequiredRoleIn(roles);
-                
+        log.info("📋 Found {} available configs for roles: {}", availableConfigs.size(), roles);
+        availableConfigs.forEach(config -> 
+            log.info("   - Config: type={}, requiredRole={}, creationActionType={}, responseActionType={}", 
+                config.getType(), config.getRequiredRole(), 
+                config.getCreationActionType(), config.getResponseActionType())
+        );
         return ResponseEntity.ok(availableConfigs);
     }
 }

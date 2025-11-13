@@ -10,6 +10,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessageSendingOperations;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.AccessDeniedException;
@@ -23,6 +24,7 @@ import com.ds.communication_service.common.dto.InteractiveProposalResponseDTO;
 import com.ds.communication_service.common.dto.MessageResponse; 
 import com.ds.communication_service.common.dto.ProposalUpdateRequest;
 import com.ds.communication_service.common.enums.ContentType;
+import com.ds.communication_service.common.enums.MessageStatus;
 import com.ds.communication_service.common.enums.ProposalActionType;
 import com.ds.communication_service.common.enums.ProposalStatus;
 import com.ds.communication_service.common.enums.ProposalType;
@@ -68,7 +70,7 @@ public class ProposalService implements IProposalService{
             .orElseThrow(() -> new IllegalArgumentException("Proposal type không hợp lệ: " + dto.getType()));
         
         // 2. Kiểm tra quyền
-        if (!senderRoles.contains(config.getRequiredRole())) {
+        if (!senderRoles.contains(config.getRequiredRole()) && !senderRoles.contains("ADMIN")) {
             throw new AccessDeniedException("Bạn không có quyền thực hiện hành động này.");
         }
         
@@ -100,6 +102,8 @@ public class ProposalService implements IProposalService{
         message.setSenderId(senderId);
         message.setType(ContentType.INTERACTIVE_PROPOSAL);
         message.setContent(dto.getFallbackContent());
+        message.setStatus(MessageStatus.SENT); // Set initial status
+        message.setSentAt(LocalDateTime.now()); // CRITICAL: Set sentAt timestamp to avoid null constraint violation
         
         message.setProposal(savedProposal); 
         Message savedMessage = messageRepo.save(message);
@@ -177,27 +181,47 @@ public class ProposalService implements IProposalService{
         ObjectMapper mapper = new ObjectMapper();
         JsonNode node;
         try {
+            log.info("🔍 callRefuseParcelApi - deliveryManId: {}, data: {}", deliveryManId, data);
             node = mapper.readTree(data);
-            String parcelId = node.get("parcelId").asText();
+            
+            // Check if parcelId exists in data
+            JsonNode parcelIdNode = node.get("parcelId");
+            if (parcelIdNode == null || parcelIdNode.isNull()) {
+                log.warn("⚠️ parcelId not found in proposal data: {}", data);
+                log.warn("⚠️ Available fields in data: {}", node.fieldNames());
+                return; // Skip API call if parcelId is missing
+            }
+            
+            String parcelId = parcelIdNode.asText();
+            if (parcelId == null || parcelId.isEmpty()) {
+                log.warn("⚠️ parcelId is empty in proposal data: {}", data);
+                return; // Skip API call if parcelId is empty
+            }
+            
             String url = String.format("%s/api/v1/assignments/drivers/%s/parcels/%s/refuse",
                                    sessionServiceUrl, deliveryManId, parcelId);
         
-            log.info("Đang gọi API ngoài: POST {}", url);
+            log.info("✅ Đang gọi API ngoài: POST {}", url);
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             
-            restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
             
-            log.info("Gọi API Refuse Parcel thành công cho Parcel ID: {}", parcelId);
-        } catch (JsonMappingException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("✅ Gọi API Refuse Parcel thành công cho Parcel ID: {}", parcelId);
+            } else {
+                log.warn("⚠️ API Refuse Parcel trả về status code: {} cho Parcel ID: {}", 
+                    response.getStatusCode(), parcelId);
+            }
         } catch (JsonProcessingException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
+            log.error("❌ Lỗi parse JSON khi gọi Refuse Parcel API. Data: {}", data, e);
+            // Don't throw - this is a side effect, shouldn't fail proposal response
+        } catch (Exception e) {
+            log.error("❌ Lỗi khi gọi Refuse Parcel API", e);
+            // Don't throw - this is a side effect, shouldn't fail proposal response
         }
     }
 
@@ -298,10 +322,12 @@ public class ProposalService implements IProposalService{
         InteractiveProposalResponseDTO res = message.getProposal() != null ? InteractiveProposalResponseDTO.from(message.getProposal()) : null;
         return MessageResponse.builder()
             .id(message.getId().toString()) 
+            .conversationId(message.getConversation() != null ? message.getConversation().getId().toString() : null) // CRITICAL: Include conversationId for Android filtering
             .content(message.getContent())
             .type(message.getType())
             .senderId(message.getSenderId())
             .sentAt(message.getSentAt())
+            .status(message.getStatus()) // Include status
             .proposal(res) 
             .build();
     }

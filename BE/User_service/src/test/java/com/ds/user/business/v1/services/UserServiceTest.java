@@ -33,7 +33,7 @@ class UserServiceTest {
     @BeforeEach
     void setUp() {
         testUser = User.builder()
-                .keycloakId(KEYCLOAK_ID)
+                .id(KEYCLOAK_ID)
                 .username("testuser")
                 .email("test@example.com")
                 .firstName("Test")
@@ -45,7 +45,7 @@ class UserServiceTest {
     @Test
     void upsertByKeycloakId_shouldCreateNewUser_whenUserDoesNotExist() {
         // Given
-        when(userRepository.findByKeycloakId(KEYCLOAK_ID)).thenReturn(Optional.empty());
+        when(userRepository.findById(KEYCLOAK_ID)).thenReturn(Optional.empty());
         when(userRepository.save(any(User.class))).thenReturn(testUser);
 
         // When
@@ -59,11 +59,11 @@ class UserServiceTest {
 
         // Then
         assertThat(result).isNotNull();
-        assertThat(result.getKeycloakId()).isEqualTo(KEYCLOAK_ID);
+        assertThat(result.getId()).isEqualTo(KEYCLOAK_ID);
         assertThat(result.getUsername()).isEqualTo("testuser");
         assertThat(result.getEmail()).isEqualTo("test@example.com");
         
-        verify(userRepository).findByKeycloakId(KEYCLOAK_ID);
+        verify(userRepository).findById(KEYCLOAK_ID);
         verify(userRepository).save(any(User.class));
     }
 
@@ -71,7 +71,7 @@ class UserServiceTest {
     void upsertByKeycloakId_shouldUpdateUser_whenUserExists() {
         // Given
         User existingUser = User.builder()
-                .keycloakId(KEYCLOAK_ID)
+                .id(KEYCLOAK_ID)
                 .username("oldusername")
                 .email("old@example.com")
                 .firstName("Old")
@@ -79,7 +79,7 @@ class UserServiceTest {
                 .status(User.UserStatus.ACTIVE)
                 .build();
 
-        when(userRepository.findByKeycloakId(KEYCLOAK_ID)).thenReturn(Optional.of(existingUser));
+        when(userRepository.findById(KEYCLOAK_ID)).thenReturn(Optional.of(existingUser));
         when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArguments()[0]);
 
         // When
@@ -93,13 +93,13 @@ class UserServiceTest {
 
         // Then
         assertThat(result).isNotNull();
-        assertThat(result.getKeycloakId()).isEqualTo(KEYCLOAK_ID);
+        assertThat(result.getId()).isEqualTo(KEYCLOAK_ID);
         assertThat(result.getUsername()).isEqualTo("newusername");
         assertThat(result.getEmail()).isEqualTo("new@example.com");
         assertThat(result.getFirstName()).isEqualTo("New");
         assertThat(result.getLastName()).isEqualTo("Name");
         
-        verify(userRepository).findByKeycloakId(KEYCLOAK_ID);
+        verify(userRepository).findById(KEYCLOAK_ID);
         verify(userRepository).save(existingUser);
     }
 
@@ -107,7 +107,7 @@ class UserServiceTest {
     void upsertByKeycloakId_shouldKeepExistingFields_whenNullProvided() {
         // Given
         User existingUser = User.builder()
-                .keycloakId(KEYCLOAK_ID)
+                .id(KEYCLOAK_ID)
                 .username("existinguser")
                 .email("existing@example.com")
                 .firstName("Existing")
@@ -115,7 +115,7 @@ class UserServiceTest {
                 .status(User.UserStatus.ACTIVE)
                 .build();
 
-        when(userRepository.findByKeycloakId(KEYCLOAK_ID)).thenReturn(Optional.of(existingUser));
+        when(userRepository.findById(KEYCLOAK_ID)).thenReturn(Optional.of(existingUser));
         when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArguments()[0]);
 
         // When
@@ -134,7 +134,7 @@ class UserServiceTest {
         assertThat(result.getFirstName()).isEqualTo("Existing"); // Kept
         assertThat(result.getLastName()).isEqualTo("NewLastName"); // Updated
         
-        verify(userRepository).findByKeycloakId(KEYCLOAK_ID);
+        verify(userRepository).findById(KEYCLOAK_ID);
         verify(userRepository).save(existingUser);
     }
 }

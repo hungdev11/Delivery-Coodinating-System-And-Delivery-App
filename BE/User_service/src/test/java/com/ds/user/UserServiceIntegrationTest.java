@@ -37,7 +37,7 @@ class UserServiceIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    private UUID createdUserId;
+    private String createdUserId;
 
     @BeforeAll
     void setup() {

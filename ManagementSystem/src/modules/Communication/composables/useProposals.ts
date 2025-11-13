@@ -14,12 +14,12 @@ import {
   createProposalConfig,
   updateProposalConfig,
   deleteProposalConfig,
-  type CreateProposalRequest,
-  type ProposalResponseRequest,
-  type ProposalConfigDTO,
-  type InteractiveProposalResponseDTO,
-  type ProposalTypeConfig,
 } from '../api'
+import { getParcelsV2 } from '@/modules/Parcels/api'
+import type { QueryPayload } from '@/common/types/filter'
+import type { FilterGroupItemV2, FilterConditionItemV2, FilterOperatorItemV2 } from '@/common/types/filter-v2'
+import { FilterItemType } from '@/common/types/filter-v2'
+import type { CreateProposalRequest, InteractiveProposalResponseDTO, ProposalConfigDTO, ProposalResponseRequest, ProposalTypeConfig } from '../model.type'
 
 export function useProposals() {
   const toast = useToast()
@@ -92,14 +92,87 @@ export function useProposals() {
   }
 
   /**
-   * Get available proposal configs for roles
+   * Check if user has undelivered parcels (as recipient)
    */
-  const loadAvailableConfigs = async (roles: string[]) => {
+  const checkUndeliveredParcels = async (userId: string): Promise<boolean> => {
+    try {
+      console.log('🔍 Checking undelivered parcels for user:', userId)
+
+      // Query parcels where user is recipient and status != DELIVERED
+      // Use V2 filter format with type property
+      const filterGroup: FilterGroupItemV2 = {
+        type: FilterItemType.GROUP,
+        items: [
+          {
+            type: FilterItemType.CONDITION,
+            field: 'receiverId',
+            operator: 'EQUALS',
+            value: userId,
+          } as FilterConditionItemV2,
+          {
+            type: FilterItemType.OPERATOR,
+            value: 'AND',
+          } as FilterOperatorItemV2,
+          {
+            type: FilterItemType.CONDITION,
+            field: 'status',
+            operator: 'NOT_EQUALS',
+            value: 'DELIVERED',
+          } as FilterConditionItemV2,
+        ],
+      }
+
+      const queryPayload: QueryPayload = {
+        filters: filterGroup as unknown as QueryPayload['filters'], // Cast to FilterGroup for QueryPayload compatibility
+        page: 0,
+        size: 1, // Only need to check if any exist
+      }
+
+      const response = await getParcelsV2(queryPayload)
+
+      if (response.result && response.result.data) {
+        const hasUndelivered = response.result.data.length > 0
+        console.log('📦 User has undelivered parcels:', hasUndelivered)
+        return hasUndelivered
+      }
+
+      return false
+    } catch (error) {
+      console.warn('⚠️ Failed to check undelivered parcels:', error)
+      // On error, don't add USER role (fail-safe)
+      return false
+    }
+  }
+
+  /**
+   * Get available proposal configs for roles
+   * If ADMIN role exists and userId is provided, check for undelivered parcels
+   * and add USER role if user has undelivered parcels
+   */
+  const loadAvailableConfigs = async (roles: string[], userId?: string) => {
     loading.value = true
     try {
-      const response = await getAvailableConfigs(roles)
-      if (response.result) {
-        availableConfigs.value = response.result
+      console.log('🔍 Loading proposal configs for roles:', roles, 'userId:', userId)
+
+      // If ADMIN role exists and userId is provided, check for undelivered parcels
+      const effectiveRoles = [...roles]
+      if (userId && roles.includes('ADMIN')) {
+        const hasUndelivered = await checkUndeliveredParcels(userId)
+        if (hasUndelivered && !effectiveRoles.includes('USER')) {
+          console.log('✅ ADMIN user has undelivered parcels, adding USER role')
+          effectiveRoles.push('USER')
+        }
+      }
+
+      console.log('📋 Effective roles for config lookup:', effectiveRoles)
+      const configs = await getAvailableConfigs(effectiveRoles)
+      // Backend returns direct array, not wrapped
+      if (Array.isArray(configs)) {
+        availableConfigs.value = configs
+        console.log('📋 Loaded', configs.length, 'available proposal configs')
+      } else {
+        console.warn('⚠️ Unexpected response format from getAvailableConfigs:', configs)
+        availableConfigs.value = []
       }
     } catch (error) {
       console.error('Failed to load available configs:', error)

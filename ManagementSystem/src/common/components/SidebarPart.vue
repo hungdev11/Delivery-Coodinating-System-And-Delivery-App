@@ -158,6 +158,17 @@ const navigationItems = computed<NavigationMenuItem[][]>(() => {
         ],
       },
       {
+        label: 'Delivery',
+        icon: 'i-heroicons-truck',
+        children: [
+          {
+            label: 'Shippers',
+            to: '/delivery/shippers',
+            icon: 'i-heroicons-truck',
+          },
+        ],
+      },
+      {
         label: 'Zones',
         icon: 'i-heroicons-map',
         children: [
@@ -186,6 +197,17 @@ const navigationItems = computed<NavigationMenuItem[][]>(() => {
             label: 'Picker',
             to: '/addresses/picker',
             icon: 'i-heroicons-map-pin',
+          },
+        ],
+      },
+      {
+        label: 'Parcels',
+        icon: 'i-heroicons-cube',
+        children: [
+          {
+            label: 'List',
+            to: '/parcels',
+            icon: 'i-heroicons-cube',
           },
         ],
       },

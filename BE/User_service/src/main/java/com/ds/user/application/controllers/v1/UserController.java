@@ -8,6 +8,7 @@ import com.ds.user.common.entities.dto.auth.SyncUserRequest;
 import com.ds.user.common.entities.dto.user.CreateUserRequest;
 import com.ds.user.common.entities.dto.user.UpdateUserRequest;
 import com.ds.user.common.entities.dto.user.UserDto;
+import com.ds.user.common.interfaces.IExternalAuthFacade;
 import com.ds.user.common.interfaces.IUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,9 +19,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * REST API Controller for User Management
@@ -33,14 +34,17 @@ import java.util.UUID;
 public class UserController {
 
     private final IUserService userService;
+    private final IExternalAuthFacade externalAuthFacade;
 
     @PostMapping("/create")
     @Operation(summary = "Create a new user")
     public ResponseEntity<BaseResponse<UserDto>> createUser(@Valid @RequestBody CreateUserRequest request) {
         log.info("POST /api/v1/users/create - Create user: username={}", request.getUsername());
         
+        // Note: User ID must be set from Keycloak ID before creating
+        // The request should include the Keycloak ID which will be used as the primary key
         User user = User.builder()
-                .keycloakId(request.getKeycloakId())
+                .id(request.getKeycloakId()) // Use Keycloak ID as the primary key
                 .username(request.getUsername())
                 .email(request.getEmail())
                 .firstName(request.getFirstName())
@@ -52,7 +56,7 @@ public class UserController {
                 .build();
         
         User created = userService.createUser(user);
-        UserDto dto = UserDto.from(created);
+        UserDto dto = buildUserDto(created);
         
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -65,17 +69,15 @@ public class UserController {
         log.info("GET /api/v1/users/{} - Get user by ID", id);
         
         try {
-            UUID userId = parseUserId(id);
-            log.debug("Parsed user ID: {} -> {}", id, userId);
-            
-            Optional<User> userOpt = userService.getUser(userId);
+            // ID is now a String (Keycloak ID)
+            Optional<User> userOpt = userService.getUser(id);
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
-                UserDto dto = UserDto.from(user);
-                log.info("Found user: {} with ID: {} (original request: {})", user.getUsername(), user.getId(), id);
+                UserDto dto = buildUserDto(user);
+                log.info("Found user: {} with ID: {}", user.getUsername(), user.getId());
                 return ResponseEntity.ok(BaseResponse.success(dto));
             } else {
-                log.warn("User not found with ID: {} (original request: {})", userId, id);
+                log.warn("User not found with ID: {}", id);
                 return ResponseEntity
                         .status(HttpStatus.NOT_FOUND)
                         .body(BaseResponse.error("User not found"));
@@ -106,7 +108,7 @@ public class UserController {
         log.info("GET /api/v1/users/username/{} - Get user by username", username);
         
         return userService.getUserByUsername(username)
-                .map(user -> ResponseEntity.ok(BaseResponse.success(UserDto.from(user))))
+                .map(user -> ResponseEntity.ok(BaseResponse.success(buildUserDto(user))))
                 .orElse(ResponseEntity
                         .status(HttpStatus.NOT_FOUND)
                         .body(BaseResponse.error("User not found")));
@@ -124,7 +126,7 @@ public class UserController {
             
             // Convert to PagedData<UserDto>
             List<UserDto> userDtos = userPage.getData().stream()
-                    .map(UserDto::from)
+                    .map(this::buildUserDto)
                     .toList();
             
             // Use the existing paging from userPage
@@ -152,7 +154,7 @@ public class UserController {
         log.info("PUT /api/v1/users/{} - Update user", id);
         
         try {
-            UUID userId = parseUserId(id);
+            // ID is now a String (Keycloak ID)
             User user = User.builder()
                     .email(request.getEmail())
                     .firstName(request.getFirstName())
@@ -163,15 +165,15 @@ public class UserController {
                     .status(request.getStatus())
                     .build();
             
-            User updated = userService.updateUser(userId, user);
-            UserDto dto = UserDto.from(updated);
+            User updated = userService.updateUser(id, user);
+            UserDto dto = buildUserDto(updated);
             
             return ResponseEntity.ok(BaseResponse.success(dto, "User updated successfully"));
-        } catch (IllegalArgumentException e) {
-            log.error("Invalid user ID format: {} - Error: {}", id, e.getMessage());
+        } catch (Exception e) {
+            log.error("Error updating user with ID {}: {}", id, e.getMessage(), e);
             return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body(BaseResponse.error("Invalid user ID format. Expected UUID or numeric ID."));
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Error updating user: " + e.getMessage()));
         }
     }
 
@@ -181,33 +183,14 @@ public class UserController {
         log.info("DELETE /api/v1/users/{} - Delete user", id);
         
         try {
-            UUID userId = parseUserId(id);
-            userService.deleteUser(userId);
+            // ID is now a String (Keycloak ID)
+            userService.deleteUser(id);
             return ResponseEntity.ok(BaseResponse.success(null, "User deleted successfully"));
-        } catch (IllegalArgumentException e) {
-            log.error("Invalid user ID format: {} - Error: {}", id, e.getMessage());
+        } catch (Exception e) {
+            log.error("Error deleting user with ID {}: {}", id, e.getMessage(), e);
             return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body(BaseResponse.error("Invalid user ID format. Expected UUID or numeric ID."));
-        }
-    }
-
-    /**
-     * Parse user ID from string, handling both UUID and numeric formats
-     */
-    private UUID parseUserId(String id) throws IllegalArgumentException {
-        try {
-            return UUID.fromString(id);
-        } catch (IllegalArgumentException e) {
-            // If not a valid UUID, try to handle as numeric ID
-            try {
-                int numericId = Integer.parseInt(id);
-                // Convert numeric ID to a predictable UUID format
-                // This is a temporary solution for legacy numeric IDs
-                return UUID.fromString(String.format("00000000-0000-0000-0000-%012d", numericId));
-            } catch (NumberFormatException ex) {
-                throw new IllegalArgumentException("Invalid user ID format. Expected UUID or numeric ID.");
-            }
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Error deleting user: " + e.getMessage()));
         }
     }
 
@@ -224,7 +207,26 @@ public class UserController {
             request.getLastName()
         );
         
-        UserDto dto = UserDto.from(result);
+        UserDto dto = buildUserDto(result);
         return ResponseEntity.ok(BaseResponse.success(dto, "User synced successfully"));
+    }
+
+    private UserDto buildUserDto(User user) {
+        if (user == null) {
+            return null;
+        }
+
+        List<String> roles = Collections.emptyList();
+        // User ID is now the Keycloak ID
+        String userId = user.getId();
+        if (userId != null && !userId.isBlank()) {
+            try {
+                roles = externalAuthFacade.getUserRoles(userId);
+            } catch (Exception e) {
+                log.warn("Failed to load roles for user {} (id={}): {}", user.getUsername(), userId, e.getMessage());
+            }
+        }
+
+        return UserDto.from(user, roles);
     }
 }
