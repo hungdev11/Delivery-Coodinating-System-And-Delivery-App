@@ -1019,6 +1019,27 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             }
         });
     }
+    
+    @Override
+    public void onSessionMessageReceived(Message message) {
+        runOnUiThread(() -> {
+            Log.d(TAG, "📡 Session message received (monitoring): " + 
+                  "id=" + message.getId() + 
+                  ", sender=" + message.getSenderId() + 
+                  ", type=" + message.getType());
+            
+            // For shippers: Log session messages for monitoring
+            // You can add UI notifications or alerts here for important messages
+            // For now, just log them
+            if (message.getType() == ContentType.INTERACTIVE_PROPOSAL) {
+                Log.i(TAG, "🚨 PROPOSAL from client in session: " + 
+                      (message.getProposal() != null ? message.getProposal().getType() : "unknown"));
+                
+                // TODO: Show map popup or notification for proposals
+                // This could be implemented in MapFragment or a separate monitoring UI
+            }
+        });
+    }
 
     /* --- CÁC HÀM TIỆN ÍCH --- */
 
