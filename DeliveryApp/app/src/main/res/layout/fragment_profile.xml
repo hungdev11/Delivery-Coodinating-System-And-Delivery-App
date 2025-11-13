@@ -65,8 +65,9 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
+    <!-- Messages Button -->
     <Button
-        android:id="@+id/btnLogout"
+        android:id="@+id/btnMessages"
         android:layout_width="match_parent"
         android:layout_height="50dp"
         android:layout_marginTop="24dp"

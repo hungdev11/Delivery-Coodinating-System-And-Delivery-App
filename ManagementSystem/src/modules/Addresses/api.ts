@@ -111,6 +111,28 @@ export const getAddressById = async (id: string): Promise<IApiResponse<AddressDt
   return apiClient.get<IApiResponse<AddressDto>>(`/v1/addresses/${id}`)
 }
 
+/**
+ * Get or create address by coordinates
+ * Finds nearest address within threshold (default 50m), if found returns it, otherwise creates new
+ */
+export const getOrCreateAddress = async (
+  data: CreateAddressRequest,
+  threshold?: number,
+): Promise<IApiResponse<AddressDto>> => {
+  const query: Record<string, string | number> = {}
+  if (threshold !== undefined) query.threshold = threshold
+
+  const queryString = new URLSearchParams(
+    Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)]))
+  ).toString()
+  
+  const url = queryString 
+    ? `/v1/addresses/get-or-create?${queryString}`
+    : '/v1/addresses/get-or-create'
+    
+  return apiClient.post<IApiResponse<AddressDto>, CreateAddressRequest>(url, data)
+}
+
 export const deleteAddress = async (id: string): Promise<IApiResponse<null>> => {
   return apiClient.delete<IApiResponse<null>>(`/v1/addresses/${id}`)
 }

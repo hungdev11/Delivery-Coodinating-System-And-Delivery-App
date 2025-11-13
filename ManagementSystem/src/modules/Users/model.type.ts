@@ -5,6 +5,7 @@
  */
 
 import type { IApiResponse } from '@/common/types'
+import type { FilterCondition, FilterGroup, SortConfig } from '@/common/types/filter'
 
 /**
  * User Data Transfer Object
@@ -22,6 +23,7 @@ export class UserDto {
   status: UserStatus
   createdAt: string
   updatedAt: string
+  roles: string[]
 
   constructor(data: UserDto) {
     this.id = data.id
@@ -36,6 +38,7 @@ export class UserDto {
     this.status = data.status
     this.createdAt = data.createdAt
     this.updatedAt = data.updatedAt
+    this.roles = data.roles ?? []
   }
 
   get fullName(): string {
@@ -119,8 +122,8 @@ export interface Paging {
   size: number
   totalElements: number
   totalPages: number
-  filters?: any[]
-  sorts?: any[]
+  filters?: (FilterCondition | FilterGroup)[] | null
+  sorts?: SortConfig[] | null
   selected?: string[]
 }
 

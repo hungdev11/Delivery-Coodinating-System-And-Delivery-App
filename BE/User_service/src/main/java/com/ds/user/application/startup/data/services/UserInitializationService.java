@@ -1,5 +1,7 @@
 package com.ds.user.application.startup.data.services;
 
+import com.ds.user.app_context.repositories.DeliveryManRepository;
+import com.ds.user.common.entities.base.DeliveryMan;
 import com.ds.user.common.entities.base.User;
 import com.ds.user.app_context.repositories.UserRepository;
 import com.ds.user.application.startup.data.KeycloakInitConfig;
@@ -27,8 +29,11 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class UserInitializationService {
-    
+
+    private static final String SHIPPER_ROLE = "SHIPPER";
+
     private final UserRepository userRepository;
+    private final DeliveryManRepository deliveryManRepository;
 
     /**
      * Create users with credentials and roles
@@ -47,7 +52,6 @@ public class UserInitializationService {
                 
                 if (!existingUsers.isEmpty()) {
                     log.info("✓ Keycloak: User '{}' already exists", userConfig.getUsername());
-                    // Sync to database if not already synced
                     String keycloakUserId = existingUsers.get(0).getId();
                     syncUserToDatabase(keycloakUserId, userConfig);
                     continue;
@@ -101,7 +105,7 @@ public class UserInitializationService {
         credential.setValue(password);
         credential.setTemporary(false);
         realmResource.users().get(userId).resetPassword(credential);
-        log.info("Password set for user");
+        log.debug("Password set for user ID: {}", userId);
     }
 
     /**
@@ -124,7 +128,7 @@ public class UserInitializationService {
 
         if (!roles.isEmpty()) {
             realmResource.users().get(userId).roles().realmLevel().add(roles);
-            log.info("Assigned {} realm roles to user", roles.size());
+            log.debug("Assigned {} realm roles to user ID: {}", roles.size(), userId);
         }
     }
 
@@ -169,7 +173,7 @@ public class UserInitializationService {
                     realmResource.users().get(userId).roles()
                             .clientLevel(client.get().getId())
                             .add(roles);
-                    log.info("Assigned {} client roles from '{}' to user", roles.size(), clientId);
+                    log.debug("Assigned {} client roles from '{}' to user ID: {}", roles.size(), clientId, userId);
                 }
 
             } catch (Exception e) {
@@ -192,20 +196,23 @@ public class UserInitializationService {
     
     /**
      * Sync user from Keycloak to User Service database
+     * The user ID in the database will be the same as the Keycloak user ID
      */
     private void syncUserToDatabase(String keycloakUserId, KeycloakInitConfig.UserConfig userConfig) {
         try {
-            // Check if user already exists in database
-            Optional<User> existingUser = userRepository.findByKeycloakId(keycloakUserId);
+            // Check if user already exists in database (by Keycloak ID, which is now the primary key)
+            Optional<User> existingUser = userRepository.findById(keycloakUserId);
             if (existingUser.isPresent()) {
-                log.info("✓ Database: User '{}' already synced (keycloakId: {})", 
+                User user = existingUser.get();
+                log.info("✓ Database: User '{}' already synced (id: {})",
                     userConfig.getUsername(), keycloakUserId);
+                ensureDeliveryManSynced(user, userConfig);
                 return;
             }
             
-            // Create user in database
+            // Create user in database with Keycloak ID as the primary key
             User user = User.builder()
-                    .keycloakId(keycloakUserId)
+                    .id(keycloakUserId) // Use Keycloak ID as the primary key
                     .username(userConfig.getUsername())
                     .email(userConfig.getEmail())
                     .firstName(userConfig.getFirstName())
@@ -213,13 +220,69 @@ public class UserInitializationService {
                     .status(userConfig.isEnabled() ? User.UserStatus.ACTIVE : User.UserStatus.PENDING)
                     .build();
             
-            userRepository.save(user);
-            log.info("✓ Database: User '{}' synced successfully (keycloakId: {})", 
+            User savedUser = userRepository.save(user);
+            log.info("✓ Database: User '{}' synced successfully (id: {})", 
                 userConfig.getUsername(), keycloakUserId);
+            ensureDeliveryManSynced(savedUser, userConfig);
                 
         } catch (Exception e) {
             log.error("✗ Database: Failed to sync user '{}': {}", 
                 userConfig.getUsername(), e.getMessage(), e);
         }
+    }
+
+    private void ensureDeliveryManSynced(User user, KeycloakInitConfig.UserConfig userConfig) {
+        if (user == null || user.getId() == null) {
+            log.warn("Cannot sync delivery man: user or user ID is null");
+            return;
+        }
+        
+        if (deliveryManRepository.existsByUserId(user.getId())) {
+            log.debug("Delivery man already exists for user '{}' (ID: {})", user.getUsername(), user.getId());
+            return;
+        }
+
+        boolean hasShipperRole = false;
+        if (userConfig.getRealmRoles() != null) {
+            hasShipperRole = userConfig.getRealmRoles()
+                    .stream()
+                    .anyMatch(role -> SHIPPER_ROLE.equalsIgnoreCase(role));
+        }
+
+        if (!hasShipperRole && userConfig.getClientRoles() != null) {
+            hasShipperRole = userConfig.getClientRoles()
+                    .values()
+                    .stream()
+                    .flatMap(List::stream)
+                    .anyMatch(role -> SHIPPER_ROLE.equalsIgnoreCase(role));
+        }
+
+        KeycloakInitConfig.DeliveryManConfig deliveryManConfig = userConfig.getDeliveryMan();
+        if (deliveryManConfig != null && !deliveryManConfig.isEnabled()) {
+            log.info("Delivery man config for user '{}' disabled. Skipping creation.", user.getUsername());
+            return;
+        }
+
+        if (!hasShipperRole && deliveryManConfig == null) {
+            return;
+        }
+
+        String vehicleType = deliveryManConfig != null && deliveryManConfig.getVehicleType() != null
+                ? deliveryManConfig.getVehicleType()
+                : "MOTORBIKE";
+        Double capacityKg = deliveryManConfig != null && deliveryManConfig.getCapacityKg() != null
+                ? deliveryManConfig.getCapacityKg()
+                : 120.0;
+
+        DeliveryMan deliveryMan = DeliveryMan.builder()
+                .user(user)
+                .vehicleType(vehicleType)
+                .capacityKg(capacityKg)
+                .build();
+
+        deliveryManRepository.save(deliveryMan);
+        user.setDeliveryMan(deliveryMan);
+        log.info("✓ Database: Delivery man created for user '{}' with vehicle {} and capacity {}",
+                user.getUsername(), vehicleType, capacityKg);
     }
 }

@@ -22,6 +22,7 @@ import com.ds.session.session_service.application.client.parcelclient.ParcelServ
 import com.ds.session.session_service.application.client.parcelclient.response.ParcelResponse;
 import com.ds.session.session_service.application.client.userclient.UserServiceClient;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
+import com.ds.session.session_service.common.entities.dto.request.UpdateAssignmentStatusRequest;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.PageResponse;
 import com.ds.session.session_service.common.entities.dto.response.ShipperInfo;
@@ -359,6 +360,48 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
 
         Page<DeliveryAssignment> tasksPage = deliveryAssignmentRepository.findAll(spec, pageable);
         return getEnrichedTasks(tasksPage);
+    }
+
+    @Override
+    public DeliveryAssignmentResponse updateAssignmentStatus(UUID sessionId, UUID assignmentId, 
+                                                             UpdateAssignmentStatusRequest request) {
+        log.info("Updating assignment {} status in session {} to {}", assignmentId, sessionId, request.getAssignmentStatus());
+        
+        // 1. Find session
+        DeliverySession session = deliverySessionRepository.findById(sessionId)
+            .orElseThrow(() -> new ResourceNotFound("Session not found: " + sessionId));
+        
+        // 2. Find assignment in session
+        DeliveryAssignment assignment = deliveryAssignmentRepository.findById(assignmentId)
+            .orElseThrow(() -> new ResourceNotFound("Assignment not found: " + assignmentId));
+        
+        // 3. Verify assignment belongs to session
+        if (!assignment.getSession().getId().equals(sessionId)) {
+            throw new IllegalStateException("Assignment " + assignmentId + " does not belong to session " + sessionId);
+        }
+        
+        // 4. Update route info if provided
+        if (request.getRouteInfo() != null) {
+            setRouteInfo(assignment, request.getRouteInfo());
+        }
+        
+        // 5. Update parcel status via Parcel service
+        ParcelInfo parcel = updateParcelStatusAndMap(UUID.fromString(assignment.getParcelId()), request.getParcelEvent());
+        
+        // 6. Update assignment status
+        assignment.setStatus(request.getAssignmentStatus());
+        if (request.getFailReason() != null) {
+            assignment.setFailReason(request.getFailReason());
+        }
+        
+        // 7. Save
+        deliveryAssignmentRepository.save(assignment);
+        
+        // 8. Return DTO
+        String deliveryManPhone = null;
+        String receiverName = null;
+        
+        return DeliveryAssignmentResponse.from(assignment, parcel, assignment.getSession(), deliveryManPhone, receiverName);
     }
 
     private ParcelInfo updateParcelStatusAndMap(UUID parcelId, ParcelEvent event) {

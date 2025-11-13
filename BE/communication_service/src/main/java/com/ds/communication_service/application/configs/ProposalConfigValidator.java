@@ -52,6 +52,16 @@ public class ProposalConfigValidator {
                             newConfig.setResponseActionType(ProposalActionType.ACCEPT_DECLINE); 
                             break;
                             
+                        case DELAY_ORDER_RECEIVE:
+                            newConfig.setRequiredRole("USER"); 
+                            newConfig.setDescription("Thiết lập khung thời gian không nhận đơn hàng.");
+                            newConfig.setDefaultTimeoutMinutes(30L); 
+                            // User (Sender) phải chọn khung thời gian hoặc thời điểm cụ thể
+                            newConfig.setCreationActionType(ProposalActionType.DATE_PICKER); 
+                            // System (Receiver) chỉ cần thông báo
+                            newConfig.setResponseActionType(ProposalActionType.INFO_ONLY); 
+                            break;
+                            
                         default:
                             log.error("Không có cấu hình mặc định cho {}, vui lòng cập nhật ProposalConfigValidator!", type);
                             newConfig.setRequiredRole("ADMIN"); 
@@ -71,4 +81,3 @@ public class ProposalConfigValidator {
         };
     }
 }
-

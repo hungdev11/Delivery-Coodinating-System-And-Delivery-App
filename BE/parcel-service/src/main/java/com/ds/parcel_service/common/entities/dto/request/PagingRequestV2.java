@@ -10,6 +10,8 @@ import org.springframework.data.domain.Sort;
 
 import com.ds.parcel_service.common.entities.dto.filter.v2.FilterGroupItemV2;
 import com.ds.parcel_service.common.entities.dto.sort.SortConfig;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 
 import java.util.List;
 import java.util.Optional;
@@ -38,21 +40,29 @@ public class PagingRequestV2 {
     /**
      * Applied filters (optional) - V2 system with operations between each pair
      */
+    @Builder.Default
+    @JsonSetter(nulls = Nulls.AS_EMPTY)
     private Optional<FilterGroupItemV2> filters = Optional.empty();
     
     /**
      * Sort configuration (optional)
      */
+    @Builder.Default
+    @JsonSetter(nulls = Nulls.AS_EMPTY)
     private Optional<List<SortConfig>> sorts = Optional.empty();
     
     /**
      * Global search term (optional)
      */
+    @Builder.Default
+    @JsonSetter(nulls = Nulls.AS_EMPTY)
     private Optional<String> search = Optional.empty();
     
     /**
      * Selected item IDs (optional)
      */
+    @Builder.Default
+    @JsonSetter(nulls = Nulls.AS_EMPTY)
     private Optional<List<String>> selected = Optional.empty();
     
     /**

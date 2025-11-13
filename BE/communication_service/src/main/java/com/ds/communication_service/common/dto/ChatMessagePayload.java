@@ -6,4 +6,5 @@ import lombok.Data;
 public class ChatMessagePayload {
     private String content;
     private String recipientId;
+    private String conversationId; // Optional: for tracking message ordering
 }

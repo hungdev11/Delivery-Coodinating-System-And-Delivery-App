@@ -8,6 +8,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -15,8 +16,11 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ds.session.session_service.common.entities.dto.request.CreateSessionRequest;
 import com.ds.session.session_service.common.entities.dto.request.ScanParcelRequest;
 import com.ds.session.session_service.common.entities.dto.request.SessionFailRequest;
+import com.ds.session.session_service.common.entities.dto.request.UpdateAssignmentStatusRequest;
 import com.ds.session.session_service.common.entities.dto.response.AssignmentResponse;
+import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.SessionResponse;
+import com.ds.session.session_service.common.interfaces.IDeliveryAssignmentService;
 import com.ds.session.session_service.common.interfaces.ISessionService;
 
 import jakarta.validation.Valid;
@@ -35,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 public class SessionController {
 
     private final ISessionService sessionService;
+    private final IDeliveryAssignmentService assignmentService;
 
     /**
      * API này dùng cho logic "Quét và chấp nhận đơn hàng"
@@ -96,5 +101,19 @@ public class SessionController {
         SessionResponse response = sessionService.createSession(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
-}
 
+    /**
+     * Update assignment status by sessionId and assignmentId
+     * This endpoint is used by API gateway for nested queries
+     */
+    @PutMapping("/{sessionId}/assignments/{assignmentId}/status")
+    public ResponseEntity<DeliveryAssignmentResponse> updateAssignmentStatus(
+            @PathVariable UUID sessionId,
+            @PathVariable UUID assignmentId,
+            @Valid @RequestBody UpdateAssignmentStatusRequest request
+    ) {
+        log.info("Updating assignment {} status in session {}", assignmentId, sessionId);
+        DeliveryAssignmentResponse response = assignmentService.updateAssignmentStatus(sessionId, assignmentId, request);
+        return ResponseEntity.ok(response);
+    }
+}

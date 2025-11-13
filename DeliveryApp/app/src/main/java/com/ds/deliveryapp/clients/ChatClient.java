@@ -59,4 +59,13 @@ public interface ChatClient {
     Call<List<ProposalTypeConfig>> getAvailableConfigs(
             @Query("roles") List<String> roles
     );
+
+    /**
+     * Lấy danh sách conversations của user
+     * (GET /api/v1/conversations)
+     */
+    @GET("conversations")
+    Call<List<Conversation>> getConversations(
+            @Query("userId") String userId
+    );
 }

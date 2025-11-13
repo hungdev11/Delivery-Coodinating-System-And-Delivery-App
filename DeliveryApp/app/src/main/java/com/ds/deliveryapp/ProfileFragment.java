@@ -60,6 +60,7 @@ public class ProfileFragment extends Fragment {
         }
 
         btnLogout.setOnClickListener(v -> handleLogout());
+        btnMessages.setOnClickListener(v -> openMessagesActivity());
 
         return view;
     }

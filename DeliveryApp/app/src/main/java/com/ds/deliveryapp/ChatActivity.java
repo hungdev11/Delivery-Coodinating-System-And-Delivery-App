@@ -57,7 +57,7 @@ import retrofit2.Response;
 public class ChatActivity extends AppCompatActivity implements MessageAdapter.OnProposalActionListener, ChatWebSocketListener {
 
     private static final String TAG = "ChatActivity";
-    private static final String SERVER_WEBSOCKET_URL = "ws://192.168.1.6:21511/ws";
+    private static final String SERVER_WEBSOCKET_URL = "wss://localweb.phuongy.works/ws/websocket";
 
     // Views
     private RecyclerView rvMessages;
@@ -75,6 +75,12 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     private String mParcelId;
     private final List<Message> mMessages = new ArrayList<>();
     private Calendar mSelectedStartTime;
+    
+    // Pagination
+    private int mCurrentPage = 0;
+    private boolean mIsLoadingMore = false;
+    private boolean mHasMoreMessages = true;
+    private static final int PAGE_SIZE = 30;
 
     // Networking & Auth
     private ChatWebSocketManager mWebSocketManager;
@@ -198,6 +204,28 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         lm.setStackFromEnd(true);
         rvMessages.setLayoutManager(lm);
         rvMessages.setAdapter(mAdapter);
+        
+        // Add scroll listener for infinite scroll
+        // After reversing messages, oldest are at top, newest at bottom
+        // Load more when scrolled to bottom (to load older messages)
+        rvMessages.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+                
+                // Check if scrolled to bottom (dy > 0 means scrolling down)
+                if (dy > 0) {
+                    int lastVisiblePosition = lm.findLastVisibleItemPosition();
+                    int totalItems = mAdapter != null ? mAdapter.getItemCount() : 0;
+                    
+                    // Load more when reaching bottom 5 items and not already loading
+                    if (lastVisiblePosition >= totalItems - 5 && !mIsLoadingMore && mHasMoreMessages) {
+                        Log.d(TAG, "📜 Reached bottom, loading more older messages...");
+                        loadMoreMessages();
+                    }
+                }
+            }
+        });
     }
 
     private void initRetrofitClients() {
@@ -280,27 +308,170 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         });
     }
     /**
-     * Tải lịch sử chat (gọi API /conversations/{id}/messages).
+     * Tải lịch sử chat - Page đầu tiên (Initial load)
+     * ✅ Server trả về messages DESC (mới nhất đầu tiên)
+     * ✅ RecyclerView hiển thị theo thứ tự nhận được (DESC) với stackFromEnd=true
      */
     private void loadChatHistory() {
         if (mConversationId == null) return;
+        
+        Log.d(TAG, "📥 Loading initial chat history (page 0) for conversation: " + mConversationId);
+        
+        mCurrentPage = 0;
+        mHasMoreMessages = true;
+        
         Call<PageResponse<Message>> call =
-                mChatClient.getChatHistory(mConversationId, mCurrentUserId, 0, 50);
+                mChatClient.getChatHistory(mConversationId, mCurrentUserId, 0, PAGE_SIZE);
         call.enqueue(new Callback<PageResponse<Message>>() {
             @Override
             public void onResponse(@NonNull Call<PageResponse<Message>> call, @NonNull Response<PageResponse<Message>> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().content() != null) {
-                    List<Message> history = response.body().content();
-                    Collections.reverse(history);
+                    PageResponse<Message> pageResponse = response.body();
+                    List<Message> history = pageResponse.content();
+
+                    // Check if there are more pages
+                    mHasMoreMessages = !pageResponse.last();
+                    
+                    if (!history.isEmpty()) {
+                        // Log proposal messages for debugging
+                        int proposalCount = 0;
+                        for (Message msg : history) {
+                            if (msg.getType() == ContentType.INTERACTIVE_PROPOSAL) {
+                                proposalCount++;
+                            }
+                        }
+                        Log.d(TAG, "📊 Total proposal messages in history: " + proposalCount);
+                    }
+                    
                     runOnUiThread(() -> {
-                        if (mAdapter != null) mAdapter.setMessages(history);
-                        scrollToBottom();
+                        if (mAdapter != null) {
+                            // Messages come sorted DESC (newest first) from backend
+                            // Reverse to display oldest first (scroll down to see new messages)
+                            Collections.reverse(history);
+                            
+                            // Sync mMessages list with adapter
+                            mMessages.clear();
+                            mMessages.addAll(history);
+                            mAdapter.setMessages(history);
+                            scrollToBottom();
+                            Log.d(TAG, "✅ Initial messages displayed (reversed), total: " + history.size() + ", hasMore=" + mHasMoreMessages);
+                        }
                     });
                 }
             }
             @Override
             public void onFailure(@NonNull Call<PageResponse<Message>> call, @NonNull Throwable t) {
-                Log.e(TAG, "Network error loading history", t);
+                Log.e(TAG, "❌ Network error loading history", t);
+            }
+        });
+    }
+
+    /**
+     * Load more messages (Infinite scroll - khi scroll lên trên)
+     */
+    private void loadMoreMessages() {
+        if (mConversationId == null || mIsLoadingMore || !mHasMoreMessages) {
+            return;
+        }
+        
+        mIsLoadingMore = true;
+        int nextPage = mCurrentPage + 1;
+        
+        Log.d(TAG, "📜 Loading more messages (page " + nextPage + ")...");
+        
+        // Show loading indicator - use post() to defer until after scroll callback completes
+        rvMessages.post(() -> {
+            if (mAdapter != null) {
+                mAdapter.setLoadingMore(true);
+            }
+        });
+        
+        Call<PageResponse<Message>> call =
+                mChatClient.getChatHistory(mConversationId, mCurrentUserId, nextPage, PAGE_SIZE);
+        call.enqueue(new Callback<PageResponse<Message>>() {
+            @Override
+            public void onResponse(@NonNull Call<PageResponse<Message>> call, @NonNull Response<PageResponse<Message>> response) {
+                mIsLoadingMore = false;
+                
+                if (response.isSuccessful() && response.body() != null && response.body().content() != null) {
+                    PageResponse<Message> pageResponse = response.body();
+                    List<Message> newMessages = pageResponse.content();
+                    
+                    Log.d(TAG, "✅ Loaded " + newMessages.size() + " more messages (page " + nextPage + ")");
+                    
+                    // Log proposal messages for debugging
+                    int proposalCount = 0;
+                    for (Message msg : newMessages) {
+                        if (msg.getType() == ContentType.INTERACTIVE_PROPOSAL) {
+                            proposalCount++;
+                            Log.d(TAG, "📋 Found PROPOSAL in page " + nextPage + ": id=" + msg.getId() + 
+                                  ", proposal=" + (msg.getProposal() != null ? msg.getProposal().getId() : "null"));
+                        }
+                    }
+                    if (proposalCount > 0) {
+                        Log.d(TAG, "📊 Found " + proposalCount + " proposal messages in page " + nextPage);
+                    }
+                    
+                    if (!newMessages.isEmpty()) {
+                        // Update pagination state
+                        mCurrentPage = nextPage;
+                        mHasMoreMessages = !pageResponse.last();
+                        
+                        // Messages come sorted DESC (newest first) from backend
+                        // Reverse to display oldest first, then prepend older messages at the BEGINNING
+                        Collections.reverse(newMessages);
+                        
+                        // Use post() to defer UI updates until after any scroll callbacks complete
+                        rvMessages.post(() -> {
+                            if (mAdapter != null) {
+                                // Hide loading indicator first
+                                mAdapter.setLoadingMore(false);
+                                
+                                // Prepend older messages at the BEGINNING of list (after reverse)
+                                // Use adapter's addMessages() but need to prepend instead
+                                // Get current list, prepend new messages, then set
+                                List<Message> currentMessages = new ArrayList<>(mMessages);
+                                currentMessages.addAll(0, newMessages); // Insert at beginning
+                                mAdapter.setMessages(currentMessages);
+                                
+                                Log.d(TAG, "✅ Prepended " + newMessages.size() + " older messages at beginning, hasMore=" + mHasMoreMessages);
+                            }
+                        });
+                    } else {
+                        mHasMoreMessages = false;
+                        Log.d(TAG, "📭 No more messages to load");
+                        
+                        // Hide loading indicator
+                        rvMessages.post(() -> {
+                            if (mAdapter != null) {
+                                mAdapter.setLoadingMore(false);
+                            }
+                        });
+                    }
+                } else {
+                    Log.e(TAG, "❌ Failed to load more messages: " + response.code());
+                    
+                    // Hide loading indicator on error
+                    rvMessages.post(() -> {
+                        if (mAdapter != null) {
+                            mAdapter.setLoadingMore(false);
+                        }
+                    });
+                }
+            }
+            
+            @Override
+            public void onFailure(@NonNull Call<PageResponse<Message>> call, @NonNull Throwable t) {
+                mIsLoadingMore = false;
+                
+                Log.e(TAG, "❌ Network error loading more messages", t);
+                
+                // Hide loading indicator on error - use post() to defer
+                rvMessages.post(() -> {
+                    if (mAdapter != null) {
+                        mAdapter.setLoadingMore(false);
+                    }
+                });
             }
         });
     }
@@ -338,8 +509,20 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             return;
         }
 
+        if (mJwtToken == null) {
+            Log.e(TAG, "Cannot connect WebSocket: JWT token is null.");
+            showErrorToast("Authentication token missing. Please login again.");
+            return;
+        }
+
+        if (mCurrentUserId == null || mCurrentUserId.isEmpty()) {
+            Log.e(TAG, "Cannot connect WebSocket: User ID is null or empty.");
+            showErrorToast("User ID missing. Please login again.");
+            return;
+        }
+
         Log.d(TAG, "Initializing WebSocket Manager...");
-        mWebSocketManager = new ChatWebSocketManager(SERVER_WEBSOCKET_URL, mCurrentUserId);
+        mWebSocketManager = new ChatWebSocketManager(SERVER_WEBSOCKET_URL, mJwtToken, mCurrentUserId);
         mWebSocketManager.setListener(this); // <-- Gán Activity này làm listener
         mWebSocketManager.connect(); // Bắt đầu kết nối
     }
@@ -374,21 +557,29 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         mWebSocketManager.sendMessage(payload, new ChatWebSocketManager.SendMessageCallback() {
             @Override
             public void onSuccess() {
-                Log.d(TAG, "STOMP message sent successfully.");
-                Message selfMessage = new Message(
-                        null, mCurrentUserId, content, null, ContentType.TEXT, null
-                );
+                Log.d(TAG, "📤 STOMP message sent successfully - waiting for WebSocket echo...");
+                
+                // ✅ FIXED: Don't add optimistic message - wait for WebSocket to deliver it
+                // The server will echo back the saved message with proper ID and sentAt
+                // This follows the same pattern as web client
+                
                 runOnUiThread(() -> {
                     etMessage.setText("");
-                    if (mAdapter != null) {
-                        mAdapter.addMessage(selfMessage);
-                        scrollToBottom();
-                    }
+                    // Message will appear when WebSocket delivers it via onMessageReceived()
                 });
+                
+                // Optional: Set a timeout to reload if WebSocket doesn't deliver
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    if (mAdapter != null) {
+                        int messageCount = mAdapter.getItemCount();
+                        // If no new message arrived, reload history
+                        Log.d(TAG, "⏱️ Timeout check: Current message count = " + messageCount);
+                    }
+                }, 3000); // Wait 3 seconds for WebSocket delivery
             }
             @Override
             public void onError(Throwable throwable) {
-                Log.e(TAG, "Error sending STOMP message", throwable);
+                Log.e(TAG, "❌ Error sending STOMP message", throwable);
                 runOnUiThread(() -> showErrorToast("Failed to send message."));
             }
         });
@@ -651,16 +842,20 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             @Override
             public void onResponse(@NonNull Call<InteractiveProposal> call, @NonNull Response<InteractiveProposal> response) {
                 if (response.isSuccessful()) {
-                    Log.i(TAG, "Gửi proposal thành công. Chờ WebSocket echo...");
-                    loadChatHistory();
+                    Log.i(TAG, "✅ Gửi proposal thành công. Chờ WebSocket echo...");
+                    // ❌ REMOVED: Don't reload entire history - WebSocket will deliver the message
+                    // loadChatHistory();
+                    
+                    // Message with proposal will arrive via onMessageReceived()
+                    runOnUiThread(() -> showErrorToast("Proposal sent! Waiting for response..."));
                 } else {
-                    Log.e(TAG, "Gửi proposal thất bại: " + response.code());
+                    Log.e(TAG, "❌ Gửi proposal thất bại: " + response.code());
                     showErrorToast("Gửi yêu cầu thất bại.");
                 }
             }
             @Override
             public void onFailure(@NonNull Call<InteractiveProposal> call, @NonNull Throwable t) {
-                Log.e(TAG, "Lỗi mạng khi gửi proposal", t);
+                Log.e(TAG, "❌ Lỗi mạng khi gửi proposal", t);
             }
         });
     }
@@ -686,16 +881,19 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             @Override
             public void onResponse(@NonNull Call<InteractiveProposal> call, @NonNull Response<InteractiveProposal> response) {
                 if (response.isSuccessful()) {
-                    Log.i(TAG, "Phản hồi proposal thành công. Chờ WebSocket update...");
-                    loadChatHistory();
+                    Log.i(TAG, "✅ Phản hồi proposal thành công. Chờ WebSocket update...");
+                    // ❌ REMOVED: Don't reload entire history - WebSocket will deliver the update
+                    // loadChatHistory();
+                    
+                    // Proposal update will arrive via onProposalUpdateReceived()
                 } else {
-                    Log.e(TAG, "Phản hồi proposal thất bại: " + response.code());
+                    Log.e(TAG, "❌ Phản hồi proposal thất bại: " + response.code());
                     showErrorToast("Thao tác thất bại.");
                 }
             }
             @Override
             public void onFailure(@NonNull Call<InteractiveProposal> call, @NonNull Throwable t) {
-                Log.e(TAG, "Lỗi mạng khi phản hồi proposal", t);
+                Log.e(TAG, "❌ Lỗi mạng khi phản hồi proposal", t);
                 showErrorToast("Lỗi mạng: " + t.getMessage());
             }
         });
@@ -728,8 +926,38 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     public void onMessageReceived(Message message) {
         runOnUiThread(() -> {
             if (message != null && mAdapter != null && message.getSenderId() != null) {
-                mAdapter.addMessage(message);
-                scrollToBottom();
+                Log.d(TAG, "📥 RECEIVED MESSAGE via WebSocket: " + 
+                      "id=" + message.getId() + 
+                      ", sender=" + message.getSenderId() + 
+                      ", type=" + message.getType() +
+                      ", content=" + (message.getContent() != null ? message.getContent().substring(0, Math.min(50, message.getContent().length())) : "null") +
+                      ", sentAt=" + message.getSentAt());
+                
+                // Log proposal messages for debugging
+                if (message.getType() == ContentType.INTERACTIVE_PROPOSAL) {
+                    Log.d(TAG, "📋 PROPOSAL message received: proposal=" + 
+                          (message.getProposal() != null ? message.getProposal().getId() : "null") +
+                          ", proposalType=" + (message.getProposal() != null ? message.getProposal().getType() : "null") +
+                          ", proposalStatus=" + (message.getProposal() != null ? message.getProposal().getStatus() : "null") +
+                          ", actionType=" + (message.getProposal() != null ? message.getProposal().getActionType() : "null"));
+                }
+                
+                // Check if message belongs to current conversation
+                boolean belongsToConversation = message.getConversationId() != null && 
+                                               message.getConversationId().equals(mConversationId);
+                
+                if (belongsToConversation) {
+                    Log.d(TAG, "✅ Adding message to chat");
+                    mAdapter.addMessage(message);
+                    scrollToBottom();
+                } else {
+                    Log.d(TAG, "⚠️ Message filtered out - belongs to different conversation. " +
+                          "Expected: " + mConversationId + ", Got: " + message.getConversationId());
+                }
+            } else {
+                Log.w(TAG, "⚠️ Received null or invalid message: " + 
+                      (message == null ? "message is null" : 
+                       (mAdapter == null ? "adapter is null" : "senderId is null")));
             }
         });
     }
@@ -745,6 +973,70 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                         update.getNewStatus(),
                         resultData
                 );
+            }
+        });
+    }
+
+    @Override
+    public void onStatusUpdateReceived(String statusUpdateJson) {
+        runOnUiThread(() -> {
+            try {
+                Log.d(TAG, "Status update received: " + statusUpdateJson);
+                // Parse the status update and update message UI
+                JSONObject statusUpdate = new JSONObject(statusUpdateJson);
+                String messageId = statusUpdate.optString("messageId");
+                String status = statusUpdate.optString("status");
+                
+                if (messageId != null && !messageId.isEmpty() && mAdapter != null) {
+                    mAdapter.updateMessageStatus(messageId, status);
+                    Log.d(TAG, "Updated message " + messageId + " status to " + status);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error parsing status update", e);
+            }
+        });
+    }
+
+    @Override
+    public void onTypingIndicatorReceived(String typingIndicatorJson) {
+        runOnUiThread(() -> {
+            try {
+                Log.d(TAG, "Typing indicator received: " + typingIndicatorJson);
+                // Parse typing indicator and update UI
+                JSONObject typingIndicator = new JSONObject(typingIndicatorJson);
+                String userId = typingIndicator.optString("userId");
+                boolean isTyping = typingIndicator.optBoolean("isTyping", false);
+                
+                // Only show typing indicator for the other user (not self)
+                if (!userId.equals(mCurrentUserId)) {
+                    if (isTyping) {
+                        tvRecipientStatus.setText(mRecipientName + " is typing...");
+                    } else {
+                        tvRecipientStatus.setText(""); // Clear typing indicator
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error parsing typing indicator", e);
+            }
+        });
+    }
+
+    @Override
+    public void onNotificationReceived(String notificationJson) {
+        runOnUiThread(() -> {
+            try {
+                Log.d(TAG, "Notification received: " + notificationJson);
+                // Parse notification and show toast or update UI
+                JSONObject notification = new JSONObject(notificationJson);
+                String title = notification.optString("title");
+                String content = notification.optString("content");
+                
+                // Show notification as toast (in-app notification)
+                if (title != null && !title.isEmpty()) {
+                    Toast.makeText(this, title + ": " + content, Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error parsing notification", e);
             }
         });
     }

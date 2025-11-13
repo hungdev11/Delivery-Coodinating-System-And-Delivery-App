@@ -25,6 +25,13 @@ public interface IDeliveryAssignmentService {
     DeliveryAssignmentResponse postponeByCustomer(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
     
     /**
+     * Update assignment status by sessionId and assignmentId
+     * This is used by API gateway for nested queries
+     */
+    DeliveryAssignmentResponse updateAssignmentStatus(UUID sessionId, UUID assignmentId, 
+                                                      com.ds.session.session_service.common.entities.dto.request.UpdateAssignmentStatusRequest request);
+    
+    /**
      * Lấy các task trong phiên ĐANG HOẠT ĐỘNG (phân trang và lọc) - V1
      */
     PageResponse<DeliveryAssignmentResponse> getDailyTasks(
@@ -57,4 +64,3 @@ public interface IDeliveryAssignmentService {
 
     Optional<ShipperInfo> getLatestDriverIdForParcel(String parcelId);
 }
-

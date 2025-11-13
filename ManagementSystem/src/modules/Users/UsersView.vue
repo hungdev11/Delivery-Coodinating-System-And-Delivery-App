@@ -22,7 +22,7 @@ import type { UserDto, UserStatus } from './model.type'
 import { useTemplateRef } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 import AdvancedFilterDrawer from '../../common/components/filters/AdvancedFilterDrawer.vue'
-import type { SortingState } from '@tanstack/table-core'
+import type { SortingState, Column } from '@tanstack/table-core'
 import type { FilterCondition, FilterGroup } from '../../common/types/filter'
 import { createSortConfig } from '../../common/utils/query-builder'
 import TableHeaderCell from '../../common/components/TableHeaderCell.vue'
@@ -82,19 +82,23 @@ const filterableColumns = computed(() => getFilterableColumns())
 /**
  * Setup header component for table columns
  */
+type HeaderConfig = {
+  variant: 'link' | 'solid' | 'outline' | 'soft' | 'ghost'
+  label: string
+  class: string
+  activeColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+  inactiveColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+  filterable?: boolean
+}
+
+type HeaderColumn = Column<UserDto, unknown>
+
 const setupHeader = ({
   column,
   config,
 }: {
-  column: any
-  config: {
-    variant?: string
-    label: string
-    class?: string
-    activeColor?: string
-    inactiveColor?: string
-    filterable?: boolean
-  }
+  column: HeaderColumn
+  config: HeaderConfig
 }) =>
   h(TableHeaderCell<UserDto>, {
     column,
@@ -324,6 +328,34 @@ const columns: TableColumn<UserDto>[] = [
       const color = getStatusColor(status)
       const displayStatus = getDisplayStatus(status)
       return h(UBadge, { class: 'capitalize', variant: 'soft', color }, () => displayStatus)
+    },
+  },
+  {
+    accessorKey: 'roles',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost',
+          label: 'Roles',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: false,
+        },
+      }),
+    cell: ({ row }) => {
+      const roles = row.getValue('roles') as string[]
+      if (!roles || roles.length === 0) {
+        return h('span', { class: 'text-gray-400' }, 'No roles')
+      }
+      return h(
+        'div',
+        { class: 'flex flex-wrap gap-1' },
+        roles.map((role) =>
+          h(UBadge, { variant: 'soft', color: 'primary', size: 'sm' }, () => role),
+        ),
+      )
     },
   },
   {

@@ -5,6 +5,7 @@ import com.ds.user.common.entities.common.BaseResponse;
 import com.ds.user.common.entities.common.PagingRequestV0;
 import com.ds.user.common.entities.common.paging.PagedData;
 import com.ds.user.common.entities.dto.user.UserDto;
+import com.ds.user.common.interfaces.IExternalAuthFacade;
 import com.ds.user.common.interfaces.IUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -30,6 +32,7 @@ import java.util.List;
 public class UserControllerV0 {
 
     private final IUserService userService;
+    private final IExternalAuthFacade externalAuthFacade;
 
     @PostMapping
     @Operation(summary = "Get users with simple paging and sorting (V0 - No Dynamic Filters)")

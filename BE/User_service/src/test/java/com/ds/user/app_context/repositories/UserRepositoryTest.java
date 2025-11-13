@@ -36,7 +36,7 @@ class UserRepositoryTest {
                 .firstName("Test")
                 .lastName("User")
                 .phone("0123456789")
-                .keycloakId("keycloak-123")
+                .id("keycloak-123")
                 .status(User.UserStatus.ACTIVE)
                 .build();
     }
@@ -108,11 +108,11 @@ class UserRepositoryTest {
         entityManager.flush();
 
         // When
-        Optional<User> found = userRepository.findByKeycloakId("keycloak-123");
+        Optional<User> found = userRepository.findById("keycloak-123");
 
         // Then
         assertThat(found).isPresent();
-        assertThat(found.get().getKeycloakId()).isEqualTo("keycloak-123");
+        assertThat(found.get().getId()).isEqualTo("keycloak-123");
     }
 
     @Test

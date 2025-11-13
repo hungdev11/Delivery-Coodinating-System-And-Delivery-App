@@ -1,11 +1,14 @@
 package com.ds.communication_service.business.v1.services;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
 import com.ds.communication_service.app_context.models.Conversation;
 import com.ds.communication_service.app_context.repositories.ConversationRepository;
+import com.ds.communication_service.app_context.repositories.MessageRepository;
 import com.ds.communication_service.common.interfaces.IConversationService;
 
 import jakarta.transaction.Transactional;
@@ -18,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ConversationService implements IConversationService{
 
     private final ConversationRepository conversationRepository;
+    private final MessageRepository messageRepository;
 
     @Transactional
     @Override
@@ -46,6 +50,16 @@ public class ConversationService implements IConversationService{
     
     @Override
     public List<Conversation> getConversationsForUser(String userId) {
-        return conversationRepository.findAllByUserId(userId);
+        List<Conversation> conversations = conversationRepository.findAllByUserId(userId);
+        
+        // Sort by last message time (most recent first), then by creation time
+        return conversations.stream()
+                .sorted(Comparator
+                        .comparing((Conversation c) -> 
+                            messageRepository.findLastMessageTimeByConversationId(c.getId())
+                                .orElse(c.getCreatedAt()), 
+                            Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Conversation::getCreatedAt, Comparator.reverseOrder()))
+                .collect(Collectors.toList());
     }
 }

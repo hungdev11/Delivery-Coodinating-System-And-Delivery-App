@@ -49,6 +49,9 @@ public class ParcelCreateRequest {
     private LocalTime windowStart;
     private LocalTime windowEnd;
 
-    private BigDecimal lat;
-    private BigDecimal lon;
+    @NotBlank(message = "senderDestinationId must not be blank")
+    private String senderDestinationId;
+    
+    @NotBlank(message = "receiverDestinationId must not be blank")
+    private String receiverDestinationId;
 }

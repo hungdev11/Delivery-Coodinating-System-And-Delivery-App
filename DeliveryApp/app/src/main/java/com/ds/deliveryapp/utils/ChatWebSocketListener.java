@@ -13,4 +13,7 @@ public interface ChatWebSocketListener {
     void onWebSocketError(String error);
     void onMessageReceived(Message message);
     void onProposalUpdateReceived(ProposalUpdateDTO update);
+    void onStatusUpdateReceived(String statusUpdateJson);
+    void onTypingIndicatorReceived(String typingIndicatorJson);
+    void onNotificationReceived(String notificationJson);
 }

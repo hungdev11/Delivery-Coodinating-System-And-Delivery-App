@@ -14,4 +14,9 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  define: {
+    // Fix for sockjs-client: it expects 'global' to be defined (Node.js thing)
+    // In browser, we need to map it to 'window'
+    global: 'window',
+  },
 })
