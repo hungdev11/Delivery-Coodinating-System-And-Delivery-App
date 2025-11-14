@@ -19,4 +19,6 @@ public class ConversationResponse {
     private String partnerUsername; // Add username for display
     private Boolean isOnline; // Online status (null if unavailable)
     private LocalDateTime lastMessageTime; // Time of last message in conversation
+    private String lastMessageContent; // Content of last message
+    private Integer unreadCount; // Number of unread messages for current user
 }

@@ -63,7 +63,12 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             // Set partner name
             String displayName = conversation.getPartnerName() != null 
                     ? conversation.getPartnerName() 
-                    : "Unknown";
+                    : (conversation.getPartnerId() != null ? conversation.getPartnerId() : "Unknown");
+            
+            // Add online status indicator to name if online
+            if (conversation.getPartnerOnline() != null && conversation.getPartnerOnline()) {
+                displayName = "🟢 " + displayName;
+            }
             
             // Add parcel code if available
             if (conversation.getCurrentParcelCode() != null && !conversation.getCurrentParcelCode().isEmpty()) {

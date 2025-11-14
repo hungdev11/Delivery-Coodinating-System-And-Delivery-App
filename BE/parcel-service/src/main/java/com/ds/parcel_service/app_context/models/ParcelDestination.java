@@ -44,8 +44,17 @@ public class ParcelDestination {
     @Column(nullable = false)
     private DestinationType destinationType;
 
+    @Column(nullable = false)
     private boolean isCurrent;
 
+    @Column(nullable = false)
     private boolean isOriginal;
+    
+    /**
+     * Business logic: Ensure only one destination is current per parcel.
+     * This should be enforced at the service layer.
+     */
+    public void setCurrent(boolean current) {
+        this.isCurrent = current;
+    }
 }
-

@@ -22,6 +22,7 @@ public class WebClientConfig {
             @Value("${services.user.base-url}") String baseUrl) {
         return WebClient.builder()
                 .baseUrl(baseUrl)
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(50 * 1024 * 1024)) // 50MB
                 .build();
     }
 
@@ -46,6 +47,7 @@ public class WebClientConfig {
             @Value("${services.zone.base-url}") String baseUrl) {
         return WebClient.builder()
                 .baseUrl(baseUrl)
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 10MB
                 .build();
     }
 
@@ -54,6 +56,7 @@ public class WebClientConfig {
             @Value("${services.parcel.base-url}") String baseUrl) {
         return WebClient.builder()
                 .baseUrl(baseUrl)
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 10MB
                 .build();
     }
 
@@ -62,6 +65,7 @@ public class WebClientConfig {
             @Value("${services.session.base-url}") String baseUrl) {
         return WebClient.builder()
                 .baseUrl(baseUrl)
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 10MB
                 .build();
     }
 
@@ -70,6 +74,7 @@ public class WebClientConfig {
             @Value("${services.communication.base-url}") String baseUrl) {
         return WebClient.builder()
                 .baseUrl(baseUrl)
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 10MB
                 .build();
     }
 }

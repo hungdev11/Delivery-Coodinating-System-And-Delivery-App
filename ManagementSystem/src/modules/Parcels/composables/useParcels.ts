@@ -183,9 +183,10 @@ export function useParcels() {
   }
 
   /**
-   * Handle page change
+   * Handle page change (0-indexed)
    */
   const handlePageChange = (newPage: number) => {
+    if (newPage < 0) return
     page.value = newPage
     loadParcels()
   }

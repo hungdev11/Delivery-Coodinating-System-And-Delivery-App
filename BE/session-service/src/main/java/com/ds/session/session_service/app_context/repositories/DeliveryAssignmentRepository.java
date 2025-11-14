@@ -43,13 +43,22 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
     boolean existsBySession_IdAndParcelId(UUID sessionId, String parcelId);
 
     /**
-     * Tìm một assignment đang hoạt động (phiên IN_PROGRESS)
+     * Tìm một assignment đang hoạt động (phiên CREATED hoặc IN_PROGRESS)
      * dựa trên parcelId.
      * (Dùng để ngăn 1 đơn hàng bị 2 shipper khác nhau quét cùng lúc)
      */
     @Query("SELECT da FROM DeliveryAssignment da JOIN da.session s WHERE da.parcelId = :parcelId AND s.status = :status")
     Optional<DeliveryAssignment> findActiveByParcelId(String parcelId, SessionStatus status);
 
+    /**
+     * Tìm tất cả assignments trong một session.
+     * (Dùng để lấy danh sách parcels trong session)
+     */
+    List<DeliveryAssignment> findBySession_Id(UUID sessionId);
+    
+    /**
+     * Tìm assignment mới nhất của một parcel (bất kỳ trạng thái session nào).
+     * (Dùng để kiểm tra lịch sử giao hàng)
+     */
     Optional<DeliveryAssignment> findFirstByParcelIdOrderByUpdatedAtDesc(String parcelId);
 }
-

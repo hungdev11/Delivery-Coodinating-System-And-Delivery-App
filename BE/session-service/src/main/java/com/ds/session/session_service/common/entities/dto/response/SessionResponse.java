@@ -21,4 +21,17 @@ public class SessionResponse {
     private int completedTasks;
     private int failedTasks;
     private List<AssignmentResponse> assignments;
+    
+    // Enriched delivery man information
+    private DeliveryManInfo deliveryMan;
+    
+    @Data
+    @Builder
+    public static class DeliveryManInfo {
+        private String name;
+        private String vehicleType;
+        private Double capacityKg;
+        private String phone;
+        private String email;
+    }
 }

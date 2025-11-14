@@ -61,6 +61,16 @@ public class AssignmentSpecification {
     }
 
     /**
+     * Lọc các task dựa trên sessionId cụ thể.
+     */
+    public static Specification<DeliveryAssignment> bySessionId(UUID sessionId) {
+        return (root, query, criteriaBuilder) -> {
+            Join<DeliveryAssignment, DeliverySession> sessionJoin = root.join("session", JoinType.INNER);
+            return criteriaBuilder.equal(sessionJoin.get("id"), sessionId);
+        };
+    }
+
+    /**
      * Lọc các task (Assignment) dựa trên danh sách trạng thái (của chính task đó).
      */
     public static Specification<DeliveryAssignment> hasAssignmentStatusIn(List<String> status) {
@@ -158,4 +168,3 @@ public class AssignmentSpecification {
         };
     }
 }
-

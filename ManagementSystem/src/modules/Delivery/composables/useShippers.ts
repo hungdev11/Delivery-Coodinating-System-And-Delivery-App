@@ -180,6 +180,7 @@ export function useShippers() {
   }
 
   const handlePageChange = (newPage: number) => {
+    if (newPage < 0) return
     page.value = newPage
     loadShippers()
   }

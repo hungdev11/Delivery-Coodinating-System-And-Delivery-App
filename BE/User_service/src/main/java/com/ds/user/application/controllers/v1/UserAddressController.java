@@ -207,6 +207,20 @@ public class UserAddressController {
     }
 
     /**
+     * GET /api/v1/users/{userId}/addresses/primary
+     * Get primary address for any user (Admin only)
+     */
+    @GetMapping("/{userId}/addresses/primary")
+    @Operation(summary = "Get primary address for user (Admin)", description = "Admin endpoint - returns the primary address for any user")
+    public ResponseEntity<BaseResponse<UserAddressDto>> getUserPrimaryAddress(
+            @PathVariable String userId) {
+        log.info("GET /api/v1/users/{}/addresses/primary - Get primary address (Admin)", userId);
+
+        UserAddressDto address = userAddressService.getPrimaryUserAddress(userId);
+        return ResponseEntity.ok(BaseResponse.success(address));
+    }
+
+    /**
      * GET /api/v1/users/{userId}/addresses/{addressId}
      * Get specific address for any user (Admin only)
      */

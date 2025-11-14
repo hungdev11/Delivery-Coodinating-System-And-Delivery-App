@@ -54,13 +54,26 @@ public interface SessionClient {
     );
 
     /**
-     * Lấy các task của phiên đang hoạt động (phân trang).
+     * Lấy các task của phiên đang hoạt động (CREATED hoặc IN_PROGRESS) (phân trang).
      * Ánh xạ tới: DeliveryAssignmentController.getDailyTasks
+     * @deprecated Use getTasksBySessionId instead
      */
+    @Deprecated
     @GET("/api/v1/assignments/session/delivery-man/{deliveryManId}/tasks/today")
-    Call<PageResponse<DeliveryAssignment>> getTasksToday(
+    Call<PageResponse<DeliveryAssignment>> getSessionTasks(
             @Path("deliveryManId") String driverId,
             @Query("status") List<String> status,
+            @Query("page") int page,
+            @Query("size") int size
+    );
+
+    /**
+     * Lấy các task của một session cụ thể theo sessionId (phân trang).
+     * Ánh xạ tới: DeliveryAssignmentController.getTasksBySessionId
+     */
+    @GET("/api/v1/assignments/session/{sessionId}/tasks")
+    Call<PageResponse<DeliveryAssignment>> getTasksBySessionId(
+            @Path("sessionId") String sessionId,
             @Query("page") int page,
             @Query("size") int size
     );
@@ -118,4 +131,25 @@ public interface SessionClient {
     Call<ShipperInfo> getLastestShipperInfoForParcel( //if ok status but null -> not found
             @Path("parcelId") String parcelId
     );
+
+    /**
+     * Tạo phiên ở trạng thái CREATED (chuẩn bị nhận đơn).
+     * Ánh xạ tới: SessionController.createSessionPrepared
+     */
+    @POST("/api/v1/sessions/drivers/{deliveryManId}/prepare")
+    Call<DeliverySession> createSessionPrepared(@Path("deliveryManId") String deliveryManId);
+
+    /**
+     * Chuyển phiên từ CREATED sang IN_PROGRESS (bắt đầu giao hàng).
+     * Ánh xạ tới: SessionController.startSession
+     */
+    @POST("/api/v1/sessions/{sessionId}/start")
+    Call<DeliverySession> startSession(@Path("sessionId") String sessionId);
+
+    /**
+     * Lấy phiên đang hoạt động (CREATED hoặc IN_PROGRESS) của shipper.
+     * Ánh xạ tới: SessionController.getActiveSession
+     */
+    @GET("/api/v1/sessions/drivers/{deliveryManId}/active")
+    Call<DeliverySession> getActiveSession(@Path("deliveryManId") String deliveryManId);
 }

@@ -103,6 +103,46 @@ public class SessionController {
     }
 
     /**
+     * Tạo phiên ở trạng thái CREATED (chuẩn bị nhận đơn).
+     * Shipper nhấn "Bắt đầu phiên" để tạo phiên này.
+     */
+    @PostMapping("/drivers/{deliveryManId}/prepare")
+    public ResponseEntity<SessionResponse> createSessionPrepared(
+            @PathVariable("deliveryManId") String deliveryManId
+    ) {
+        log.info("Creating prepared session (CREATED) for delivery man {}", deliveryManId);
+        SessionResponse response = sessionService.createSessionPrepared(deliveryManId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * Chuyển phiên từ CREATED sang IN_PROGRESS (bắt đầu giao hàng).
+     * Shipper nhấn "Bắt đầu giao" để chuyển trạng thái.
+     */
+    @PostMapping("/{sessionId}/start")
+    public ResponseEntity<SessionResponse> startSession(@PathVariable UUID sessionId) {
+        log.info("Starting session {} (CREATED -> IN_PROGRESS)", sessionId);
+        SessionResponse response = sessionService.startSession(sessionId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Lấy phiên đang hoạt động (CREATED hoặc IN_PROGRESS) của shipper.
+     * Dùng để kiểm tra xem shipper có đang có phiên hoạt động không.
+     */
+    @GetMapping("/drivers/{deliveryManId}/active")
+    public ResponseEntity<SessionResponse> getActiveSession(
+            @PathVariable("deliveryManId") String deliveryManId
+    ) {
+        log.info("Getting active session for delivery man {}", deliveryManId);
+        SessionResponse response = sessionService.getActiveSession(deliveryManId);
+        if (response == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * Update assignment status by sessionId and assignmentId
      * This endpoint is used by API gateway for nested queries
      */

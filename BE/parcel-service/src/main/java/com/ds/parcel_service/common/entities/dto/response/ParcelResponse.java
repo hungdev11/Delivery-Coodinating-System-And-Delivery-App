@@ -36,4 +36,9 @@ public class ParcelResponse {
 
     private BigDecimal lat;
     private BigDecimal lon;
+    
+    // Priority and delay fields
+    private Integer priority;
+    private Boolean isDelayed;
+    private LocalDateTime delayedUntil;
 }

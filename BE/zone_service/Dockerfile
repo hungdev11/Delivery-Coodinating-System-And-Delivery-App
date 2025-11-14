@@ -75,6 +75,10 @@ RUN mkdir -p osrm_data/osrm-car-strict-priority-with-delta \
     osrm_data/osrm-car-flexible-priority-no-delta \
     osrm_data/osrm-car-base
 
+# Install wget for healthcheck (needed by docker-compose)
+# Install before switching to non-root user (requires root privileges)
+RUN apk add --no-cache wget
+
 # Change ownership to non-root user
 RUN chown -R nodejs:nodejs /app
 
@@ -92,9 +96,9 @@ ENV NODE_ENV=production
 # Switch to non-root user
 USER nodejs
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "console.log('healthy')" || exit 1
+# Health check (using wget to match docker-compose healthcheck)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:21503/health || exit 1
 
 # Run migrations then start application (use local devDependency via npx)
 CMD sh -c "npx prisma migrate deploy && npm run start:prod"

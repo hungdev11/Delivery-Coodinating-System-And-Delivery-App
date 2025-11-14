@@ -353,11 +353,13 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     static class SentViewHolder extends RecyclerView.ViewHolder {
         TextView tvMessageContent;
         TextView tvTimestamp;
+        TextView tvStatus;
         
         public SentViewHolder(@NonNull View itemView) {
             super(itemView);
             tvMessageContent = itemView.findViewById(R.id.tv_message_content);
             tvTimestamp = itemView.findViewById(R.id.tv_timestamp);
+            tvStatus = itemView.findViewById(R.id.tv_status);
         }
         
         public void bind(Message message) {
@@ -370,6 +372,32 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 tvTimestamp.setVisibility(View.VISIBLE);
             } else {
                 tvTimestamp.setVisibility(View.GONE);
+            }
+            
+            // Display read receipt (status)
+            if (message.getStatus() != null && !message.getStatus().isEmpty()) {
+                String statusText = getStatusText(message.getStatus());
+                tvStatus.setText(statusText);
+                tvStatus.setVisibility(View.VISIBLE);
+            } else {
+                tvStatus.setVisibility(View.GONE);
+            }
+        }
+        
+        /**
+         * Convert status to display text
+         */
+        private String getStatusText(String status) {
+            if (status == null) return "";
+            switch (status.toUpperCase()) {
+                case "SENT":
+                    return "✓";
+                case "DELIVERED":
+                    return "✓✓";
+                case "READ":
+                    return "✓✓";
+                default:
+                    return "";
             }
         }
         

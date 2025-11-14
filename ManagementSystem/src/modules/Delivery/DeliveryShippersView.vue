@@ -52,6 +52,7 @@ const {
   updateSorts,
   clearFilters,
   getFilterableColumns,
+  handlePageChange,
 } = useShippers()
 const sorting = ref<Array<{ id: string; desc: boolean }>>([])
 const activeFilters = ref<FilterCondition[]>([])
@@ -420,7 +421,12 @@ onMounted(async () => {
         Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
         {{ total }} results
       </div>
-      <UPagination v-model="page" :items-per-page="pageSize" :total="total" />
+      <UPagination 
+        :model-value="page + 1" 
+        :items-per-page="pageSize" 
+        :total="total"
+        @update:model-value="(newPage: number) => handlePageChange(newPage - 1)"
+      />
     </div>
 
     <AdvancedFilterDrawer

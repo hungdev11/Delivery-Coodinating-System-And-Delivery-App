@@ -21,7 +21,8 @@ export class AxiosHttpClient {
   constructor(baseURL: string, config?: AxiosRequestConfig) {
     this.client = axios.create({
       baseURL,
-      timeout: 10000,
+      // Remove timeout limit for web (allow long-running requests)
+      // timeout: 10000, // Commented out to allow unlimited timeout
       headers: {
         'Content-Type': 'application/json',
       },

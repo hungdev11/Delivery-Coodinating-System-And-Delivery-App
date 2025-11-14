@@ -83,3 +83,70 @@ export const updateUser = async (
 export const deleteUser = async (id: string): Promise<DeleteUserResponse> => {
   return apiClient.delete<DeleteUserResponse>(`/v1/users/${id}`)
 }
+
+/**
+ * User Address API
+ */
+
+export interface UserAddressDto {
+  id: string
+  userId: string
+  destinationId: string
+  note?: string | null
+  tag?: string | null
+  isPrimary: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface GetUserAddressesResponse {
+  result: UserAddressDto[]
+  success: boolean
+  message?: string
+}
+
+export interface GetUserPrimaryAddressResponse {
+  result: UserAddressDto
+  success: boolean
+  message?: string
+}
+
+/**
+ * Get primary address for a user
+ */
+export const getUserPrimaryAddress = async (userId: string): Promise<GetUserPrimaryAddressResponse> => {
+  return apiClient.get<GetUserPrimaryAddressResponse>(`/v1/users/${userId}/addresses/primary`)
+}
+
+/**
+ * Get all addresses for a user
+ */
+export const getUserAddresses = async (userId: string): Promise<GetUserAddressesResponse> => {
+  return apiClient.get<GetUserAddressesResponse>(`/v1/users/${userId}/addresses`)
+}
+
+export interface CreateUserAddressRequest {
+  destinationId: string
+  note?: string
+  tag?: string
+  isPrimary?: boolean
+}
+
+export interface CreateUserAddressResponse {
+  result: UserAddressDto
+  success: boolean
+  message?: string
+}
+
+/**
+ * Create address for a user (admin endpoint)
+ */
+export const createUserAddress = async (
+  userId: string,
+  data: CreateUserAddressRequest,
+): Promise<CreateUserAddressResponse> => {
+  return apiClient.post<CreateUserAddressResponse, CreateUserAddressRequest>(
+    `/v1/users/${userId}/addresses`,
+    data,
+  )
+}

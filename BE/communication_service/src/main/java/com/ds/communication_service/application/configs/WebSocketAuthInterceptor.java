@@ -1,8 +1,13 @@
 package com.ds.communication_service.application.configs;
 
+import com.ds.communication_service.business.v1.services.WebSocketSessionManager;
+import com.ds.communication_service.common.dto.UpdateNotificationDTO;
+
 import java.security.Principal;
 import java.util.Collections;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -17,6 +22,10 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @Slf4j
 public class WebSocketAuthInterceptor implements ChannelInterceptor {
+
+    @Autowired(required = false)
+    @Lazy
+    private WebSocketSessionManager sessionManager;
 
     /**
      * Được gọi mỗi khi một tin nhắn (CONNECT, SUBSCRIBE, SEND...) được gửi từ client.
@@ -52,15 +61,27 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             // 3. Đọc header "Authorization" mà client gửi
             // (Client đang gửi: "Bearer <USER_ID>")
             String authHeader = accessor.getFirstNativeHeader("Authorization");
+            
+            // 4. Đọc header "Client-Type" để xác định client type (ANDROID, WEB)
+            String clientTypeHeader = accessor.getFirstNativeHeader("Client-Type");
+            UpdateNotificationDTO.ClientType clientType = UpdateNotificationDTO.ClientType.ALL; // Default to ALL if not specified
+            if (clientTypeHeader != null && !clientTypeHeader.isBlank()) {
+                try {
+                    clientType = UpdateNotificationDTO.ClientType.valueOf(clientTypeHeader.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    log.warn("WebSocket CONNECT: Invalid Client-Type header: {}. Using default: ALL", clientTypeHeader);
+                    clientType = UpdateNotificationDTO.ClientType.ALL;
+                }
+            }
 
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 
-                // 4. Lấy User ID (là phần sau "Bearer ")
+                // 5. Lấy User ID (là phần sau "Bearer ")
                 String userId = authHeader.substring(7);
 
                 if (userId != null && !userId.isBlank()) {
                     
-                    // 5. Tạo một đối tượng "Principal" (danh tính)
+                    // 6. Tạo một đối tượng "Principal" (danh tính)
                     // Chúng ta dùng UsernamePasswordAuthenticationToken vì nó
                     // implement Principal và dễ sử dụng.
                     Principal authToken = new UsernamePasswordAuthenticationToken(
@@ -69,9 +90,15 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                             Collections.emptyList() // Không cần quyền (authorities)
                     );
 
-                    // 6. Gán Principal vào session WebSocket này
+                    // 7. Gán Principal vào session WebSocket này
                     accessor.setUser(authToken);
-                    log.info("WebSocket CONNECT: User {} authenticated, Principal name={}", userId, authToken.getName());
+                    log.info("WebSocket CONNECT: User {} authenticated, Principal name={}, ClientType={}", 
+                        userId, authToken.getName(), clientType);
+                    
+                    // 8. Register session với session manager (nếu có)
+                    if (sessionManager != null && accessor.getSessionId() != null) {
+                        sessionManager.registerSession(userId, accessor.getSessionId(), clientType);
+                    }
                 } else {
                     log.warn("WebSocket CONNECT: Empty userId in Authorization header");
                 }

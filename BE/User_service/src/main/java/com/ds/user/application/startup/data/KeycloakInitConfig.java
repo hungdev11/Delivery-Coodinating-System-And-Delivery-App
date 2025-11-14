@@ -153,6 +153,7 @@ public class KeycloakInitConfig {
         private List<String> realmRoles = List.of();
         private Map<String, List<String>> clientRoles = Map.of();
         private DeliveryManConfig deliveryMan;
+        private AddressConfig address;
         
         public void setUsername(String username) {
             this.username = username;
@@ -192,6 +193,34 @@ public class KeycloakInitConfig {
         
         public void setDeliveryMan(DeliveryManConfig deliveryMan) {
             this.deliveryMan = deliveryMan;
+        }
+        
+        public void setAddress(AddressConfig address) {
+            this.address = address;
+        }
+    }
+    
+    @Getter
+    public static class AddressConfig {
+        private String name;
+        private String addressText;
+        private Double lat;
+        private Double lon;
+        
+        public void setName(String name) {
+            this.name = name;
+        }
+        
+        public void setAddressText(String addressText) {
+            this.addressText = addressText;
+        }
+        
+        public void setLat(Double lat) {
+            this.lat = lat;
+        }
+        
+        public void setLon(Double lon) {
+            this.lon = lon;
         }
     }
     

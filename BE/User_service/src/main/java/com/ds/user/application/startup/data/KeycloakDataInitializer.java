@@ -25,12 +25,14 @@ public class KeycloakDataInitializer implements CommandLineRunner {
 
         try {
             keycloakInitializationService.initializeKeycloakData();
+            log.info("=".repeat(80));
+            log.info("Keycloak Data Initialization Completed Successfully");
+            log.info("=".repeat(80));
         } catch (Exception e) {
-            log.error("Failed to initialize Keycloak data: {}", e.getMessage(), e);
+            log.error("=".repeat(80));
+            log.error("FAILED to initialize Keycloak data: {}", e.getMessage(), e);
+            log.error("=".repeat(80));
+            // Don't throw - allow application to continue even if seed fails
         }
-
-        log.info("=".repeat(80));
-        log.info("Keycloak Data Initialization Completed");
-        log.info("=".repeat(80));
     }
 }

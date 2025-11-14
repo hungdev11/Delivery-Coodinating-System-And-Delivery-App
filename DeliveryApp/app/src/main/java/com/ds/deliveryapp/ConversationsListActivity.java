@@ -16,6 +16,7 @@ import com.ds.deliveryapp.auth.AuthManager;
 import com.ds.deliveryapp.clients.ChatClient;
 import com.ds.deliveryapp.clients.res.Conversation;
 import com.ds.deliveryapp.configs.RetrofitClient;
+import com.ds.deliveryapp.service.GlobalChatService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +41,7 @@ public class ConversationsListActivity extends AppCompatActivity {
     private ChatClient mChatClient;
     private AuthManager mAuthManager;
     private String mCurrentUserId;
+    private GlobalChatService globalChatService;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,9 +57,13 @@ public class ConversationsListActivity extends AppCompatActivity {
             return;
         }
 
+        // Initialize GlobalChatService
+        globalChatService = GlobalChatService.getInstance(this);
+        
         initViews();
         initRetrofitClients();
         initRecyclerView();
+        setupGlobalChatListener();
         loadConversations();
     }
 
@@ -102,6 +108,19 @@ public class ConversationsListActivity extends AppCompatActivity {
 
                     mConversations.clear();
                     mConversations.addAll(conversations);
+                    
+                    // Sync unread counts with GlobalChatService
+                    if (globalChatService != null) {
+                        java.util.Map<String, Integer> unreadCounts = new java.util.HashMap<>();
+                        for (Conversation conv : conversations) {
+                            if (conv.getConversationId() != null && conv.getUnreadCount() != null && conv.getUnreadCount() > 0) {
+                                unreadCounts.put(conv.getConversationId(), conv.getUnreadCount());
+                            }
+                        }
+                        globalChatService.syncUnreadCounts(unreadCounts);
+                        Log.d(TAG, "Synced " + unreadCounts.size() + " unread counts with GlobalChatService");
+                    }
+                    
                     mAdapter.notifyDataSetChanged();
                 } else {
                     Log.e(TAG, "❌ Failed to load conversations: " + response.code());
@@ -116,6 +135,78 @@ public class ConversationsListActivity extends AppCompatActivity {
                 Log.e(TAG, "❌ Network error loading conversations", t);
                 Toast.makeText(ConversationsListActivity.this, 
                         "Network error: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    /**
+     * Setup listener for GlobalChatService to update unread count in real-time
+     */
+    private void setupGlobalChatListener() {
+        GlobalChatService.GlobalChatListener listener = new GlobalChatService.GlobalChatListener() {
+            @Override
+            public void onMessageReceived(com.ds.deliveryapp.clients.res.Message message) {
+                // Update unread count for the conversation in the list
+                if (message != null && message.getConversationId() != null) {
+                    updateUnreadCountForConversation(message.getConversationId());
+                }
+            }
+
+            @Override
+            public void onUnreadCountChanged(int count) {
+                // Update UI when unread count changes
+                runOnUiThread(() -> {
+                    // Update conversations list with latest unread counts from GlobalChatService
+                    for (Conversation conv : mConversations) {
+                        if (conv.getConversationId() != null) {
+                            int unreadCount = globalChatService.getUnreadCountForConversation(conv.getConversationId());
+                            conv.setUnreadCount(unreadCount);
+                        }
+                    }
+                    if (mAdapter != null) {
+                        mAdapter.notifyDataSetChanged();
+                    }
+                });
+            }
+
+            @Override
+            public void onConnectionStatusChanged(boolean connected) {
+                // Handle connection status if needed
+            }
+
+            @Override
+            public void onError(String error) {
+                // Handle error if needed
+            }
+
+            @Override
+            public void onNotificationReceived(String notificationJson) {
+                // Handle notifications if needed
+            }
+        };
+        
+        globalChatService.addListener(listener);
+    }
+
+    /**
+     * Update unread count for a specific conversation
+     */
+    private void updateUnreadCountForConversation(String conversationId) {
+        if (conversationId == null || globalChatService == null) return;
+        
+        runOnUiThread(() -> {
+            int unreadCount = globalChatService.getUnreadCountForConversation(conversationId);
+            for (Conversation conv : mConversations) {
+                if (conversationId.equals(conv.getConversationId())) {
+                    conv.setUnreadCount(unreadCount);
+                    if (mAdapter != null) {
+                        int position = mConversations.indexOf(conv);
+                        if (position >= 0) {
+                            mAdapter.notifyItemChanged(position);
+                        }
+                    }
+                    break;
+                }
             }
         });
     }
@@ -141,5 +232,15 @@ public class ConversationsListActivity extends AppCompatActivity {
         super.onResume();
         // Reload conversations khi quay lại màn hình
         loadConversations();
+    }
+    
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Remove listener when activity is destroyed
+        if (globalChatService != null) {
+            // Note: We can't remove a specific listener, but GlobalChatService should handle cleanup
+            // In a production app, you'd want to keep track of the listener reference
+        }
     }
 }

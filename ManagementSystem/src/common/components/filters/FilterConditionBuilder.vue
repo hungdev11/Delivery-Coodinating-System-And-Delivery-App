@@ -4,7 +4,7 @@
     <USelect
       v-if="showLogic"
       :model-value="condition.logic || 'AND'"
-      :options="logicOptions"
+      :items="logicOptions"
       size="sm"
       class="w-20"
       @update:model-value="(value) => updateCondition({ ...condition, logic: value })"
@@ -13,7 +13,7 @@
     <!-- Field Selector -->
     <USelect
       :model-value="condition.field || ''"
-      :options="fieldOptions"
+      :items="fieldOptions"
       placeholder="Select field"
       size="sm"
       class="min-w-32"
@@ -23,7 +23,7 @@
     <!-- Operator Selector -->
     <USelect
       :model-value="condition.operator || 'eq'"
-      :options="operatorOptions"
+      :items="operatorOptions"
       placeholder="Operator"
       size="sm"
       class="min-w-24"
@@ -65,7 +65,7 @@
       <USelect
         v-else-if="isSelectInput"
         :model-value="condition.value || ''"
-        :options="getSelectOptions()"
+        :items="getSelectOptions()"
         :placeholder="getPlaceholder()"
         size="sm"
         :multiple="isMultiSelect"

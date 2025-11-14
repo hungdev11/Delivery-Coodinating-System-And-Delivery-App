@@ -30,6 +30,15 @@ public class DeliveryAssignmentController {
         return assignmentClient.getDailyTasks(deliveryManId, status, page, size);
     }
 
+    @GetMapping("/session/{sessionId}/tasks")
+    public ResponseEntity<?> getTasksBySessionId(
+            @PathVariable UUID sessionId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        log.info("GET /api/v1/assignments/session/{}/tasks - Get tasks by session ID", sessionId);
+        return assignmentClient.getTasksBySessionId(sessionId, page, size);
+    }
+
     @GetMapping("/session/delivery-man/{deliveryManId}/tasks")
     public ResponseEntity<?> getTasksHistory(
             @PathVariable UUID deliveryManId,

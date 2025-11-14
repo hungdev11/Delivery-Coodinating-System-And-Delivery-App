@@ -15,11 +15,13 @@ import {
   resolveComponent,
   h,
 } from 'vue'
-import { useRouter } from 'vue-router'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
 import { useParcels } from './composables'
 import { useParcelExport } from './composables/useParcelExport'
 import type { ParcelDto, ParcelStatus } from './model.type'
+import { seedParcels, type SeedParcelsRequest } from './api'
+import UserSelect from '@/common/components/UserSelect.vue'
+import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { useTemplateRef } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 import AdvancedFilterDrawer from '../../common/components/filters/AdvancedFilterDrawer.vue'
@@ -39,12 +41,21 @@ const UCheckbox = resolveComponent('UCheckbox')
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 
-const router = useRouter()
 const overlay = useOverlay()
 const table = useTemplateRef('table')
+const toast = useToast()
 
 // Export composable
 const { exportParcels } = useParcelExport()
+
+// Seed parcels state
+const showSeedModal = ref(false)
+const seeding = ref(false)
+const seedForm = ref<SeedParcelsRequest>({
+  count: 20,
+  shopId: undefined,
+  clientId: undefined,
+})
 
 // Composables
 const {
@@ -59,14 +70,20 @@ const {
   create,
   update,
   remove,
-  changeStatus,
   bulkDelete,
   handleSearch,
   updateFilters,
   updateSorts,
   clearFilters,
   getFilterableColumns,
+  handlePageChange,
 } = useParcels()
+
+// Handle page change from UPagination (1-indexed) to API (0-indexed)
+const handlePaginationChange = (newPage: number) => {
+  // UPagination uses 1-indexed pages, convert to 0-indexed for API
+  handlePageChange(newPage - 1)
+}
 
 // Table state
 const selected = ref<ParcelDto[]>([])
@@ -525,6 +542,56 @@ const openQRModal = async (parcel: ParcelDto) => {
 }
 
 /**
+ * Handle seed parcels
+ */
+const handleSeedParcels = async () => {
+  if (!seedForm.value.count || seedForm.value.count < 1) {
+    toast.add({
+      title: 'Error',
+      description: 'Please enter a valid count (at least 1)',
+      color: 'error',
+    })
+    return
+  }
+
+  seeding.value = true
+  try {
+    const response = await seedParcels(seedForm.value)
+    if (response.success && response.result) {
+      toast.add({
+        title: 'Success',
+        description: `Successfully created ${response.result.successCount} parcel(s), ${response.result.failCount} failed`,
+        color: 'success',
+      })
+      showSeedModal.value = false
+      // Reset form
+      seedForm.value = {
+        count: 20,
+        shopId: undefined,
+        clientId: undefined,
+      }
+      // Reload parcels
+      await loadParcels()
+    } else {
+      toast.add({
+        title: 'Error',
+        description: response.message || 'Failed to seed parcels',
+        color: 'error',
+      })
+    }
+  } catch (error) {
+    console.error('Failed to seed parcels:', error)
+    toast.add({
+      title: 'Error',
+      description: error instanceof Error ? error.message : 'Failed to seed parcels',
+      color: 'error',
+    })
+  } finally {
+    seeding.value = false
+  }
+}
+
+/**
  * Handle bulk delete
  */
 const handleBulkDelete = async () => {
@@ -546,13 +613,13 @@ const handleBulkDelete = async () => {
  */
 const handleBulkExport = () => {
   if (!table.value?.tableApi?.getFilteredSelectedRowModel()?.rows) return
-  
+
   const selectedParcels = table.value.tableApi
     .getFilteredSelectedRowModel()
     .rows.map((row) => row.original)
-  
+
   if (selectedParcels.length === 0) return
-  
+
   exportParcels(selectedParcels)
 }
 
@@ -673,6 +740,14 @@ watch(
   <div class="container mx-auto px-4 py-6">
     <PageHeader title="Parcels" description="Manage system parcels">
       <template #actions>
+        <UButton
+          icon="i-heroicons-sparkles"
+          color="primary"
+          variant="soft"
+          @click="showSeedModal = true"
+        >
+          Seed Parcels
+        </UButton>
         <UButton icon="i-heroicons-plus" @click="openCreateModal"> Add Parcel </UButton>
       </template>
     </PageHeader>
@@ -838,12 +913,17 @@ watch(
     </UCard>
 
     <!-- Pagination -->
-    <div v-if="!loading && filteredParcels.length > 0" class="mt-6 flex items-center justify-between">
+    <div v-if="!loading && parcels.length > 0" class="mt-6 flex items-center justify-between">
       <div class="text-sm text-gray-700 dark:text-gray-300">
         Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
         {{ total }} results
       </div>
-      <UPagination v-model="page" :items-per-page="pageSize" :total="total" />
+      <UPagination
+        :model-value="page + 1"
+        :page-count="pageSize"
+        :total="total"
+        @update:page="handlePaginationChange"
+      />
     </div>
 
     <!-- Advanced Filter Drawer -->
@@ -856,5 +936,75 @@ watch(
       @clear="handleAdvancedFilterClear"
       @update:show="showAdvancedFilters = $event"
     />
+
+    <!-- Seed Parcels Modal -->
+    <UModal v-model:open="showSeedModal" title="Seed Parcels" description="Create parcels randomly or with specific shop/client. Uses primary addresses automatically.">
+      <template #body>
+        <form @submit.prevent="handleSeedParcels" class="space-y-4">
+          <UFormField label="Number of Parcels" required>
+            <UInput
+              v-model.number="seedForm.count"
+              type="number"
+              min="1"
+              placeholder="20"
+              :disabled="seeding"
+            />
+            <template #hint>
+              Number of parcels to create (randomly selects shop/client if not specified)
+            </template>
+          </UFormField>
+
+          <UFormField label="Shop (Optional)">
+            <UserSelect
+              v-model="seedForm.shopId"
+              placeholder="Select shop (or leave empty for random)"
+              :allow-seed-id="true"
+              :disabled="seeding"
+            />
+            <template #hint>
+              Select a specific shop as sender. If not selected, randomly selects from available shops.
+            </template>
+          </UFormField>
+
+          <UFormField label="Client (Optional)">
+            <UserSelect
+              v-model="seedForm.clientId"
+              placeholder="Select client (or leave empty for random)"
+              :allow-seed-id="true"
+              :disabled="seeding"
+            />
+            <template #hint>
+              Select a specific client as receiver. If not selected, randomly selects from available clients.
+            </template>
+          </UFormField>
+
+          <UAlert
+            color="info"
+            variant="soft"
+            title="Note"
+            description="Parcels will be created using the primary addresses of the selected shop and client. If shop/client is not specified, they will be randomly selected."
+          />
+        </form>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            :disabled="seeding"
+            @click="showSeedModal = false"
+          >
+            Cancel
+          </UButton>
+          <UButton
+            color="primary"
+            :loading="seeding"
+            @click="handleSeedParcels"
+          >
+            {{ seeding ? 'Seeding...' : 'Seed Parcels' }}
+          </UButton>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>

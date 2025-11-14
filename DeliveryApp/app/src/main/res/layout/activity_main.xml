@@ -13,15 +13,34 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_above="@id/bottomNavigation"
-
         android:paddingTop="24dp"
-        android:clipToPadding="false"/> <com.google.android.material.bottomnavigation.BottomNavigationView
-    android:id="@+id/bottomNavigation"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:layout_alignParentBottom="true"
-    app:menu="@menu/bottom_nav_menu"
-    android:background="#FFFFFF"
-    app:itemIconTint="@color/nav_selector"
-    app:itemTextColor="@color/nav_selector" />
+        android:clipToPadding="false"/>
+
+    <!-- Chat floating button - draggable, positioned dynamically -->
+    <FrameLayout
+        android:id="@+id/chat_button_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@id/bottomNavigation"
+        android:clipChildren="false"
+        android:clipToPadding="false">
+        
+        <com.ds.deliveryapp.widget.ChatFloatingButton
+            android:id="@+id/chat_floating_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="16dp" />
+    </FrameLayout>
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNavigation"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        app:menu="@menu/bottom_nav_menu"
+        android:background="#FFFFFF"
+        app:itemIconTint="@color/nav_selector"
+        app:itemTextColor="@color/nav_selector" />
 </RelativeLayout>

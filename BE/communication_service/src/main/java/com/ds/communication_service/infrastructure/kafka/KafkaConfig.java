@@ -46,6 +46,12 @@ public class KafkaConfig {
     public static final String TOPIC_MESSAGE_STATUS = "message-status-events";
     public static final String TOPIC_TYPING_EVENTS = "typing-events";
     public static final String TOPIC_NOTIFICATIONS = "notifications";
+    /**
+     * Topic for update notifications from other services
+     * Other services (session-service, parcel-service, etc.) publish updates to this topic
+     * Communication service consumes and forwards to clients via WebSocket
+     */
+    public static final String TOPIC_UPDATE_NOTIFICATIONS = "update-notifications";
 
     /**
      * Producer configuration
@@ -155,6 +161,16 @@ public class KafkaConfig {
                 .partitions(3) // Partition by userId
                 .replicas(1)
                 .config("retention.ms", "2592000000") // 30 days
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+
+    @Bean
+    public NewTopic updateNotificationsTopic() {
+        return TopicBuilder.name(TOPIC_UPDATE_NOTIFICATIONS)
+                .partitions(3) // Partition by userId
+                .replicas(1)
+                .config("retention.ms", "86400000") // 1 day (updates are short-lived)
                 .config("cleanup.policy", "delete")
                 .build();
     }

@@ -32,6 +32,7 @@ import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.clients.res.ProposalTypeConfig;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.enums.ContentType;
+import com.ds.deliveryapp.service.GlobalChatService;
 import com.ds.deliveryapp.utils.ChatWebSocketListener;
 import com.ds.deliveryapp.utils.ChatWebSocketManager;
 import com.google.gson.Gson;
@@ -66,6 +67,9 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     private ImageView ivAvatar;
     private TextView tvRecipientName;
     private TextView tvRecipientStatus;
+    
+    // Loading state
+    private boolean isSendingProposal = false;
 
     // Adapter & Data
     private MessageAdapter mAdapter;
@@ -84,6 +88,8 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     private ChatWebSocketManager mWebSocketManager;
     private ChatClient mChatClient;
     private AuthManager mAuthManager;
+    private GlobalChatService globalChatService;
+    private GlobalChatService.GlobalChatListener globalChatListener;
     // State Data
     private String mJwtToken;
     private String mCurrentUserId;
@@ -100,6 +106,12 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         setContentView(R.layout.activity_chat);
 
         mAuthManager = new AuthManager(this);
+        
+        // Initialize GlobalChatService
+        globalChatService = GlobalChatService.getInstance(this);
+        if (!globalChatService.isConnected()) {
+            globalChatService.initialize();
+        }
 
         initViews();
 
@@ -116,12 +128,219 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             mAdapter.setCurrentUserId(mCurrentUserId);
         }
 
-        // 3. Bắt đầu chuỗi tải dữ liệu ngay lập tức
-        // (Không cần gọi getUserInfoAndProceed() nữa)
+        // 3. Setup global chat listener for this conversation
+        setupGlobalChatListener();
+
+        // 4. Bắt đầu chuỗi tải dữ liệu ngay lập tức
         fetchConversationIdAndConnect();
         loadAvailableProposals();
 
         setupSendButton();
+    }
+    
+    /**
+     * Setup listener for GlobalChatService to receive messages for this conversation
+     */
+    private void setupGlobalChatListener() {
+        globalChatListener = new GlobalChatService.GlobalChatListener() {
+            @Override
+            public void onMessageReceived(Message message) {
+                // Filter messages by conversation ID
+                // Note: mConversationId might be null initially, so we'll also check later
+                if (message != null) {
+                    // If conversationId is set, filter by it
+                    // Otherwise, accept all messages (will be filtered in onMessageReceivedFromGlobal)
+                    boolean shouldProcess = true;
+                    if (mConversationId != null && message.getConversationId() != null) {
+                        shouldProcess = message.getConversationId().equals(mConversationId);
+                    }
+                    
+                    if (shouldProcess) {
+                        runOnUiThread(() -> {
+                            onMessageReceivedFromGlobal(message);
+                        });
+                    }
+                }
+            }
+
+            @Override
+            public void onUnreadCountChanged(int count) {
+                // Not needed in ChatActivity
+            }
+
+            @Override
+            public void onConnectionStatusChanged(boolean connected) {
+                runOnUiThread(() -> {
+                    if (connected) {
+                        Log.i(TAG, "GlobalChatService: WebSocket connected");
+                    } else {
+                        Log.w(TAG, "GlobalChatService: WebSocket disconnected");
+                        showErrorToast("Chat connection lost. Reconnecting...");
+                    }
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    Log.e(TAG, "GlobalChatService error: " + error);
+                });
+            }
+
+            @Override
+            public void onNotificationReceived(String notificationJson) {
+                // Handle notifications if needed
+            }
+        };
+        
+        globalChatService.addListener(globalChatListener);
+    }
+    
+    /**
+     * Handle message received from GlobalChatService
+     */
+    private void onMessageReceivedFromGlobal(Message message) {
+        if (message != null && mAdapter != null && message.getSenderId() != null) {
+            Log.d(TAG, "📥 RECEIVED MESSAGE via GlobalChatService: " + 
+                  "id=" + message.getId() + 
+                  ", sender=" + message.getSenderId() + 
+                  ", type=" + message.getType() +
+                  ", conversation=" + message.getConversationId());
+            
+            // Check if message belongs to current conversation
+            boolean belongsToConversation = message.getConversationId() != null && 
+                                           message.getConversationId().equals(mConversationId);
+            
+            if (belongsToConversation) {
+                Log.d(TAG, "✅ Adding message to chat");
+                mAdapter.addMessage(message);
+                scrollToBottom();
+                
+                // Mark message as read when received and displayed
+                // Only mark if message is not from current user and not already read
+                if (message.getSenderId() != null && !message.getSenderId().equals(mCurrentUserId)) {
+                    markMessageAsRead(message);
+                }
+            } else {
+                Log.d(TAG, "⚠️ Message filtered out - belongs to different conversation. " +
+                      "Expected: " + mConversationId + ", Got: " + message.getConversationId());
+            }
+        }
+    }
+    
+    /**
+     * Mark a single message as read
+     */
+    private void markMessageAsRead(Message message) {
+        if (message == null || message.getId() == null || mConversationId == null) {
+            return;
+        }
+        
+        // Check if message is already read
+        if ("READ".equals(message.getStatus())) {
+            return;
+        }
+        
+        // Mark as read via WebSocket - use GlobalChatService's WebSocketManager
+        ChatWebSocketManager wsManager = null;
+        if (globalChatService != null) {
+            wsManager = globalChatService.getWebSocketManager();
+        } else if (mWebSocketManager != null) {
+            wsManager = mWebSocketManager;
+        }
+        
+        if (wsManager != null && wsManager.isConnected()) {
+            String[] messageIds = {message.getId()};
+            wsManager.markMessagesAsRead(messageIds, mConversationId);
+            Log.d(TAG, "Marked message as read: " + message.getId());
+            
+            // Also update GlobalChatService to decrement unread count
+            if (globalChatService != null) {
+                globalChatService.clearUnreadCountForConversation(mConversationId);
+            }
+        }
+    }
+    
+    /**
+     * Mark multiple messages as read when conversation is opened
+     */
+    private void markMessagesAsRead(List<Message> messages) {
+        if (messages == null || messages.isEmpty() || mConversationId == null || mCurrentUserId == null) {
+            return;
+        }
+        
+        // Collect unread message IDs (messages from other users that are not read)
+        List<String> unreadMessageIds = new ArrayList<>();
+        for (Message message : messages) {
+            if (message.getSenderId() != null 
+                && !message.getSenderId().equals(mCurrentUserId) 
+                && !"READ".equals(message.getStatus())) {
+                unreadMessageIds.add(message.getId());
+            }
+        }
+        
+        // Mark as read via WebSocket - use GlobalChatService's WebSocketManager
+        ChatWebSocketManager wsManager = null;
+        if (globalChatService != null) {
+            wsManager = globalChatService.getWebSocketManager();
+        } else if (mWebSocketManager != null) {
+            wsManager = mWebSocketManager;
+        }
+        
+        if (!unreadMessageIds.isEmpty() && wsManager != null && wsManager.isConnected()) {
+            String[] messageIdsArray = unreadMessageIds.toArray(new String[0]);
+            wsManager.markMessagesAsRead(messageIdsArray, mConversationId);
+            Log.d(TAG, "✅ Marked " + unreadMessageIds.size() + " messages as read");
+            
+            // Also update GlobalChatService to clear unread count for this conversation
+            if (globalChatService != null) {
+                globalChatService.clearUnreadCountForConversation(mConversationId);
+            }
+        } else if (unreadMessageIds.isEmpty()) {
+            Log.d(TAG, "No unread messages to mark as read");
+            // Still clear unread count in GlobalChatService even if no unread messages
+            if (globalChatService != null && mConversationId != null) {
+                globalChatService.clearUnreadCountForConversation(mConversationId);
+            }
+        }
+    }
+    
+    /**
+     * Mark all unread messages in conversation as read when user opens chat
+     * This is called when conversation is opened to ensure all messages are marked as read
+     */
+    private void markAllMessagesAsRead() {
+        if (mConversationId == null || mCurrentUserId == null) {
+            Log.w(TAG, "Cannot mark messages as read: conversationId or userId is null");
+            return;
+        }
+        
+        Log.d(TAG, "📖 Marking all unread messages as read for conversation: " + mConversationId);
+        
+        // Get WebSocket manager
+        ChatWebSocketManager wsManager = null;
+        if (globalChatService != null) {
+            wsManager = globalChatService.getWebSocketManager();
+        } else if (mWebSocketManager != null) {
+            wsManager = mWebSocketManager;
+        }
+        
+        if (wsManager == null || !wsManager.isConnected()) {
+            Log.w(TAG, "WebSocket not connected, will mark as read when connected");
+            // Will be called again when messages are loaded
+            return;
+        }
+        
+        // Mark all messages in the current list as read
+        if (!mMessages.isEmpty()) {
+            markMessagesAsRead(mMessages);
+        }
+        
+        // Also clear unread count in GlobalChatService immediately
+        if (globalChatService != null) {
+            globalChatService.clearUnreadCountForConversation(mConversationId);
+            Log.d(TAG, "✅ Cleared unread count for conversation: " + mConversationId);
+        }
     }
 
     private void initViews() {
@@ -258,21 +477,39 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                     // --- CẬP NHẬT APP BAR TÙY CHỈNH ---
                     runOnUiThread(() -> {
                         if (tvRecipientName != null) {
-                            tvRecipientName.setText(mRecipientName);
+                            // Add online status indicator if online
+                            String displayName = mRecipientName;
+                            if (conversation.getPartnerOnline() != null && conversation.getPartnerOnline()) {
+                                displayName = "🟢 " + displayName;
+                            }
+                            tvRecipientName.setText(displayName);
                         }
 
                         if (tvRecipientStatus != null) {
                             if (mParcelCode != null && !mParcelCode.isEmpty()) {
                                 tvRecipientStatus.setText("Đơn hàng: " + mParcelCode);
-                            } else {
+                            } else if (conversation.getPartnerOnline() != null && conversation.getPartnerOnline()) {
                                 tvRecipientStatus.setText("Đang hoạt động");
+                            } else {
+                                tvRecipientStatus.setText("Offline");
                             }
                         }
                         // (Thêm code Glide/Picasso để tải ivAvatar tại đây)
                     });
 
                     loadChatHistory();
-                    connectWebSocket(); // Bắt đầu kết nối WebSocket
+                    
+                    // Mark all messages as read when conversation is opened
+                    // This ensures unread count is cleared immediately
+                    markAllMessagesAsRead();
+                    
+                    // WebSocket is already connected via GlobalChatService
+                    // Just ensure we have the manager reference
+                    if (globalChatService.isConnected()) {
+                        mWebSocketManager = globalChatService.getWebSocketManager();
+                    } else {
+                        connectWebSocket(); // Will initialize GlobalChatService if needed
+                    }
 
                 } else {
                     Log.e(TAG, "Failed to fetch conversation ID (API Error: " + response.code() + ")");
@@ -333,6 +570,13 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                             mMessages.addAll(history);
                             mAdapter.setMessages(history);
                             scrollToBottom();
+                            
+                            // Mark all messages as read when conversation is opened
+                            markMessagesAsRead(history);
+                            
+                            // Also mark all messages as read (in case there are more pages)
+                            markAllMessagesAsRead();
+                            
                             Log.d(TAG, "✅ Initial messages displayed (reversed), total: " + history.size() + ", hasMore=" + mHasMoreMessages);
                         }
                     });
@@ -480,30 +724,34 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     }
 
     /**
-     * Kết nối bằng WebSocket Manager.
+     * Connect to WebSocket using GlobalChatService.
+     * ChatActivity now uses the global WebSocket connection instead of creating its own.
      */
     private void connectWebSocket() {
-        if (mWebSocketManager != null && mWebSocketManager.isConnected()) {
-            Log.w(TAG, "WebSocket connection attempt ignored: Already connected.");
-            return;
+        // Use GlobalChatService's WebSocket manager instead of creating a new one
+        // Ensure GlobalChatService is connected
+        if (!globalChatService.isConnected()) {
+            Log.w(TAG, "GlobalChatService not connected. Initializing...");
+            globalChatService.initialize();
+            
+            // Wait a bit for connection to establish
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                if (globalChatService.isConnected()) {
+                    mWebSocketManager = globalChatService.getWebSocketManager();
+                    Log.d(TAG, "Using GlobalChatService WebSocket connection");
+                } else {
+                    Log.e(TAG, "Failed to connect GlobalChatService");
+                    showErrorToast("Failed to connect to chat service.");
+                }
+            }, 1000);
+        } else {
+            // Use existing global connection
+            mWebSocketManager = globalChatService.getWebSocketManager();
+            Log.d(TAG, "Using existing GlobalChatService WebSocket connection");
         }
-
-        if (mJwtToken == null) {
-            Log.e(TAG, "Cannot connect WebSocket: JWT token is null.");
-            showErrorToast("Authentication token missing. Please login again.");
-            return;
-        }
-
-        if (mCurrentUserId == null || mCurrentUserId.isEmpty()) {
-            Log.e(TAG, "Cannot connect WebSocket: User ID is null or empty.");
-            showErrorToast("User ID missing. Please login again.");
-            return;
-        }
-
-        Log.d(TAG, "Initializing WebSocket Manager...");
-        mWebSocketManager = new ChatWebSocketManager(SERVER_WEBSOCKET_URL, mJwtToken, mCurrentUserId);
-        mWebSocketManager.setListener(this); // <-- Gán Activity này làm listener
-        mWebSocketManager.connect(); // Bắt đầu kết nối
+        
+        // Note: We no longer create our own WebSocket connection
+        // Messages are received via GlobalChatService listener (setupGlobalChatListener)
     }
 
     /**
@@ -514,12 +762,45 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             String content = etMessage.getText().toString().trim();
             if (!content.isEmpty()) {
                 if (mWebSocketManager != null && mWebSocketManager.isConnected()) {
+                    // Disable button and show loading state
+                    setSendButtonLoading(true);
                     sendMessage(content);
                 } else {
                     showErrorToast("Not connected to chat. Please wait or try again.");
                 }
             }
         });
+    }
+
+    /**
+     * Set loading state for send button
+     */
+    private void setSendButtonLoading(boolean loading) {
+        if (btnSend != null) {
+            btnSend.setEnabled(!loading);
+            btnSend.setAlpha(loading ? 0.5f : 1.0f);
+            // Optionally show a progress indicator
+            if (loading) {
+                // You can add a progress indicator here if needed
+                btnSend.setContentDescription("Đang gửi...");
+            } else {
+                btnSend.setContentDescription("Nút gửi tin nhắn");
+            }
+        }
+    }
+
+    /**
+     * Set loading state for all buttons (send, attach) during API calls
+     */
+    private void setButtonsLoadingState(boolean loading) {
+        if (btnSend != null) {
+            btnSend.setEnabled(!loading);
+            btnSend.setAlpha(loading ? 0.5f : 1.0f);
+        }
+        if (btnAttach != null) {
+            btnAttach.setEnabled(!loading);
+            btnAttach.setAlpha(loading ? 0.5f : 1.0f);
+        }
     }
 
     /**
@@ -544,6 +825,8 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                 
                 runOnUiThread(() -> {
                     etMessage.setText("");
+                    // Re-enable send button
+                    setSendButtonLoading(false);
                     // Message will appear when WebSocket delivers it via onMessageReceived()
                 });
                 
@@ -559,7 +842,11 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             @Override
             public void onError(Throwable throwable) {
                 Log.e(TAG, "❌ Error sending STOMP message", throwable);
-                runOnUiThread(() -> showErrorToast("Failed to send message."));
+                runOnUiThread(() -> {
+                    // Re-enable send button on error
+                    setSendButtonLoading(false);
+                    showErrorToast("Failed to send message.");
+                });
             }
         });
     }
@@ -794,6 +1081,15 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             return;
         }
 
+        // Disable buttons during API call
+        if (isSendingProposal) {
+            showErrorToast("Đang gửi yêu cầu...");
+            return;
+        }
+
+        isSendingProposal = true;
+        setButtonsLoadingState(true);
+
         if ("CONFIRM_REFUSAL".equals(type) && mParcelId != null) {
             data = "{\"parcelId\":\"" + mParcelId + "\"}";
         }
@@ -820,6 +1116,9 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         call.enqueue(new Callback<InteractiveProposal>() {
             @Override
             public void onResponse(@NonNull Call<InteractiveProposal> call, @NonNull Response<InteractiveProposal> response) {
+                isSendingProposal = false;
+                setButtonsLoadingState(false);
+
                 if (response.isSuccessful()) {
                     Log.i(TAG, "✅ Gửi proposal thành công. Chờ WebSocket echo...");
                     // ❌ REMOVED: Don't reload entire history - WebSocket will deliver the message
@@ -829,12 +1128,15 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                     runOnUiThread(() -> showErrorToast("Proposal sent! Waiting for response..."));
                 } else {
                     Log.e(TAG, "❌ Gửi proposal thất bại: " + response.code());
-                    showErrorToast("Gửi yêu cầu thất bại.");
+                    runOnUiThread(() -> showErrorToast("Gửi yêu cầu thất bại."));
                 }
             }
             @Override
             public void onFailure(@NonNull Call<InteractiveProposal> call, @NonNull Throwable t) {
+                isSendingProposal = false;
+                setButtonsLoadingState(false);
                 Log.e(TAG, "❌ Lỗi mạng khi gửi proposal", t);
+                runOnUiThread(() -> showErrorToast("Lỗi mạng khi gửi yêu cầu."));
             }
         });
     }
@@ -848,6 +1150,15 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     public void onProposalRespond(UUID proposalId, String resultData) {
         Log.d(TAG, "Handling RESPOND for proposal: " + proposalId + " with data: " + resultData);
 
+        // Disable buttons during API call
+        if (isSendingProposal) {
+            showErrorToast("Đang xử lý...");
+            return;
+        }
+
+        isSendingProposal = true;
+        setButtonsLoadingState(true);
+
         ProposalResponseRequest payload = new ProposalResponseRequest(resultData);
 
         Call<InteractiveProposal> call = mChatClient.respondToProposal(
@@ -859,90 +1170,100 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         call.enqueue(new Callback<InteractiveProposal>() {
             @Override
             public void onResponse(@NonNull Call<InteractiveProposal> call, @NonNull Response<InteractiveProposal> response) {
+                isSendingProposal = false;
+                setButtonsLoadingState(false);
+
                 if (response.isSuccessful()) {
                     Log.i(TAG, "✅ Phản hồi proposal thành công. Chờ WebSocket update...");
                     // ❌ REMOVED: Don't reload entire history - WebSocket will deliver the update
                     // loadChatHistory();
                     
                     // Proposal update will arrive via onProposalUpdateReceived()
+                    runOnUiThread(() -> showErrorToast("Phản hồi đã gửi!"));
                 } else {
                     Log.e(TAG, "❌ Phản hồi proposal thất bại: " + response.code());
-                    showErrorToast("Thao tác thất bại.");
+                    runOnUiThread(() -> showErrorToast("Thao tác thất bại."));
                 }
             }
             @Override
             public void onFailure(@NonNull Call<InteractiveProposal> call, @NonNull Throwable t) {
+                isSendingProposal = false;
+                setButtonsLoadingState(false);
                 Log.e(TAG, "❌ Lỗi mạng khi phản hồi proposal", t);
-                showErrorToast("Lỗi mạng: " + t.getMessage());
+                runOnUiThread(() -> showErrorToast("Lỗi mạng: " + t.getMessage()));
             }
         });
     }
 
-    /* --- IMPLEMENTS TỪ WEBSOCKET LISTENER (Khi nhận sự kiện) --- */
+    /* --- IMPLEMENTS TỪ WEBSOCKET LISTENER (Legacy - now handled by GlobalChatService) --- */
+    /* Note: These methods are kept for backward compatibility but messages now come via GlobalChatService */
 
     @Override
     public void onWebSocketOpened() {
-        runOnUiThread(() -> Log.i(TAG, "ChatActivity: WebSocket Opened."));
+        // Handled by GlobalChatService - this should not be called
+        runOnUiThread(() -> Log.i(TAG, "ChatActivity: WebSocket Opened (via GlobalChatService)."));
     }
 
     @Override
     public void onWebSocketClosed() {
+        // Handled by GlobalChatService - this should not be called
         runOnUiThread(() -> {
-            Log.i(TAG, "ChatActivity: WebSocket Closed.");
-            showErrorToast("Chat connection closed.");
+            Log.i(TAG, "ChatActivity: WebSocket Closed (via GlobalChatService).");
         });
     }
 
     @Override
     public void onWebSocketError(String error) {
+        // Handled by GlobalChatService - this should not be called
         runOnUiThread(() -> {
-            Log.e(TAG, "ChatActivity: WebSocket Error: " + error);
-            showErrorToast("Chat error. Please try again.");
+            Log.e(TAG, "ChatActivity: WebSocket Error (via GlobalChatService): " + error);
         });
     }
 
     @Override
     public void onMessageReceived(Message message) {
-        runOnUiThread(() -> {
-            if (message != null && mAdapter != null && message.getSenderId() != null) {
-                Log.d(TAG, "📥 RECEIVED MESSAGE via WebSocket: " + 
-                      "id=" + message.getId() + 
-                      ", sender=" + message.getSenderId() + 
-                      ", type=" + message.getType() +
-                      ", content=" + (message.getContent() != null ? message.getContent().substring(0, Math.min(50, message.getContent().length())) : "null") +
-                      ", sentAt=" + message.getSentAt());
-                
-                // Log proposal messages for debugging
-                if (message.getType() == ContentType.INTERACTIVE_PROPOSAL) {
-                    Log.d(TAG, "📋 PROPOSAL message received: proposal=" + 
-                          (message.getProposal() != null ? message.getProposal().getId() : "null") +
-                          ", proposalType=" + (message.getProposal() != null ? message.getProposal().getType() : "null") +
-                          ", proposalStatus=" + (message.getProposal() != null ? message.getProposal().getStatus() : "null") +
-                          ", actionType=" + (message.getProposal() != null ? message.getProposal().getActionType() : "null"));
-                }
-                
-                // Check if message belongs to current conversation
-                boolean belongsToConversation = message.getConversationId() != null && 
-                                               message.getConversationId().equals(mConversationId);
-                
-                if (belongsToConversation) {
-                    Log.d(TAG, "✅ Adding message to chat");
-                    mAdapter.addMessage(message);
-                    scrollToBottom();
-                } else {
-                    Log.d(TAG, "⚠️ Message filtered out - belongs to different conversation. " +
-                          "Expected: " + mConversationId + ", Got: " + message.getConversationId());
-                }
-            } else {
-                Log.w(TAG, "⚠️ Received null or invalid message: " + 
-                      (message == null ? "message is null" : 
-                       (mAdapter == null ? "adapter is null" : "senderId is null")));
-            }
-        });
+        // This is now handled by onMessageReceivedFromGlobal() via GlobalChatService listener
+        // Keeping this for backward compatibility but it should not be called directly
+        // Messages now come through GlobalChatService.GlobalChatListener
+        Log.d(TAG, "onMessageReceived called (legacy method) - forwarding to global handler");
+        onMessageReceivedFromGlobal(message);
     }
 
     @Override
     public void onProposalUpdateReceived(ProposalUpdateDTO update) {
+        // Register with GlobalChatService to receive proposal updates
+        GlobalChatService.ProposalListener proposalListener = new GlobalChatService.ProposalListener() {
+            @Override
+            public void onProposalReceived(Message proposalMessage) {
+                // Proposals are handled by MainActivity popup
+                // But if it's for this conversation, also show in chat
+                if (proposalMessage != null && mConversationId != null 
+                    && proposalMessage.getConversationId() != null 
+                    && proposalMessage.getConversationId().equals(mConversationId)) {
+                    runOnUiThread(() -> {
+                        onMessageReceivedFromGlobal(proposalMessage);
+                    });
+                }
+            }
+
+            @Override
+            public void onProposalUpdate(ProposalUpdateDTO update) {
+                runOnUiThread(() -> {
+                    if (update != null && mAdapter != null && update.getProposalId() != null) {
+                        Log.i(TAG, "Updating status for Proposal " + update.getProposalId() + " to " + update.getNewStatus());
+                        String resultData = update.getResultData();
+                        mAdapter.updateProposalStatus(
+                                update.getProposalId(),
+                                update.getNewStatus(),
+                                resultData
+                        );
+                    }
+                });
+            }
+        };
+        globalChatService.addProposalListener(proposalListener);
+        
+        // Also handle direct updates (backward compatibility)
         runOnUiThread(() -> {
             if (update != null && mAdapter != null && update.getProposalId() != null) {
                 Log.i(TAG, "Updating status for Proposal " + update.getProposalId() + " to " + update.getNewStatus());
@@ -1019,6 +1340,35 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             }
         });
     }
+    
+    @Override
+    public void onSessionMessageReceived(Message message) {
+        runOnUiThread(() -> {
+            Log.d(TAG, "📡 Session message received (monitoring): " + 
+                  "id=" + message.getId() + 
+                  ", sender=" + message.getSenderId() + 
+                  ", type=" + message.getType());
+            
+            // For shippers: Log session messages for monitoring
+            // You can add UI notifications or alerts here for important messages
+            // For now, just log them
+            if (message.getType() == ContentType.INTERACTIVE_PROPOSAL) {
+                Log.i(TAG, "🚨 PROPOSAL from client in session: " + 
+                      (message.getProposal() != null ? message.getProposal().getType() : "unknown"));
+                
+                // TODO: Show map popup or notification for proposals
+                // This could be implemented in MapFragment or a separate monitoring UI
+            }
+        });
+    }
+
+    @Override
+    public void onUpdateNotificationReceived(String updateNotificationJson) {
+        // Update notifications are handled by TaskFragment and MapFragment
+        // ChatActivity doesn't need to handle update notifications
+        // This method is required by ChatWebSocketListener interface
+        Log.d(TAG, "📥 Update notification received (ignored in ChatActivity): " + updateNotificationJson);
+    }
 
     /* --- CÁC HÀM TIỆN ÍCH --- */
 
@@ -1045,12 +1395,25 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        Log.d(TAG, "onResume: ChatActivity resumed");
+        
+        // When user returns to chat, mark all messages as read
+        if (mConversationId != null) {
+            markAllMessagesAsRead();
+        }
+    }
+    
+    @Override
     protected void onDestroy() {
         super.onDestroy();
-        Log.d(TAG, "onDestroy: Disconnecting WebSocket Manager.");
-        if (mWebSocketManager != null) {
-            mWebSocketManager.disconnect();
-            mWebSocketManager = null;
+        Log.d(TAG, "onDestroy: Cleaning up ChatActivity listeners.");
+        // Remove listener from GlobalChatService (but don't disconnect - it's global)
+        if (globalChatService != null && globalChatListener != null) {
+            globalChatService.removeListener(globalChatListener);
         }
+        // Don't disconnect WebSocket - it's managed globally by GlobalChatService
+        // It should stay connected even when ChatActivity is destroyed
     }
 }

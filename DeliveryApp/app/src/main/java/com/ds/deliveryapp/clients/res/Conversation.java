@@ -17,4 +17,7 @@ public class Conversation {
     // Parcel info if conversation is related to a specific parcel
     private String currentParcelId;
     private String currentParcelCode;
+    
+    // Online status
+    private Boolean partnerOnline;
 }

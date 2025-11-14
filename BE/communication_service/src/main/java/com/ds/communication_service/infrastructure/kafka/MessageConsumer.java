@@ -1,9 +1,11 @@
 package com.ds.communication_service.infrastructure.kafka;
 
+import com.ds.communication_service.business.v1.services.WebSocketSessionManager;
 import com.ds.communication_service.common.dto.ChatMessagePayload;
 import com.ds.communication_service.common.dto.MessageStatusUpdate;
 import com.ds.communication_service.common.dto.NotificationMessage;
 import com.ds.communication_service.common.dto.TypingIndicator;
+import com.ds.communication_service.common.dto.UpdateNotificationDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -24,6 +26,7 @@ import org.springframework.stereotype.Service;
 public class MessageConsumer {
 
     private final SimpMessageSendingOperations messagingTemplate;
+    private final WebSocketSessionManager sessionManager;
 
     /**
      * Consume chat messages from Kafka queue
@@ -177,6 +180,95 @@ public class MessageConsumer {
             
         } catch (Exception e) {
             log.error("❌ Error consuming notification from Kafka: {}", e.getMessage(), e);
+            // Don't acknowledge - message will be reprocessed
+        }
+    }
+
+    /**
+     * Consume update notifications from Kafka
+     * Other services (session-service, parcel-service, etc.) publish updates to this topic
+     * Communication service forwards to clients via WebSocket
+     * Supports filtering by client type (ANDROID, WEB, ALL)
+     */
+    @KafkaListener(
+        topics = KafkaConfig.TOPIC_UPDATE_NOTIFICATIONS,
+        groupId = "${spring.kafka.consumer.group-id:communication-service-group}",
+        containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void consumeUpdateNotification(
+            @Payload UpdateNotificationDTO updateNotification,
+            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+            @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
+            @Header(KafkaHeaders.OFFSET) long offset,
+            Acknowledgment acknowledgment) {
+        
+        try {
+            log.info("📥 Received update notification from Kafka. Topic: {}, Partition: {}, Offset: {}", 
+                topic, partition, offset);
+            log.info("📋 Update notification: type={}, entityType={}, entityId={}, action={}, userId={}, clientType={}", 
+                updateNotification.getUpdateType(), 
+                updateNotification.getEntityType(), 
+                updateNotification.getEntityId(), 
+                updateNotification.getAction(), 
+                updateNotification.getUserId(),
+                updateNotification.getClientType());
+            
+            // Handle multiple userIds (comma-separated) for broadcast
+            String userIds = updateNotification.getUserId();
+            if (userIds == null || userIds.isBlank()) {
+                log.warn("⚠️ Update notification has no userId. Skipping.");
+                if (acknowledgment != null) {
+                    acknowledgment.acknowledge();
+                }
+                return;
+            }
+            
+            // Split userIds if multiple (comma-separated)
+            String[] userIdArray = userIds.split(",");
+            
+            // Get client type filter (default to ALL if not specified)
+            UpdateNotificationDTO.ClientType clientTypeFilter = updateNotification.getClientType();
+            if (clientTypeFilter == null) {
+                clientTypeFilter = UpdateNotificationDTO.ClientType.ALL;
+            }
+            
+            // Send update notification to each user via WebSocket
+            for (String userId : userIdArray) {
+                userId = userId.trim();
+                if (userId.isBlank()) {
+                    continue;
+                }
+                
+                try {
+                    // Check if user is connected and has the required client type
+                    if (clientTypeFilter != UpdateNotificationDTO.ClientType.ALL) {
+                        if (!sessionManager.hasClientType(userId, clientTypeFilter)) {
+                            log.debug("⏭️ Skipping update notification for user {}: required clientType={}, user has={}", 
+                                userId, clientTypeFilter, sessionManager.getClientTypes(userId));
+                            continue;
+                        }
+                    }
+                    
+                    // Destination: /user/{userId}/queue/updates
+                    String destination = "/queue/updates";
+                    messagingTemplate.convertAndSendToUser(userId, destination, updateNotification);
+                    
+                    log.info("✅ Update notification sent via WebSocket: userId={}, destination={}, type={}, entityId={}, clientType={}", 
+                        userId, destination, updateNotification.getUpdateType(), updateNotification.getEntityId(), clientTypeFilter);
+                    
+                } catch (Exception e) {
+                    log.error("❌ Error sending update notification to user {}: {}", userId, e.getMessage());
+                    // Continue with other users even if one fails
+                }
+            }
+            
+            // Acknowledge message processing
+            if (acknowledgment != null) {
+                acknowledgment.acknowledge();
+            }
+            
+        } catch (Exception e) {
+            log.error("❌ Error consuming update notification from Kafka: {}", e.getMessage(), e);
             // Don't acknowledge - message will be reprocessed
         }
     }
