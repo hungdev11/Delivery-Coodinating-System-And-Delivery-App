@@ -8,7 +8,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentTransaction;
+import androidx.lifecycle.Lifecycle;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import com.ds.deliveryapp.clients.res.Message;
 import com.ds.deliveryapp.dialog.ProposalPopupDialog;
@@ -20,6 +25,10 @@ public class MainActivity extends AppCompatActivity implements GlobalChatService
 
     private ChatFloatingButton chatFloatingButton;
     private GlobalChatService globalChatService;
+    
+    // Cache fragments để giữ state khi switch tabs
+    private Map<Integer, Fragment> fragmentCache = new HashMap<>();
+    private Fragment currentFragment = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,31 +47,68 @@ public class MainActivity extends AppCompatActivity implements GlobalChatService
 
         BottomNavigationView bottomNavigation = findViewById(R.id.bottomNavigation);
         bottomNavigation.setOnItemSelectedListener(item -> {
-            Fragment selectedFragment = null;
             int id = item.getItemId();
+            Fragment selectedFragment = null;
+            int fragmentKey = 0;
 
             if (id == R.id.nav_orders) {
                 // Check for active session and show appropriate fragment
                 selectedFragment = shouldShowDashboard() ? new SessionDashboardFragment() : new TaskFragment();
-            } else if (id == R.id.nav_map) selectedFragment = new MapFragment();
-            else if (id == R.id.nav_activity) selectedFragment = new ActivityFragment();
-            else if (id == R.id.nav_profile) selectedFragment = new ProfileFragment();
+                fragmentKey = R.id.nav_orders;
+            } else if (id == R.id.nav_map) {
+                selectedFragment = new MapFragment();
+                fragmentKey = R.id.nav_map;
+            } else if (id == R.id.nav_activity) {
+                selectedFragment = new ActivityFragment();
+                fragmentKey = R.id.nav_activity;
+            } else if (id == R.id.nav_profile) {
+                selectedFragment = new ProfileFragment();
+                fragmentKey = R.id.nav_profile;
+            }
 
-            if (selectedFragment != null)
-                getSupportFragmentManager().beginTransaction()
-                        .replace(R.id.fragment_container, selectedFragment)
-                        .commit();
+            if (selectedFragment != null) {
+                switchFragment(fragmentKey, selectedFragment);
+            }
 
             return true;
         });
         // Start with dashboard or tasks based on session status
         if (shouldShowDashboard()) {
-            getSupportFragmentManager().beginTransaction()
-                    .replace(R.id.fragment_container, new SessionDashboardFragment())
-                    .commit();
+            Fragment initialFragment = new SessionDashboardFragment();
+            switchFragment(R.id.nav_orders, initialFragment);
         } else {
             bottomNavigation.setSelectedItemId(R.id.nav_orders);
         }
+    }
+
+    /**
+     * Switch fragment using show/hide instead of replace to preserve state
+     */
+    private void switchFragment(int fragmentKey, Fragment fragment) {
+        Fragment cachedFragment = fragmentCache.get(fragmentKey);
+        FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        
+        // Hide current fragment if exists
+        if (currentFragment != null) {
+            transaction.hide(currentFragment);
+            // Set max lifecycle to STARTED for hidden fragment (not destroyed)
+            transaction.setMaxLifecycle(currentFragment, Lifecycle.State.STARTED);
+        }
+        
+        if (cachedFragment != null) {
+            // Fragment already exists, show it
+            transaction.show(cachedFragment);
+            transaction.setMaxLifecycle(cachedFragment, Lifecycle.State.RESUMED);
+            currentFragment = cachedFragment;
+        } else {
+            // Fragment doesn't exist, add it
+            transaction.add(R.id.fragment_container, fragment, String.valueOf(fragmentKey));
+            transaction.setMaxLifecycle(fragment, Lifecycle.State.RESUMED);
+            fragmentCache.put(fragmentKey, fragment);
+            currentFragment = fragment;
+        }
+        
+        transaction.commit();
     }
 
     private boolean shouldShowDashboard() {
@@ -75,9 +121,10 @@ public class MainActivity extends AppCompatActivity implements GlobalChatService
      * Show dashboard fragment (called from TaskFragment when no active session)
      */
     public void showDashboard() {
-        getSupportFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new SessionDashboardFragment())
-                .commit();
+        Fragment dashboardFragment = new SessionDashboardFragment();
+        // Clear cached orders fragment and replace with dashboard
+        fragmentCache.remove(R.id.nav_orders);
+        switchFragment(R.id.nav_orders, dashboardFragment);
     }
 
     @Override
@@ -98,8 +145,17 @@ public class MainActivity extends AppCompatActivity implements GlobalChatService
 
     /**
      * Navigate to Tasks fragment (used by SessionDashboardFragment after creating session)
+     * Force reload TaskFragment to check for new session
      */
     public void navigateToTasks() {
+        // Clear cached orders fragment to force reload
+        fragmentCache.remove(R.id.nav_orders);
+        
+        // Create new TaskFragment (will check for active session)
+        Fragment taskFragment = new TaskFragment();
+        switchFragment(R.id.nav_orders, taskFragment);
+        
+        // Update bottom navigation selection
         BottomNavigationView bottomNavigation = findViewById(R.id.bottomNavigation);
         bottomNavigation.setSelectedItemId(R.id.nav_orders);
     }

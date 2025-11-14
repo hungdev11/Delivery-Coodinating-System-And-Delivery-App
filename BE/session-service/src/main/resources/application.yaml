@@ -15,6 +15,14 @@ spring:
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    # HikariCP Connection Pool Configuration
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
   jpa:
     hibernate:
       ddl-auto: update
@@ -59,12 +67,17 @@ feign:
   client:
     config:
       default:
-        connectTimeout: 2000
-        readTimeout: 5000
-        loggerLevel: full
+        connectTimeout: 5000
+        readTimeout: 10000
+        loggerLevel: basic
       parcel-service:
-        connectTimeout: 2000
-        readTimeout: 5000
+        connectTimeout: 5000
+        readTimeout: 15000
+      zone-service:
+        connectTimeout: 5000
+        readTimeout: 10000
   httpclient:
-    connection-timeout: 2000
-    time-to-live: 5000
+    connection-timeout: 5000
+    time-to-live: 30000
+    max-connections: 200
+    max-connections-per-route: 50

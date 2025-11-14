@@ -29,6 +29,12 @@ public class ChatWebSocketManager {
     private static final String WS_SUB_STATUS_UPDATES = "/user/queue/status-updates";
     private static final String WS_SUB_TYPING = "/user/queue/typing";
     private static final String WS_SUB_NOTIFICATIONS = "/user/queue/notifications";
+    /**
+     * Subscription for update notifications from other services
+     * Other services (session-service, parcel-service, etc.) publish updates to Kafka
+     * Communication service consumes and forwards to clients via WebSocket
+     */
+    private static final String WS_SUB_UPDATES = "/user/queue/updates";
     // Send destinations
     private static final String WS_SEND_MESSAGE = "/app/chat.send";
     private static final String WS_SEND_TYPING = "/app/chat.typing";
@@ -106,6 +112,8 @@ public class ChatWebSocketManager {
         Map<String, String> handshakeHeaders = new HashMap<>();
         if (mUserId != null) {
             handshakeHeaders.put("Authorization", "Bearer " + mUserId);
+            // Add Client-Type header to identify Android client
+            handshakeHeaders.put("Client-Type", "ANDROID");
         }
 
         // Use Stomp.over() with ConnectionProvider.OKHTTP, URL, headers map, and custom OkHttpClient
@@ -113,6 +121,8 @@ public class ChatWebSocketManager {
         List<StompHeader> headers = new ArrayList<>();
         if (mUserId != null) {
             headers.add(new StompHeader("Authorization", "Bearer " + mUserId));
+            // Add Client-Type header to identify Android client
+            headers.add(new StompHeader("Client-Type", "ANDROID"));
         }
 
         mStompClient = Stomp.over(Stomp.ConnectionProvider.OKHTTP, mWebSocketUrl, handshakeHeaders, okHttpClient);
@@ -270,6 +280,21 @@ public class ChatWebSocketManager {
                         }
                 );
         mComposite.add(notificationsDisposable);
+        
+        // Kênh 6: Update notifications from other services
+        Disposable updatesDisposable = mStompClient.topic(WS_SUB_UPDATES)
+                .subscribe(
+                        stompMessage -> {
+                            Log.d(TAG, "<<< Received STOMP (Update Notification): " + stompMessage.getPayload());
+                            if (mListener != null) {
+                                mListener.onUpdateNotificationReceived(stompMessage.getPayload());
+                            }
+                        },
+                        throwable -> {
+                            Log.e(TAG, "Error on STOMP topic (" + WS_SUB_UPDATES + ")", throwable);
+                        }
+                );
+        mComposite.add(updatesDisposable);
         
         Log.d(TAG, "✅ All subscriptions created successfully for user: " + mUserId);
     }

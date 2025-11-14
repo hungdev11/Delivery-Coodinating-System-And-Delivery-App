@@ -7,10 +7,15 @@ import android.util.Log;
 import com.ds.deliveryapp.auth.AuthManager;
 import com.ds.deliveryapp.clients.req.ProposalUpdateDTO;
 import com.ds.deliveryapp.clients.res.Message;
+import com.ds.deliveryapp.clients.res.UpdateNotification;
 import com.ds.deliveryapp.utils.ChatWebSocketListener;
 import com.ds.deliveryapp.utils.ChatWebSocketManager;
 import com.ds.deliveryapp.enums.ContentType;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,6 +31,7 @@ public class GlobalChatService implements ChatWebSocketListener {
     private ChatWebSocketManager webSocketManager;
     private AuthManager authManager;
     private Context context;
+    private Gson gson;
 
     // Unread message tracking per conversation
     private java.util.Map<String, Integer> unreadCountPerConversation = new java.util.concurrent.ConcurrentHashMap<>();
@@ -41,6 +47,10 @@ public class GlobalChatService implements ChatWebSocketListener {
     private GlobalChatService(Context context) {
         this.context = context.getApplicationContext();
         this.authManager = new AuthManager(context);
+        // Initialize Gson with LocalDateTime support
+        this.gson = new GsonBuilder()
+                .setDateFormat("yyyy-MM-dd'T'HH:mm:ss")
+                .create();
     }
 
     public static synchronized GlobalChatService getInstance(Context context) {
@@ -300,6 +310,42 @@ public class GlobalChatService implements ChatWebSocketListener {
             onMessageReceived(message);
         }
     }
+    
+    @Override
+    public void onUpdateNotificationReceived(String updateNotificationJson) {
+        Log.d(TAG, "📥 Update notification received: " + updateNotificationJson);
+        
+        try {
+            // Parse update notification JSON
+            UpdateNotification updateNotification = gson.fromJson(updateNotificationJson, UpdateNotification.class);
+            
+            if (updateNotification == null) {
+                Log.w(TAG, "⚠️ Failed to parse update notification JSON");
+                return;
+            }
+            
+            Log.i(TAG, String.format("📋 Update notification: type=%s, entityType=%s, entityId=%s, action=%s, userId=%s", 
+                updateNotification.getUpdateType(), 
+                updateNotification.getEntityType(), 
+                updateNotification.getEntityId(), 
+                updateNotification.getAction(), 
+                updateNotification.getUserId()));
+            
+            // Notify all listeners about update notification
+            for (GlobalChatListener listener : listeners) {
+                try {
+                    if (listener instanceof UpdateNotificationListener) {
+                        ((UpdateNotificationListener) listener).onUpdateNotificationReceived(updateNotification);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error notifying listener of update notification", e);
+                }
+            }
+            
+        } catch (Exception e) {
+            Log.e(TAG, "❌ Error parsing update notification JSON: " + e.getMessage(), e);
+        }
+    }
 
     private void handleProposalMessage(Message message) {
         Log.d(TAG, "Handling proposal message: " + message.getId());
@@ -340,6 +386,18 @@ public class GlobalChatService implements ChatWebSocketListener {
         void onConnectionStatusChanged(boolean connected);
         void onError(String error);
         void onNotificationReceived(String notificationJson);
+    }
+
+    /**
+     * Interface for update notification events
+     * Extends GlobalChatListener to handle update notifications from other services
+     */
+    public interface UpdateNotificationListener extends GlobalChatListener {
+        /**
+         * Called when an update notification is received
+         * Clients should refresh data based on the update type and entity
+         */
+        void onUpdateNotificationReceived(UpdateNotification updateNotification);
     }
 
     /**

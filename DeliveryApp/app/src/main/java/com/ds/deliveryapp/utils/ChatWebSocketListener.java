@@ -22,4 +22,12 @@ public interface ChatWebSocketListener {
      * This is used by shippers to monitor all client communications in their active session
      */
     void onSessionMessageReceived(Message message);
+    
+    /**
+     * Called when an update notification is received from Communication service
+     * Other services (session-service, parcel-service, etc.) publish updates to Kafka
+     * Communication service consumes and forwards to clients via WebSocket
+     * Clients should refresh data when receiving update notifications
+     */
+    void onUpdateNotificationReceived(String updateNotificationJson);
 }

@@ -27,8 +27,10 @@ import com.ds.deliveryapp.clients.SessionClient;
 import com.ds.deliveryapp.clients.req.SessionFailRequest;
 import com.ds.deliveryapp.clients.res.DeliverySession;
 import com.ds.deliveryapp.clients.res.PageResponse;
+import com.ds.deliveryapp.clients.res.UpdateNotification;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.DeliveryAssignment;
+import com.ds.deliveryapp.service.GlobalChatService;
 import com.ds.deliveryapp.utils.SessionManager;
 
 import java.util.ArrayList;
@@ -43,7 +45,7 @@ import retrofit2.Response;
  * Màn hình Nhiệm vụ hôm nay.
  * (API lấy các task của phiên (session) đang hoạt động).
  */
-public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickListener {
+public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickListener, GlobalChatService.UpdateNotificationListener {
 
     private RecyclerView rvTasks;
     private TasksAdapter adapter;
@@ -69,6 +71,15 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
 
     private SessionManager sessionManager;
     private Button btnStartDelivery;
+    private GlobalChatService globalChatService;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // Initialize GlobalChatService and register update notification listener
+        globalChatService = GlobalChatService.getInstance(requireContext());
+        globalChatService.addListener(this);
+    }
 
     @Nullable
     @Override
@@ -89,6 +100,9 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         rvTasks.setAdapter(adapter);
         progressBar = view.findViewById(R.id.progress_bar);
         tvEmptyState = view.findViewById(R.id.tv_empty_state);
+
+        // Hiển thị skeleton ngay khi onCreateView (trước khi fetch data)
+        adapter.setShowSkeleton(true);
 
         btnScanOrder = view.findViewById(R.id.btnScanOrder);
         btnScanOrder.setOnClickListener(v -> {
@@ -195,6 +209,12 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         if (page == 0) {
             progressBar.setVisibility(View.VISIBLE);
             if (tvEmptyState != null) tvEmptyState.setVisibility(View.GONE);
+            // Hiển thị skeleton khi loading page đầu tiên
+            if (adapter != null) {
+                adapter.setShowSkeleton(true);
+            }
+            // Disable buttons during initial load
+            setButtonsEnabled(false);
         }
 
         SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
@@ -211,6 +231,10 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             public void onResponse(Call<PageResponse<DeliveryAssignment>> call, Response<PageResponse<DeliveryAssignment>> response) {
                 isLoading = false;
                 progressBar.setVisibility(View.GONE);
+                // Re-enable buttons after load completes
+                if (page == 0) {
+                    setButtonsEnabled(true);
+                }
 
                 if (response.isSuccessful() && response.body() != null) {
                     PageResponse<DeliveryAssignment> pageResponse = response.body();
@@ -222,6 +246,11 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
 
                     tasks.addAll(newTasks);
                     adapter.updateTasks(tasks);
+                    
+                    // Ẩn skeleton khi đã có data
+                    if (page == 0 && adapter != null) {
+                        adapter.setShowSkeleton(false);
+                    }
 
                     if (page == 0 && !tasks.isEmpty()) {
                         activeSessionId = tasks.get(0).getSessionId();
@@ -259,6 +288,14 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             public void onFailure(Call<PageResponse<DeliveryAssignment>> call, Throwable t) {
                 isLoading = false;
                 progressBar.setVisibility(View.GONE);
+                // Re-enable buttons after load fails
+                if (page == 0) {
+                    setButtonsEnabled(true);
+                }
+                // Ẩn skeleton khi có lỗi
+                if (page == 0 && adapter != null) {
+                    adapter.setShowSkeleton(false);
+                }
                 Log.e(TAG, "Network error: " + t.getMessage());
                 Toast.makeText(getContext(), "Lỗi kết nối mạng.", Toast.LENGTH_LONG).show();
             }
@@ -323,12 +360,19 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     }
 
     private void callCompleteSession() {
+        // Disable buttons during API call
+        setButtonsEnabled(false);
+        progressBar.setVisibility(View.VISIBLE);
+
         SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
         Call<DeliverySession> call = service.completeSession(activeSessionId);
 
         call.enqueue(new Callback<DeliverySession>() {
             @Override
             public void onResponse(Call<DeliverySession> call, Response<DeliverySession> response) {
+                progressBar.setVisibility(View.GONE);
+                setButtonsEnabled(true);
+
                 if (response.isSuccessful()) {
                     Toast.makeText(getContext(), "Đã hoàn tất phiên.", Toast.LENGTH_LONG).show();
                     // Navigate to dashboard after completing session
@@ -342,6 +386,8 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
 
             @Override
             public void onFailure(Call<DeliverySession> call, Throwable t) {
+                progressBar.setVisibility(View.GONE);
+                setButtonsEnabled(true);
                 Toast.makeText(getContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
@@ -369,6 +415,10 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     }
 
     private void callFailSession(String reason) {
+        // Disable buttons during API call
+        setButtonsEnabled(false);
+        progressBar.setVisibility(View.VISIBLE);
+
         SessionFailRequest requestBody = new SessionFailRequest(reason);
 
         SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
@@ -377,6 +427,9 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         call.enqueue(new Callback<DeliverySession>() {
             @Override
             public void onResponse(Call<DeliverySession> call, Response<DeliverySession> response) {
+                progressBar.setVisibility(View.GONE);
+                setButtonsEnabled(true);
+
                 if (response.isSuccessful()) {
                     Toast.makeText(getContext(), "Đã báo cáo sự cố. Phiên bị hủy.", Toast.LENGTH_LONG).show();
                     // Navigate to dashboard after failing session
@@ -390,6 +443,8 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
 
             @Override
             public void onFailure(Call<DeliverySession> call, Throwable t) {
+                progressBar.setVisibility(View.GONE);
+                setButtonsEnabled(true);
                 Toast.makeText(getContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
@@ -464,6 +519,21 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         }
     }
 
+    /**
+     * Enable/disable all buttons during API calls
+     */
+    private void setButtonsEnabled(boolean enabled) {
+        if (btnStartDelivery != null) {
+            btnStartDelivery.setEnabled(enabled);
+        }
+        if (btnScanOrder != null) {
+            btnScanOrder.setEnabled(enabled);
+        }
+        if (btnSessionMenu != null) {
+            btnSessionMenu.setEnabled(enabled);
+        }
+    }
+
     private void startSession() {
         if (activeSessionId == null) {
             Toast.makeText(getContext(), "Không tìm thấy phiên.", Toast.LENGTH_SHORT).show();
@@ -507,5 +577,116 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         Intent intent = new Intent(getActivity(), TaskDetailActivity.class);
         intent.putExtra("TASK_DETAIL", task);
         startActivityForResult(intent, SCAN_REQUEST_CODE);
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        // Unregister update notification listener
+        if (globalChatService != null) {
+            globalChatService.removeListener(this);
+        }
+    }
+
+    // ==================== GlobalChatService.UpdateNotificationListener ====================
+    
+    @Override
+    public void onMessageReceived(com.ds.deliveryapp.clients.res.Message message) {
+        // Not used in TaskFragment
+    }
+
+    @Override
+    public void onUnreadCountChanged(int count) {
+        // Not used in TaskFragment
+    }
+
+    @Override
+    public void onConnectionStatusChanged(boolean connected) {
+        // Not used in TaskFragment
+    }
+
+    @Override
+    public void onError(String error) {
+        // Not used in TaskFragment
+    }
+
+    @Override
+    public void onNotificationReceived(String notificationJson) {
+        // Not used in TaskFragment
+    }
+
+    @Override
+    public void onUpdateNotificationReceived(UpdateNotification updateNotification) {
+        Log.d(TAG, String.format("📥 Update notification received: type=%s, entityType=%s, entityId=%s, action=%s", 
+            updateNotification.getUpdateType(), 
+            updateNotification.getEntityType(), 
+            updateNotification.getEntityId(), 
+            updateNotification.getAction()));
+        
+        // Handle update notification on UI thread
+        if (getActivity() != null) {
+            getActivity().runOnUiThread(() -> {
+                handleUpdateNotification(updateNotification);
+            });
+        }
+    }
+    
+    /**
+     * Handle update notification and refresh data accordingly
+     */
+    private void handleUpdateNotification(UpdateNotification updateNotification) {
+        if (updateNotification == null) {
+            return;
+        }
+        
+        UpdateNotification.EntityType entityType = updateNotification.getEntityType();
+        UpdateNotification.ActionType action = updateNotification.getAction();
+        String entityId = updateNotification.getEntityId();
+        
+        // Handle SESSION_UPDATE: refresh session status and tasks
+        if (entityType == UpdateNotification.EntityType.SESSION) {
+            if (action == UpdateNotification.ActionType.COMPLETED || 
+                action == UpdateNotification.ActionType.FAILED || 
+                action == UpdateNotification.ActionType.CANCELLED) {
+                // Session ended - check session status and navigate to dashboard if needed
+                Log.d(TAG, "Session ended (action: " + action + "). Checking session status...");
+                checkActiveSession();
+            } else if (action == UpdateNotification.ActionType.CREATED || 
+                       action == UpdateNotification.ActionType.STATUS_CHANGED) {
+                // Session created or status changed - refresh tasks
+                Log.d(TAG, "Session updated (action: " + action + "). Refreshing tasks...");
+                if (activeSessionId == null || activeSessionId.equals(entityId)) {
+                    // Refresh session status first, then refresh tasks
+                    checkActiveSession();
+                }
+            }
+        }
+        // Handle ASSIGNMENT_UPDATE: refresh tasks list
+        else if (entityType == UpdateNotification.EntityType.ASSIGNMENT) {
+            if (action == UpdateNotification.ActionType.CREATED || 
+                action == UpdateNotification.ActionType.UPDATED || 
+                action == UpdateNotification.ActionType.STATUS_CHANGED ||
+                action == UpdateNotification.ActionType.COMPLETED ||
+                action == UpdateNotification.ActionType.FAILED) {
+                // Assignment updated - refresh tasks
+                Log.d(TAG, "Assignment updated (action: " + action + "). Refreshing tasks...");
+                if (activeSessionId != null) {
+                    // Refresh tasks for current session
+                    resetAndFetchTasks();
+                }
+            }
+        }
+        // Handle PARCEL_UPDATE: refresh tasks list (if parcel status changed)
+        else if (entityType == UpdateNotification.EntityType.PARCEL) {
+            if (action == UpdateNotification.ActionType.STATUS_CHANGED || 
+                action == UpdateNotification.ActionType.UPDATED) {
+                // Parcel updated - refresh tasks (parcel status might affect assignment status)
+                Log.d(TAG, "Parcel updated (action: " + action + "). Refreshing tasks...");
+                if (activeSessionId != null) {
+                    // Refresh tasks for current session
+                    resetAndFetchTasks();
+                }
+            }
+        }
     }
 }

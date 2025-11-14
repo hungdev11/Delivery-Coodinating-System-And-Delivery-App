@@ -110,6 +110,19 @@ public class SessionServiceClient implements ISessionServiceClient {
     }
 
     @Override
+    public ResponseEntity<?> getTasksBySessionId(UUID sessionId, int page, int size) {
+        String uri = UriComponentsBuilder
+                .fromPath("/api/v1/assignments/session/{sessionId}/tasks")
+                .queryParam("page", page)
+                .queryParam("size", size)
+                .build(sessionId)
+                .toString();
+
+        log.info("WebClient: GET -> {}", uri);
+        return callGet(uri);
+    }
+
+    @Override
     public ResponseEntity<?> getTasksHistory(UUID deliveryManId, List<String> status,
             String createdAtStart, String createdAtEnd,
             String completedAtStart, String completedAtEnd,

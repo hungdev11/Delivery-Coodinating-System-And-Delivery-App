@@ -5,6 +5,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
@@ -368,16 +371,140 @@ public class ParcelService implements IParcelService{
 
     @Override
     public Map<String, ParcelResponse> fetchParcelsBulk(List<UUID> parcelIds) {
+        long startTime = System.currentTimeMillis();
+        log.info("🚀 Starting optimized fetchParcelsBulk for {} parcels", parcelIds.size());
+        
+        if (parcelIds == null || parcelIds.isEmpty()) {
+            log.warn("⚠️ No parcel IDs provided");
+            return new HashMap<>();
+        }
+        
         Map<String, ParcelResponse> result = new HashMap<>();
-        for (UUID parcelId : parcelIds) {
+        
+        try {
+            // Step 1: Fetch all parcels in batch (1 query instead of N)
+            log.debug("📦 Step 1: Fetching {} parcels from database...", parcelIds.size());
+            List<Parcel> parcels = parcelRepository.findAllById(parcelIds);
+            long dbQueryTime = System.currentTimeMillis() - startTime;
+            log.info("✅ Fetched {} parcels from database in {}ms", parcels.size(), dbQueryTime);
+            
+            if (parcels.isEmpty()) {
+                log.warn("⚠️ No parcels found for provided IDs");
+                return result;
+            }
+            
+            // Step 2: Fetch all destinations in batch (1 query instead of N)
+            log.debug("📍 Step 2: Fetching destinations for {} parcels...", parcels.size());
+            List<ParcelDestination> destinations = parcelDestinationRepository.findByParcelInAndIsCurrentTrue(parcels);
+            long destinationsTime = System.currentTimeMillis() - startTime - dbQueryTime;
+            log.info("✅ Fetched {} destinations in {}ms", destinations.size(), destinationsTime);
+            
+            // Step 3: Create map of parcel -> destination for quick lookup
+            Map<String, ParcelDestination> parcelToDestination = destinations.stream()
+                .collect(Collectors.toMap(
+                    dest -> dest.getParcel().getId().toString(),
+                    dest -> dest,
+                    (existing, replacement) -> existing // Keep first if duplicate
+                ));
+            
+            // Step 4: Fetch zone destinations in parallel (N parallel calls instead of sequential)
+            log.debug("🌐 Step 3: Fetching zone destinations for {} addresses...", destinations.size());
+            List<String> destinationIds = destinations.stream()
+                .map(ParcelDestination::getDestinationId)
+                .distinct()
+                .collect(Collectors.toList());
+            
+            long zoneStartTime = System.currentTimeMillis();
+            
+            // Create parallel futures for zone service calls
+            ExecutorService executor = Executors.newFixedThreadPool(Math.min(10, destinationIds.size()));
+            Map<String, CompletableFuture<DestinationResponse<DesDetail>>> zoneFutures = new HashMap<>();
+            
+            for (String destinationId : destinationIds) {
+                CompletableFuture<DestinationResponse<DesDetail>> future = CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return zoneClient.getDestination(destinationId);
+                    } catch (Exception e) {
+                        log.error("❌ Failed to fetch zone destination {}: {}", destinationId, e.getMessage());
+                        return null;
+                    }
+                }, executor);
+                zoneFutures.put(destinationId, future);
+            }
+            
+            // Wait for all zone calls to complete
+            CompletableFuture.allOf(zoneFutures.values().toArray(new CompletableFuture[0])).join();
+            
+            // Create map of destinationId -> DestinationResponse
+            Map<String, DestinationResponse<DesDetail>> destinationMap = new HashMap<>();
+            for (Map.Entry<String, CompletableFuture<DestinationResponse<DesDetail>>> entry : zoneFutures.entrySet()) {
+                try {
+                    DestinationResponse<DesDetail> response = entry.getValue().get();
+                    if (response != null && response.getResult() != null) {
+                        destinationMap.put(entry.getKey(), response);
+                    }
+                } catch (Exception e) {
+                    log.error("❌ Error getting zone destination {}: {}", entry.getKey(), e.getMessage());
+                }
+            }
+            
+            // Cleanup executor
+            executor.shutdown();
+            
+            long zoneTime = System.currentTimeMillis() - zoneStartTime;
+            log.info("✅ Fetched {} zone destinations in {}ms (parallel)", destinationMap.size(), zoneTime);
+            
+            // Step 5: Build result map by combining parcel, destination, and zone data
+            log.debug("🔨 Step 4: Building response for {} parcels...", parcels.size());
+            for (Parcel parcel : parcels) {
+                try {
+                    String parcelIdStr = parcel.getId().toString();
+                    ParcelDestination destination = parcelToDestination.get(parcelIdStr);
+                    
+                    if (destination == null) {
+                        log.warn("⚠️ No destination found for parcel {}", parcelIdStr);
+                        // Return parcel without location
+                        result.put(parcelIdStr, toDto(parcel));
+                        continue;
+                    }
+                    
+                    DestinationResponse<DesDetail> zoneResponse = destinationMap.get(destination.getDestinationId());
+                    
+                    if (zoneResponse == null || zoneResponse.getResult() == null) {
+                        log.warn("⚠️ No zone data found for destination {} (parcel {})", 
+                                destination.getDestinationId(), parcelIdStr);
+                        // Return parcel without location
+                        result.put(parcelIdStr, toDto(parcel));
+                        continue;
+                    }
+                    
+                    // Build response with location
+                    ParcelResponse parcelResponse = toDtoWithLocation(parcel, zoneResponse);
+                    result.put(parcelIdStr, parcelResponse);
+                } catch (Exception e) {
+                    log.error("❌ Error building response for parcel {}: {}", parcel.getId(), e.getMessage(), e);
+                    // Return parcel without location as fallback
+                    result.put(parcel.getId().toString(), toDto(parcel));
+                }
+            }
+            
+            long totalTime = System.currentTimeMillis() - startTime;
+            log.info("✅ Completed fetchParcelsBulk: {} parcels in {}ms (DB: {}ms, Destinations: {}ms, Zone: {}ms)", 
+                    result.size(), totalTime, dbQueryTime, destinationsTime, zoneTime);
+            
+        } catch (Exception e) {
+            log.error("❌ Critical error in fetchParcelsBulk: {}", e.getMessage(), e);
+            // Fallback: return empty map or parcels without locations
             try {
-                ParcelResponse parcel = getParcelById(parcelId);
-                result.put(parcelId.toString(), parcel);
-            } catch (Exception e) {
-                log.error("Failed to fetch parcel info for {}: {}", parcelId, e.getMessage(), e);
-                // Skip this parcel and continue with others
+                List<Parcel> parcels = parcelRepository.findAllById(parcelIds);
+                for (Parcel parcel : parcels) {
+                    result.put(parcel.getId().toString(), toDto(parcel));
+                }
+            } catch (Exception fallbackError) {
+                log.error("❌ Fallback also failed: {}", fallbackError.getMessage(), fallbackError);
             }
         }
+        
         return result;
     }
 

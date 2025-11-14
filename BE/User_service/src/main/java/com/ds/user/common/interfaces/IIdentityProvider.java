@@ -60,6 +60,13 @@ public interface IIdentityProvider {
     List<String> getUserRoles(String externalId);
     
     /**
+     * Batch get user roles for multiple users (parallel execution for better performance)
+     * @param externalIds list of external user IDs
+     * @return map of externalId -> list of role names
+     */
+    java.util.Map<String, List<String>> batchGetUserRoles(List<String> externalIds);
+    
+    /**
      * Assign roles to user
      * @param externalId external user ID
      * @param roles roles to assign

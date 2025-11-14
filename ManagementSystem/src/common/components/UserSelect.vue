@@ -4,6 +4,7 @@
  *
  * A searchable select component for selecting users by ID or name
  * Supports seed ID (allows direct ID input)
+ * Uses USelectMenu for search functionality
  */
 
 import { ref, computed, watch, onMounted } from 'vue'
@@ -64,28 +65,41 @@ watch(selectedUser, (user) => {
   }
 })
 
-// Computed options for USelect
+// Computed options for USelectMenu
 const userOptions = computed(() => {
-  return users.value.map(user => ({
-    label: `${user.fullName} (${user.username}) - ${user.id.substring(0, 8)}...`,
+  const options = users.value.map(user => ({
+    label: `${user.fullName} (${user.username})`,
     value: user.id,
     user: user as UserDto,
+    description: user.email || `ID: ${user.id.substring(0, 8)}...`,
+    // Avatar placeholder - can be enhanced with actual user avatar
+    avatar: {
+      src: undefined,
+      alt: user.fullName || user.username,
+    },
   }))
-})
 
   // If allowSeedId is true, add the current ID as an option if not in list
-const selectOptions = computed(() => {
-  const options = [...userOptions.value]
-
   if (props.allowSeedId && selectedId.value && !users.value.find(u => u.id === selectedId.value)) {
     options.unshift({
       label: `ID: ${selectedId.value}`,
       value: selectedId.value,
       user: undefined as unknown as UserDto,
+      description: 'Direct ID input',
+      avatar: {
+        src: undefined,
+        alt: 'ID',
+      },
     })
   }
 
   return options
+})
+
+// Selected option for USelectMenu
+const selectedOption = computed(() => {
+  if (!selectedId.value) return undefined
+  return userOptions.value.find(opt => opt.value === selectedId.value)
 })
 
 /**
@@ -129,20 +143,20 @@ const loadUsers = async (query: string) => {
       size: 20, // Limit results for better UX
     }
 
-      const response = await getUsers(params)
+    const response = await getUsers(params)
 
-      if (response.result) {
-        users.value = response.result.data.map((u) => new UserDto(u))
+    if (response.result) {
+      users.value = response.result.data.map((u) => new UserDto(u))
 
-        // If query matches an ID exactly, try to load that user
-        if (props.allowSeedId && isIdQuery && users.value.length === 0) {
-          try {
-            await loadUserById(query)
-          } catch {
-            // Ignore if user not found
-          }
+      // If query matches an ID exactly, try to load that user
+      if (props.allowSeedId && isIdQuery && users.value.length === 0) {
+        try {
+          await loadUserById(query)
+        } catch {
+          // Ignore if user not found
         }
       }
+    }
   } catch (error) {
     console.error('Failed to search users:', error)
     toast.add({
@@ -181,9 +195,18 @@ const loadUserById = async (id: string) => {
   }
 }
 
-// Note: USelect in Nuxt UI v3 handles search internally
-// We load users when options are requested via :items prop
-// The search is handled automatically by USelect when searchable is true
+/**
+ * Handle search in USelectMenu
+ * USelectMenu triggers search when user types
+ */
+const handleSearch = (query: string) => {
+  searchQuery.value = query
+  if (query && query.length >= 2) {
+    loadUsers(query)
+  } else if (!query) {
+    users.value = []
+  }
+}
 
 /**
  * Handle selection change
@@ -192,6 +215,7 @@ const handleSelectionChange = (value: string | undefined) => {
   if (!value) {
     selectedUser.value = null
     selectedId.value = undefined
+    emit('update:modelValue', undefined)
     return
   }
 
@@ -203,6 +227,7 @@ const handleSelectionChange = (value: string | undefined) => {
     // Allow raw ID selection
     selectedId.value = value
     selectedUser.value = null
+    emit('update:modelValue', value)
   }
 }
 
@@ -216,13 +241,44 @@ onMounted(() => {
 
 <template>
   <UFormField :label="label" :name="`user-select-${label.toLowerCase().replace(/\s+/g, '-')}`">
-    <USelect
-      :model-value="selectedId"
-      :items="selectOptions"
+    <USelectMenu
+      :model-value="selectedOption"
+      :options="userOptions"
       :placeholder="placeholder"
       :loading="loading"
       :disabled="disabled"
+      searchable
+      :searchable-placeholder="'Search by ID or name...'"
+      icon="i-lucide-user"
       @update:model-value="handleSelectionChange"
-    />
+      @update:search="handleSearch"
+      class="w-full"
+    >
+      <template #leading="{ option }">
+        <UAvatar
+          v-if="option"
+          v-bind="option.avatar"
+          :size="'2xs'"
+          :alt="option.avatar?.alt || option.label"
+        />
+      </template>
+      <template #label>
+        <span v-if="selectedOption">{{ selectedOption.label }}</span>
+        <span v-else class="text-gray-500">{{ placeholder }}</span>
+      </template>
+      <template #option="{ option }">
+        <div class="flex items-center gap-2">
+          <UAvatar
+            v-bind="option.avatar"
+            :size="'2xs'"
+            :alt="option.avatar?.alt || option.label"
+          />
+          <div class="flex flex-col">
+            <span class="text-sm font-medium">{{ option.label }}</span>
+            <span v-if="option.description" class="text-xs text-gray-500">{{ option.description }}</span>
+          </div>
+        </div>
+      </template>
+    </USelectMenu>
   </UFormField>
 </template>

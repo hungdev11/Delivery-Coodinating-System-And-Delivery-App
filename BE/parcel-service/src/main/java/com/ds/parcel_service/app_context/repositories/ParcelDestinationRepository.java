@@ -24,4 +24,10 @@ public interface ParcelDestinationRepository extends JpaRepository<ParcelDestina
      * Find all current destinations for a parcel (for validation - should be 0 or 1)
      */
     List<ParcelDestination> findAllByParcelAndIsCurrentTrue(Parcel parcel);
+    
+    /**
+     * Find all current destinations for multiple parcels (batch query for performance)
+     * This is used in fetchParcelsBulk to avoid N+1 queries
+     */
+    List<ParcelDestination> findByParcelInAndIsCurrentTrue(List<Parcel> parcels);
 }

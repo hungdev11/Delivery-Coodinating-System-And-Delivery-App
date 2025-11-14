@@ -9,6 +9,14 @@ spring:
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    # HikariCP Connection Pool Configuration
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
   jpa:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:update}  # Options: create, create-drop, update, validate, none
@@ -42,6 +50,13 @@ keycloak:
     username: ${KEYCLOAK_ADMIN_USERNAME}
     password: ${KEYCLOAK_ADMIN_PASSWORD}
     secret: ${KEYCLOAK_CLIENT_SECRET:46sGOyba6nyt8UhLkKAQgzmbedF9L042}
+  
+  admin-client:
+    # Connection pool settings (if needed by the HTTP client)
+    connection-pool-size: 20
+    # Timeout settings (in milliseconds)
+    connection-timeout: 10000
+    socket-timeout: 30000
   
   init:
     enabled: ${KEYCLOAK_INIT_ENABLED:true}
@@ -98,6 +113,21 @@ keycloak:
               - "http://localhost:5173"
               - "http://localhost:3000"
             roles:
+              - user-service
+              - delivery-service
+
+          - clientId: dss-client
+            name: "DSS Client"
+            secret: ""  # Will be auto-generated
+            publicClient: false
+            serviceAccountsEnabled: true
+            standardFlowEnabled: true
+            directAccessGrantsEnabled: true
+            redirectUris: ["*"]
+            webOrigins: ["*"]
+            roles:
+              - admin-service
+              - management-service
               - user-service
               - delivery-service
 
@@ -220,6 +250,11 @@ keycloak:
             realmRoles: [SHOP]
             clientRoles:
               frontend-client: [user-service]
+            address:
+              name: My Shop - Primary Address
+              addressText: 123 Nguyen Hue Street, District 1, Ho Chi Minh City
+              lat: 10.762622
+              lon: 106.660172
 
           - username: shop02
             email: shop02@delivery-system.com
@@ -231,6 +266,11 @@ keycloak:
             realmRoles: [SHOP]
             clientRoles:
               frontend-client: [user-service]
+            address:
+              name: Fast Mart - Primary Address
+              addressText: 456 Le Loi Street, District 1, Ho Chi Minh City
+              lat: 10.770000
+              lon: 106.670000
 
           - username: shop03
             email: shop03@delivery-system.com
@@ -242,6 +282,11 @@ keycloak:
             realmRoles: [SHOP]
             clientRoles:
               frontend-client: [user-service]
+            address:
+              name: Quick Store - Primary Address
+              addressText: 789 Dong Khoi Street, District 1, Ho Chi Minh City
+              lat: 10.775000
+              lon: 106.675000
 
           - username: shop04
             email: shop04@delivery-system.com
@@ -253,6 +298,11 @@ keycloak:
             realmRoles: [SHOP]
             clientRoles:
               frontend-client: [user-service]
+            address:
+              name: Best Shop - Primary Address
+              addressText: 321 Pasteur Street, District 3, Ho Chi Minh City
+              lat: 10.785000
+              lon: 106.685000
 
           - username: shop05
             email: shop05@delivery-system.com
@@ -264,6 +314,11 @@ keycloak:
             realmRoles: [SHOP]
             clientRoles:
               frontend-client: [user-service]
+            address:
+              name: Mega Market - Primary Address
+              addressText: 654 Vo Van Tan Street, District 3, Ho Chi Minh City
+              lat: 10.790000
+              lon: 106.690000
 
           - username: staff02
             email: staff02@delivery-system.com
@@ -286,11 +341,122 @@ keycloak:
             realmRoles: [CLIENT]
             clientRoles:
               frontend-client: [user-service]
+            address:
+              name: Jane Customer - Primary Address
+              addressText: Đại học Sư phạm Kỹ thuật TP.HCM, Võ Văn Ngân, Linh Chiểu, Thủ Đức, TP.HCM
+              lat: 10.860000
+              lon: 106.770000
+
+          - username: client02
+            email: client02@delivery-system.com
+            firstName: Minh
+            lastName: Le
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Minh Le - Primary Address
+              addressText: 123 Lê Văn Việt, Bình Thọ, Thủ Đức, TP.HCM
+              lat: 10.850000
+              lon: 106.760000
+
+          - username: client03
+            email: client03@delivery-system.com
+            firstName: Lan
+            lastName: Tran
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Lan Tran - Primary Address
+              addressText: 456 Võ Văn Ngân, Bình Thọ, Thủ Đức, TP.HCM
+              lat: 10.862000
+              lon: 106.772000
+
+          - username: client04
+            email: client04@delivery-system.com
+            firstName: Duc
+            lastName: Nguyen
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Duc Nguyen - Primary Address
+              addressText: Đường Huy Cận, Phường Phước Long, Thủ Đức, TP.HCM
+              lat: 10.830000
+              lon: 106.750000
+
+          - username: client05
+            email: client05@delivery-system.com
+            firstName: An
+            lastName: Pham
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: An Pham - Primary Address
+              addressText: 789 Lê Văn Việt, Hiệp Phú, Thủ Đức, TP.HCM
+              lat: 10.848000
+              lon: 106.758000
+
+          - username: client06
+            email: client06@delivery-system.com
+            firstName: Hoa
+            lastName: Vo
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Hoa Vo - Primary Address
+              addressText: 321 Võ Văn Ngân, Linh Chiểu, Thủ Đức, TP.HCM
+              lat: 10.864000
+              lon: 106.774000
+
+          - username: client07
+            email: client07@delivery-system.com
+            firstName: Hung
+            lastName: Hoang
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Hung Hoang - Primary Address
+              addressText: 654 Lê Văn Việt, Tăng Nhơn Phú A, Thủ Đức, TP.HCM
+              lat: 10.852000
+              lon: 106.762000
 
 # External Services
 services:
   settings:
     base-url: ${SETTINGS_SERVICE_URL:http://localhost:21502}
+  zone:
+    base-url: ${ZONE_SERVICE_URL:http://localhost:21503}
+  api-gateway:
+    base-url: ${API_GATEWAY_URL:http://localhost:21500}
+
+# Parcel Seed Configuration
+parcel:
+  seed:
+    enabled: ${PARCEL_SEED_ENABLED:true}
+    count: ${PARCEL_SEED_COUNT:20}
 
 # Actuator Configuration
 management:

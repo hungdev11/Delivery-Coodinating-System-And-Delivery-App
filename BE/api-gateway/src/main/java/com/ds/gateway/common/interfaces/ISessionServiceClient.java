@@ -13,6 +13,7 @@ public interface ISessionServiceClient {
     ResponseEntity<?> createSessionBatch(Object createSessionRequest);
 
     ResponseEntity<?> getDailyTasks(UUID deliveryManId, List<String> status, int page, int size);
+    ResponseEntity<?> getTasksBySessionId(UUID sessionId, int page, int size);
     ResponseEntity<?> getTasksHistory(UUID deliveryManId, List<String> status,
                                       String createdAtStart, String createdAtEnd,
                                       String completedAtStart, String completedAtEnd,

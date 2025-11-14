@@ -67,6 +67,9 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     private ImageView ivAvatar;
     private TextView tvRecipientName;
     private TextView tvRecipientStatus;
+    
+    // Loading state
+    private boolean isSendingProposal = false;
 
     // Adapter & Data
     private MessageAdapter mAdapter;
@@ -474,14 +477,21 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                     // --- CẬP NHẬT APP BAR TÙY CHỈNH ---
                     runOnUiThread(() -> {
                         if (tvRecipientName != null) {
-                            tvRecipientName.setText(mRecipientName);
+                            // Add online status indicator if online
+                            String displayName = mRecipientName;
+                            if (conversation.getPartnerOnline() != null && conversation.getPartnerOnline()) {
+                                displayName = "🟢 " + displayName;
+                            }
+                            tvRecipientName.setText(displayName);
                         }
 
                         if (tvRecipientStatus != null) {
                             if (mParcelCode != null && !mParcelCode.isEmpty()) {
                                 tvRecipientStatus.setText("Đơn hàng: " + mParcelCode);
-                            } else {
+                            } else if (conversation.getPartnerOnline() != null && conversation.getPartnerOnline()) {
                                 tvRecipientStatus.setText("Đang hoạt động");
+                            } else {
+                                tvRecipientStatus.setText("Offline");
                             }
                         }
                         // (Thêm code Glide/Picasso để tải ivAvatar tại đây)
@@ -752,12 +762,45 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             String content = etMessage.getText().toString().trim();
             if (!content.isEmpty()) {
                 if (mWebSocketManager != null && mWebSocketManager.isConnected()) {
+                    // Disable button and show loading state
+                    setSendButtonLoading(true);
                     sendMessage(content);
                 } else {
                     showErrorToast("Not connected to chat. Please wait or try again.");
                 }
             }
         });
+    }
+
+    /**
+     * Set loading state for send button
+     */
+    private void setSendButtonLoading(boolean loading) {
+        if (btnSend != null) {
+            btnSend.setEnabled(!loading);
+            btnSend.setAlpha(loading ? 0.5f : 1.0f);
+            // Optionally show a progress indicator
+            if (loading) {
+                // You can add a progress indicator here if needed
+                btnSend.setContentDescription("Đang gửi...");
+            } else {
+                btnSend.setContentDescription("Nút gửi tin nhắn");
+            }
+        }
+    }
+
+    /**
+     * Set loading state for all buttons (send, attach) during API calls
+     */
+    private void setButtonsLoadingState(boolean loading) {
+        if (btnSend != null) {
+            btnSend.setEnabled(!loading);
+            btnSend.setAlpha(loading ? 0.5f : 1.0f);
+        }
+        if (btnAttach != null) {
+            btnAttach.setEnabled(!loading);
+            btnAttach.setAlpha(loading ? 0.5f : 1.0f);
+        }
     }
 
     /**
@@ -782,6 +825,8 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                 
                 runOnUiThread(() -> {
                     etMessage.setText("");
+                    // Re-enable send button
+                    setSendButtonLoading(false);
                     // Message will appear when WebSocket delivers it via onMessageReceived()
                 });
                 
@@ -797,7 +842,11 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             @Override
             public void onError(Throwable throwable) {
                 Log.e(TAG, "❌ Error sending STOMP message", throwable);
-                runOnUiThread(() -> showErrorToast("Failed to send message."));
+                runOnUiThread(() -> {
+                    // Re-enable send button on error
+                    setSendButtonLoading(false);
+                    showErrorToast("Failed to send message.");
+                });
             }
         });
     }
@@ -1032,6 +1081,15 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             return;
         }
 
+        // Disable buttons during API call
+        if (isSendingProposal) {
+            showErrorToast("Đang gửi yêu cầu...");
+            return;
+        }
+
+        isSendingProposal = true;
+        setButtonsLoadingState(true);
+
         if ("CONFIRM_REFUSAL".equals(type) && mParcelId != null) {
             data = "{\"parcelId\":\"" + mParcelId + "\"}";
         }
@@ -1058,6 +1116,9 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         call.enqueue(new Callback<InteractiveProposal>() {
             @Override
             public void onResponse(@NonNull Call<InteractiveProposal> call, @NonNull Response<InteractiveProposal> response) {
+                isSendingProposal = false;
+                setButtonsLoadingState(false);
+
                 if (response.isSuccessful()) {
                     Log.i(TAG, "✅ Gửi proposal thành công. Chờ WebSocket echo...");
                     // ❌ REMOVED: Don't reload entire history - WebSocket will deliver the message
@@ -1067,12 +1128,15 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                     runOnUiThread(() -> showErrorToast("Proposal sent! Waiting for response..."));
                 } else {
                     Log.e(TAG, "❌ Gửi proposal thất bại: " + response.code());
-                    showErrorToast("Gửi yêu cầu thất bại.");
+                    runOnUiThread(() -> showErrorToast("Gửi yêu cầu thất bại."));
                 }
             }
             @Override
             public void onFailure(@NonNull Call<InteractiveProposal> call, @NonNull Throwable t) {
+                isSendingProposal = false;
+                setButtonsLoadingState(false);
                 Log.e(TAG, "❌ Lỗi mạng khi gửi proposal", t);
+                runOnUiThread(() -> showErrorToast("Lỗi mạng khi gửi yêu cầu."));
             }
         });
     }
@@ -1086,6 +1150,15 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     public void onProposalRespond(UUID proposalId, String resultData) {
         Log.d(TAG, "Handling RESPOND for proposal: " + proposalId + " with data: " + resultData);
 
+        // Disable buttons during API call
+        if (isSendingProposal) {
+            showErrorToast("Đang xử lý...");
+            return;
+        }
+
+        isSendingProposal = true;
+        setButtonsLoadingState(true);
+
         ProposalResponseRequest payload = new ProposalResponseRequest(resultData);
 
         Call<InteractiveProposal> call = mChatClient.respondToProposal(
@@ -1097,21 +1170,27 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         call.enqueue(new Callback<InteractiveProposal>() {
             @Override
             public void onResponse(@NonNull Call<InteractiveProposal> call, @NonNull Response<InteractiveProposal> response) {
+                isSendingProposal = false;
+                setButtonsLoadingState(false);
+
                 if (response.isSuccessful()) {
                     Log.i(TAG, "✅ Phản hồi proposal thành công. Chờ WebSocket update...");
                     // ❌ REMOVED: Don't reload entire history - WebSocket will deliver the update
                     // loadChatHistory();
                     
                     // Proposal update will arrive via onProposalUpdateReceived()
+                    runOnUiThread(() -> showErrorToast("Phản hồi đã gửi!"));
                 } else {
                     Log.e(TAG, "❌ Phản hồi proposal thất bại: " + response.code());
-                    showErrorToast("Thao tác thất bại.");
+                    runOnUiThread(() -> showErrorToast("Thao tác thất bại."));
                 }
             }
             @Override
             public void onFailure(@NonNull Call<InteractiveProposal> call, @NonNull Throwable t) {
+                isSendingProposal = false;
+                setButtonsLoadingState(false);
                 Log.e(TAG, "❌ Lỗi mạng khi phản hồi proposal", t);
-                showErrorToast("Lỗi mạng: " + t.getMessage());
+                runOnUiThread(() -> showErrorToast("Lỗi mạng: " + t.getMessage()));
             }
         });
     }
@@ -1281,6 +1360,14 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                 // This could be implemented in MapFragment or a separate monitoring UI
             }
         });
+    }
+
+    @Override
+    public void onUpdateNotificationReceived(String updateNotificationJson) {
+        // Update notifications are handled by TaskFragment and MapFragment
+        // ChatActivity doesn't need to handle update notifications
+        // This method is required by ChatWebSocketListener interface
+        Log.d(TAG, "📥 Update notification received (ignored in ChatActivity): " + updateNotificationJson);
     }
 
     /* --- CÁC HÀM TIỆN ÍCH --- */

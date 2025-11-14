@@ -272,19 +272,25 @@ public class SessionService implements ISessionService {
         session.setEndTime(LocalDateTime.now());
         DeliverySession savedSession = sessionRepository.save(session);
         
-        // Xử lý các task DELAYED
-        // Báo cho Parcel-Service chuyển các đơn DELAYED về IN_WAREHOUSE
-        savedSession.getAssignments().stream()
-            .filter(
-                a -> a.getStatus().equals(AssignmentStatus.FAILED) && 
-                (a.getFailReason().contains("hẹn") || a.getFailReason().contains("hoãn")))
-            .forEach(da-> {
-                try {
-                    parcelApiClient.changeParcelStatus(da.getParcelId(), ParcelEvent.END_SESSION);
-                } catch (Exception e) {
-                    log.error("Failed to call Parcel-Service for parcel {}: {}", da.getParcelId(), e.getMessage());
-                }
-            });
+        // Handle DELAYED tasks: notify Parcel-Service to change DELAYED parcels back to IN_WAREHOUSE
+        // This includes:
+        // 1. Tasks that were DELAYED due to customer request (POSTPONE) during delivery
+        // 2. Tasks that were DELAYED due to session failure (now handled by failSession)
+        List<DeliveryAssignment> delayedTasks = savedSession.getAssignments().stream()
+            .filter(a -> a.getStatus().equals(AssignmentStatus.DELAYED))
+            .toList();
+        
+        log.info("Session {} completed. Processing {} DELAYED tasks to return to IN_WAREHOUSE", sessionId, delayedTasks.size());
+        
+        for (DeliveryAssignment task : delayedTasks) {
+            try {
+                // END_SESSION event will change parcel from DELAYED to IN_WAREHOUSE
+                parcelApiClient.changeParcelStatus(task.getParcelId(), ParcelEvent.END_SESSION);
+                log.info("Parcel {} returned to IN_WAREHOUSE from DELAYED", task.getParcelId());
+            } catch (Exception e) {
+                log.error("Failed to call Parcel-Service for parcel {}: {}", task.getParcelId(), e.getMessage());
+            }
+        }
         
         return toSessionResponse(savedSession);
     }
@@ -297,6 +303,8 @@ public class SessionService implements ISessionService {
             .orElseThrow(() -> new ResourceNotFound("Session not found: " + sessionId));
         
         // Allow failing CREATED or IN_PROGRESS sessions
+        // Session fail is when: expired, shipper cancels, or admin cancels
+        // NOT when individual parcels fail
         if (session.getStatus() != SessionStatus.IN_PROGRESS && session.getStatus() != SessionStatus.CREATED) {
             log.warn("Session {} is already in state {}. Cannot fail.", sessionId, session.getStatus());
             throw new IllegalStateException("Session " + sessionId + " must be in IN_PROGRESS or CREATED status to fail. Current status: " + session.getStatus());
@@ -307,17 +315,22 @@ public class SessionService implements ISessionService {
         
         DeliverySession savedSession = sessionRepository.save(session);
 
-        // 3. Xử lý tất cả các task còn lại
+        // When session fails (expired, cancelled by shipper/admin), all undelivered parcels (IN_PROGRESS) 
+        // must be set to DELAYED status, not FAILED
         List<DeliveryAssignment> pendingTasks = assignmentRepository.findBySession_IdAndStatus(sessionId, AssignmentStatus.IN_PROGRESS);
+        log.info("Session {} failed. Setting {} pending tasks to DELAYED status", sessionId, pendingTasks.size());
+        
         for (DeliveryAssignment task : pendingTasks) {
-            // Chuyển trạng thái task nội bộ
-            task.setStatus(AssignmentStatus.FAILED);
+            // Set assignment status to DELAYED (not FAILED)
+            task.setStatus(AssignmentStatus.DELAYED);
             task.setFailReason("Session Failed: " + reason);
             assignmentRepository.save(task);
 
-            // Báo cho Parcel-Service: k thể giao
+            // Notify Parcel-Service: parcel should be delayed (POSTPONE event)
+            // This will change parcel status from ON_ROUTE to DELAYED
             try {
-                parcelApiClient.changeParcelStatus(task.getParcelId(), ParcelEvent.CAN_NOT_DELIVERY);
+                parcelApiClient.changeParcelStatus(task.getParcelId(), ParcelEvent.POSTPONE);
+                log.info("Parcel {} set to DELAYED due to session failure", task.getParcelId());
             } catch (Exception e) {
                 log.error("Failed to call Parcel-Service for parcel {}: {}", task.getParcelId(), e.getMessage());
             }

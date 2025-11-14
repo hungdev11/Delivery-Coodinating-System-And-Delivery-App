@@ -61,26 +61,54 @@ public class ConversationEnrichmentService {
                         return CompletableFuture.completedFuture(enrichedList);
                     }
                     
-                    // Step 2: For each conversation, enrich with additional data
-                    List<CompletableFuture<EnrichedConversationResponse>> futures = new ArrayList<>();
+                    // Step 2: Collect all partner IDs for batch fetching
+                    List<String> partnerIds = new ArrayList<>();
+                    List<JsonNode> conversationNodes = new ArrayList<>();
                     
                     for (JsonNode convNode : conversationsJson) {
-                        CompletableFuture<EnrichedConversationResponse> future = enrichSingleConversation(
-                                convNode, currentUserId
-                        );
-                        futures.add(future);
+                        if (convNode.has("partnerId")) {
+                            String partnerId = convNode.get("partnerId").asText();
+                            partnerIds.add(partnerId);
+                            conversationNodes.add(convNode);
+                        }
                     }
                     
-                    // Wait for all enrichment to complete
-                    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                    // Step 3: Batch fetch all users in parallel (instead of sequential)
+                    List<CompletableFuture<UserDto>> userFutures = new ArrayList<>();
+                    for (String partnerId : partnerIds) {
+                        userFutures.add(userServiceClient.getUserById(partnerId));
+                    }
+                    
+                    // Wait for all user fetches to complete
+                    return CompletableFuture.allOf(userFutures.toArray(new CompletableFuture[0]))
                             .thenApply(v -> {
-                                futures.forEach(f -> {
+                                // Create map of partnerId -> UserDto
+                                java.util.Map<String, UserDto> userMap = new java.util.HashMap<>();
+                                for (int i = 0; i < partnerIds.size(); i++) {
                                     try {
-                                        enrichedList.add(f.join());
+                                        UserDto userDto = userFutures.get(i).join();
+                                        if (userDto != null) {
+                                            userMap.put(partnerIds.get(i), userDto);
+                                        }
+                                    } catch (Exception e) {
+                                        log.warn("⚠️ Failed to fetch user {}: {}", partnerIds.get(i), e.getMessage());
+                                    }
+                                }
+                                
+                                // Step 4: Build enriched conversations using cached user data
+                                for (JsonNode convNode : conversationNodes) {
+                                    try {
+                                        String partnerId = convNode.get("partnerId").asText();
+                                        UserDto userDto = userMap.get(partnerId);
+                                        EnrichedConversationResponse enriched = buildEnrichedConversation(
+                                                convNode, currentUserId, userDto
+                                        );
+                                        enrichedList.add(enriched);
                                     } catch (Exception e) {
                                         log.error("❌ Failed to enrich conversation: {}", e.getMessage());
                                     }
-                                });
+                                }
+                                
                                 return enrichedList;
                             });
                 })
@@ -96,7 +124,9 @@ public class ConversationEnrichmentService {
     public EnrichedConversationResponse enrichSingleConversationSync(
             JsonNode convNode, String currentUserId, String partnerId) {
         try {
-            return enrichSingleConversation(convNode, currentUserId).get();
+            // Fetch user synchronously for single conversation
+            UserDto userDto = userServiceClient.getUserById(partnerId).get();
+            return buildEnrichedConversation(convNode, currentUserId, userDto);
         } catch (Exception e) {
             log.error("Error enriching conversation synchronously: {}", e.getMessage(), e);
             // Return basic conversation without enrichment
@@ -202,6 +232,59 @@ public class ConversationEnrichmentService {
         // For now, return null (no active parcel)
         // Will implement in next iteration
         return CompletableFuture.completedFuture(null);
+    }
+
+    /**
+     * Build enriched conversation response from conversation node and user DTO
+     * This is used after batch fetching users to avoid N+1 queries
+     */
+    private EnrichedConversationResponse buildEnrichedConversation(
+            JsonNode convNode, String currentUserId, UserDto userDto) {
+        
+        try {
+            // Parse basic conversation info
+            String conversationId = convNode.get("conversationId").asText();
+            String partnerId = convNode.get("partnerId").asText();
+            String partnerUsername = convNode.has("partnerUsername") ? convNode.get("partnerUsername").asText() : null;
+            String lastMessageTime = convNode.has("lastMessageTime") ? convNode.get("lastMessageTime").asText() : null;
+            String lastMessageContent = convNode.has("lastMessageContent") ? convNode.get("lastMessageContent").asText() : null;
+            Integer unreadCount = convNode.has("unreadCount") ? convNode.get("unreadCount").asInt() : 0;
+            
+            // Always use User Service data, not the fallback from Communication Service
+            String actualPartnerName = buildFullName(userDto);
+            String actualPartnerUsername = userDto != null ? userDto.getUsername() : partnerUsername;
+            
+            EnrichedConversationResponse.EnrichedConversationResponseBuilder builder = 
+                    EnrichedConversationResponse.builder()
+                    .conversationId(conversationId)
+                    .partnerId(partnerId)
+                    .partnerName(actualPartnerName) // Always use User Service name
+                    .partnerUsername(actualPartnerUsername)
+                    .partnerAvatar(null) // TODO: Add avatar when available
+                    .lastMessageTime(lastMessageTime)
+                    .lastMessageContent(lastMessageContent) // Pass through from Communication Service
+                    .unreadCount(unreadCount != null ? unreadCount : 0); // Use unread count from Communication Service
+            
+            if (userDto != null) {
+                builder.partnerEmail(userDto.getEmail())
+                       .partnerPhone(userDto.getPhone())
+                       .partnerFirstName(userDto.getFirstName())
+                       .partnerLastName(userDto.getLastName());
+            }
+            
+            // Note: checkShipperParcelInfo is async and expensive, skip for now in batch mode
+            // TODO: Implement batch parcel info check if needed
+            
+            return builder.build();
+                    
+        } catch (Exception e) {
+            log.error("❌ Error building enriched conversation: {}", e.getMessage());
+            return EnrichedConversationResponse.builder()
+                    .conversationId("unknown")
+                    .partnerId("unknown")
+                    .partnerName("Error")
+                    .build();
+        }
     }
 
     private String buildFullName(UserDto userDto) {

@@ -93,8 +93,8 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             parcelId,
             deliveryManId,
             routeInfo,
-            AssignmentStatus.COMPLETED,       // newStatus
-            ParcelEvent.POSTPONE,      // parcelEvent 
+            AssignmentStatus.DELAYED,       // newStatus - Customer requested delay
+            ParcelEvent.POSTPONE,      // parcelEvent - Changes parcel from ON_ROUTE to DELAYED
             reason                            // failReason
         );
     }
