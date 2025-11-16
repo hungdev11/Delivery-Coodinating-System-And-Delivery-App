@@ -21,10 +21,16 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Keycloak implementation of IIdentityProvider
@@ -47,6 +53,9 @@ public class KeycloakIdentityProvider implements IIdentityProvider {
     @Autowired(required = false)
     @Qualifier("keycloak")
     private Keycloak keycloak; // Optional: for client-specific operations
+    
+    // ExecutorService for parallel role fetching
+    private final ExecutorService executorService = Executors.newFixedThreadPool(10);
     
     @PostConstruct
     public void logConfiguration() {
@@ -308,6 +317,68 @@ public class KeycloakIdentityProvider implements IIdentityProvider {
             log.error("[KeycloakIdentity] Unexpected error getting user roles for externalId={}: {}", 
                 externalId, e.getMessage(), e);
             return Collections.emptyList();
+        }
+    }
+    
+    @Override
+    public Map<String, List<String>> batchGetUserRoles(List<String> externalIds) {
+        if (externalIds == null || externalIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        
+        log.info("[KeycloakIdentity] Batch getting roles for {} users in realm={}", externalIds.size(), realm);
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            // Fetch roles in parallel using ExecutorService
+            List<CompletableFuture<Map.Entry<String, List<String>>>> futures = externalIds.stream()
+                    .map(userId -> CompletableFuture.<Map.Entry<String, List<String>>>supplyAsync(() -> {
+                        try {
+                            List<String> roles = getUserRoles(userId);
+                            return Map.entry(userId, roles);
+                        } catch (Exception e) {
+                            log.warn("[KeycloakIdentity] Failed to get roles for user {}: {}", userId, e.getMessage());
+                            return Map.entry(userId, Collections.<String>emptyList());
+                        }
+                    }, executorService))
+                    .collect(Collectors.toList());
+            
+            // Wait for all futures to complete
+            CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+                    futures.toArray(new CompletableFuture[0]));
+            
+            // Collect results
+            Map<String, List<String>> rolesMap = new HashMap<>();
+            try {
+                allFutures.get(30, TimeUnit.SECONDS); // Timeout after 30 seconds
+                for (CompletableFuture<Map.Entry<String, List<String>>> future : futures) {
+                    Map.Entry<String, List<String>> entry = future.get();
+                    rolesMap.put(entry.getKey(), entry.getValue());
+                }
+            } catch (Exception e) {
+                log.error("[KeycloakIdentity] Error waiting for batch role fetch: {}", e.getMessage(), e);
+                // Collect completed results
+                for (CompletableFuture<Map.Entry<String, List<String>>> future : futures) {
+                    if (future.isDone()) {
+                        try {
+                            Map.Entry<String, List<String>> entry = future.get();
+                            rolesMap.put(entry.getKey(), entry.getValue());
+                        } catch (Exception ex) {
+                            log.warn("[KeycloakIdentity] Failed to get result from future: {}", ex.getMessage());
+                        }
+                    }
+                }
+            }
+            
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("[KeycloakIdentity] Batch fetched roles for {} users in {}ms (avg: {}ms/user)", 
+                    rolesMap.size(), duration, rolesMap.size() > 0 ? duration / rolesMap.size() : 0);
+            
+            return rolesMap;
+            
+        } catch (Exception e) {
+            log.error("[KeycloakIdentity] Unexpected error in batchGetUserRoles: {}", e.getMessage(), e);
+            return Collections.emptyMap();
         }
     }
     

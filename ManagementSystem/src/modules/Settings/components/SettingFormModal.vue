@@ -180,7 +180,7 @@ const getValuePlaceholder = () => {
           <UFormField label="Type">
             <USelect
               v-model="formData.type"
-              :options="[
+              :items="[
                 { label: 'String', value: 'STRING' },
                 { label: 'Integer', value: 'INTEGER' },
                 { label: 'Boolean', value: 'BOOLEAN' },
@@ -193,7 +193,7 @@ const getValuePlaceholder = () => {
           <UFormField label="Display Mode">
             <USelect
               v-model="formData.displayMode"
-              :options="[
+              :items="[
                 { label: 'Text', value: 'TEXT' },
                 { label: 'Password', value: 'PASSWORD' },
                 { label: 'Code', value: 'CODE' },

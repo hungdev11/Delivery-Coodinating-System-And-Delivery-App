@@ -21,6 +21,8 @@ import com.ds.gateway.annotations.AuthRequired;
 import com.ds.gateway.business.v1.services.ConversationEnrichmentService;
 import com.ds.gateway.common.entities.dto.communicate.ConversationRequest;
 import com.ds.gateway.common.entities.dto.communicate.EnrichedConversationResponse;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -79,15 +81,70 @@ public class CommunicationController {
 
     /**
      * Find or create conversation between two users
+     * This endpoint enriches the conversation with partner name and other details
      */
     @GetMapping("/conversations/find-by-users")
     @AuthRequired
     public ResponseEntity<?> getConversationByTwoUsers(
             @RequestParam("user1") String userId1,
-            @RequestParam("user2") String userId2) {
-        log.info("GET /api/v1/conversations/find-by-users?user1={}&user2={} - Proxying to Communication Service", userId1, userId2);
+            @RequestParam("user2") String userId2,
+            @RequestHeader(value = "X-User-Id", required = false) String currentUserIdFromHeader) {
+        log.info("GET /api/v1/conversations/find-by-users?user1={}&user2={} - Enriching response", userId1, userId2);
+        
+        // Get basic conversation from Communication Service
         String url = communicationServiceUrl + "/api/v1/conversations/find-by-users?user1=" + userId1 + "&user2=" + userId2;
-        return ResponseEntity.ok(restTemplate.getForObject(url, Object.class));
+        try {
+            Object conversationObj = restTemplate.getForObject(url, Object.class);
+            
+            if (conversationObj == null) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            // Convert to JsonNode for enrichment
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode convNode = mapper.valueToTree(conversationObj);
+            
+            // Determine current user and partner
+            // Use header first, then try to determine from conversation data
+            String currentUserId = currentUserIdFromHeader;
+            String partnerId = null;
+            
+            if (currentUserId == null) {
+                // Try to determine from conversation data (partnerId field)
+                if (convNode.has("partnerId")) {
+                    String convPartnerId = convNode.get("partnerId").asText();
+                    // Determine which user is the current user
+                    if (convPartnerId.equals(userId1)) {
+                        currentUserId = userId2;
+                        partnerId = userId1;
+                    } else {
+                        currentUserId = userId1;
+                        partnerId = userId2;
+                    }
+                } else {
+                    // Default: use userId1 as current user
+                    currentUserId = userId1;
+                    partnerId = userId2;
+                }
+            } else {
+                // Current user is known, determine partner
+                if (currentUserId.equals(userId1)) {
+                    partnerId = userId2;
+                } else {
+                    partnerId = userId1;
+                }
+            }
+            
+            // Enrich the conversation
+            EnrichedConversationResponse enriched = conversationEnrichmentService
+                    .enrichSingleConversationSync(convNode, currentUserId, partnerId);
+            
+            return ResponseEntity.ok(enriched);
+        } catch (Exception e) {
+            log.error("Error enriching conversation: {}", e.getMessage(), e);
+            // Fallback to direct proxy
+            return ResponseEntity.ok(restTemplate.getForObject(url, Object.class));
+        }
     }
 
     @PostMapping("/conversations/find-by-users")

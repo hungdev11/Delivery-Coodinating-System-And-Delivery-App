@@ -60,9 +60,16 @@ const {
   updateSorts,
   clearFilters,
   getFilterableColumns,
+  handlePageChange,
 } = useUsers()
 
 const { exportUsers } = useUserExport()
+
+// Handle page change from UPagination (1-indexed) to API (0-indexed)
+const handlePaginationChange = (newPage: number) => {
+  // UPagination uses 1-indexed pages, convert to 0-indexed for API
+  handlePageChange(newPage - 1)
+}
 
 // Table state
 const selected = ref<UserDto[]>([])
@@ -764,7 +771,12 @@ watch(
         Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
         {{ total }} results
       </div>
-      <UPagination v-model="page" :items-per-page="pageSize" :total="total" />
+      <UPagination
+        :model-value="page + 1"
+        :page-count="pageSize"
+        :total="total"
+        @update:page="handlePaginationChange"
+      />
     </div>
 
     <!-- Advanced Filter Drawer -->

@@ -7,15 +7,43 @@
  *   2) Search address text (local + TrackAsia through API Gateway), jump to point, fine-tune by dragging map
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { PageHeader } from '@/common/components'
 import MapView from '@/common/components/MapView.vue'
 import { useAddresses } from './composables'
-import type { ByPointResult } from './api'
+import type { ByPointResult, AddressDto } from './api'
 import { storeToRefs } from 'pinia'
+import { useParcels } from '@/modules/Parcels/composables'
+import UserSelect from '@/common/components/UserSelect.vue'
+import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
+import { getOrCreateAddress, getAddressById } from './api'
+import {
+  getUserPrimaryAddress,
+  getUserAddresses,
+  createUserAddress,
+  type CreateUserAddressRequest,
+} from '@/modules/Users/api'
 
 const router = useRouter()
+const toast = useToast()
+
+// Parcel creation state
+const quickCreateParcelModalOpen = ref(false)
+const quickParcelForm = ref({
+  code: '',
+  senderId: '',
+  receiverId: '',
+  receiveFrom: '',
+  sendTo: '',
+  weight: 0,
+  value: 0,
+  deliveryType: 'NORMAL' as const,
+})
+
+// Sender primary address state
+const senderPrimaryAddress = ref<AddressDto | null>(null)
+const loadingSenderAddress = ref(false)
 
 // Map state
 const mapViewRef = ref<InstanceType<typeof MapView>>()
@@ -221,6 +249,218 @@ const selectNearby = (item: { id?: string; source: 'local' | 'track-asia'; name:
   if (item.addressText) newAddressNote.value = item.addressText
   addrStore.select(item)
 }
+
+// Load sender primary address when senderId changes
+watch(() => quickParcelForm.value.senderId, async (senderId) => {
+  if (!senderId) {
+    senderPrimaryAddress.value = null
+    return
+  }
+
+  loadingSenderAddress.value = true
+  try {
+    const response = await getUserPrimaryAddress(senderId)
+    if (response.result?.destinationId) {
+      // Get address detail from zone-service
+      const addressResponse = await getAddressById(response.result.destinationId)
+      if (addressResponse.result) {
+        senderPrimaryAddress.value = addressResponse.result
+        // Update map center to sender's primary address
+        jumpTo(addressResponse.result.lat, addressResponse.result.lon, addressResponse.result.name)
+        // Pre-fill receiveFrom with sender's primary address
+        quickParcelForm.value.receiveFrom = addressResponse.result.name || ''
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load sender primary address:', error)
+    // Don't show error toast - user might not have a primary address yet
+    senderPrimaryAddress.value = null
+  } finally {
+    loadingSenderAddress.value = false
+  }
+})
+
+// Quick create parcel from selected address
+const openQuickCreateParcel = () => {
+  // Pre-fill form with selected address info
+  if (addrStore.selected) {
+    quickParcelForm.value.sendTo = addrStore.selected.name || ''
+  } else if (newAddressName.value) {
+    quickParcelForm.value.sendTo = newAddressName.value
+  }
+
+  // If sender has primary address, use it for receiveFrom
+  if (senderPrimaryAddress.value) {
+    quickParcelForm.value.receiveFrom = senderPrimaryAddress.value.name || ''
+  } else if (addrStore.selected) {
+    quickParcelForm.value.receiveFrom = addrStore.selected.name || ''
+  } else if (newAddressName.value) {
+    quickParcelForm.value.receiveFrom = newAddressName.value
+  }
+
+  quickCreateParcelModalOpen.value = true
+}
+
+/**
+ * Add address to client user (if not exists)
+ */
+const addAddressToClient = async (
+  userId: string,
+  destinationId: string,
+  addressName: string,
+  addressText?: string,
+) => {
+  try {
+    // Check if client already has this address
+    const addressesResponse = await getUserAddresses(userId)
+    if (addressesResponse.result) {
+      const existingAddress = addressesResponse.result.find(
+        (addr) => addr.destinationId === destinationId,
+      )
+      if (existingAddress) {
+        // Address already exists for client
+        return existingAddress.destinationId
+      }
+    }
+
+    // Create user address for client (not primary, just added)
+    const createUserAddressRequest: CreateUserAddressRequest = {
+      destinationId,
+      note: addressText,
+      tag: 'Added from Parcel',
+      isPrimary: false,
+    }
+
+    const createUserAddressResponse = await createUserAddress(userId, createUserAddressRequest)
+
+    if (createUserAddressResponse.result) {
+      toast.add({
+        title: 'Success',
+        description: `Address added to client: ${addressName}`,
+        color: 'success',
+      })
+      return createUserAddressResponse.result.destinationId
+    }
+
+    return destinationId
+  } catch (error) {
+    console.error('Failed to add address to client:', error)
+    // Don't fail parcel creation if adding address fails
+    return destinationId
+  }
+}
+
+const handleQuickCreateParcel = async () => {
+  if (!quickParcelForm.value.code || !quickParcelForm.value.senderId || !quickParcelForm.value.receiverId) {
+    toast.add({
+      title: 'Error',
+      description: 'Please fill in code, sender, and receiver',
+      color: 'error',
+    })
+    return
+  }
+
+  try {
+    // Get or create sender destination
+    // Use sender's primary address if available, otherwise use current map center
+    let senderDestinationId: string | null = null
+
+    if (senderPrimaryAddress.value) {
+      // Use sender's primary address
+      senderDestinationId = senderPrimaryAddress.value.id
+      quickParcelForm.value.receiveFrom = senderPrimaryAddress.value.name || quickParcelForm.value.receiveFrom
+    } else {
+      // Get or create sender destination from current map center
+      const senderResponse = await getOrCreateAddress({
+        name: quickParcelForm.value.receiveFrom || 'Sender Address',
+        addressText: quickParcelForm.value.receiveFrom,
+        lat: currentLat.value,
+        lon: currentLon.value,
+      })
+
+      if (!senderResponse.result?.id) {
+        toast.add({
+          title: 'Error',
+          description: 'Failed to get or create sender destination',
+          color: 'error',
+        })
+        return
+      }
+
+      senderDestinationId = senderResponse.result.id
+    }
+
+    // Get or create receiver destination from selected address on map
+    // Use current map center (where user selected the address)
+    const receiverResponse = await getOrCreateAddress({
+      name: quickParcelForm.value.sendTo || 'Receiver Address',
+      addressText: quickParcelForm.value.sendTo,
+      lat: currentLat.value,
+      lon: currentLon.value,
+    })
+
+    if (!receiverResponse.result?.id) {
+      toast.add({
+        title: 'Error',
+        description: 'Failed to get or create receiver destination',
+        color: 'error',
+      })
+      return
+    }
+
+    // Add address to client (if receiver is a client user)
+    // This ensures client has the address in their address list
+    try {
+      await addAddressToClient(
+        quickParcelForm.value.receiverId,
+        receiverResponse.result.id,
+        receiverResponse.result.name,
+        receiverResponse.result.addressText || undefined
+      )
+    } catch (error) {
+      console.error('Failed to add address to client:', error)
+      // Continue anyway - address addition is optional
+    }
+
+    // Create parcel
+    const { create } = useParcels()
+    const success = await create({
+      code: quickParcelForm.value.code,
+      senderId: quickParcelForm.value.senderId,
+      receiverId: quickParcelForm.value.receiverId,
+      deliveryType: quickParcelForm.value.deliveryType,
+      receiveFrom: quickParcelForm.value.receiveFrom,
+      sendTo: quickParcelForm.value.sendTo,
+      weight: quickParcelForm.value.weight,
+      value: quickParcelForm.value.value,
+      senderDestinationId: senderDestinationId,
+      receiverDestinationId: receiverResponse.result.id,
+    })
+
+    if (success) {
+      quickCreateParcelModalOpen.value = false
+      // Reset form
+      quickParcelForm.value = {
+        code: '',
+        senderId: '',
+        receiverId: '',
+        receiveFrom: '',
+        sendTo: '',
+        weight: 0,
+        value: 0,
+        deliveryType: 'NORMAL',
+      }
+      senderPrimaryAddress.value = null
+    }
+  } catch (error) {
+    console.error('Failed to create parcel:', error)
+    toast.add({
+      title: 'Error',
+      description: error instanceof Error ? error.message : 'Failed to create parcel',
+      color: 'error',
+    })
+  }
+}
 </script>
 
 <template>
@@ -356,6 +596,16 @@ const selectNearby = (item: { id?: string; source: 'local' | 'track-asia'; name:
                 Clear
               </UButton>
             </div>
+            <!-- Quick Create Parcel Button -->
+            <UButton
+              color="primary"
+              variant="soft"
+              icon="i-heroicons-cube"
+              @click="openQuickCreateParcel"
+              class="w-full mt-2"
+            >
+              Quick Create Parcel
+            </UButton>
           </div>
         </UCard>
 
@@ -407,6 +657,66 @@ const selectNearby = (item: { id?: string; source: 'local' | 'track-asia'; name:
         </div>
       </div>
     </div>
+
+    <!-- Quick Create Parcel Modal -->
+    <UModal
+      v-model:open="quickCreateParcelModalOpen"
+      title="Quick Create Parcel"
+      description="Create a parcel quickly using the selected address"
+      :ui="{ footer: 'justify-end' }"
+    >
+      <template #body>
+        <form @submit.prevent="handleQuickCreateParcel" class="space-y-4">
+          <UFormField label="Parcel Code" required>
+            <UInput v-model="quickParcelForm.code" placeholder="Enter parcel code" />
+          </UFormField>
+
+          <div class="grid grid-cols-2 gap-4">
+            <UserSelect
+              v-model="quickParcelForm.senderId"
+              label="Sender"
+              placeholder="Search sender..."
+              :allow-seed-id="true"
+            />
+            <UserSelect
+              v-model="quickParcelForm.receiverId"
+              label="Receiver"
+              placeholder="Search receiver..."
+              :allow-seed-id="true"
+            />
+          </div>
+
+          <UFormField label="Receive From">
+            <UInput v-model="quickParcelForm.receiveFrom" placeholder="Sender address" />
+          </UFormField>
+
+          <UFormField label="Send To">
+            <UInput v-model="quickParcelForm.sendTo" placeholder="Receiver address" />
+          </UFormField>
+
+          <div class="grid grid-cols-2 gap-4">
+            <UFormField label="Weight (kg)">
+              <UInput v-model.number="quickParcelForm.weight" type="number" placeholder="0" />
+            </UFormField>
+            <UFormField label="Value">
+              <UInput v-model.number="quickParcelForm.value" type="number" placeholder="0" />
+            </UFormField>
+          </div>
+
+          <div class="text-xs text-gray-500">
+            📍 Address coordinates: {{ centerLabel }}
+          </div>
+        </form>
+      </template>
+      <template #footer>
+        <UButton color="neutral" variant="ghost" @click="quickCreateParcelModalOpen = false">
+          Cancel
+        </UButton>
+        <UButton color="primary" @click="handleQuickCreateParcel">
+          Create Parcel
+        </UButton>
+      </template>
+    </UModal>
   </div>
 </template>
 

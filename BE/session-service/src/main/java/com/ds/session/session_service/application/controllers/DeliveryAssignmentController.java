@@ -40,7 +40,9 @@ public class DeliveryAssignmentController {
 
     /**
      * Lấy tất cả các task trong "phiên" (session) ĐANG HOẠT ĐỘNG của shipper.
+     * @deprecated Use getTasksBySessionId instead. This endpoint will be removed in a future version.
      */
+    @Deprecated
     @GetMapping("/session/delivery-man/{deliveryManId}/tasks/today")
     public ResponseEntity<PageResponse<DeliveryAssignmentResponse>> getDailyTasks(
         @PathVariable UUID deliveryManId,
@@ -50,6 +52,20 @@ public class DeliveryAssignmentController {
     ) {
         log.info("Fetching daily (active session) tasks for shipper {} with status filter: {}", deliveryManId, status);
         PageResponse<DeliveryAssignmentResponse> response = assignmentService.getDailyTasks(deliveryManId, status, page, size);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Lấy tất cả các task của một session cụ thể theo sessionId (phân trang).
+     */
+    @GetMapping("/session/{sessionId}/tasks")
+    public ResponseEntity<PageResponse<DeliveryAssignmentResponse>> getTasksBySessionId(
+        @PathVariable UUID sessionId,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size
+    ) {
+        log.info("Fetching tasks for session {} (page: {}, size: {})", sessionId, page, size);
+        PageResponse<DeliveryAssignmentResponse> response = assignmentService.getTasksBySessionId(sessionId, page, size);
         return ResponseEntity.ok(response);
     }
 
@@ -160,4 +176,3 @@ public class DeliveryAssignmentController {
     }
     
 }
-

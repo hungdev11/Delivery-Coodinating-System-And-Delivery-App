@@ -257,7 +257,9 @@ export const useZonesStore = defineStore('zones', () => {
   }
 
   const setPage = (pageIndex: number) => {
+    if (pageIndex < 0) return
     page.value = pageIndex
+    loadZones() // Reload zones when page changes
   }
 
   return {

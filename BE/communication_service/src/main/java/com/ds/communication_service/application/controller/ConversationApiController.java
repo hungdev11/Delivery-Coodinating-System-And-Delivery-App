@@ -111,6 +111,16 @@ public class ConversationApiController {
             .findLastMessageTimeByConversationId(conversation.getId())
             .orElse(conversation.getCreatedAt());
         
+        // Get last message content
+        String lastMessageContent = messageRepository
+            .findLastMessageContentByConversationId(conversation.getId())
+            .orElse(null);
+        
+        // Calculate unread count (messages where sender != currentUserId and status != READ)
+        long unreadCount = messageRepository.countUnreadMessagesByConversationIdAndUserId(
+            conversation.getId(), currentUserId
+        );
+        
         // Fetch user info from User Service
         UserInfoDto userInfo = userServiceClient.getUserById(partnerId);
         
@@ -133,6 +143,8 @@ public class ConversationApiController {
             .partnerAvatar(null) // TODO: Add avatar support when available
             .isOnline(null) // TODO: Implement online status tracking
             .lastMessageTime(lastMessageTime)
+            .lastMessageContent(lastMessageContent)
+            .unreadCount((int) unreadCount)
             .build();
 
         return dto;

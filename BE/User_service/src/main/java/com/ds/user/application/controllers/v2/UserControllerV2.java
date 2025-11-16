@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * V2 API Controller for User Management
@@ -43,9 +44,19 @@ public class UserControllerV2 {
             // Get users using V2 service (enhanced filtering)
             PagedData<User> userPage = userService.getUsersV2(query);
             
-            // Convert to PagedData<UserDto>
+            // Batch fetch roles for all users in parallel
+            List<String> userIds = userPage.getData().stream()
+                    .map(User::getId)
+                    .filter(id -> id != null && !id.isBlank())
+                    .toList();
+            
+            Map<String, List<String>> rolesMap = userIds.isEmpty() 
+                    ? Collections.emptyMap() 
+                    : externalAuthFacade.batchGetUserRoles(userIds);
+            
+            // Convert to PagedData<UserDto> with roles
             List<UserDto> userDtos = userPage.getData().stream()
-                    .map(this::buildUserDto)
+                    .map(user -> buildUserDto(user, rolesMap.getOrDefault(user.getId(), Collections.emptyList())))
                     .toList();
             
             // Use the existing paging from userPage
@@ -65,19 +76,18 @@ public class UserControllerV2 {
     }
 
     private UserDto buildUserDto(User user) {
+        return buildUserDto(user, null);
+    }
+    
+    private UserDto buildUserDto(User user, List<String> roles) {
         if (user == null) {
             return null;
         }
 
-        List<String> roles = Collections.emptyList();
-        // User ID is now the Keycloak ID
-        String userId = user.getId();
-        if (userId != null && !userId.isBlank()) {
-            try {
-                roles = externalAuthFacade.getUserRoles(userId);
-            } catch (Exception e) {
-                log.warn("Failed to load roles for user {} (id={}): {}", user.getUsername(), userId, e.getMessage());
-            }
+        // If roles are provided (from batch fetch), use them
+        // Otherwise, return empty list (roles should be provided via batch fetch)
+        if (roles == null) {
+            roles = Collections.emptyList();
         }
 
         return UserDto.from(user, roles);
