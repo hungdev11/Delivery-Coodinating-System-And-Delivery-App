@@ -12,7 +12,7 @@ import com.ds.session.session_service.app_context.models.DeliveryAssignment;
 import com.ds.session.session_service.app_context.models.DeliverySession;
 import com.ds.session.session_service.app_context.repositories.DeliveryAssignmentRepository;
 import com.ds.session.session_service.app_context.repositories.DeliverySessionRepository;
-import com.ds.session.session_service.application.client.parcelclient.ParcelServiceClient;
+import com.ds.session.session_service.application.client.parcelclient.ParcelServiceClient; 
 import com.ds.session.session_service.application.client.parcelclient.response.ParcelResponse;
 import com.ds.session.session_service.common.entities.dto.request.CreateSessionRequest;
 import com.ds.session.session_service.common.entities.dto.response.AssignmentResponse;
@@ -22,6 +22,7 @@ import com.ds.session.session_service.common.enums.ParcelEvent;
 import com.ds.session.session_service.common.enums.SessionStatus;
 import com.ds.session.session_service.common.exceptions.ResourceNotFound;
 import com.ds.session.session_service.common.interfaces.ISessionService;
+import com.ds.session.session_service.infrastructure.kafka.ParcelEventPublisher;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
@@ -36,6 +37,7 @@ public class SessionService implements ISessionService {
     private final DeliverySessionRepository sessionRepository;
     private final DeliveryAssignmentRepository assignmentRepository;
     private final ParcelServiceClient parcelApiClient; 
+    private final ParcelEventPublisher parcelEventPublisher;
 
 
     @Override
@@ -93,10 +95,10 @@ public class SessionService implements ISessionService {
 
         // 7. Gọi Parcel-Service để cập nhật trạng thái đơn hàng
         try {
-            parcelApiClient.changeParcelStatus(parcelId, ParcelEvent.SCAN_QR);
+            parcelEventPublisher.publish(parcelId, ParcelEvent.SCAN_QR);
         } catch (Exception e) {
-            log.error("Failed to call Parcel-Service for parcel {}: {}", parcelId, e.getMessage());
-            throw new RuntimeException("Failed to update parcel status via API: " + e.getMessage(), e);
+            log.error("Failed to publish parcel status event for parcel {}: {}", parcelId, e.getMessage());
+            throw new RuntimeException("Failed to publish parcel status event: " + e.getMessage(), e);
         }
 
         // 8. Lưu session (và task mới sẽ được lưu theo nhờ CascadeType.ALL)
@@ -139,11 +141,10 @@ public class SessionService implements ISessionService {
 
             // 4. TODO: Báo cho Parcel-Service biết đơn hàng này đã ON_ROUTE
             try {
-                parcelApiClient.changeParcelStatus(parcelId, ParcelEvent.SCAN_QR);
+                parcelEventPublisher.publish(parcelId, ParcelEvent.SCAN_QR);
             } catch (Exception e) {
-                // Xử lý nếu gọi API thất bại (ví dụ: dùng @Retryable)
-                log.error("Failed to call Parcel-Service for parcel {}: {}", parcelId, e.getMessage());
-                throw new RuntimeException("Failed to update parcel status via API: " + e.getMessage(), e);
+                log.error("Failed to publish parcel status event for parcel {}: {}", parcelId, e.getMessage());
+                throw new RuntimeException("Failed to publish parcel status event: " + e.getMessage(), e);
             }
         }
         
@@ -184,9 +185,9 @@ public class SessionService implements ISessionService {
                 (a.getFailReason().contains("hẹn") || a.getFailReason().contains("hoãn")))
             .forEach(da-> {
                 try {
-                    parcelApiClient.changeParcelStatus(da.getParcelId(), ParcelEvent.END_SESSION);
+                    parcelEventPublisher.publish(da.getParcelId(), ParcelEvent.END_SESSION);
                 } catch (Exception e) {
-                    log.error("Failed to call Parcel-Service for parcel {}: {}", da.getParcelId(), e.getMessage());
+                    log.error("Failed to publish parcel status event for parcel {}: {}", da.getParcelId(), e.getMessage());
                 }
             });
         

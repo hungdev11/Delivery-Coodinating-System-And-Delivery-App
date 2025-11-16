@@ -20,6 +20,7 @@ import com.ds.session.session_service.app_context.repositories.DeliveryAssignmen
 import com.ds.session.session_service.app_context.repositories.DeliverySessionRepository; 
 import com.ds.session.session_service.application.client.parcelclient.ParcelServiceClient;
 import com.ds.session.session_service.application.client.parcelclient.response.ParcelResponse;
+import com.ds.session.session_service.infrastructure.kafka.ParcelEventPublisher;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.request.UpdateAssignmentStatusRequest;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
@@ -48,6 +49,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     private final DeliveryAssignmentRepository deliveryAssignmentRepository;
     private final DeliverySessionRepository deliverySessionRepository; 
     private final ParcelServiceClient parcelServiceClient;
+    private final ParcelEventPublisher parcelEventPublisher;
     private final ParcelMapper parcelMapper; 
     private final ObjectMapper objectMapper; 
 
@@ -114,7 +116,15 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         setRouteInfo(assignment, routeInfo);
         
         // 5. Đồng bộ với Parcel service
-        ParcelInfo parcel = updateParcelStatusAndMap(parcelId, parcelEvent);
+        // publish event to parcel-service instead of direct REST call
+        try {
+            parcelEventPublisher.publish(parcelId.toString(), parcelEvent);
+        } catch (Exception e) {
+            log.error("Failed to publish parcel status event for parcel {}: {}", parcelId, e.getMessage());
+            throw new RuntimeException("Failed to publish parcel status event: " + e.getMessage(), e);
+        }
+
+        ParcelInfo parcel = null;
 
         // 6. Cập nhật trạng thái (tham số hóa)
         assignment.setStatus(newStatus);
@@ -399,8 +409,14 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     }
 
     private ParcelInfo updateParcelStatusAndMap(UUID parcelId, ParcelEvent event) {
-        ParcelResponse response = parcelServiceClient.changeParcelStatus(parcelId.toString(), event);
-        log.info("parcel status: {}, event: {}", response.getStatus(), event);
-        return parcelMapper.toParcelInfo(response);
+        // If you still want synchronous confirmation, you can optionally call parcelServiceClient here as fallback
+        try {
+            ParcelResponse response = parcelServiceClient.changeParcelStatus(parcelId.toString(), event);
+            log.info("parcel status (sync fallback): {}, event: {}", response.getStatus(), event);
+            return parcelMapper.toParcelInfo(response);
+        } catch (Exception ex) {
+            log.warn("Parcel service sync fallback failed for parcel {}: {}. Returning null for parcel info.", parcelId, ex.getMessage());
+            return null;
+        }
     }
 }

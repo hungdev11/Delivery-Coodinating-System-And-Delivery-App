@@ -22,6 +22,30 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:session-service-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.ds
+      enable-auto-commit: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # make producer idempotent and enable transaction support from the app side
+        "enable.idempotence": true
+      transaction-id-prefix: session-tx-
+    template:
+      default-topic: parcel-status-request
+    listener:
+      ack-mode: manual
+      missing-topics-fatal: false
+    properties:
+      "isolation.level": read_committed
 
 logging:
   level:
