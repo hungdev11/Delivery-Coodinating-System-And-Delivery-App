@@ -6,13 +6,14 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import com.ds.session.session_service.app_context.models.DeliverySession;
 import com.ds.session.session_service.common.enums.SessionStatus;
 
 @Repository
-public interface DeliverySessionRepository extends JpaRepository<DeliverySession, UUID> {
+public interface DeliverySessionRepository extends JpaRepository<DeliverySession, UUID>, JpaSpecificationExecutor<DeliverySession> {
 
     /**
      * Tìm phiên (session) đang hoạt động (IN_PROGRESS) của một shipper.
@@ -38,4 +39,3 @@ public interface DeliverySessionRepository extends JpaRepository<DeliverySession
             LocalDateTime startTime,
             LocalDateTime endTime);
 }
-

@@ -22,6 +22,7 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import com.ds.session.session_service.infrastructure.kafka.dto.UserEventDto;
 
 @Configuration
 @EnableKafka
@@ -72,23 +73,37 @@ public class KafkaConfig {
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         config.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
-        config.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class.getName());
-        // trust session-service DTOs
-        config.put(JsonDeserializer.TRUSTED_PACKAGES, "com.ds.session.session_service.common.entities.dto,com.ds.session.session_service.business.v1.services");
-        config.put(JsonDeserializer.VALUE_DEFAULT_TYPE, Object.class);
-
-    // Disable auto-commit and use manual ack so consumer offset commits can be controlled
-    config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-    // Use read_committed isolation to avoid reading uncommitted transactional messages
-    config.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+        
+        // Create JsonDeserializer that ignores type info from producer and uses local DTO
+        JsonDeserializer<UserEventDto> jsonDeserializer = new JsonDeserializer<>(UserEventDto.class);
+        jsonDeserializer.setUseTypeHeaders(false);
+        jsonDeserializer.setRemoveTypeHeaders(true);
+        jsonDeserializer.addTrustedPackages("com.ds.session.session_service.common.entities.dto", 
+                "com.ds.session.session_service.business.v1.services", 
+                "com.ds.session.session_service.infrastructure.kafka.dto");
+        
+        // Wrap with ErrorHandlingDeserializer
+        ErrorHandlingDeserializer<UserEventDto> errorHandlingDeserializer = 
+                new ErrorHandlingDeserializer<>(jsonDeserializer);
+        
+        // Disable auto-commit and use manual ack so consumer offset commits can be controlled
+        config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        // Use read_committed isolation to avoid reading uncommitted transactional messages
+        config.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
         config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
         config.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 300000);
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
         config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 10000);
 
-        return new DefaultKafkaConsumerFactory<>(config);
+        // Create factory and set deserializers
+        DefaultKafkaConsumerFactory<String, Object> factory = new DefaultKafkaConsumerFactory<>(config);
+        factory.setKeyDeserializer(new StringDeserializer());
+        @SuppressWarnings("unchecked")
+        org.apache.kafka.common.serialization.Deserializer<Object> valueDeserializer = 
+                (org.apache.kafka.common.serialization.Deserializer<Object>) (org.apache.kafka.common.serialization.Deserializer<?>) errorHandlingDeserializer;
+        factory.setValueDeserializer(valueDeserializer);
+        return factory;
     }
 
     @Bean

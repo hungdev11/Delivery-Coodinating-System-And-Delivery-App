@@ -7,10 +7,11 @@
 import { ref } from 'vue'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import {
-  getActiveAssignmentsForDeliveryMan,
+  getActiveSessionForDeliveryMan,
   getAssignmentHistoryForDeliveryMan,
   getDeliverySessionDetail,
   getSessionDemoRoute,
+  getAssignmentsBySessionId,
 } from '../api'
 import { DeliverySessionDto, DeliveryAssignmentDto } from '../model.type'
 import type { DeliveryAssignmentTask, AssignmentStatus } from '../model.type'
@@ -121,13 +122,28 @@ export function useDeliverySessions() {
   const loadSessions = async (deliveryManId: string) => {
     sessionsLoading.value = true
     try {
-      const [activeTasks, historyTasks] = await Promise.all([
-        getActiveAssignmentsForDeliveryMan(deliveryManId, { page: 0, size: 50 }),
-        getAssignmentHistoryForDeliveryMan(deliveryManId, { page: 0, size: 50 }),
-      ])
+      // Get active session first (replaces deprecated getActiveAssignmentsForDeliveryMan)
+      const activeSessionResponse = await getActiveSessionForDeliveryMan(deliveryManId)
+      const activeSessionId = activeSessionResponse.result?.id
+
+      // Get history tasks
+      const historyTasks = await getAssignmentHistoryForDeliveryMan(deliveryManId, { page: 0, size: 50 })
 
       const taskGroups = new Map<string, DeliveryAssignmentTask[]>()
 
+      // Collect active session assignments if exists
+      if (activeSessionId) {
+        try {
+          const activeAssignments = await getAssignmentsBySessionId(activeSessionId, { page: 0, size: 100 })
+          if (activeAssignments.content) {
+            taskGroups.set(activeSessionId, activeAssignments.content)
+          }
+        } catch (error) {
+          console.warn('Failed to load active session assignments:', error)
+        }
+      }
+
+      // Collect history tasks
       const collect = (tasks?: DeliveryAssignmentTask[]) => {
         tasks?.forEach((task) => {
           if (!task.sessionId) return
@@ -138,9 +154,9 @@ export function useDeliverySessions() {
         })
       }
 
-      collect(activeTasks?.content)
       collect(historyTasks?.content)
 
+      // Fetch all sessions
       const uniqueSessionIds = Array.from(taskGroups.keys())
       const fetchedSessions = await Promise.all(uniqueSessionIds.map(fetchSession))
       const validSessions = fetchedSessions.filter(

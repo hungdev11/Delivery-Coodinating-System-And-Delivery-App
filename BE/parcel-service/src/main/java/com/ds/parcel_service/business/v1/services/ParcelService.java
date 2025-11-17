@@ -19,6 +19,7 @@ import com.ds.parcel_service.app_context.models.Parcel;
 import com.ds.parcel_service.app_context.models.ParcelDestination;
 import com.ds.parcel_service.app_context.repositories.ParcelDestinationRepository;
 import com.ds.parcel_service.app_context.repositories.ParcelRepository;
+import com.ds.parcel_service.app_context.repositories.UserSnapshotRepository;
 import com.ds.parcel_service.application.client.CreateDestinationRequest;
 import com.ds.parcel_service.application.client.DesDetail;
 import com.ds.parcel_service.application.client.DestinationResponse;
@@ -60,6 +61,7 @@ public class ParcelService implements IParcelService{
     private final ParcelRepository parcelRepository;
     private final ParcelDestinationRepository parcelDestinationRepository;
     private final ZoneClient zoneClient;
+    private final UserSnapshotRepository userSnapshotRepository;
 
     private final Map<ParcelStatus, IParcelState> stateMap = Map.of(
         ParcelStatus.IN_WAREHOUSE, new InWarehouseState(),
@@ -306,13 +308,34 @@ public class ParcelService implements IParcelService{
     }
 
     private ParcelResponse toDto(Parcel parcel) {
-        // [Logic: get phone number here]
+        // Get sender and receiver names from UserSnapshot
+        final String[] senderName = {null};
+        final String[] receiverName = {null};
+        
+        try {
+            if (parcel.getSenderId() != null) {
+                userSnapshotRepository.findByUserId(parcel.getSenderId())
+                    .ifPresent(snapshot -> senderName[0] = snapshot.getFullName());
+            }
+            if (parcel.getReceiverId() != null) {
+                userSnapshotRepository.findByUserId(parcel.getReceiverId())
+                    .ifPresent(snapshot -> receiverName[0] = snapshot.getFullName());
+            }
+        } catch (Exception e) {
+            log.debug("Could not fetch user names for parcel {}: {}", parcel.getId(), e.getMessage());
+        }
+        
+        final String finalSenderName = senderName[0];
+        final String finalReceiverName = receiverName[0];
+        
         return ParcelResponse.builder()
                             .id(parcel.getId().toString())
                             .code(parcel.getCode())
                             .deliveryType(parcel.getDeliveryType())
                             .senderId(parcel.getSenderId())
+                            .senderName(finalSenderName)
                             .receiverId(parcel.getReceiverId())
+                            .receiverName(finalReceiverName)
                             .receiveFrom(parcel.getReceiveFrom())
                             .targetDestination(parcel.getSendTo())
                             .weight(parcel.getWeight())

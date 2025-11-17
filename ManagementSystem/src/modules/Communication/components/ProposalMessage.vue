@@ -6,7 +6,9 @@
  */
 
 import type { InteractiveProposalResponseDTO } from '../model.type'
-import { computed } from 'vue';
+import { computed, ref, onMounted } from 'vue'
+import { getAssignmentsBySessionId } from '../../Delivery/api'
+import type { DeliveryAssignmentTask } from '../../Delivery/model.type'
 
 interface Props {
   proposal: InteractiveProposalResponseDTO
@@ -20,6 +22,36 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   respond: [proposalId: string, resultData: string]
 }>()
+
+// Affected parcels from session (only parcels of the client who sent the proposal)
+const affectedAssignments = ref<DeliveryAssignmentTask[]>([])
+const loadingAssignments = ref(false)
+
+/**
+ * Load assignments if proposal has sessionId
+ * Only loads assignments where receiverId = proposerId (client's parcels)
+ */
+onMounted(async () => {
+  if (props.proposal.sessionId && props.proposal.proposerId) {
+    loadingAssignments.value = true
+    try {
+      const response = await getAssignmentsBySessionId(props.proposal.sessionId, {
+        page: 0,
+        size: 100,
+      })
+      if (response.content) {
+        // Filter: only assignments where receiverId = proposerId (client who sent the proposal)
+        affectedAssignments.value = response.content.filter(
+          (assignment: DeliveryAssignmentTask) => assignment.receiverId === props.proposal.proposerId
+        )
+      }
+    } catch (error) {
+      console.error('Failed to load affected assignments:', error)
+    } finally {
+      loadingAssignments.value = false
+    }
+  }
+})
 
 /**
  * Format message time
@@ -129,6 +161,26 @@ const getBorderColor = computed(() => {
       >
         Decline
       </UButton>
+    </div>
+
+    <!-- Affected Parcels Display (if proposal has sessionId) -->
+    <div
+      v-if="proposal.sessionId && affectedAssignments.length > 0"
+      class="mt-2 pt-2 border-t border-gray-200 text-xs"
+    >
+      <p class="font-medium text-gray-700 mb-1">
+        Affected Parcels ({{ affectedAssignments.length }}):
+      </p>
+      <div class="space-y-1 max-h-32 overflow-y-auto">
+        <div
+          v-for="assignment in affectedAssignments"
+          :key="assignment.parcelId"
+          class="text-gray-600 bg-gray-50 px-2 py-1 rounded"
+        >
+          <span class="font-medium">{{ assignment.parcelCode || assignment.parcelId }}</span>
+          <span class="text-gray-500 ml-2">- {{ assignment.status }}</span>
+        </div>
+      </div>
     </div>
 
     <!-- Result Data Display -->

@@ -1,18 +1,17 @@
 package com.ds.gateway.application.controllers.v2;
 
 import com.ds.gateway.annotations.AuthRequired;
+import com.ds.gateway.application.controllers.support.ProxyControllerSupport;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.RestTemplate;
 
 /**
  * Proxy controller for User Service shipper (delivery man) endpoints - V2.
@@ -26,7 +25,9 @@ import org.springframework.web.client.RestTemplate;
 @RequiredArgsConstructor
 public class UserShipperControllerV2 {
 
-    private final RestTemplate restTemplate;
+    private static final String USER_SERVICE = "user-service";
+
+    private final ProxyControllerSupport proxyControllerSupport;
 
     @Value("${services.user.base-url}")
     private String userServiceBaseUrl;
@@ -44,12 +45,6 @@ public class UserShipperControllerV2 {
     @PostMapping
     public ResponseEntity<?> listShippers(@RequestBody Object requestBody) {
         log.info("POST /api/v2/users/shippers - proxy to User Service");
-        try {
-            Object response = restTemplate.postForObject(shipperV2Url, requestBody, Object.class);
-            return ResponseEntity.ok(response);
-        } catch (HttpClientErrorException | HttpServerErrorException ex) {
-            log.error("Shipper V2 proxy failed: {}", ex.getMessage());
-            return ResponseEntity.status(ex.getStatusCode()).body(ex.getResponseBodyAsString());
-        }
+        return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.POST, shipperV2Url, requestBody);
     }
 }

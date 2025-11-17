@@ -1,6 +1,5 @@
 package com.ds.parcel_service.application.controllers;
 
-import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -73,22 +73,32 @@ public class ParcelController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Get parcels sent by current user
+     * User ID is extracted from X-User-Id header (forwarded by API Gateway from JWT token)
+     */
     @GetMapping("/me")
     public ResponseEntity<PageResponse<ParcelResponse>> getMyParcels(
-            @RequestParam String customerId,
+            @RequestHeader("X-User-Id") String customerId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
+        log.info("GET /api/v1/parcels/me - Get parcels sent by user: {}", customerId);
         PageResponse<ParcelResponse> parcels = parcelService.getParcelsSentByCustomer(customerId, page, size);
         return ResponseEntity.ok(parcels);
     }
 
+    /**
+     * Get parcels received by current user
+     * User ID is extracted from X-User-Id header (forwarded by API Gateway from JWT token)
+     */
     @GetMapping("/me/receive")
     public ResponseEntity<PageResponse<ParcelResponse>> getReceiveParcels(
-            @RequestParam String customerId,
+            @RequestHeader("X-User-Id") String customerId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
+        log.info("GET /api/v1/parcels/me/receive - Get parcels received by user: {}", customerId);
         PageResponse<ParcelResponse> parcels = parcelService.getParcelsReceivedByCustomer(customerId, page, size);
         return ResponseEntity.ok(parcels);
     }

@@ -16,16 +16,21 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
+import com.ds.communication_service.infrastructure.logging.WebSocketEventLogger;
 
 import lombok.extern.slf4j.Slf4j;
 
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
     @Autowired(required = false)
     @Lazy
     private WebSocketSessionManager sessionManager;
+
+    private final WebSocketEventLogger eventLogger;
 
     /**
      * Được gọi mỗi khi một tin nhắn (CONNECT, SUBSCRIBE, SEND...) được gửi từ client.
@@ -62,6 +67,10 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             // (Client đang gửi: "Bearer <USER_ID>")
             String authHeader = accessor.getFirstNativeHeader("Authorization");
             
+            // 3a. Đọc X-User-Id và X-User-Roles headers (optional, for consistency)
+            String userIdHeader = accessor.getFirstNativeHeader("X-User-Id");
+            String userRolesHeader = accessor.getFirstNativeHeader("X-User-Roles");
+            
             // 4. Đọc header "Client-Type" để xác định client type (ANDROID, WEB)
             String clientTypeHeader = accessor.getFirstNativeHeader("Client-Type");
             UpdateNotificationDTO.ClientType clientType = UpdateNotificationDTO.ClientType.ALL; // Default to ALL if not specified
@@ -74,36 +83,43 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                 }
             }
 
+            // Determine userId: prefer Authorization header, fallback to X-User-Id
+            String userId = null;
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                
-                // 5. Lấy User ID (là phần sau "Bearer ")
-                String userId = authHeader.substring(7);
+                userId = authHeader.substring(7);
+            } else if (userIdHeader != null && !userIdHeader.isBlank()) {
+                userId = userIdHeader;
+            }
 
-                if (userId != null && !userId.isBlank()) {
-                    
-                    // 6. Tạo một đối tượng "Principal" (danh tính)
-                    // Chúng ta dùng UsernamePasswordAuthenticationToken vì nó
-                    // implement Principal và dễ sử dụng.
-                    Principal authToken = new UsernamePasswordAuthenticationToken(
-                            userId, // Đây sẽ là giá trị của principal.getName()
-                            null,
-                            Collections.emptyList() // Không cần quyền (authorities)
-                    );
-
-                    // 7. Gán Principal vào session WebSocket này
-                    accessor.setUser(authToken);
-                    log.info("WebSocket CONNECT: User {} authenticated, Principal name={}, ClientType={}", 
-                        userId, authToken.getName(), clientType);
-                    
-                    // 8. Register session với session manager (nếu có)
-                    if (sessionManager != null && accessor.getSessionId() != null) {
-                        sessionManager.registerSession(userId, accessor.getSessionId(), clientType);
-                    }
+            if (userId != null && !userId.isBlank()) {
+                // Log headers for debugging
+                if (userRolesHeader != null && !userRolesHeader.isBlank()) {
+                    log.info("WebSocket CONNECT: User {} with roles: {}, ClientType={}", 
+                        userId, userRolesHeader, clientType);
                 } else {
-                    log.warn("WebSocket CONNECT: Empty userId in Authorization header");
+                    log.info("WebSocket CONNECT: User {} authenticated, ClientType={}", 
+                        userId, clientType);
                 }
+                
+                // 6. Tạo một đối tượng "Principal" (danh tính)
+                // Chúng ta dùng UsernamePasswordAuthenticationToken vì nó
+                // implement Principal và dễ sử dụng.
+                Principal authToken = new UsernamePasswordAuthenticationToken(
+                        userId, // Đây sẽ là giá trị của principal.getName()
+                        null,
+                        Collections.emptyList() // Không cần quyền (authorities)
+                );
+
+                // 7. Gán Principal vào session WebSocket này
+                accessor.setUser(authToken);
+                
+                // 8. Register session với session manager (nếu có)
+                if (sessionManager != null && accessor.getSessionId() != null) {
+                    sessionManager.registerSession(userId, accessor.getSessionId(), clientType);
+                }
+                eventLogger.logConnect(userId, accessor.getSessionId(), userRolesHeader, clientType.name());
             } else {
-                log.warn("WebSocket CONNECT: Missing or invalid Authorization header");
+                log.warn("WebSocket CONNECT: Missing or invalid Authorization/X-User-Id header");
             }
         } else if (StompCommand.SUBSCRIBE.equals(command)) {
             // Log subscription attempts
@@ -111,8 +127,10 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             Principal user = accessor.getUser();
             if (user != null) {
                 log.info("WebSocket SUBSCRIBE: User {} subscribing to {}", user.getName(), destination);
+                eventLogger.logSubscribe(user.getName(), destination);
             } else {
                 log.warn("WebSocket SUBSCRIBE: No Principal found for subscription to {}", destination);
+                eventLogger.logSubscribe(null, destination);
             }
         }
         
@@ -130,6 +148,9 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             String destination = accessor.getDestination();
             if (destination != null && destination.contains("/queue/messages")) {
                 log.info("📤 WebSocket message sent: destination={}, sent={}", destination, sent);
+                Principal user = accessor.getUser();
+                String userId = user != null ? user.getName() : null;
+                eventLogger.logSend(userId, destination, sent);
             }
         }
     }

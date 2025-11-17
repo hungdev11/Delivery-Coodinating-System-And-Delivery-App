@@ -1,0 +1,109 @@
+package com.ds.communication_service.infrastructure.kafka;
+
+import com.ds.communication_service.app_context.models.UserSnapshot;
+import com.ds.communication_service.app_context.repositories.UserSnapshotRepository;
+import com.ds.communication_service.infrastructure.kafka.dto.UserEventDto;
+import com.ds.communication_service.infrastructure.snapshot.SnapshotInitializationService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Kafka consumer for User events
+ * Updates UserSnapshot table when user events are received
+ */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class UserEventConsumer {
+
+    private final UserSnapshotRepository userSnapshotRepository;
+    private final SnapshotInitializationService snapshotInitializationService;
+
+    @KafkaListener(
+        topics = "user-events",
+        groupId = "${spring.kafka.consumer.group-id:communication-service-group}",
+        containerFactory = "kafkaListenerContainerFactory"
+    )
+    @Transactional
+    public void handleUserEvent(
+            @Payload UserEventDto event,
+            @Header(KafkaHeaders.RECEIVED_KEY) String userId,
+            Acknowledgment acknowledgment) {
+        
+        try {
+            log.info("📥 Received user event: {} for user: {}", event.getEventType(), userId);
+
+            switch (event.getEventType()) {
+                case USER_CREATED:
+                case USER_UPDATED:
+                    handleUserCreatedOrUpdated(event);
+                    break;
+                case USER_DELETED:
+                    handleUserDeleted(userId);
+                    break;
+                case USER_SERVICE_READY:
+                    handleUserServiceReady();
+                    break;
+                default:
+                    log.warn("Unknown event type: {}", event.getEventType());
+            }
+
+            // Acknowledge message after successful processing
+            acknowledgment.acknowledge();
+            log.debug("✅ User event processed successfully: {} for user: {}", event.getEventType(), userId);
+
+        } catch (Exception e) {
+            log.error("❌ Error processing user event: {} for user: {}: {}", 
+                event.getEventType(), userId, e.getMessage(), e);
+            // Don't acknowledge on error - message will be retried
+            throw e;
+        }
+    }
+
+    private void handleUserCreatedOrUpdated(UserEventDto event) {
+        UserSnapshot snapshot = userSnapshotRepository.findById(event.getUserId())
+            .orElse(UserSnapshot.builder()
+                .userId(event.getUserId())
+                .build());
+
+        snapshot.setUsername(event.getUsername());
+        snapshot.setFirstName(event.getFirstName());
+        snapshot.setLastName(event.getLastName());
+        snapshot.setEmail(event.getEmail());
+        snapshot.setPhone(event.getPhone());
+        snapshot.setAddress(event.getAddress());
+        snapshot.setIdentityNumber(event.getIdentityNumber());
+        snapshot.setStatus(event.getStatus());
+
+        userSnapshotRepository.save(snapshot);
+        log.debug("✅ User snapshot updated: {}", event.getUserId());
+    }
+
+    private void handleUserDeleted(String userId) {
+        userSnapshotRepository.deleteById(userId);
+        log.debug("✅ User snapshot deleted: {}", userId);
+    }
+
+    private void handleUserServiceReady() {
+        log.info("🚀 Received USER_SERVICE_READY event. Triggering snapshot synchronization...");
+        try {
+            // Trigger snapshot initialization if table is empty
+            long snapshotCount = userSnapshotRepository.count();
+            if (snapshotCount == 0) {
+                log.info("📥 Snapshot table is empty. Starting sync from UserService...");
+                snapshotInitializationService.doInitializeSnapshot();
+            } else {
+                log.info("✅ Snapshot table already has {} records. Skipping sync.", snapshotCount);
+            }
+        } catch (Exception e) {
+            log.error("❌ Error during snapshot sync after USER_SERVICE_READY: {}", e.getMessage(), e);
+        }
+    }
+}

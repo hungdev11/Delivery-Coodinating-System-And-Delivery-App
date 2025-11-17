@@ -19,6 +19,10 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import com.ds.communication_service.infrastructure.kafka.dto.UserEventDto;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -52,6 +56,12 @@ public class KafkaConfig {
      * Communication service consumes and forwards to clients via WebSocket
      */
     public static final String TOPIC_UPDATE_NOTIFICATIONS = "update-notifications";
+    /**
+     * Topic for audit events (CREATE/UPDATE/DELETE operations)
+     * Shared topic used by all services for audit logging
+     */
+    public static final String TOPIC_AUDIT_EVENTS = "audit-events";
+    public static final String TOPIC_AUDIT_EVENTS_DLQ = "audit-events-dlq"; // Dead Letter Queue
 
     /**
      * Producer configuration
@@ -61,7 +71,16 @@ public class KafkaConfig {
         Map<String, Object> config = new HashMap<>();
         config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        
+        // Create ObjectMapper with JavaTimeModule for LocalDateTime support
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        
+        // Create JsonSerializer without type information
+        JsonSerializer<Object> jsonSerializer = new JsonSerializer<>(objectMapper);
+        jsonSerializer.setAddTypeInfo(false);
+        config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, jsonSerializer.getClass());
         
         // Producer reliability settings
         config.put(ProducerConfig.ACKS_CONFIG, "all"); // Wait for all replicas
@@ -77,7 +96,9 @@ public class KafkaConfig {
         // Use gzip compression instead of snappy (snappy requires native libraries not available in Docker)
         config.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip");
         
-        return new DefaultKafkaProducerFactory<>(config);
+        DefaultKafkaProducerFactory<String, Object> factory = new DefaultKafkaProducerFactory<>(config);
+        factory.setValueSerializer(jsonSerializer);
+        return factory;
     }
 
     @Bean
@@ -94,20 +115,34 @@ public class KafkaConfig {
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         config.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
-        config.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class.getName());
-        config.put(JsonDeserializer.TRUSTED_PACKAGES, "com.ds.communication_service.common.dto");
-        config.put(JsonDeserializer.VALUE_DEFAULT_TYPE, Object.class);
+        
+        // Create JsonDeserializer that ignores type info from producer and uses local DTO
+        JsonDeserializer<UserEventDto> jsonDeserializer = new JsonDeserializer<>(UserEventDto.class);
+        jsonDeserializer.setUseTypeHeaders(false);
+        jsonDeserializer.setRemoveTypeHeaders(true);
+        jsonDeserializer.addTrustedPackages("com.ds.communication_service.common.dto", 
+                "com.ds.communication_service.infrastructure.kafka.dto");
+        
+        // Wrap with ErrorHandlingDeserializer
+        ErrorHandlingDeserializer<UserEventDto> errorHandlingDeserializer = 
+                new ErrorHandlingDeserializer<>(jsonDeserializer);
         
         // Consumer reliability settings
-        config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false); // Manual commit for reliability
+        config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
         config.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 300000);
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
         config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 10000);
         
-        return new DefaultKafkaConsumerFactory<>(config);
+        // Create factory and set deserializers
+        DefaultKafkaConsumerFactory<String, Object> factory = new DefaultKafkaConsumerFactory<>(config);
+        factory.setKeyDeserializer(new StringDeserializer());
+        @SuppressWarnings("unchecked")
+        org.apache.kafka.common.serialization.Deserializer<Object> valueDeserializer = 
+                (org.apache.kafka.common.serialization.Deserializer<Object>) (org.apache.kafka.common.serialization.Deserializer<?>) errorHandlingDeserializer;
+        factory.setValueDeserializer(valueDeserializer);
+        return factory;
     }
 
     @Bean
@@ -171,6 +206,26 @@ public class KafkaConfig {
                 .partitions(3) // Partition by userId
                 .replicas(1)
                 .config("retention.ms", "86400000") // 1 day (updates are short-lived)
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+
+    @Bean
+    public NewTopic auditEventsTopic() {
+        return TopicBuilder.name(TOPIC_AUDIT_EVENTS)
+                .partitions(3) // Partition by userId or resourceType
+                .replicas(1)
+                .config("retention.ms", "2592000000") // 30 days
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+
+    @Bean
+    public NewTopic auditEventsDlqTopic() {
+        return TopicBuilder.name(TOPIC_AUDIT_EVENTS_DLQ)
+                .partitions(1)
+                .replicas(1)
+                .config("retention.ms", "7776000000") // 90 days (longer retention for failed events)
                 .config("cleanup.policy", "delete")
                 .build();
     }

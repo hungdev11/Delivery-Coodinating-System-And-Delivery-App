@@ -38,21 +38,24 @@ public class PagingRequestV2 {
     /**
      * Applied filters (optional) - V2 system with operations between each pair
      */
-    private Optional<FilterGroupItemV2> filters = Optional.empty();
+    private FilterGroupItemV2 filters;
     
     /**
      * Sort configuration (optional)
      */
+    @Builder.Default
     private Optional<List<SortConfig>> sorts = Optional.empty();
     
     /**
      * Global search term (optional)
      */
+    @Builder.Default
     private Optional<String> search = Optional.empty();
     
     /**
      * Selected item IDs (optional)
      */
+    @Builder.Default
     private Optional<List<String>> selected = Optional.empty();
     
     /**
@@ -73,7 +76,7 @@ public class PagingRequestV2 {
      * Get filters or null
      */
     public FilterGroupItemV2 getFiltersOrNull() {
-        return filters.orElse(null);
+        return filters;
     }
     
     /**

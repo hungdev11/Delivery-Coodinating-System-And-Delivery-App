@@ -69,11 +69,28 @@ export const deleteDeliveryMan = async (id: string) => {
  * =============================
  */
 
+/**
+ * Get delivery sessions with V2 enhanced filtering (Admin/Shipper)
+ * Uses v2 endpoint for search functionality
+ */
 export const getDeliverySessions = async (
   params: QueryPayload,
 ): Promise<GetDeliverySessionsResponse> => {
   return apiClient.post<GetDeliverySessionsResponse, QueryPayload>(
-    '/v1/delivery-sessions/search',
+    '/v2/delivery-sessions',
+    params,
+  )
+}
+
+/**
+ * Get delivery sessions for client users
+ * Uses v1 client-specific endpoint
+ */
+export const getDeliverySessionsForClient = async (
+  params: QueryPayload,
+): Promise<GetDeliverySessionsResponse> => {
+  return apiClient.post<GetDeliverySessionsResponse, QueryPayload>(
+    '/v1/client/delivery-sessions',
     params,
   )
 }
@@ -143,6 +160,31 @@ export const getAssignmentHistoryForDeliveryMan = async (
         createdAtEnd: params.createdAtEnd,
         completedAtStart: params.completedAtStart,
         completedAtEnd: params.completedAtEnd,
+      },
+    },
+  )
+}
+
+/**
+ * Get active session for a deliveryman
+ */
+export const getActiveSessionForDeliveryMan = async (deliveryManId: string): Promise<GetDeliverySessionDetailResponse> => {
+  return apiClient.get<GetDeliverySessionDetailResponse>(`/v1/sessions/drivers/${deliveryManId}/active`)
+}
+
+/**
+ * Get assignments by session ID
+ */
+export const getAssignmentsBySessionId = async (
+  sessionId: string,
+  params: { page?: number; size?: number } = {},
+): Promise<DeliveryAssignmentTaskResponse> => {
+  return apiClient.get<DeliveryAssignmentTaskResponse>(
+    `/v1/assignments/session/${sessionId}/tasks`,
+    {
+      params: {
+        page: params.page ?? 0,
+        size: params.size ?? 100,
       },
     },
   )

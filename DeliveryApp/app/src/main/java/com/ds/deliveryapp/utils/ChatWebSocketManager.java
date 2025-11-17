@@ -47,12 +47,18 @@ public class ChatWebSocketManager {
     private final String mWebSocketUrl;
     private final String mJwtToken;
     private final String mUserId;
+    private final List<String> mUserRoles;
     private ChatWebSocketListener mListener; // Listener (chính là ChatActivity)
 
     public ChatWebSocketManager(String webSocketUrl, String jwtToken, String userId) {
+        this(webSocketUrl, jwtToken, userId, null);
+    }
+
+    public ChatWebSocketManager(String webSocketUrl, String jwtToken, String userId, List<String> userRoles) {
         this.mWebSocketUrl = webSocketUrl;
         this.mJwtToken = jwtToken;
         this.mUserId = userId;
+        this.mUserRoles = userRoles != null ? userRoles : new ArrayList<>();
     }
 
     public void setListener(ChatWebSocketListener listener) {
@@ -112,6 +118,11 @@ public class ChatWebSocketManager {
         Map<String, String> handshakeHeaders = new HashMap<>();
         if (mUserId != null) {
             handshakeHeaders.put("Authorization", "Bearer " + mUserId);
+            handshakeHeaders.put("X-User-Id", mUserId);
+            // Add roles header if available
+            if (mUserRoles != null && !mUserRoles.isEmpty()) {
+                handshakeHeaders.put("X-User-Roles", String.join(",", mUserRoles));
+            }
             // Add Client-Type header to identify Android client
             handshakeHeaders.put("Client-Type", "ANDROID");
         }
@@ -121,6 +132,11 @@ public class ChatWebSocketManager {
         List<StompHeader> headers = new ArrayList<>();
         if (mUserId != null) {
             headers.add(new StompHeader("Authorization", "Bearer " + mUserId));
+            headers.add(new StompHeader("X-User-Id", mUserId));
+            // Add roles header if available
+            if (mUserRoles != null && !mUserRoles.isEmpty()) {
+                headers.add(new StompHeader("X-User-Roles", String.join(",", mUserRoles)));
+            }
             // Add Client-Type header to identify Android client
             headers.add(new StompHeader("Client-Type", "ANDROID"));
         }

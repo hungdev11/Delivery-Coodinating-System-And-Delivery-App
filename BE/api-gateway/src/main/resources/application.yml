@@ -27,6 +27,8 @@ spring:
         jwt:
           issuer-uri: ${keycloak.backend.issuer-uri:${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}}
           jwk-set-uri: ${keycloak.backend.jwk-set-uri:${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}/protocol/openid-connect/certs}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 # Keycloak Configuration (reusing admin credentials from User Service)
 keycloak:
@@ -71,11 +73,6 @@ services:
     base-url: ${PARCEL_SERVICE_URL:http://localhost:21506}
   communication:
     base-url: ${COMMUNICATION_SERVICE_URL:http://localhost:21511}
-  # Uncomment and add other services as needed
-  # order:
-  #   base-url: ${ORDER_SERVICE_URL:http://order-service:8080}
-  # delivery:
-  #   base-url: ${DELIVERY_SERVICE_URL:http://delivery-service:8080}
 
 # Logging Configuration
 # Only log errors from frameworks/libraries, keep developer logs at INFO

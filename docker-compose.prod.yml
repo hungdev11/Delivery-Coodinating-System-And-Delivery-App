@@ -48,11 +48,14 @@ services:
       KEYCLOAK_CLIENT_ID: dss-client
       KEYCLOAK_CLIENT_SECRET: dss-secret
       SETTINGS_SERVICE_URL: http://settings-service:21502
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21501
     ports:
       - "21501:21501"
     depends_on:
       settings-service:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21501/actuator/health"]
@@ -104,9 +107,16 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       PARCEL_DB_NAME: ${PARCEL_DB_NAME:-ds_parcel_service}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21506
     ports:
       - "21506:21506"
+    depends_on:
+      user-service:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21506/actuator/health"]
       interval: 10s
@@ -129,17 +139,103 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       SESSION_DB_NAME: ${SESSION_DB_NAME:-ds_session_service}
       PARCEL_SERVICE_URL: http://parcel-service:21506
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21505
     ports:
       - "21505:21505"
     depends_on:
       parcel-service:
         condition: service_healthy
+      user-service:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21505/actuator/health"]
       interval: 10s
       timeout: 10s
       retries: 120
+      start_period: 30s
+
+  # Communication Service (from CI/CD)
+  communication-service:
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER}/dss-communication-service:${IMAGE_TAG:-latest}
+    container_name: dss-communication-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      COMMUNICATION_DB_NAME: ${COMMUNICATION_DB_NAME:-ds_communication_service}
+      SESSION_SERVICE_URL: ${SESSION_SERVICE_URL:-http://session-service:21505}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      SERVER_PORT: 21511
+    ports:
+      - "21511:21511"
+    depends_on:
+      session-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:21511/actuator/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
+  # Zookeeper (Required for Kafka)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: dss-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: dss-kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
       start_period: 30s
 
   # API Gateway (from CI/CD)
@@ -159,6 +255,7 @@ services:
       ZONE_SERVICE_URL: http://zone-service:21503
       SESSION_SERVICE_URL: http://session-service:21505
       PARCEL_SERVICE_URL: http://parcel-service:21506
+      COMMUNICATION_SERVICE_URL: ${COMMUNICATION_SERVICE_URL:-http://communication-service:21511}
       SERVER_PORT: 21500
     ports:
       - "21500:21500"
@@ -172,6 +269,8 @@ services:
       session-service:
         condition: service_healthy
       parcel-service:
+        condition: service_healthy
+      communication-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:21500/api/v1/health || exit 1"]

@@ -26,6 +26,7 @@ import com.ds.communication_service.common.interfaces.IConversationService;
 import com.ds.communication_service.common.interfaces.IMessageService;
 import com.ds.communication_service.app_context.repositories.MessageRepository;
 import com.ds.communication_service.business.v1.services.UserServiceClient;
+import com.ds.communication_service.business.v1.services.WebSocketSessionManager;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +41,7 @@ public class ConversationApiController {
     private final IConversationService conversationService;
     private final MessageRepository messageRepository;
     private final UserServiceClient userServiceClient;
+    private final WebSocketSessionManager webSocketSessionManager;
 
     @GetMapping("/{conversationId}/messages")
     public ResponseEntity<PageResponse<MessageResponse>> getMessages(
@@ -135,13 +137,23 @@ public class ConversationApiController {
             log.warn("Could not fetch user info for partnerId: {}, using fallback name", partnerId);
         }
         
+        // Check online status from WebSocket session manager
+        Boolean isOnline = null;
+        try {
+            if (webSocketSessionManager != null) {
+                isOnline = webSocketSessionManager.isUserOnline(partnerId);
+            }
+        } catch (Exception e) {
+            log.debug("Could not check online status for user {}: {}", partnerId, e.getMessage());
+        }
+        
         ConversationResponse dto = ConversationResponse.builder()
             .conversationId(conversation.getId().toString())
             .partnerId(partnerId)
             .partnerName(partnerName)
             .partnerUsername(partnerUsername)
             .partnerAvatar(null) // TODO: Add avatar support when available
-            .isOnline(null) // TODO: Implement online status tracking
+            .isOnline(isOnline)
             .lastMessageTime(lastMessageTime)
             .lastMessageContent(lastMessageContent)
             .unreadCount((int) unreadCount)

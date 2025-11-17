@@ -8,9 +8,9 @@
 import { onMounted, onUnmounted, ref, computed, watch, nextTick, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
-import { 
-  useConversations, 
-  useWebSocket, 
+import {
+  useConversations,
+  useWebSocket,
   useProposals,
   useMessageStatus,
   useTypingIndicator,
@@ -30,6 +30,11 @@ import ProposalMessage from './components/ProposalMessage.vue'
 import ProposalMenu from './components/ProposalMenu.vue'
 import TypingIndicator from './components/TypingIndicator.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
+import { getParcelsV2 } from '../Parcels/api'
+import type { ParcelDto } from '../Parcels/model.type'
+import type { QueryPayload } from '@/common/types/filter'
+import { getActiveSessionForDeliveryMan, getAssignmentsBySessionId } from '../Delivery/api'
+import type { DeliveryAssignmentTask } from '../Delivery/model.type'
 
 // Lazy load modals
 const LazyDateTimePickerModal = defineAsyncComponent(() => import('./components/DateTimePickerModal.vue'))
@@ -48,6 +53,16 @@ const partnerUsername = ref<string>('')
 const currentUser = getCurrentUser()
 const currentUserId = computed(() => currentUser?.id || '')
 const currentUserRoles = computed(() => getUserRoles())
+const isClient = computed(() => currentUserRoles.value.includes('CLIENT'))
+
+// Current parcel for client case
+const currentParcel = ref<ParcelDto | null>(null)
+const loadingParcel = ref(false)
+
+// Active session and assignments for client-shipper chat
+const activeSessionId = ref<string | null>(null)
+const sessionAssignments = ref<DeliveryAssignmentTask[]>([])
+const loadingSession = ref(false)
 
 const {
   messages,
@@ -79,6 +94,9 @@ const loadingProposals = ref(false)
 const typingTimer = ref<number | null>(null)
 const isTyping = ref(false)
 
+// Parcels modal state
+const showParcelsModal = ref(false)
+
 // Get typing users for this conversation
 const typingUsers = computed(() => {
   if (!conversationId.value || !currentUserId.value) return []
@@ -98,6 +116,12 @@ onMounted(async () => {
     await loadMessages(conversationId.value, currentUserId.value)
     await loadPartnerInfo()
     await loadAvailableProposalConfigs()
+    // Load current parcel if user is CLIENT
+    if (isClient.value) {
+      await loadCurrentParcel()
+      // Load active session and assignments if chatting with shipper
+      await loadActiveSessionAndAssignments()
+    }
     await connectWebSocket()
     scrollToBottom()
   }
@@ -120,6 +144,102 @@ const loadPartnerInfo = async () => {
   } else {
     // Fallback to partnerId
     partnerName.value = partnerId.value || 'Unknown User'
+  }
+}
+
+/**
+ * Load current parcel being shipped for CLIENT user
+ * Shows parcel that is ON_ROUTE and owned by current client (receiverId = currentUserId)
+ */
+const loadCurrentParcel = async () => {
+  if (!currentUserId.value || !isClient.value) return
+
+  loadingParcel.value = true
+  try {
+    // Query for parcels where receiverId = currentUserId and status = ON_ROUTE
+    const query: QueryPayload = {
+      page: 0,
+      size: 1,
+      filters: {
+        logic: 'AND',
+        conditions: [
+          {
+            field: 'receiverId',
+            operator: 'eq',
+            value: currentUserId.value,
+            logic: 'AND',
+          },
+          {
+            field: 'status',
+            operator: 'eq',
+            value: 'ON_ROUTE',
+            logic: undefined,
+          },
+        ],
+      },
+      sorts: [
+        {
+          field: 'updatedAt',
+          direction: 'desc',
+        },
+      ],
+    }
+
+    const response = await getParcelsV2(query)
+    if (response.result?.data && response.result.data.length > 0) {
+      currentParcel.value = response.result.data[0]
+    } else {
+      currentParcel.value = null
+    }
+  } catch (error) {
+    console.error('Failed to load current parcel:', error)
+    currentParcel.value = null
+  } finally {
+    loadingParcel.value = false
+  }
+}
+
+/**
+ * Load active session and assignments for shipper (partner)
+ * Only loads assignments where receiverId = currentUserId (client's parcels in the session)
+ */
+const loadActiveSessionAndAssignments = async () => {
+  if (!partnerId.value || !isClient.value || !currentUserId.value) return
+
+  loadingSession.value = true
+  try {
+    // Get active session for the shipper (partner)
+    const sessionResponse = await getActiveSessionForDeliveryMan(partnerId.value)
+
+    if (sessionResponse.result && sessionResponse.result.id) {
+      activeSessionId.value = sessionResponse.result.id
+
+      // Get all assignments in this session
+      const assignmentsResponse = await getAssignmentsBySessionId(activeSessionId.value, {
+        page: 0,
+        size: 100,
+      })
+
+      if (assignmentsResponse.content) {
+        // Filter: only assignments where receiverId = currentUserId (client's parcels)
+        sessionAssignments.value = assignmentsResponse.content.filter(
+          (assignment: DeliveryAssignmentTask) => assignment.receiverId === currentUserId.value
+        )
+        console.log('📦 Loaded', sessionAssignments.value.length, 'client parcels in active session')
+      } else {
+        sessionAssignments.value = []
+      }
+    } else {
+      activeSessionId.value = null
+      sessionAssignments.value = []
+      console.log('ℹ️ No active session found for shipper:', partnerId.value)
+    }
+  } catch (error) {
+    console.error('Failed to load active session and assignments:', error)
+    activeSessionId.value = null
+    sessionAssignments.value = []
+  } finally {
+    loadingSession.value = false
   }
 }
 
@@ -180,12 +300,12 @@ const connectWebSocket = async () => {
           currentConversationId: conversationId.value,
         })
         addMessage(message)
-        
+
         // Save to local storage
         if (conversationId.value) {
           chatHistoryStore.addMessage(conversationId.value, message)
         }
-        
+
         nextTick(() => scrollToBottom())
 
         // ❌ REMOVED: No need to reload conversations on every message
@@ -232,18 +352,18 @@ const handleReconnect = async () => {
  */
 const handleInputChange = () => {
   if (!conversationId.value || !connected.value) return
-  
+
   // Send typing indicator
   if (!isTyping.value) {
     isTyping.value = true
     sendTyping(conversationId.value, true)
   }
-  
+
   // Reset typing timer
   if (typingTimer.value) {
     clearTimeout(typingTimer.value)
   }
-  
+
   // Stop typing after 3 seconds of inactivity
   typingTimer.value = window.setTimeout(() => {
     if (isTyping.value) {
@@ -530,6 +650,7 @@ const sendProposalRequest = async (type: string, data: string) => {
   const config = availableConfigs.value.find((c) => c.type === type)
   const fallbackContent = config?.description || `Proposal: ${type}`
 
+  // Include sessionId if available (for client-shipper proposals)
   const result = await createProposal({
     conversationId: conversationId.value,
     recipientId: partnerId.value,
@@ -538,6 +659,7 @@ const sendProposalRequest = async (type: string, data: string) => {
     fallbackContent,
     senderId: currentUserId.value,
     senderRoles: currentUserRoles.value,
+    sessionId: activeSessionId.value || undefined, // Include sessionId if available
   })
 
   if (result && conversationId.value) {
@@ -567,12 +689,12 @@ const handleProposalResponse = async (proposalId: string, resultData: string) =>
  */
 const handleProposalUpdate = (update: ProposalUpdateDTO) => {
   console.log('📋 Proposal update received:', update)
-  
+
   // Find message with matching proposal ID and update its status
   const messageIndex = messages.value.findIndex(
     (msg) => msg.proposal?.id === update.proposalId
   )
-  
+
   if (messageIndex !== -1) {
     const message = messages.value[messageIndex]
     if (message.proposal) {
@@ -581,10 +703,10 @@ const handleProposalUpdate = (update: ProposalUpdateDTO) => {
       if (update.resultData) {
         message.proposal.resultData = update.resultData
       }
-      
+
       // Trigger reactivity
       messages.value[messageIndex] = { ...message }
-      
+
       console.log('✅ Updated proposal status:', {
         proposalId: update.proposalId,
         newStatus: update.newStatus,
@@ -672,9 +794,20 @@ const isMyMessage = (message: MessageResponse) => {
         </div>
       </div>
       <div class="flex items-center space-x-2">
+        <!-- Parcels Icon (CLIENT case only, when there are parcels in active session) -->
+        <UButton
+          v-if="isClient && sessionAssignments.length > 0"
+          variant="ghost"
+          color="neutral"
+          icon="i-heroicons-cube"
+          @click="showParcelsModal = true"
+        >
+          <span class="ml-1">{{ sessionAssignments.length }}</span>
+        </UButton>
+
         <!-- Notification Center -->
         <NotificationCenter />
-        
+
         <UBadge
           :color="connected ? 'success' : 'neutral'"
           variant="subtle"
@@ -729,11 +862,11 @@ const isMyMessage = (message: MessageResponse) => {
           @respond="handleProposalResponse"
         />
       </div>
-      
+
       <!-- Typing Indicator -->
-      <TypingIndicator 
-        v-if="isPartnerTyping" 
-        :show="isPartnerTyping" 
+      <TypingIndicator
+        v-if="isPartnerTyping"
+        :show="isPartnerTyping"
         :user-name="partnerName || 'Partner'"
       />
     </div>
@@ -783,6 +916,74 @@ const isMyMessage = (message: MessageResponse) => {
             Within a time range
           </UButton>
         </div>
+      </template>
+    </UModal>
+
+    <!-- Parcels Modal (CLIENT case only) -->
+    <UModal
+      v-model:open="showParcelsModal"
+      :title="`Your Parcels in Current Session (${sessionAssignments.length})`"
+      description="Parcels being delivered by this shipper in their active session"
+    >
+      <template #body>
+        <div class="space-y-3">
+          <USkeleton v-if="loadingSession" class="h-32 w-full" />
+
+          <div v-else-if="sessionAssignments.length === 0" class="text-center py-8 text-gray-500">
+            <p>No parcels found in the current session.</p>
+          </div>
+
+          <div v-else class="space-y-3">
+            <div
+              v-for="assignment in sessionAssignments"
+              :key="assignment.parcelId"
+              class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <div class="flex items-center space-x-2 mb-2">
+                    <span class="font-semibold text-gray-900 dark:text-gray-100">
+                      {{ assignment.parcelCode || assignment.parcelId }}
+                    </span>
+                    <UBadge
+                      :color="
+                        assignment.status === 'COMPLETED'
+                          ? 'success'
+                          : assignment.status === 'FAILED'
+                            ? 'error'
+                            : 'warning'
+                      "
+                      variant="soft"
+                      class="capitalize"
+                    >
+                      {{ assignment.status.toLowerCase() }}
+                    </UBadge>
+                  </div>
+                  <div class="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                    <p v-if="assignment.deliveryType">
+                      Type: <strong>{{ assignment.deliveryType }}</strong>
+                    </p>
+                    <p v-if="assignment.deliveryLocation">
+                      Location: <strong>{{ assignment.deliveryLocation }}</strong>
+                    </p>
+                    <p v-if="assignment.value">
+                      Value: <strong>{{ assignment.value.toLocaleString() }} VND</strong>
+                    </p>
+                    <p v-if="assignment.weight">
+                      Weight: <strong>{{ assignment.weight }} kg</strong>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <UButton variant="outline" color="neutral" @click="showParcelsModal = false">
+          Close
+        </UButton>
       </template>
     </UModal>
   </div>

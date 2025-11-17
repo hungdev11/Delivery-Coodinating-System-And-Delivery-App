@@ -163,17 +163,34 @@ const openCreateChat = async () => {
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
-                <div class="flex flex-col">
+                <div class="flex flex-col flex-1 min-w-0">
                   <p class="text-sm font-medium text-gray-900 truncate">
                     {{ conversation.partnerName }}
                   </p>
                   <p v-if="conversation.partnerUsername" class="text-xs text-gray-500 truncate">
                     @{{ conversation.partnerUsername }}
                   </p>
+                  <p v-if="conversation.lastMessageContent" class="text-xs text-gray-600 truncate mt-1">
+                    {{ conversation.lastMessageContent }}
+                  </p>
+                  <p v-else class="text-xs text-gray-400 italic mt-1">
+                    No messages yet
+                  </p>
                 </div>
-                <span class="text-xs text-gray-500 ml-2">
-                  {{ formatLastMessageTime(conversation.lastMessageTime) }}
-                </span>
+                <div class="flex flex-col items-end ml-2">
+                  <span class="text-xs text-gray-500">
+                    {{ formatLastMessageTime(conversation.lastMessageTime) }}
+                  </span>
+                  <UBadge
+                    v-if="conversation.unreadCount && conversation.unreadCount > 0"
+                    color="primary"
+                    variant="solid"
+                    size="xs"
+                    class="mt-1"
+                  >
+                    {{ conversation.unreadCount }}
+                  </UBadge>
+                </div>
               </div>
             </div>
           </div>

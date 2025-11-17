@@ -14,7 +14,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Collections;
 import java.util.List;
@@ -33,6 +38,32 @@ public class UserControllerV2 {
 
     private final IUserService userService;
     private final IExternalAuthFacade externalAuthFacade;
+
+    @GetMapping("/me")
+    @Operation(summary = "Get current user (V2)")
+    public ResponseEntity<BaseResponse<UserDto>> getCurrentUser(
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        log.info("GET /api/v2/users/me - Get current user, header userId={}", userId);
+
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(BaseResponse.error("Missing X-User-Id header"));
+        }
+
+        try {
+            return userService.getUser(userId)
+                .map(user -> ResponseEntity.ok(BaseResponse.success(buildUserDto(user))))
+                .orElseGet(() -> ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error("User not found")));
+        } catch (Exception e) {
+            log.error("Error getting current user {}: {}", userId, e.getMessage(), e);
+            return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(BaseResponse.error("Failed to load current user: " + e.getMessage()));
+        }
+    }
 
     @PostMapping
     @Operation(summary = "Get users with enhanced filtering and sorting (V2 - Operations between each pair)")

@@ -40,9 +40,7 @@ public class PagingRequestV2 {
     /**
      * Applied filters (optional) - V2 system with operations between each pair
      */
-    @Builder.Default
-    @JsonSetter(nulls = Nulls.AS_EMPTY)
-    private Optional<FilterGroupItemV2> filters = Optional.empty();
+    private FilterGroupItemV2 filters;
     
     /**
      * Sort configuration (optional)
@@ -83,7 +81,7 @@ public class PagingRequestV2 {
      * Get filters or null
      */
     public FilterGroupItemV2 getFiltersOrNull() {
-        return filters.orElse(null);
+        return filters;
     }
     
     /**

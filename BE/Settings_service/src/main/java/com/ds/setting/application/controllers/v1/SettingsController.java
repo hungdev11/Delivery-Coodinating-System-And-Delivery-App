@@ -86,4 +86,15 @@ public class SettingsController {
         settingsService.deleteByKeyAndGroup(key, group);
         return ResponseEntity.ok(BaseResponse.success(null, "Setting deleted successfully"));
     }
+
+    @PutMapping("/{group}/bulk")
+    @Operation(summary = "Bulk upsert (create or update) multiple settings in a group")
+    public ResponseEntity<BaseResponse<List<SystemSettingDto>>> bulkUpsertSettings(
+            @PathVariable String group,
+            @Valid @RequestBody com.ds.setting.common.entities.dto.BulkUpsertSettingsRequest request,
+            @RequestHeader(value = "X-User-Id", required = false, defaultValue = "system") String userId) {
+        log.info("PUT /api/v1/settings/{}/bulk - Bulk upsert {} settings by: {}", group, request.getSettings().size(), userId);
+        List<SystemSettingDto> results = settingsService.bulkUpsertByGroup(group, request.getSettings(), userId);
+        return ResponseEntity.ok(BaseResponse.success(results, "Settings saved successfully"));
+    }
 }

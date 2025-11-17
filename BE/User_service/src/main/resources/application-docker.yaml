@@ -449,8 +449,8 @@ services:
     base-url: ${SETTINGS_SERVICE_URL:http://settings-service:21502}
   zone:
     base-url: ${ZONE_SERVICE_URL:http://zone-service:21503}
-  api-gateway:
-    base-url: ${API_GATEWAY_URL:http://api-gateway:21500}
+  parcel:
+    base-url: ${PARCEL_SERVICE_URL:http://parcel-service:21506}
 
 # Parcel Seed Configuration
 parcel:

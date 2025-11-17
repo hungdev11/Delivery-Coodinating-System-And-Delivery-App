@@ -86,6 +86,7 @@ public class ProposalService implements IProposalService{
         proposal.setType(dto.getType()); 
         proposal.setData(dto.getData());
         proposal.setStatus(ProposalStatus.PENDING);
+        proposal.setSessionId(dto.getSessionId()); // Set sessionId if provided
         
         proposal.setActionType(config.getResponseActionType()); 
         

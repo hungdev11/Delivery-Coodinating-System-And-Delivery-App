@@ -28,7 +28,8 @@ public class ParcelSeedService {
 
     private final UserRepository userRepository;
     private final UserAddressRepository userAddressRepository;
-    private final WebClient apiGatewayWebClient;
+    private final WebClient zoneServiceWebClient;
+    private final WebClient parcelServiceWebClient;
     
     private final ObjectMapper objectMapper = new ObjectMapper();
     
@@ -41,10 +42,12 @@ public class ParcelSeedService {
     public ParcelSeedService(
             UserRepository userRepository,
             UserAddressRepository userAddressRepository,
-            @Qualifier("apiGatewayWebClient") WebClient apiGatewayWebClient) {
+            @Qualifier("zoneServiceWebClient") WebClient zoneServiceWebClient,
+            @Qualifier("parcelServiceWebClient") WebClient parcelServiceWebClient) {
         this.userRepository = userRepository;
         this.userAddressRepository = userAddressRepository;
-        this.apiGatewayWebClient = apiGatewayWebClient;
+        this.zoneServiceWebClient = zoneServiceWebClient;
+        this.parcelServiceWebClient = parcelServiceWebClient;
     }
 
     /**
@@ -229,7 +232,7 @@ public class ParcelSeedService {
                     parcelRequest.put("receiverDestinationId", receiverDestinationId);
 
                     // Build request with optional authorization header
-                    var requestSpec = apiGatewayWebClient.post()
+                    var requestSpec = parcelServiceWebClient.post()
                             .uri("/api/v1/parcels")
                             .contentType(MediaType.APPLICATION_JSON)
                             .bodyValue(parcelRequest);
@@ -303,11 +306,11 @@ public class ParcelSeedService {
     }
 
     /**
-     * Get address information from zone-service via API Gateway
+     * Get address information from zone-service directly
      */
     private AddressInfo getAddressInfo(String destinationId) {
         try {
-            String responseBody = apiGatewayWebClient.get()
+            String responseBody = zoneServiceWebClient.get()
                     .uri("/api/v1/addresses/{id}", destinationId)
                     .retrieve()
                     .bodyToMono(String.class)

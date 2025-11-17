@@ -22,6 +22,7 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import com.ds.parcel_service.infrastructure.kafka.dto.UserEventDto;
 
 @Configuration
 @EnableKafka
@@ -63,15 +64,32 @@ public class KafkaConfig {
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         config.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
-        config.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class.getName());
-        config.put(JsonDeserializer.TRUSTED_PACKAGES, "com.ds.parcel_service.common.entities.dto,com.ds.parcel_service.business.v1.services");
-        config.put(JsonDeserializer.VALUE_DEFAULT_TYPE, Object.class);
-    // For exactly-once processing, disable auto commit and set isolation level to read_committed
-    config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-    config.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
-    config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        return new DefaultKafkaConsumerFactory<>(config);
+        
+        // Create JsonDeserializer that ignores type info from producer and uses local DTO
+        JsonDeserializer<UserEventDto> jsonDeserializer = new JsonDeserializer<>(UserEventDto.class);
+        jsonDeserializer.setUseTypeHeaders(false);
+        jsonDeserializer.setRemoveTypeHeaders(true);
+        jsonDeserializer.addTrustedPackages("com.ds.parcel_service.common.entities.dto", 
+                "com.ds.parcel_service.business.v1.services", 
+                "com.ds.parcel_service.infrastructure.kafka.dto");
+        
+        // Wrap with ErrorHandlingDeserializer
+        ErrorHandlingDeserializer<UserEventDto> errorHandlingDeserializer = 
+                new ErrorHandlingDeserializer<>(jsonDeserializer);
+        
+        // For exactly-once processing, disable auto commit and set isolation level to read_committed
+        config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        config.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+        config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        
+        // Create factory and set deserializers
+        DefaultKafkaConsumerFactory<String, Object> factory = new DefaultKafkaConsumerFactory<>(config);
+        factory.setKeyDeserializer(new StringDeserializer());
+        @SuppressWarnings("unchecked")
+        org.apache.kafka.common.serialization.Deserializer<Object> valueDeserializer = 
+                (org.apache.kafka.common.serialization.Deserializer<Object>) (org.apache.kafka.common.serialization.Deserializer<?>) errorHandlingDeserializer;
+        factory.setValueDeserializer(valueDeserializer);
+        return factory;
     }
 
     @Bean

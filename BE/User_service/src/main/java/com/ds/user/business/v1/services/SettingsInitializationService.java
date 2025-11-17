@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import jakarta.annotation.PostConstruct;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -162,6 +163,7 @@ public class SettingsInitializationService implements ISettingsInitializationSer
 
     private boolean isSettingsAlreadyInitialized() {
         try {
+            // Check by group instead of individual keys - more efficient
             String url = settingsServiceUrl + "/api/v1/settings/keycloak";
             List<?> response = restTemplate.getForObject(url, List.class);
             return response != null && !response.isEmpty();
@@ -172,46 +174,110 @@ public class SettingsInitializationService implements ISettingsInitializationSer
     }
 
     private void initializeKeycloakSettings() {
-        createSetting("KEYCLOAK_AUTH_SERVER_URL", "keycloak", "Keycloak authentication server URL", "STRING",
+        // Build list of settings to bulk upsert
+        List<Map<String, Object>> settingsToUpsert = new ArrayList<>();
+        
+        // Add base settings
+        addSettingToList(settingsToUpsert, "KEYCLOAK_AUTH_SERVER_URL", "Keycloak authentication server URL", "STRING",
                 keycloakAuthServerUrl, "SYSTEM", false, "URL");
-
-        // Initialize default realm and client settings
-        createSetting("KEYCLOAK_REALM", "keycloak", "Default Keycloak realm", "STRING", 
+        addSettingToList(settingsToUpsert, "KEYCLOAK_REALM", "Default Keycloak realm", "STRING", 
                 keycloakRealm, "SYSTEM", true, "TEXT");
-
-        // Initialize master realm settings for Keycloak initialization
-        createSetting("KEYCLOAK_MASTER_REALM", "keycloak", "Keycloak master realm for admin operations", "STRING", 
+        addSettingToList(settingsToUpsert, "KEYCLOAK_MASTER_REALM", "Keycloak master realm for admin operations", "STRING", 
                 "master", "SYSTEM", true, "TEXT");
-        
-        createSetting("KEYCLOAK_ADMIN_USERNAME", "keycloak", "Keycloak admin username", "STRING", 
+        addSettingToList(settingsToUpsert, "KEYCLOAK_ADMIN_USERNAME", "Keycloak admin username", "STRING", 
                 "dev", "SYSTEM", true, "TEXT");
-        
-        createSetting("KEYCLOAK_ADMIN_PASSWORD", "keycloak", "Keycloak admin password", "STRING", 
+        addSettingToList(settingsToUpsert, "KEYCLOAK_ADMIN_PASSWORD", "Keycloak admin password", "STRING", 
                 "dev", "SYSTEM", true, "PASSWORD");
-
-        // Initialize default realm and client ID settings
-        createSetting("KEYCLOAK_DEFAULT_REALM", "keycloak", "Default realm for API Gateway authentication", "STRING", 
+        addSettingToList(settingsToUpsert, "KEYCLOAK_DEFAULT_REALM", "Default realm for API Gateway authentication", "STRING", 
                 initConfig.getDefaultConfig().getRealm(), "SYSTEM", true, "TEXT");
-        
-        createSetting("KEYCLOAK_DEFAULT_CLIENT_ID", "keycloak", "Default client ID for API Gateway authentication", "STRING", 
+        addSettingToList(settingsToUpsert, "KEYCLOAK_DEFAULT_CLIENT_ID", "Default client ID for API Gateway authentication", "STRING", 
                 initConfig.getDefaultConfig().getClientId(), "SYSTEM", true, "TEXT");
 
+        // Add realm and client settings
         for (KeycloakInitConfig.RealmConfig realmConfig : initConfig.getRealms()) {
             String realmKey = realmConfig.getName().replace("-", "_").toUpperCase();
-            createSetting("KEYCLOAK_REALM_" + realmKey, "keycloak", "Realm: " + realmConfig.getDisplayName(), "STRING",
+            addSettingToList(settingsToUpsert, "KEYCLOAK_REALM_" + realmKey, "Realm: " + realmConfig.getDisplayName(), "STRING",
                     realmConfig.getName(), "SYSTEM", true, "TEXT");
 
             for (KeycloakInitConfig.ClientConfig clientConfig : realmConfig.getClients()) {
                 String clientKey = clientConfig.getClientId().replace("-", "_").toUpperCase();
-                createSetting("KEYCLOAK_CLIENT_" + clientKey + "_ID", "keycloak", "Client ID for " + clientConfig.getName(),
+                addSettingToList(settingsToUpsert, "KEYCLOAK_CLIENT_" + clientKey + "_ID", "Client ID for " + clientConfig.getName(),
                         "STRING", clientConfig.getClientId(), "SYSTEM", true, "TEXT");
+            }
+        }
+        
+        // Bulk upsert all settings at once
+        bulkUpsertSettings("keycloak", settingsToUpsert);
+    }
+    
+    private void addSettingToList(List<Map<String, Object>> list, String key, String description,
+                                   String type, String value, String level, boolean isReadOnly, String displayMode) {
+        if (value == null || value.trim().isEmpty()) {
+            log.warn("  Skipping creation of '{}' - value is null or empty", key);
+            return;
+        }
+        
+        Map<String, Object> setting = new HashMap<>();
+        setting.put("key", key);
+        setting.put("group", "keycloak");
+        setting.put("description", description);
+        setting.put("type", type);
+        setting.put("value", value.trim());
+        setting.put("level", convertLevelToOrdinal(level));
+        setting.put("isReadOnly", isReadOnly);
+        setting.put("displayMode", displayMode);
+        list.add(setting);
+    }
+    
+    /**
+     * Bulk upsert settings using the bulk endpoint
+     */
+    private void bulkUpsertSettings(String group, List<Map<String, Object>> settings) {
+        if (settings.isEmpty()) {
+            log.warn("No settings to upsert for group: {}", group);
+            return;
+        }
+        
+        try {
+            String url = settingsServiceUrl + "/api/v1/settings/" + group + "/bulk";
+            Map<String, Object> request = new HashMap<>();
+            request.put("group", group);
+            request.put("settings", settings);
 
-                // Skip creating secret setting here - it will be handled by ClientInitializationService
-                // after the client is created and we can retrieve/generate the actual secret from Keycloak
-                if (!clientConfig.isPublicClient()) {
-                    log.debug("Confidential client '{}' detected - secret will be generated during client creation", clientConfig.getClientId());
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("X-User-Id", "user-service-init");
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+            
+            restTemplate.put(url, entity);
+            log.info("  ✓ Bulk upserted {} settings in group {}", settings.size(), group);
+        } catch (Exception e) {
+            log.error("  Failed to bulk upsert settings in group '{}': {}", group, e.getMessage(), e);
+            // Fallback to individual upserts if bulk fails
+            log.warn("  Falling back to individual upserts...");
+            for (Map<String, Object> setting : settings) {
+                createSetting(
+                    (String) setting.get("key"),
+                    group,
+                    (String) setting.get("description"),
+                    (String) setting.get("type"),
+                    (String) setting.get("value"),
+                    getLevelFromOrdinal((Integer) setting.get("level")),
+                    (Boolean) setting.get("isReadOnly"),
+                    (String) setting.get("displayMode")
+                );
                 }
             }
+    }
+    
+    private String getLevelFromOrdinal(int ordinal) {
+        switch (ordinal) {
+            case 0: return "SYSTEM";
+            case 1: return "APPLICATION";
+            case 2: return "SERVICE";
+            case 3: return "FEATURE";
+            case 4: return "USER";
+            default: return "SYSTEM";
         }
     }
 

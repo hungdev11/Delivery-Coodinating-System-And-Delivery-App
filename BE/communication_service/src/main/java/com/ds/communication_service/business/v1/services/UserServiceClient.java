@@ -1,62 +1,48 @@
 package com.ds.communication_service.business.v1.services;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
-import com.ds.communication_service.common.dto.BaseResponse;
+import com.ds.communication_service.app_context.models.UserSnapshot;
+import com.ds.communication_service.app_context.repositories.UserSnapshotRepository;
 import com.ds.communication_service.common.dto.UserInfoDto;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Service to interact with User Service
+ * Service to get user information from snapshot table
+ * Uses local snapshot instead of calling User Service API
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class UserServiceClient {
 
-    private final RestTemplate restTemplate;
-
-    @Value("${user.service.url:http://api-gateway:21500}")
-    private String userServiceUrl;
+    private final UserSnapshotRepository userSnapshotRepository;
 
     /**
-     * Get user information by user ID
+     * Get user information by user ID from snapshot table
      * @param userId The user ID
      * @return UserInfoDto or null if not found
      */
     public UserInfoDto getUserById(String userId) {
         try {
-            String url = userServiceUrl + "/api/v1/users/" + userId;
-            log.debug("Fetching user info from: {}", url);
-            
-            ResponseEntity<BaseResponse<UserInfoDto>> response = restTemplate.exchange(
-                url,
-                HttpMethod.GET,
-                null,
-                new ParameterizedTypeReference<BaseResponse<UserInfoDto>>() {}
-            );
-            
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                BaseResponse<UserInfoDto> body = response.getBody();
-                if (body.isSuccess() && body.getData() != null) {
-                    log.debug("Successfully fetched user info for userId: {}", userId);
-                    return body.getData();
-                }
-            }
-            
-            log.warn("User not found or unsuccessful response for userId: {}", userId);
-            return null;
-            
+            return userSnapshotRepository.findByUserId(userId)
+                .map(this::mapToUserInfoDto)
+                .orElse(null);
         } catch (Exception e) {
-            log.error("Error fetching user info for userId: {}. Error: {}", userId, e.getMessage());
+            log.error("Error fetching user info from snapshot for userId: {}. Error: {}", userId, e.getMessage());
             return null;
         }
+    }
+
+    private UserInfoDto mapToUserInfoDto(UserSnapshot snapshot) {
+        return UserInfoDto.builder()
+            .id(snapshot.getUserId())
+            .username(snapshot.getUsername())
+            .firstName(snapshot.getFirstName())
+            .lastName(snapshot.getLastName())
+            .email(snapshot.getEmail())
+            .build();
     }
 }
