@@ -261,7 +261,25 @@ public class SessionService implements ISessionService {
 
         session.setStatus(SessionStatus.IN_PROGRESS);
         DeliverySession savedSession = sessionRepository.save(session);
-        log.info("Session {} started successfully.", sessionId);
+        
+        // Update all parcels in the session to ON_ROUTE status
+        List<DeliveryAssignment> assignments = savedSession.getAssignments().stream()
+            .filter(a -> a.getStatus() == AssignmentStatus.IN_PROGRESS)
+            .toList();
+        
+        log.info("Session {} started. Updating {} parcels to ON_ROUTE status", sessionId, assignments.size());
+        
+        for (DeliveryAssignment assignment : assignments) {
+            try {
+                parcelEventPublisher.publish(assignment.getParcelId(), ParcelEvent.SCAN_QR);
+                log.debug("Published SCAN_QR event for parcel {} to update to ON_ROUTE", assignment.getParcelId());
+            } catch (Exception e) {
+                log.error("Failed to publish SCAN_QR event for parcel {}: {}", assignment.getParcelId(), e.getMessage());
+                // Don't throw - continue with other parcels
+            }
+        }
+        
+        log.info("Session {} started successfully. {} parcels updated to ON_ROUTE", sessionId, assignments.size());
 
         return toSessionResponse(savedSession);
     }

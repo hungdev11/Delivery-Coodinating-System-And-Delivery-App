@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ds.session.session_service.common.entities.dto.common.BaseResponse;
 import com.ds.session.session_service.common.entities.dto.request.CreateSessionRequest;
 import com.ds.session.session_service.common.entities.dto.request.ScanParcelRequest;
 import com.ds.session.session_service.common.entities.dto.request.SessionFailRequest;
@@ -131,15 +132,15 @@ public class SessionController {
      * Dùng để kiểm tra xem shipper có đang có phiên hoạt động không.
      */
     @GetMapping("/drivers/{deliveryManId}/active")
-    public ResponseEntity<SessionResponse> getActiveSession(
+    public ResponseEntity<BaseResponse<SessionResponse>> getActiveSession(
             @PathVariable("deliveryManId") String deliveryManId
     ) {
         log.info("Getting active session for delivery man {}", deliveryManId);
         SessionResponse response = sessionService.getActiveSession(deliveryManId);
         if (response == null) {
-            return ResponseEntity.noContent().build();
+            return ResponseEntity.ok(BaseResponse.error("No active session found for delivery man"));
         }
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(BaseResponse.success(response));
     }
 
     /**

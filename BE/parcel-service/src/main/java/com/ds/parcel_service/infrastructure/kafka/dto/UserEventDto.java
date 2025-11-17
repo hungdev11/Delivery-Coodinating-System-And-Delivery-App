@@ -23,7 +23,8 @@ public class UserEventDto {
         DELIVERY_MAN_UPDATED,
         DELIVERY_MAN_DELETED,
         USER_SERVICE_READY,
-        SCAN_QR
+        SCAN_QR,
+        POSTPONE
     }
 
     private EventType eventType;

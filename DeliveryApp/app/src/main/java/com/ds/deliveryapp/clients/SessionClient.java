@@ -151,5 +151,5 @@ public interface SessionClient {
      * Ánh xạ tới: SessionController.getActiveSession
      */
     @GET("/api/v1/sessions/drivers/{deliveryManId}/active")
-    Call<DeliverySession> getActiveSession(@Path("deliveryManId") String deliveryManId);
+    Call<com.ds.deliveryapp.clients.res.BaseResponse<DeliverySession>> getActiveSession(@Path("deliveryManId") String deliveryManId);
 }

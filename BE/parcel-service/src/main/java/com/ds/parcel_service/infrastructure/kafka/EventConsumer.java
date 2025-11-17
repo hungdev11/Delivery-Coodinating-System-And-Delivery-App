@@ -28,7 +28,7 @@ public class EventConsumer {
     @KafkaListener(
         topics = KafkaConfig.TOPIC_PARCEL_STATUS_REQUEST,
         groupId = "${spring.kafka.consumer.group-id:parcel-service-group}",
-        containerFactory = "kafkaListenerContainerFactory"
+        containerFactory = "parcelStatusRequestListenerContainerFactory"
     )
     public void consumeParcelStatusRequest(
         @Payload com.ds.parcel_service.common.events.ParcelStatusRequestEvent payload,

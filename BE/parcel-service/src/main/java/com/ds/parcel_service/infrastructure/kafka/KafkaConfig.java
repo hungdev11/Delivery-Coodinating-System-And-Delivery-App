@@ -23,6 +23,7 @@ import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import com.ds.parcel_service.infrastructure.kafka.dto.UserEventDto;
+import com.ds.parcel_service.common.events.ParcelStatusRequestEvent;
 
 @Configuration
 @EnableKafka
@@ -93,9 +94,56 @@ public class KafkaConfig {
     }
 
     @Bean
+    public ConsumerFactory<String, Object> parcelStatusRequestConsumerFactory() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        config.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        
+        // Create JsonDeserializer for ParcelStatusRequestEvent
+        JsonDeserializer<ParcelStatusRequestEvent> jsonDeserializer = new JsonDeserializer<>(ParcelStatusRequestEvent.class);
+        jsonDeserializer.setUseTypeHeaders(false);
+        jsonDeserializer.setRemoveTypeHeaders(true);
+        jsonDeserializer.addTrustedPackages("com.ds.parcel_service.common.events", 
+                "com.ds.parcel_service.common.entities.dto", 
+                "com.ds.parcel_service.business.v1.services", 
+                "com.ds.parcel_service.infrastructure.kafka.dto");
+        
+        // Wrap with ErrorHandlingDeserializer
+        ErrorHandlingDeserializer<ParcelStatusRequestEvent> errorHandlingDeserializer = 
+                new ErrorHandlingDeserializer<>(jsonDeserializer);
+        
+        // For exactly-once processing, disable auto commit and set isolation level to read_committed
+        config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        config.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+        config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        
+        // Create factory and set deserializers
+        DefaultKafkaConsumerFactory<String, Object> factory = new DefaultKafkaConsumerFactory<>(config);
+        factory.setKeyDeserializer(new StringDeserializer());
+        @SuppressWarnings("unchecked")
+        org.apache.kafka.common.serialization.Deserializer<Object> valueDeserializer = 
+                (org.apache.kafka.common.serialization.Deserializer<Object>) (org.apache.kafka.common.serialization.Deserializer<?>) errorHandlingDeserializer;
+        factory.setValueDeserializer(valueDeserializer);
+        return factory;
+    }
+
+    @Bean
     public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
+        factory.setConcurrency(3);
+        // Manual ack so we can control committing offsets after successful processing and (optionally) transactions
+        factory.getContainerProperties().setAckMode(org.springframework.kafka.listener.ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+        // ensure listener runs in a Kafka transaction if needed (producer will be transactional)
+        factory.getContainerProperties().setSyncCommits(true);
+        return factory;
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, Object> parcelStatusRequestListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(parcelStatusRequestConsumerFactory());
         factory.setConcurrency(3);
         // Manual ack so we can control committing offsets after successful processing and (optionally) transactions
         factory.getContainerProperties().setAckMode(org.springframework.kafka.listener.ContainerProperties.AckMode.MANUAL_IMMEDIATE);

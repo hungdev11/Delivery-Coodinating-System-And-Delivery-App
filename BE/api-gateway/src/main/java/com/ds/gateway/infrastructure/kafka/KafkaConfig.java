@@ -36,19 +36,23 @@ public class KafkaConfig {
 
     /**
      * KafkaAdmin bean for topic management
-     * Required for NewTopic beans to create topics
-     * Configured to auto-create topics if missing, but not block startup if Kafka is unavailable
+     * Configured to not block startup if Kafka is unavailable
+     * Topics will be created by TopicInitializationService after startup
      */
     @Bean
     public KafkaAdmin kafkaAdmin() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        configs.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 5000); // 5s timeout
-        configs.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 5000);
+        // Increase timeout to avoid quick failures, but still fail fast if Kafka is truly unavailable
+        configs.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 10000); // 10s timeout
+        configs.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 10000);
+        // Connection timeout - fail fast if can't connect
+        configs.put(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG, 10000);
         
         KafkaAdmin admin = new KafkaAdmin(configs);
-        // Allow auto-creation of topics (topics will be created when first message is sent)
-        admin.setAutoCreate(true);
+        // Disable auto-create - topics will be created by TopicInitializationService
+        // This prevents KafkaAdmin from trying to create topics during startup
+        admin.setAutoCreate(false);
         // Don't fail startup if broker unavailable - topics will be created when Kafka is ready
         admin.setFatalIfBrokerNotAvailable(false);
         return admin;
@@ -80,9 +84,11 @@ public class KafkaConfig {
         config.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 30000);
         config.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true); // Prevent duplicate messages
         
-        // Reduce blocking timeout - if Kafka is unavailable, fail fast but don't block startup
-        // Topics will be auto-created when first message is sent (if Kafka is available)
-        config.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5000); // 5s timeout for faster failure detection
+        // Increase metadata timeout to allow topics to be created
+        // Topics will be auto-created by Kafka broker or TopicInitializationService
+        config.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000); // 60s timeout to allow topic creation and metadata refresh
+        config.put(ProducerConfig.METADATA_MAX_AGE_CONFIG, 60000); // 1 minute - refresh metadata more frequently
+        config.put(ProducerConfig.METADATA_MAX_IDLE_CONFIG, 60000); // 1 minute
         
         // Performance settings
         config.put(ProducerConfig.BATCH_SIZE_CONFIG, 16384);
@@ -103,8 +109,11 @@ public class KafkaConfig {
     /**
      * Audit events topic
      * High retention for audit trail
+     * Note: Topics are created by TopicInitializationService after startup to avoid blocking
+     * These beans are kept for reference but won't be used during startup
      */
-    @Bean
+    // @Bean - Commented out to prevent KafkaAdmin from trying to create topics during startup
+    // Topics will be created by TopicInitializationService instead
     public NewTopic auditEventsTopic() {
         return TopicBuilder.name(TOPIC_AUDIT_EVENTS)
                 .partitions(3) // Partition by userId or resourceType
@@ -117,8 +126,11 @@ public class KafkaConfig {
     /**
      * Dead Letter Queue for failed audit events
      * Events that fail to be processed will be sent here for manual review
+     * Note: Topics are created by TopicInitializationService after startup to avoid blocking
+     * These beans are kept for reference but won't be used during startup
      */
-    @Bean
+    // @Bean - Commented out to prevent KafkaAdmin from trying to create topics during startup
+    // Topics will be created by TopicInitializationService instead
     public NewTopic auditEventsDlqTopic() {
         return TopicBuilder.name(TOPIC_AUDIT_EVENTS_DLQ)
                 .partitions(1)

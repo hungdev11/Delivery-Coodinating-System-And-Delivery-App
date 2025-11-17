@@ -90,7 +90,7 @@ feign:
 # External Services Configuration
 services:
   zone:
-    base-url: ${ZONE_SERVICE_URL:http://localhost:21503}
+    base-url: ${ZONE_SERVICE_URL:http://zone-service:21503}
 
 # Snapshot Initialization Configuration
 snapshot:
@@ -100,4 +100,4 @@ snapshot:
 # User Service Configuration (for snapshot initialization)
 user:
   service:
-    url: ${USER_SERVICE_URL:http://localhost:21501}
+    url: ${USER_SERVICE_URL:http://user-service:21501}

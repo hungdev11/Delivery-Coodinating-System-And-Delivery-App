@@ -37,8 +37,11 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     /**
      * Get last message content for a conversation
      * Uses native query with LIMIT 1 to ensure only one result is returned
+     * Returns content from message, or empty string if null
      */
-    @Query(value = "SELECT content FROM messages WHERE conversation_id = :conversationId " +
-           "ORDER BY sent_at DESC LIMIT 1", nativeQuery = true)
+    @Query(value = "SELECT COALESCE(m.content, '') " +
+           "FROM messages m " +
+           "WHERE m.conversation_id = :conversationId " +
+           "ORDER BY m.sent_at DESC LIMIT 1", nativeQuery = true)
     Optional<String> findLastMessageContentByConversationId(@Param("conversationId") UUID conversationId);
 }

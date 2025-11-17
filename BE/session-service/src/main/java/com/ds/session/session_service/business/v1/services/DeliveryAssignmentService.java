@@ -91,26 +91,57 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
 
     @Override
     public DeliveryAssignmentResponse postponeByCustomer(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo) {
-        return updateTaskState(
-            parcelId,
-            deliveryManId,
-            routeInfo,
-            AssignmentStatus.DELAYED,       // newStatus - Customer requested delay
-            ParcelEvent.POSTPONE,      // parcelEvent - Changes parcel from ON_ROUTE to DELAYED
-            reason                            // failReason
-        );
+        log.info("Postponing parcel {} for delivery man {} with reason: {}", parcelId, deliveryManId, reason);
+        try {
+            return updateTaskState(
+                parcelId,
+                deliveryManId,
+                routeInfo,
+                AssignmentStatus.DELAYED,       // newStatus - Customer requested delay
+                ParcelEvent.POSTPONE,      // parcelEvent - Changes parcel from ON_ROUTE to DELAYED
+                reason                            // failReason
+            );
+        } catch (Exception e) {
+            log.error("Error postponing parcel {} for delivery man {}: {}", parcelId, deliveryManId, e.getMessage(), e);
+            throw e;
+        }
     }
 
     private DeliveryAssignmentResponse updateTaskState(UUID parcelId, UUID deliveryManId, RouteInfo routeInfo,
                                                        AssignmentStatus newStatus, ParcelEvent parcelEvent, String failReason) {
         
+        log.debug("Updating task state: parcelId={}, deliveryManId={}, newStatus={}, parcelEvent={}", 
+                parcelId, deliveryManId, newStatus, parcelEvent);
+        
         // 1. Tìm session đang hoạt động của shipper
-        DeliverySession session = getActiveSessionOrFail(deliveryManId.toString());
+        DeliverySession session;
+        try {
+            session = getActiveSessionOrFail(deliveryManId.toString());
+            log.debug("Found active session: {} for delivery man: {}", session.getId(), deliveryManId);
+        } catch (Exception e) {
+            log.error("Failed to find active session for delivery man {}: {}", deliveryManId, e.getMessage());
+            throw e;
+        }
+        
         // 2. Tìm task (đơn hàng) trong session đó
-        DeliveryAssignment assignment = getAssignmentInSessionOrFail(session.getId(), parcelId.toString());
+        DeliveryAssignment assignment;
+        try {
+            assignment = getAssignmentInSessionOrFail(session.getId(), parcelId.toString());
+            log.debug("Found assignment: {} for parcel: {} in session: {}", assignment.getId(), parcelId, session.getId());
+        } catch (Exception e) {
+            log.error("Failed to find assignment for parcel {} in session {}: {}", parcelId, session.getId(), e.getMessage());
+            throw e;
+        }
         
         // 3. Kiểm tra trạng thái
-        ensureStatusIsProcessing(assignment); 
+        try {
+            ensureStatusIsProcessing(assignment);
+            log.debug("Assignment {} status is valid: {}", assignment.getId(), assignment.getStatus());
+        } catch (Exception e) {
+            log.error("Assignment {} status check failed. Current status: {}. Error: {}", 
+                    assignment.getId(), assignment.getStatus(), e.getMessage());
+            throw e;
+        }
         
         // 4. Cập nhật thông tin tuyến đường
         setRouteInfo(assignment, routeInfo);
@@ -118,10 +149,13 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         // 5. Đồng bộ với Parcel service
         // publish event to parcel-service instead of direct REST call
         try {
+            log.debug("Publishing parcel event: {} for parcel: {}", parcelEvent, parcelId);
             parcelEventPublisher.publish(parcelId.toString(), parcelEvent);
+            log.info("✅ Successfully published parcel event: {} for parcel: {}", parcelEvent, parcelId);
         } catch (Exception e) {
-            log.error("Failed to publish parcel status event for parcel {}: {}", parcelId, e.getMessage());
-            throw new RuntimeException("Failed to publish parcel status event: " + e.getMessage(), e);
+            log.error("❌ Failed to publish parcel status event for parcel {}: {}", parcelId, e.getMessage(), e);
+            // Don't throw - allow assignment status update to proceed even if event publish fails
+            // The event can be retried or handled separately
         }
 
         ParcelInfo parcel = null;
@@ -131,7 +165,13 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         assignment.setFailReason(failReason); 
         
         // 7. Lưu
-        deliveryAssignmentRepository.save(assignment);
+        try {
+            deliveryAssignmentRepository.save(assignment);
+            log.info("✅ Assignment {} updated to status: {}", assignment.getId(), newStatus);
+        } catch (Exception e) {
+            log.error("❌ Failed to save assignment {}: {}", assignment.getId(), e.getMessage(), e);
+            throw new RuntimeException("Failed to save assignment: " + e.getMessage(), e);
+        }
 
         // 8. Trả về DTO
         // TODO: Lấy SĐT shipper và tên người nhận từ User-Service.
