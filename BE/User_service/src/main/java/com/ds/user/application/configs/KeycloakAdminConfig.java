@@ -38,6 +38,12 @@ public class KeycloakAdminConfig {
     @Value("${keycloak.credentials.password}")
     private String password;
 
+    @Value("${keycloak.admin-client.connection-timeout:10000}")
+    private int connectionTimeout;
+
+    @Value("${keycloak.admin-client.socket-timeout:30000}")
+    private int socketTimeout;
+
     private final KeycloakInitConfig initConfig;
 
     /**
@@ -50,13 +56,16 @@ public class KeycloakAdminConfig {
         ObjectMapper objectMapper = new ObjectMapper()
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         
+        // Configure ResteasyClient with timeout settings for better performance
         ResteasyClientBuilder clientBuilder = (ResteasyClientBuilder) ResteasyClientBuilder.newBuilder()
                 .register(new ContextResolver<ObjectMapper>() {
                     @Override
                     public ObjectMapper getContext(Class<?> type) {
                         return objectMapper;
                     }
-                });
+                })
+                .connectTimeout(connectionTimeout, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(socketTimeout, java.util.concurrent.TimeUnit.MILLISECONDS);
 
         // Use master realm admin credentials for admin operations
         return KeycloakBuilder.builder()
@@ -80,13 +89,16 @@ public class KeycloakAdminConfig {
         ObjectMapper objectMapper = new ObjectMapper()
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         
+        // Configure ResteasyClient with timeout settings for better performance
         ResteasyClientBuilder clientBuilder = (ResteasyClientBuilder) ResteasyClientBuilder.newBuilder()
                 .register(new ContextResolver<ObjectMapper>() {
                     @Override
                     public ObjectMapper getContext(Class<?> type) {
                         return objectMapper;
                     }
-                });
+                })
+                .connectTimeout(connectionTimeout, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(socketTimeout, java.util.concurrent.TimeUnit.MILLISECONDS);
 
         return KeycloakBuilder.builder()
                 .serverUrl(serverUrl)

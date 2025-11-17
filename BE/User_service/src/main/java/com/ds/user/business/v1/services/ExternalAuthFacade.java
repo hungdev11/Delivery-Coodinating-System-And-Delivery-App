@@ -79,6 +79,11 @@ public class ExternalAuthFacade implements IExternalAuthFacade {
     }
     
     @Override
+    public java.util.Map<String, List<String>> batchGetUserRoles(List<String> externalIds) {
+        return identityProvider.batchGetUserRoles(externalIds);
+    }
+    
+    @Override
     public void assignRoles(String externalId, List<String> roles) {
         identityProvider.assignRoles(externalId, roles);
     }

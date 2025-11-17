@@ -22,4 +22,23 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
      */
     @Query("SELECT MAX(m.sentAt) FROM Message m WHERE m.conversation.id = :conversationId")
     Optional<LocalDateTime> findLastMessageTimeByConversationId(@Param("conversationId") UUID conversationId);
+    
+    /**
+     * Count unread messages for a user in a conversation
+     * Unread = messages where senderId != userId AND status != READ
+     */
+    @Query("SELECT COUNT(m) FROM Message m WHERE m.conversation.id = :conversationId " +
+           "AND m.senderId != :userId AND m.status != 'READ'")
+    long countUnreadMessagesByConversationIdAndUserId(
+        @Param("conversationId") UUID conversationId,
+        @Param("userId") String userId
+    );
+    
+    /**
+     * Get last message content for a conversation
+     * Uses native query with LIMIT 1 to ensure only one result is returned
+     */
+    @Query(value = "SELECT content FROM messages WHERE conversation_id = :conversationId " +
+           "ORDER BY sent_at DESC LIMIT 1", nativeQuery = true)
+    Optional<String> findLastMessageContentByConversationId(@Param("conversationId") UUID conversationId);
 }

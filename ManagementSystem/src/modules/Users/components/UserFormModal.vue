@@ -120,7 +120,7 @@ const handleCancel = () => {
         </UFormField>
 
         <UFormField v-if="isEditMode" label="Status" name="status" required>
-          <USelect class="w-full" v-model="form.status" :options="statusOptions" />
+          <USelect class="w-full" v-model="form.status" :items="statusOptions" />
         </UFormField>
       </form>
     </template>

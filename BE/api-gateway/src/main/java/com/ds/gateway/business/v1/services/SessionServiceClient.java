@@ -110,6 +110,19 @@ public class SessionServiceClient implements ISessionServiceClient {
     }
 
     @Override
+    public ResponseEntity<?> getTasksBySessionId(UUID sessionId, int page, int size) {
+        String uri = UriComponentsBuilder
+                .fromPath("/api/v1/assignments/session/{sessionId}/tasks")
+                .queryParam("page", page)
+                .queryParam("size", size)
+                .build(sessionId)
+                .toString();
+
+        log.info("WebClient: GET -> {}", uri);
+        return callGet(uri);
+    }
+
+    @Override
     public ResponseEntity<?> getTasksHistory(UUID deliveryManId, List<String> status,
             String createdAtStart, String createdAtEnd,
             String completedAtStart, String completedAtEnd,
@@ -196,10 +209,19 @@ public class SessionServiceClient implements ISessionServiceClient {
 
     private ResponseEntity<?> callPost(String uri, Object body) {
         try {
-            Object responseBody = webClient.post()
+            WebClient.RequestBodySpec requestSpec = webClient.post()
                     .uri(uri)
-                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                    .bodyValue(body != null ? body : new Object())
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+            
+            // Set body - use empty JSON object if body is null
+            if (body != null) {
+                requestSpec.bodyValue(body);
+            } else {
+                // For endpoints that don't require body, send empty JSON object
+                requestSpec.bodyValue("{}");
+            }
+            
+            Object responseBody = requestSpec
                     .retrieve()
                     .bodyToMono(Object.class)
                     .block();
@@ -249,6 +271,48 @@ public class SessionServiceClient implements ISessionServiceClient {
                     .contentType(MediaType.IMAGE_PNG)
                     .body(qrImage);
         } catch (WebClientResponseException e) {
+            log.error("GET {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
+            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        }
+    }
+
+    @Override
+    public ResponseEntity<?> createSessionPrepared(String deliveryManId) {
+        String uri = String.format("/api/v1/sessions/drivers/%s/prepare", deliveryManId);
+        log.info("WebClient: POST -> {}", uri);
+        return callPost(uri, null);
+    }
+
+    @Override
+    public ResponseEntity<?> startSession(UUID sessionId) {
+        String uri = String.format("/api/v1/sessions/%s/start", sessionId);
+        log.info("WebClient: POST -> {}", uri);
+        return callPost(uri, null);
+    }
+
+    @Override
+    public ResponseEntity<?> getActiveSession(String deliveryManId) {
+        String uri = String.format("/api/v1/sessions/drivers/%s/active", deliveryManId);
+        log.info("WebClient: GET -> {}", uri);
+        try {
+            Object body = webClient.get()
+                    .uri(uri)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+            
+            // Handle 204 No Content response
+            if (body == null) {
+                return ResponseEntity.noContent().build();
+            }
+            
+            return ResponseEntity.ok(body);
+        } catch (WebClientResponseException e) {
+            // Handle 204 No Content as success
+            if (e.getStatusCode().value() == 204) {
+                return ResponseEntity.noContent().build();
+            }
             log.error("GET {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
         }

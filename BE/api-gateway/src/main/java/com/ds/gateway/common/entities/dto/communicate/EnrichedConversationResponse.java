@@ -24,7 +24,7 @@ public class EnrichedConversationResponse {
     // Last message info
     private String lastMessageContent;
     private String lastMessageTime;
-    private Integer unreadCount;
+    private Integer unreadCount; // Number of unread messages for current user
     
     // Partner details (from User Service)
     private String partnerEmail;

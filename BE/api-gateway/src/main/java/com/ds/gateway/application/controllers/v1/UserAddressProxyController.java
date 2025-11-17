@@ -136,6 +136,17 @@ public class UserAddressProxyController {
         }
     }
 
+    @GetMapping("/{userId}/addresses/primary")
+    public ResponseEntity<?> getUserPrimaryAddress(@PathVariable String userId) {
+        log.info("GET /api/v1/users/{}/addresses/primary - proxy to User Service (Admin)", userId);
+        try {
+            return restTemplate.getForEntity(userAddressUrl + "/" + userId + "/addresses/primary", Object.class);
+        } catch (HttpClientErrorException | HttpServerErrorException ex) {
+            log.error("User address proxy failed: {}", ex.getMessage());
+            return ResponseEntity.status(ex.getStatusCode()).body(ex.getResponseBodyAsString());
+        }
+    }
+
     @GetMapping("/{userId}/addresses/{addressId}")
     public ResponseEntity<?> getUserAddress(@PathVariable String userId, @PathVariable String addressId) {
         log.info("GET /api/v1/users/{}/addresses/{} - proxy to User Service (Admin)", userId, addressId);

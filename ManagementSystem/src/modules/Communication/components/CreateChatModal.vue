@@ -8,7 +8,7 @@
 
 import { ref, computed } from 'vue'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
-import { getUserById } from '../../Users/api'
+import UserSelect from '@/common/components/UserSelect.vue'
 
 interface Props {
   currentUserId: string
@@ -19,48 +19,7 @@ const emit = defineEmits<{ close: [result: { partnerId: string } | null] }>()
 
 const toast = useToast()
 const partnerIdInput = ref('')
-const searching = ref(false)
-const partnerInfo = ref<{ id: string; name: string } | null>(null)
-
 const submitting = ref(false)
-
-/**
- * Search for user by ID
- */
-const searchUser = async () => {
-  if (!partnerIdInput.value.trim()) {
-    partnerInfo.value = null
-    return
-  }
-
-  searching.value = true
-  try {
-    const response = await getUserById(partnerIdInput.value.trim())
-    if (response.result) {
-      partnerInfo.value = {
-        id: response.result.id,
-        name: response.result.fullName || response.result.username,
-      }
-    } else {
-      partnerInfo.value = null
-      toast.add({
-        title: 'User not found',
-        description: 'Please check the user ID',
-        color: 'warning',
-      })
-    }
-  } catch (error) {
-    console.error('Failed to search user:', error)
-    partnerInfo.value = null
-    toast.add({
-      title: 'Error',
-      description: 'Failed to search user',
-      color: 'error',
-    })
-  } finally {
-    searching.value = false
-  }
-}
 
 const handleSubmit = async () => {
   if (!partnerIdInput.value.trim()) {
@@ -94,7 +53,7 @@ const handleCancel = () => {
 }
 
 const canSubmit = computed(() => {
-  return partnerIdInput.value.trim() && partnerIdInput.value.trim() !== props.currentUserId
+  return partnerIdInput.value && partnerIdInput.value.trim() !== props.currentUserId
 })
 </script>
 
@@ -107,36 +66,13 @@ const canSubmit = computed(() => {
   >
     <template #body>
       <div class="space-y-4">
-        <UFormField label="User ID" name="partnerId" required>
-          <div class="flex gap-2">
-            <UInput
-              class="flex-1"
-              v-model="partnerIdInput"
-              placeholder="Enter user ID"
-              @blur="searchUser"
-              @keyup.enter="searchUser"
-            />
-            <UButton
-              :loading="searching"
-              icon="i-heroicons-magnifying-glass"
-              @click="searchUser"
-            >
-              Search
-            </UButton>
-          </div>
-        </UFormField>
-
-        <div v-if="partnerInfo" class="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-          <div class="flex items-center space-x-2">
-            <UIcon name="i-heroicons-check-circle" class="text-green-600" />
-            <div>
-              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                {{ partnerInfo.name }}
-              </p>
-              <p class="text-xs text-gray-500">ID: {{ partnerInfo.id }}</p>
-            </div>
-          </div>
-        </div>
+        <UserSelect
+          v-model="partnerIdInput"
+          label="Select User"
+          placeholder="Search user by ID or name..."
+          :allow-seed-id="true"
+          :searchable="true"
+        />
       </div>
     </template>
 

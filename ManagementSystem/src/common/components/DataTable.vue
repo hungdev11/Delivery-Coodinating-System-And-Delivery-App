@@ -67,6 +67,8 @@ interface Props {
   rowKey?: string
   /** Store key for persistence */
   storeKey?: string
+  /** Enable reload button */
+  reloadable?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -81,7 +83,8 @@ const props = withDefaults(defineProps<Props>(), {
   filterable: false,
   emptyMessage: 'No data available',
   rowKey: 'id',
-  storeKey: 'default'
+  storeKey: 'default',
+  reloadable: true
 })
 
 const emit = defineEmits<{
@@ -93,6 +96,7 @@ const emit = defineEmits<{
   'selection-change': [rows: T[]]
   'row-click': [row: T]
   'bulk-delete': [ids: string[]]
+  reload: []
 }>()
 
 // Initialize store
@@ -157,6 +161,12 @@ const currentPage = computed({
 const handleBulkDelete = () => {
   const ids = store.deleteSelected()
   emit('bulk-delete', ids)
+}
+
+// Handle reload
+const handleReload = () => {
+  if (loading) return
+  emit('reload')
 }
 
 // Watch for selection changes
@@ -228,6 +238,18 @@ onMounted(() => {
       />
       <div class="flex items-center gap-2">
         <slot name="actions" />
+        <!-- Reload button -->
+        <UButton
+          v-if="reloadable"
+          icon="i-heroicons-arrow-path"
+          variant="ghost"
+          color="gray"
+          :loading="loading"
+          @click="handleReload"
+          :disabled="loading"
+        >
+          Reload
+        </UButton>
       </div>
     </div>
 

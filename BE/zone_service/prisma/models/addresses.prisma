@@ -40,6 +40,7 @@ model addresses {
   @@index([name])
   @@index([geohash])  // Fast proximity pre-filtering
   @@index([lat, lon]) // Fallback spatial index
+  @@unique([lat, lon, name]) // Ensure one coordinate doesn't have two addresses with the same name
 }
 
 enum AddressType {

@@ -1,5 +1,6 @@
 package com.ds.parcel_service.common.interfaces;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -41,4 +42,9 @@ public interface IParcelService {
     PageResponse<ParcelResponse> getParcelsSentByCustomer(String customerId, int page, int size);
 
     PageResponse<ParcelResponse> getParcelsReceivedByCustomer(String customerId, int page, int size);
+    
+    // Priority and delay management
+    ParcelResponse updateParcelPriority(UUID parcelId, Integer priority);
+    ParcelResponse delayParcel(UUID parcelId, LocalDateTime delayedUntil);
+    ParcelResponse undelayParcel(UUID parcelId);
 }

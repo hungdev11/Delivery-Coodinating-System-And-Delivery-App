@@ -33,10 +33,13 @@ import androidx.fragment.app.Fragment;
 import com.ds.deliveryapp.clients.RoutingApi;
 import com.ds.deliveryapp.clients.SessionClient;
 import com.ds.deliveryapp.clients.req.RoutingRequestDto;
+import com.ds.deliveryapp.clients.res.DeliverySession;
 import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.clients.res.RoutingResponseDto;
+import com.ds.deliveryapp.clients.res.UpdateNotification;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.enums.DeliveryType;
+import com.ds.deliveryapp.service.GlobalChatService;
 
 // Models
 import com.ds.deliveryapp.model.DeliveryAssignment;
@@ -69,7 +72,7 @@ import java.util.stream.Collectors;
 
 import retrofit2.Response;
 
-public class MapFragment extends Fragment implements TaskListDialogFragment.OnTaskSelectedListener, LocationListener {
+public class MapFragment extends Fragment implements TaskListDialogFragment.OnTaskSelectedListener, LocationListener, GlobalChatService.UpdateNotificationListener {
 
     private static final String TAG = "MapFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
@@ -78,7 +81,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     private static final double DEVIATION_THRESHOLD_METERS = 50.0; // Ngưỡng lệch 50m
     private static final double ARRIVAL_THRESHOLD_METERS = 25.0; // Vẫn giữ để tham khảo, nhưng không dùng
     private static final double NEXT_STEP_THRESHOLD_METERS = 20.0; // Ngưỡng hoàn thành 1 bước 20m
-    private static final long GPS_UPDATE_INTERVAL_MS = 2000; // 2 giây
+    private static final long GPS_UPDATE_INTERVAL_MS = 1000; // 1 giây
     private static final float GPS_UPDATE_DISTANCE_M = 5; // 5 mét
 
     // --- Các biến UI ---
@@ -87,6 +90,9 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     private MapView mapView;
     private TextView tvInstruction;
     private ProgressBar progressBar;
+    private LinearLayout legNavigationContainer;
+    private ImageButton btnPrevLeg, btnNextLeg;
+    private TextView tvLegInfo;
 
     // --- Dữ liệu & Trạng thái ---
     private List<DeliveryAssignment> mOriginalTasks;
@@ -109,6 +115,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     private String driverId;
     private SessionClient sessionClient;
     private RoutingApi routingApi;
+    private GlobalChatService globalChatService;
 
     // --- Icon cho nút điều hướng ---
     private Drawable iconRecenter;
@@ -159,20 +166,76 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             }
 
             try {
-                // 1. Lấy danh sách task nếu chưa có
+                // 1. Lấy danh sách task nếu chưa có (Tối ưu: fetch từng page, early stop)
                 if (fragment.mOriginalTasks == null || fragment.mOriginalTasks.isEmpty()) {
-                    Log.d(TAG, "Đang lấy danh sách Task...");
-                    Response<PageResponse<DeliveryAssignment>> taskResponse = fragment.sessionClient
-                            .getTasksToday(fragment.driverId, List.of("IN_PROGRESS"), 0, 100)
-                            .execute();
+                    Log.d(TAG, "Đang lấy danh sách Task (tối ưu pagination)...");
+                    List<DeliveryAssignment> allTasks = new ArrayList<>();
+                    int page = 0;
+                    final int pageSize = 20;
+                    final int maxTasks = 50; // Limit max tasks thay vì 100
+                    final int minTasksWithLocation = 5; // Minimum tasks có lat/lon để routing
+                    
+                    boolean hasMore = true;
+                    int tasksWithLocation = 0;
+                    
+                    while (hasMore && allTasks.size() < maxTasks) {
+                        Response<PageResponse<DeliveryAssignment>> taskResponse = fragment.sessionClient
+                                .getSessionTasks(fragment.driverId, List.of("CREATED", "IN_PROGRESS"), page, pageSize)
+                                .execute();
 
-                    if (!taskResponse.isSuccessful() || taskResponse.body() == null || taskResponse.body().content() == null) {
-                        throw new IOException("Không thể lấy danh sách nhiệm vụ");
+                        if (!taskResponse.isSuccessful()) {
+                            if (taskResponse.code() == 204 || taskResponse.code() == 404) {
+                                // No active session or session ended - cleanup map
+                                Log.w(TAG, "No active session found (status: " + taskResponse.code() + "). Session may have ended.");
+                                return new RouteCalculationResult(null, new ArrayList<>(), new ArrayList<>(), 
+                                    new Exception("Session ended or no active session"));
+                            }
+                            if (page == 0) {
+                                throw new IOException("Không thể lấy danh sách nhiệm vụ: " + taskResponse.code());
+                            }
+                            break; // Stop if error after first page
+                        }
+                        
+                        if (taskResponse.body() == null || taskResponse.body().content() == null) {
+                            if (page == 0) {
+                                throw new IOException("Không thể lấy danh sách nhiệm vụ: response body is null");
+                            }
+                            break; // Stop if error after first page
+                        }
+
+                        PageResponse<DeliveryAssignment> pageResponse = taskResponse.body();
+                        List<DeliveryAssignment> pageTasks = pageResponse.content();
+                        
+                        if (pageTasks == null || pageTasks.isEmpty()) {
+                            hasMore = false;
+                            break;
+                        }
+                        
+                        // Count tasks with location in this page
+                        int pageTasksWithLocation = (int) pageTasks.stream()
+                                .filter(task -> "IN_PROGRESS".equals(task.getStatus()) && task.getLat() != null && task.getLon() != null)
+                                .count();
+                        tasksWithLocation += pageTasksWithLocation;
+                        
+                        allTasks.addAll(pageTasks);
+                        hasMore = !pageResponse.last();
+                        
+                        // Early stop: Đủ tasks có lat/lon cho routing
+                        if (tasksWithLocation >= minTasksWithLocation) {
+                            Log.d(TAG, "Early stop: Đã có " + tasksWithLocation + " tasks có lat/lon, đủ cho routing");
+                            break;
+                        }
+                        
+                        page++;
+                        Log.d(TAG, "Fetched page " + page + ": " + pageTasks.size() + " tasks, " + pageTasksWithLocation + " with location");
                     }
-
-                    fragment.mOriginalTasks = taskResponse.body().content().stream()
+                    
+                    // Filter chỉ lấy IN_PROGRESS tasks có lat/lon
+                    fragment.mOriginalTasks = allTasks.stream()
                             .filter(task -> "IN_PROGRESS".equals(task.getStatus()) && task.getLat() != null && task.getLon() != null)
                             .collect(Collectors.toList());
+                    
+                    Log.d(TAG, "Tổng số tasks có lat/lon sau filter: " + fragment.mOriginalTasks.size());
                 }
 
                 if (fragment.mOriginalTasks == null || fragment.mOriginalTasks.isEmpty()) {
@@ -218,12 +281,29 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
 
             fragment.isRecalculating = false;
 
+            // Re-enable FAB after route calculation completes
+            if (fragment.fabReloadRoute != null) {
+                fragment.fabReloadRoute.setEnabled(true);
+                fragment.fabReloadRoute.setAlpha(1.0f);
+            }
+
             if (result.exception != null) {
-                Toast.makeText(fragment.getContext(), "Lỗi tải dữ liệu: " + result.exception.getMessage(), Toast.LENGTH_LONG).show();
+                String errorMessage = result.exception.getMessage();
+                if (errorMessage != null && errorMessage.contains("Session ended")) {
+                    // Session ended - cleanup map
+                    Log.w(TAG, "Session ended. Cleaning up map...");
+                    fragment.cleanupMap();
+                    Toast.makeText(fragment.getContext(), "Phiên đã kết thúc. Đã dọn dẹp bản đồ.", Toast.LENGTH_LONG).show();
+                } else {
+                    Toast.makeText(fragment.getContext(), "Lỗi tải dữ liệu: " + errorMessage, Toast.LENGTH_LONG).show();
+                }
                 return;
             }
 
             if (result.sortedTasks == null || result.sortedTasks.isEmpty()) {
+                // Check if session ended (no tasks means no active session)
+                fragment.checkSessionStatusAndCleanup();
+                
                 Toast.makeText(fragment.getContext(), "Không có nhiệm vụ nào cần xử lý.", Toast.LENGTH_LONG).show();
                 fragment.isRouteLoaded = false;
                 fragment.mOriginalTasks = null;
@@ -239,8 +319,10 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                     fragment.tvInstruction.setText("Không có nhiệm vụ.");
                 }
 
-                if (fragment.fabReloadRoute != null) {
-                    fragment.fabReloadRoute.setEnabled(true);
+                // FAB already enabled above
+
+                if (fragment.legNavigationContainer != null) {
+                    fragment.legNavigationContainer.setVisibility(View.GONE);
                 }
                 return;
             }
@@ -254,6 +336,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
 
             fragment.currentLegIndex = 0;
             fragment.displayCurrentLeg();
+            fragment.updateLegNavigationUI();
 
             if (!fragment.mSortedTasks.isEmpty()) {
                 fragment.showTaskSnackbar(fragment.mSortedTasks.get(fragment.currentLegIndex));
@@ -264,6 +347,14 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     }
 
 
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // Initialize GlobalChatService and register update notification listener
+        globalChatService = GlobalChatService.getInstance(requireContext());
+        globalChatService.addListener(this);
+    }
 
     @Nullable
     @Override
@@ -281,6 +372,10 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         fabRecenter = view.findViewById(R.id.fab_recenter); // Nút mới
         tvInstruction = view.findViewById(R.id.tv_instruction);
         progressBar = view.findViewById(R.id.progress_bar);
+        legNavigationContainer = view.findViewById(R.id.leg_navigation_container);
+        btnPrevLeg = view.findViewById(R.id.btn_prev_leg);
+        btnNextLeg = view.findViewById(R.id.btn_next_leg);
+        tvLegInfo = view.findViewById(R.id.tv_leg_info);
 
         // --- NÂNG CẤP: Tải icon cho nút điều hướng ---
         iconRecenter = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_mylocation);
@@ -309,6 +404,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
 
         setupOSMMap();
         setupFabListeners();
+        setupLegNavigation();
         checkAndRequestLocation(); // Bắt đầu luồng
         return view;
     }
@@ -371,16 +467,28 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         mCurrentLocation = new GeoPoint(location.getLatitude(), location.getLongitude());
         updateDriverMarker();
 
-        // --- NÂNG CẤP: Tự động di chuyển camera ---
+        // --- NÂNG CẤP: Tự động di chuyển camera (Focus mode) ---
         if (isNavigating) {
-            // --- THAY ĐỔI ZOOM: Thêm setZoom để luôn giữ mức zoom 18 ---
+            // --- FOCUS MODE: Luôn focus vào vị trí driver và giữ mức zoom 18 ---
             mapView.getController().setZoom(18.0);
             mapView.getController().animateTo(mCurrentLocation);
-            // --- NÂNG CẤP: Xoay bản đồ theo hướng đi ---
-            if (location.hasBearing()) {
-                mapView.setMapOrientation(-location.getBearing());
+            // --- MAP ROTATION: Ưu tiên theo hướng route, fallback GPS bearing ---
+            float bearing = -1;
+            if (isRouteLoaded && mRouteResponse != null && mCurrentLocation != null) {
+                // Ưu tiên: Tính bearing từ route geometry (hướng cần đi)
+                bearing = calculateRouteBearing(location);
+            }
+            if (bearing < 0 && location.hasBearing()) {
+                // Fallback: Dùng GPS bearing nếu không tính được route bearing
+                bearing = location.getBearing();
+            }
+            if (bearing >= 0) {
+                mapView.setMapOrientation(-bearing);
+                boolean fromRoute = bearing >= 0 && isRouteLoaded && mRouteResponse != null;
+                Log.d(TAG, "Map rotation updated: bearing=" + bearing + " (from route: " + fromRoute + ")");
             }
         }
+        // Mode khác (!isNavigating): không auto-rotate, user tự do xoay map
 
         if (isRouteLoaded) {
             // Kiểm tra lệch hướng
@@ -455,6 +563,82 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         }
     }
 
+    /**
+     * Tính bearing từ vị trí hiện tại đến điểm tiếp theo trong current step geometry
+     * Ưu tiên dùng trong focus mode để xoay map theo hướng cần đi
+     * @param location Vị trí GPS hiện tại
+     * @return Bearing trong độ (0-360) hoặc -1 nếu không tính được
+     */
+    private float calculateRouteBearing(Location location) {
+        if (mRouteResponse == null || mRouteResponse.getRoute() == null || 
+            mRouteResponse.getRoute().getLegs() == null || 
+            currentLegIndex < 0 || currentLegIndex >= mRouteResponse.getRoute().getLegs().size()) {
+            return -1;
+        }
+
+        try {
+            RoutingResponseDto.RouteLegDto currentLeg = mRouteResponse.getRoute().getLegs().get(currentLegIndex);
+            List<RoutingResponseDto.RouteStepDto> steps = currentLeg.getSteps();
+            
+            if (steps == null || steps.isEmpty() || currentStepIndex < 0 || currentStepIndex >= steps.size()) {
+                return -1;
+            }
+
+            RoutingResponseDto.RouteStepDto currentStep = steps.get(currentStepIndex);
+            if (currentStep.getGeometry() == null || currentStep.getGeometry().getCoordinates() == null ||
+                currentStep.getGeometry().getCoordinates().isEmpty()) {
+                return -1;
+            }
+
+            List<List<Double>> coordinates = currentStep.getGeometry().getCoordinates();
+            GeoPoint currentPoint = mCurrentLocation;
+            
+            // Tìm điểm gần nhất tiếp theo trong step geometry từ vị trí hiện tại
+            GeoPoint nextPoint = null;
+            double minDistance = Double.MAX_VALUE;
+            
+            for (List<Double> coord : coordinates) {
+                if (coord == null || coord.size() < 2) continue;
+                
+                GeoPoint point = new GeoPoint(coord.get(1), coord.get(0)); // lat, lon
+                double distance = currentPoint.distanceToAsDouble(point);
+                
+                // Chỉ lấy điểm phía trước (distance > 10m để tránh nhiễu)
+                if (distance > 10.0 && distance < minDistance) {
+                    minDistance = distance;
+                    nextPoint = point;
+                }
+            }
+            
+            if (nextPoint == null) {
+                // Nếu không tìm thấy điểm tiếp theo, dùng điểm cuối của step
+                List<Double> lastCoord = coordinates.get(coordinates.size() - 1);
+                nextPoint = new GeoPoint(lastCoord.get(1), lastCoord.get(0));
+            }
+            
+            // Tính bearing giữa vị trí hiện tại và điểm tiếp theo
+            double lat1 = Math.toRadians(currentPoint.getLatitude());
+            double lon1 = Math.toRadians(currentPoint.getLongitude());
+            double lat2 = Math.toRadians(nextPoint.getLatitude());
+            double lon2 = Math.toRadians(nextPoint.getLongitude());
+            
+            double deltaLon = lon2 - lon1;
+            double y = Math.sin(deltaLon) * Math.cos(lat2);
+            double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLon);
+            
+            double bearingRad = Math.atan2(y, x);
+            double bearingDeg = Math.toDegrees(bearingRad);
+            
+            // Normalize bearing to 0-360
+            float bearing = (float) ((bearingDeg + 360) % 360);
+            
+            return bearing;
+        } catch (Exception e) {
+            Log.e(TAG, "Lỗi tính route bearing: " + e.getMessage());
+            return -1;
+        }
+    }
+
     private void checkDeviation(GeoPoint currentLocation) {
         if (isRecalculating || mPrecalculatedPolylines == null || currentLegIndex >= mPrecalculatedPolylines.size()) {
             return;
@@ -474,6 +658,16 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         if (!onTrack) {
             Log.w(TAG, "Phát hiện lệch hướng! Đang tính toán lại...");
             Toast.makeText(getContext(), "Phát hiện lệch hướng, đang tính toán lại...", Toast.LENGTH_SHORT).show();
+            
+            // Disable FAB and show loading during recalculation
+            if (fabReloadRoute != null) {
+                fabReloadRoute.setEnabled(false);
+                fabReloadRoute.setAlpha(0.5f);
+            }
+            if (progressBar != null) {
+                progressBar.setVisibility(View.VISIBLE);
+            }
+            
             // Xóa danh sách task cũ để AsyncTask tải lại (nếu cần)
             // mOriginalTasks = null; // Không nên xóa, chỉ cần tính lại đường
             new FetchAndRouteTask(this, currentLocation).execute();
@@ -662,6 +856,58 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
 
 
     /**
+     * Setup navigation buttons for leg-by-leg navigation
+     */
+    private void setupLegNavigation() {
+        btnPrevLeg.setOnClickListener(v -> navigateToPreviousLeg());
+        btnNextLeg.setOnClickListener(v -> navigateToNextLeg());
+    }
+
+    private void navigateToPreviousLeg() {
+        if (currentLegIndex > 0) {
+            currentLegIndex--;
+            displayCurrentLeg();
+            updateLegNavigationUI();
+        }
+    }
+
+    private void navigateToNextLeg() {
+        if (mSortedTasks != null && currentLegIndex < mSortedTasks.size() - 1) {
+            currentLegIndex++;
+            displayCurrentLeg();
+            updateLegNavigationUI();
+        }
+    }
+
+    private void updateLegNavigationUI() {
+        if (mSortedTasks == null || mSortedTasks.isEmpty()) {
+            if (legNavigationContainer != null) {
+                legNavigationContainer.setVisibility(View.GONE);
+            }
+            return;
+        }
+
+        if (legNavigationContainer != null) {
+            legNavigationContainer.setVisibility(View.VISIBLE);
+        }
+
+        if (tvLegInfo != null) {
+            tvLegInfo.setText((currentLegIndex + 1) + " / " + mSortedTasks.size());
+        }
+
+        // Enable/disable navigation buttons
+        if (btnPrevLeg != null) {
+            btnPrevLeg.setEnabled(currentLegIndex > 0);
+            btnPrevLeg.setAlpha(currentLegIndex > 0 ? 1.0f : 0.5f);
+        }
+
+        if (btnNextLeg != null) {
+            btnNextLeg.setEnabled(currentLegIndex < mSortedTasks.size() - 1);
+            btnNextLeg.setAlpha(currentLegIndex < mSortedTasks.size() - 1 ? 1.0f : 0.5f);
+        }
+    }
+
+    /**
      * Hiển thị chặng hiện tại lên bản đồ.
      */
     private void displayCurrentLeg() {
@@ -742,6 +988,9 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             mapView.getController().setZoom(18.0); // Ép zoom 18
         }
 
+        // Update leg navigation UI
+        updateLegNavigationUI();
+
         mapView.invalidate();
     }
 
@@ -792,33 +1041,41 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                 return;
             }
 
+            // Disable FAB and show loading
+            fabReloadRoute.setEnabled(false);
+            fabReloadRoute.setAlpha(0.5f);
+            if (progressBar != null) {
+                progressBar.setVisibility(View.VISIBLE);
+            }
             Toast.makeText(getContext(), "Đang tải lại tuyến đường...", Toast.LENGTH_SHORT).show();
 
             // --- QUAN TRỌNG: Xóa danh sách task cũ để nó tải lại từ server ---
             mOriginalTasks = null;
 
-            // Kích hoạt lại nút (nếu nó bị tắt sau khi hoàn thành)
-            fabReloadRoute.setEnabled(true);
-
             // Gọi lại AsyncTask với vị trí hiện tại
             new FetchAndRouteTask(this, mCurrentLocation).execute();
         });
 
-        // --- NÂNG CẤP: Nút Recenter giờ là nút Bật/Tắt Điều hướng ---
+        // --- NÂNG CẤP: Nút Lock/Focus Toggle - Bật/Tắt Focus mode (lock camera vào driver) ---
         fabRecenter.setOnClickListener(v -> {
-            isNavigating = !isNavigating; // Đảo trạng thái
+            isNavigating = !isNavigating; // Toggle lock/focus mode
             if (isNavigating) {
-                // Bật điều hướng
+                // Bật Focus mode: Lock camera vào driver, tự động follow và rotate
                 fabRecenter.setImageDrawable(iconNavigation);
                 if (mCurrentLocation != null) {
                     mapView.getController().animateTo(mCurrentLocation);
                     mapView.getController().setZoom(18.0);
+                    // Reset rotation if location has bearing
+                    Location lastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                    if (lastLocation != null && lastLocation.hasBearing()) {
+                        mapView.setMapOrientation(-lastLocation.getBearing());
+                    }
                 }
-                Toast.makeText(getContext(), "Đã bật chế độ điều hướng.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Đã bật Focus mode - Camera sẽ tự động theo dõi vị trí.", Toast.LENGTH_SHORT).show();
             } else {
-                // Tắt điều hướng
+                // Tắt Focus mode: Manual camera control
                 fabRecenter.setImageDrawable(iconRecenter);
-                Toast.makeText(getContext(), "Đã tắt chế độ điều hướng.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Đã tắt Focus mode - Bạn có thể di chuyển camera tự do.", Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -837,6 +1094,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         if (foundIndex != -1) {
             currentLegIndex = foundIndex;
             displayCurrentLeg();
+            updateLegNavigationUI();
             showTaskSnackbar(mSortedTasks.get(currentLegIndex));
         }
     }
@@ -882,24 +1140,34 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         super.onResume();
         if (mapView != null) mapView.onResume();
 
+        // Check session status first - cleanup map if session ended
+        checkSessionStatusAndCleanup();
+
         // Bắt đầu lại GPS tracking khi quay lại app
         if (locationManager != null && ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, GPS_UPDATE_INTERVAL_MS, GPS_UPDATE_DISTANCE_M, this);
         }
 
-        // --- NÂNG CẤP: Tự động tải lại tuyến đường khi quay lại Fragment ---
-        // (Để bắt các task mới hoặc task vừa hoàn thành trong Dialog)
+        // Tối ưu: Chỉ reload route khi thực sự cần
+        // (Route chưa được load hoặc có flag forceReload)
         if (!isRecalculating && mCurrentLocation != null) {
-            Log.d(TAG, "onResume: Tải lại tuyến đường để cập nhật danh sách task...");
-            Toast.makeText(getContext(), "Đang cập nhật lại tuyến đường...", Toast.LENGTH_SHORT).show();
-            mOriginalTasks = null; // Bắt buộc tải lại
-
-            // Kích hoạt lại nút reload (nếu nó bị tắt)
-            if(fabReloadRoute != null) {
-                fabReloadRoute.setEnabled(true);
+            if (!isRouteLoaded) {
+                // Route chưa load: Tải route (only if session is still active)
+                if (isSessionActive()) {
+                    Log.d(TAG, "onResume: Route chưa load, tải route...");
+                    new FetchAndRouteTask(this, mCurrentLocation).execute();
+                } else {
+                    Log.d(TAG, "onResume: Session ended. Skipping route fetch.");
+                }
+            } else {
+                // Route đã load: Không reload, chỉ khôi phục GPS frequency về bình thường
+                Log.d(TAG, "onResume: Route đã load, không reload (cache route data)");
+                // Khôi phục GPS update frequency về bình thường (1s)
+                if (locationManager != null && ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                    locationManager.removeUpdates(this);
+                    locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, GPS_UPDATE_INTERVAL_MS, GPS_UPDATE_DISTANCE_M, this);
+                }
             }
-
-            new FetchAndRouteTask(this, mCurrentLocation).execute();
         }
     }
 
@@ -907,9 +1175,69 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     public void onPause() {
         super.onPause();
         if (mapView != null) mapView.onPause();
-        // Ngừng lắng nghe GPS khi không active
+        // Tối ưu: Không remove GPS updates nếu đang trong navigation mode
+        // Chỉ pause GPS khi fragment bị destroy hoàn toàn hoặc không đang navigate
         if (locationManager != null) {
-            locationManager.removeUpdates(this);
+            if (isNavigating && isRouteLoaded) {
+                // Đang navigate: Giảm frequency thay vì remove hoàn toàn (interval = 5s)
+                locationManager.removeUpdates(this);
+                if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                    locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, GPS_UPDATE_DISTANCE_M, this);
+                    Log.d(TAG, "onPause: Giảm GPS update frequency (5s) thay vì remove (đang navigate)");
+                }
+            } else {
+                // Không navigate: Remove updates như bình thường
+                locationManager.removeUpdates(this);
+                Log.d(TAG, "onPause: Removed GPS updates (không đang navigate)");
+            }
+        }
+    }
+
+    @Override
+    public void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        // Lưu state quan trọng của MapFragment
+        outState.putInt("currentLegIndex", currentLegIndex);
+        outState.putInt("currentStepIndex", currentStepIndex);
+        outState.putBoolean("isRouteLoaded", isRouteLoaded);
+        outState.putBoolean("isNavigating", isNavigating);
+        if (mCurrentLocation != null) {
+            outState.putDouble("currentLat", mCurrentLocation.getLatitude());
+            outState.putDouble("currentLon", mCurrentLocation.getLongitude());
+        }
+        Log.d(TAG, "onSaveInstanceState: Saved state - legIndex=" + currentLegIndex + ", stepIndex=" + currentStepIndex + ", isRouteLoaded=" + isRouteLoaded);
+    }
+
+    @Override
+    public void onViewStateRestored(@Nullable Bundle savedInstanceState) {
+        super.onViewStateRestored(savedInstanceState);
+        // Restore state khi fragment được recreate
+        if (savedInstanceState != null) {
+            currentLegIndex = savedInstanceState.getInt("currentLegIndex", 0);
+            currentStepIndex = savedInstanceState.getInt("currentStepIndex", 0);
+            isRouteLoaded = savedInstanceState.getBoolean("isRouteLoaded", false);
+            isNavigating = savedInstanceState.getBoolean("isNavigating", true);
+            if (savedInstanceState.containsKey("currentLat") && savedInstanceState.containsKey("currentLon")) {
+                double lat = savedInstanceState.getDouble("currentLat");
+                double lon = savedInstanceState.getDouble("currentLon");
+                mCurrentLocation = new GeoPoint(lat, lon);
+            }
+            Log.d(TAG, "onViewStateRestored: Restored state - legIndex=" + currentLegIndex + ", stepIndex=" + currentStepIndex + ", isRouteLoaded=" + isRouteLoaded);
+            
+            // Nếu route đã load và có đủ data, hiển thị lại current leg
+            // Note: Route data (mRouteResponse, mPrecalculatedPolylines, mSortedTasks) 
+            // có thể không được restore vì không thể serialize
+            // Nên chỉ cập nhật UI nếu data vẫn còn trong memory
+            if (isRouteLoaded && mRouteResponse != null && mPrecalculatedPolylines != null && mSortedTasks != null) {
+                displayCurrentLeg();
+            } else {
+                // Nếu route data không còn, reset state và sẽ reload khi có GPS
+                Log.d(TAG, "onViewStateRestored: Route data not available, resetting state");
+                isRouteLoaded = false;
+                currentLegIndex = 0;
+                currentStepIndex = 0;
+                updateLegNavigationUI();
+            }
         }
     }
 
@@ -924,5 +1252,216 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         Log.d(TAG, "MapFragment onActivityResult: truyền sự kiện xuống children...");
         super.onActivityResult(requestCode, resultCode, data);
+    }
+    
+    /**
+     * Check session status and cleanup map if session ended (COMPLETED or FAILED)
+     */
+    private void checkSessionStatusAndCleanup() {
+        if (driverId == null || sessionClient == null) {
+            return;
+        }
+        
+        // Check session status asynchronously
+        new Thread(() -> {
+            try {
+                Response<DeliverySession> response = sessionClient.getActiveSession(driverId).execute();
+                
+                if (!response.isSuccessful() || response.code() == 204 || response.body() == null) {
+                    // No active session - session ended (COMPLETED or FAILED)
+                    Log.w(TAG, "No active session found. Session may have ended. Cleaning up map...");
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> cleanupMap());
+                    }
+                    return;
+                }
+                
+                DeliverySession session = response.body();
+                String status = session.getStatus();
+                
+                if ("COMPLETED".equals(status) || "FAILED".equals(status)) {
+                    // Session ended - cleanup map
+                    Log.w(TAG, "Session ended with status: " + status + ". Cleaning up map...");
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> cleanupMap());
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error checking session status: " + e.getMessage());
+                // Don't cleanup on error - might be network issue
+            }
+        }).start();
+    }
+    
+    /**
+     * Check if session is still active (non-blocking check)
+     * Returns true if route is loaded (assumes session is active)
+     */
+    private boolean isSessionActive() {
+        // Quick check: if route is loaded, assume session is active
+        // This avoids blocking the UI thread
+        // Will be updated by checkSessionStatusAndCleanup() if session ended
+        return isRouteLoaded;
+    }
+    
+    /**
+     * Cleanup map when session ends: remove routes, markers, polylines, reset state
+     */
+    private void cleanupMap() {
+        Log.d(TAG, "🧹 Cleaning up map: removing routes, markers, polylines...");
+        
+        // Reset route state
+        isRouteLoaded = false;
+        isNavigating = false;
+        isRecalculating = false;
+        currentLegIndex = 0;
+        currentStepIndex = 0;
+        
+        // Clear route data
+        mOriginalTasks = null;
+        mSortedTasks = null;
+        mRouteResponse = null;
+        mPrecalculatedPolylines = null;
+        
+        // Clear map overlays (routes, markers, polylines)
+        if (mapView != null) {
+            mapView.getOverlays().clear();
+            // Keep only driver marker and aura
+            if (mCurrentLocation != null) {
+                updateDriverMarker();
+            }
+            mapView.invalidate();
+        }
+        
+        // Reset UI
+        if (tvInstruction != null) {
+            tvInstruction.setText("Phiên đã kết thúc. Không có tuyến đường.");
+        }
+        
+        if (legNavigationContainer != null) {
+            legNavigationContainer.setVisibility(View.GONE);
+        }
+        
+        if (fabReloadRoute != null) {
+            fabReloadRoute.setEnabled(false);
+        }
+        
+        // Reset map rotation
+        if (mapView != null) {
+            mapView.setMapOrientation(0);
+        }
+        
+        Log.d(TAG, "✅ Map cleanup completed");
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        // Unregister update notification listener
+        if (globalChatService != null) {
+            globalChatService.removeListener(this);
+        }
+    }
+
+    // ==================== GlobalChatService.UpdateNotificationListener ====================
+    
+    @Override
+    public void onMessageReceived(com.ds.deliveryapp.clients.res.Message message) {
+        // Not used in MapFragment
+    }
+
+    @Override
+    public void onUnreadCountChanged(int count) {
+        // Not used in MapFragment
+    }
+
+    @Override
+    public void onConnectionStatusChanged(boolean connected) {
+        // Not used in MapFragment
+    }
+
+    @Override
+    public void onError(String error) {
+        // Not used in MapFragment
+    }
+
+    @Override
+    public void onNotificationReceived(String notificationJson) {
+        // Not used in MapFragment
+    }
+
+    @Override
+    public void onUpdateNotificationReceived(UpdateNotification updateNotification) {
+        Log.d(TAG, String.format("📥 Update notification received: type=%s, entityType=%s, entityId=%s, action=%s", 
+            updateNotification.getUpdateType(), 
+            updateNotification.getEntityType(), 
+            updateNotification.getEntityId(), 
+            updateNotification.getAction()));
+        
+        // Handle update notification on UI thread
+        if (getActivity() != null) {
+            getActivity().runOnUiThread(() -> {
+                handleUpdateNotification(updateNotification);
+            });
+        }
+    }
+    
+    /**
+     * Handle update notification and refresh route accordingly
+     */
+    private void handleUpdateNotification(UpdateNotification updateNotification) {
+        if (updateNotification == null) {
+            return;
+        }
+        
+        UpdateNotification.EntityType entityType = updateNotification.getEntityType();
+        UpdateNotification.ActionType action = updateNotification.getAction();
+        String entityId = updateNotification.getEntityId();
+        
+        // Handle SESSION_UPDATE: cleanup map if session ended, reload route if session started
+        if (entityType == UpdateNotification.EntityType.SESSION) {
+            if (action == UpdateNotification.ActionType.COMPLETED || 
+                action == UpdateNotification.ActionType.FAILED || 
+                action == UpdateNotification.ActionType.CANCELLED) {
+                // Session ended - cleanup map
+                Log.d(TAG, "Session ended (action: " + action + "). Cleaning up map...");
+                cleanupMap();
+            } else if (action == UpdateNotification.ActionType.CREATED || 
+                       action == UpdateNotification.ActionType.STATUS_CHANGED) {
+                // Session created or status changed - reload route if needed
+                Log.d(TAG, "Session updated (action: " + action + "). Reloading route...");
+                if (mCurrentLocation != null && !isRecalculating) {
+                    // Reload route with current location
+                    new FetchAndRouteTask(this, mCurrentLocation).execute();
+                }
+            }
+        }
+        // Handle ASSIGNMENT_UPDATE: reload route if assignment status changed
+        else if (entityType == UpdateNotification.EntityType.ASSIGNMENT) {
+            if (action == UpdateNotification.ActionType.CREATED || 
+                action == UpdateNotification.ActionType.UPDATED || 
+                action == UpdateNotification.ActionType.STATUS_CHANGED ||
+                action == UpdateNotification.ActionType.COMPLETED ||
+                action == UpdateNotification.ActionType.FAILED) {
+                // Assignment updated - reload route (route might change)
+                Log.d(TAG, "Assignment updated (action: " + action + "). Reloading route...");
+                if (mCurrentLocation != null && !isRecalculating && isRouteLoaded) {
+                    // Reload route with current location
+                    new FetchAndRouteTask(this, mCurrentLocation).execute();
+                }
+            }
+        }
+        // Handle PARCEL_UPDATE: reload route if parcel status changed (might affect route)
+        else if (entityType == UpdateNotification.EntityType.PARCEL) {
+            if (action == UpdateNotification.ActionType.STATUS_CHANGED || 
+                action == UpdateNotification.ActionType.UPDATED) {
+                // Parcel updated - reload route if route is loaded (parcel status might affect route)
+                Log.d(TAG, "Parcel updated (action: " + action + "). Reloading route...");
+                if (mCurrentLocation != null && !isRecalculating && isRouteLoaded) {
+                    // Reload route with current location
+                    new FetchAndRouteTask(this, mCurrentLocation).execute();
+                }
+            }
+        }
     }
 }

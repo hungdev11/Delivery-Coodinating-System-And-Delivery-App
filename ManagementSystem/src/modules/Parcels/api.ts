@@ -73,3 +73,32 @@ export const changeParcelStatus = async (
 ): Promise<ChangeStatusResponse> => {
   return apiClient.put<ChangeStatusResponse, null>(`/v1/parcels/change-status/${id}?event=${event}`, null)
 }
+
+/**
+ * Seed Parcels API
+ */
+export interface SeedParcelsRequest {
+  count?: number
+  shopId?: string
+  clientId?: string
+}
+
+export interface SeedParcelsResponse {
+  result: {
+    successCount: number
+    failCount: number
+    total: number
+    message: string
+  }
+  success: boolean
+  message?: string
+}
+
+/**
+ * Seed parcels randomly or with specific shop/client
+ */
+export const seedParcels = async (
+  data?: SeedParcelsRequest,
+): Promise<SeedParcelsResponse> => {
+  return apiClient.post<SeedParcelsResponse, SeedParcelsRequest>('/v1/parcels/seed', data || {})
+}

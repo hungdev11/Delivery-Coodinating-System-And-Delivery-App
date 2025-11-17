@@ -9,6 +9,7 @@
 import { computed, ref, watch } from 'vue'
 import type { ParcelDto, DeliveryType } from '../model.type'
 import AddressPicker from './AddressPicker.vue'
+import UserSelect from '@/common/components/UserSelect.vue'
 import { getOrCreateAddress } from '@/modules/Addresses/api'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 
@@ -219,13 +220,21 @@ const handleCancel = () => {
         </UFormField>
 
         <div class="grid grid-cols-2 gap-4">
-          <UFormField label="Sender ID" name="senderId" required>
-            <UInput class="w-full" v-model="form.senderId" placeholder="Enter sender ID" />
-          </UFormField>
+          <UserSelect
+            v-model="form.senderId"
+            label="Sender"
+            placeholder="Search sender by ID or name..."
+            :allow-seed-id="true"
+            :searchable="true"
+          />
 
-          <UFormField label="Receiver ID" name="receiverId" required>
-            <UInput class="w-full" v-model="form.receiverId" placeholder="Enter receiver ID" />
-          </UFormField>
+          <UserSelect
+            v-model="form.receiverId"
+            label="Receiver"
+            placeholder="Search receiver by ID or name..."
+            :allow-seed-id="true"
+            :searchable="true"
+          />
         </div>
 
         <UFormField label="Delivery Type" name="deliveryType" required>
