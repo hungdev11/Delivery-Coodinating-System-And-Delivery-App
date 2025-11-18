@@ -4,14 +4,26 @@
 
 Biểu đồ ERD này bao gồm tất cả các bảng trong các service của hệ thống Delivery System, loại trừ các snapshot tables.
 
-## Cấu Trúc Services
+## Cấu Trúc Services & Liên Kết Chi Tiết
 
-1. **User Service** (ds_user_service) - MySQL
-2. **Settings Service** (ds_settings_service) - MySQL
-3. **Zone Service** (ds_zone_service) - MySQL (Prisma)
-4. **Parcel Service** (ds_parcel_service) - MySQL
-5. **Communication Service** (ds_communication_service) - MySQL
-6. **Session Service** (ds_session_service) - MySQL
+1. **User Service** (ds_user_service) - MySQL  
+   - 📄 Chi tiết: [ERD_USER_SERVICE.md](./ERD_USER_SERVICE.md)  
+   - Liên quan: Parcel Service (sender/receiver), Communication Service (conversations/messages/proposals), Session Service (delivery man), Zone Service (user_addresses.destinationId)
+2. **Settings Service** (ds_settings_service) - MySQL  
+   - 📄 Chi tiết: [ERD_SETTINGS_SERVICE.md](./ERD_SETTINGS_SERVICE.md)  
+   - Liên quan: Toàn bộ services thông qua cấu hình/key secret
+3. **Zone Service** (ds_zone_service) - MySQL (Prisma)  
+   - 📄 Chi tiết: [ERD_ZONE_SERVICE.md](./ERD_ZONE_SERVICE.md)  
+   - Liên quan: User Service (`user_addresses`), Parcel Service (`parcel_destinations`), Session Service (routing metadata)
+4. **Parcel Service** (ds_parcel_service) - MySQL  
+   - 📄 Chi tiết: [ERD_PARCEL_SERVICE.md](./ERD_PARCEL_SERVICE.md)  
+   - Liên quan: User Service (sender/receiver), Zone Service (destinations), Session Service (delivery assignments)
+5. **Communication Service** (ds_communication_service) - MySQL  
+   - 📄 Chi tiết: [ERD_COMMUNICATION_SERVICE.md](./ERD_COMMUNICATION_SERVICE.md)  
+   - Liên quan: User Service (participants), Session Service (interactive proposals)
+6. **Session Service** (ds_session_service) - MySQL  
+   - 📄 Chi tiết: [ERD_SESSION_SERVICE.md](./ERD_SESSION_SERVICE.md)  
+   - Liên quan: User Service (delivery man), Parcel Service (assignments), Communication Service (proposals)
 
 ---
 
@@ -450,19 +462,17 @@ erDiagram
     %% ============================================
     %% CROSS-SERVICE REFERENCES (No FK constraints)
     %% ============================================
-    %% user_addresses.destinationId -> addresses.address_id
-    %% parcels.senderId -> users.id
-    %% parcels.receiverId -> users.id
-    %% working_places.delivery_man_id -> delivery_mans.id
-    %% conversations.user1_id -> users.id
-    %% conversations.user2_id -> users.id
-    %% messages.sender_id -> users.id
-    %% notifications.user_id -> users.id
-    %% interactive_proposals.proposer_id -> users.id
-    %% interactive_proposals.recipient_id -> users.id
-    %% delivery_sessions.deliveryManId -> delivery_mans.id
-    %% delivery_assignments.parcel_id -> parcels.id
-    %% interactive_proposals.session_id -> delivery_sessions.id
+    user_addresses }o--|| addresses : "destinationId"
+    parcels }o--|| users : "senderId / receiverId"
+    parcel_destinations }o--|| addresses : "destinationId"
+    working_places }o--|| delivery_mans : "delivery_man_id"
+    delivery_sessions }o--|| delivery_mans : "deliveryManId"
+    delivery_assignments }o--|| parcels : "parcel_id"
+    conversations }o--|| users : "user1_id / user2_id"
+    messages }o--|| users : "sender_id"
+    notifications }o--|| users : "user_id"
+    interactive_proposals }o--|| users : "proposer_id / recipient_id"
+    interactive_proposals }o--|| delivery_sessions : "session_id"
 ```
 
 ---
