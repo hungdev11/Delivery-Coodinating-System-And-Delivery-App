@@ -3,16 +3,19 @@ package com.ds.gateway.business.v1.services;
 import java.util.List;
 import java.util.UUID;
 
+import java.time.Duration;
+import java.util.Optional;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.Optional;
 import com.ds.gateway.common.interfaces.ISessionServiceClient;
 import lombok.extern.slf4j.Slf4j;
 
@@ -197,13 +200,19 @@ public class SessionServiceClient implements ISessionServiceClient {
                     .accept(MediaType.APPLICATION_JSON)
                     .retrieve()
                     .bodyToMono(Object.class)
-                    .block();
+                    .block(Duration.ofSeconds(30)); // 30 second timeout for GET requests
 
             return ResponseEntity.ok(body);
 
         } catch (WebClientResponseException e) {
             log.error("GET {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        } catch (WebClientException e) {
+            log.error("GET {} request failed (timeout/connection error): {}", uri, e.getMessage());
+            return ResponseEntity.status(504).body("{\"error\":\"Gateway timeout: Service did not respond in time\"}");
+        } catch (Exception e) {
+            log.error("GET {} unexpected error: {}", uri, e.getMessage(), e);
+            return ResponseEntity.status(500).body("{\"error\":\"Internal server error: " + e.getMessage() + "\"}");
         }
     }
 
@@ -224,13 +233,19 @@ public class SessionServiceClient implements ISessionServiceClient {
             Object responseBody = requestSpec
                     .retrieve()
                     .bodyToMono(Object.class)
-                    .block();
+                    .block(Duration.ofSeconds(60)); // 60 second timeout
 
             return ResponseEntity.ok(responseBody);
 
         } catch (WebClientResponseException e) {
             log.error("POST {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        } catch (WebClientException e) {
+            log.error("POST {} request failed (timeout/connection error): {}", uri, e.getMessage());
+            return ResponseEntity.status(504).body("{\"error\":\"Gateway timeout: Service did not respond in time\"}");
+        } catch (Exception e) {
+            log.error("POST {} unexpected error: {}", uri, e.getMessage(), e);
+            return ResponseEntity.status(500).body("{\"error\":\"Internal server error: " + e.getMessage() + "\"}");
         }
     }
 
@@ -242,13 +257,19 @@ public class SessionServiceClient implements ISessionServiceClient {
                     .bodyValue(body != null ? body : new Object())
                     .retrieve()
                     .bodyToMono(Object.class)
-                    .block();
+                    .block(Duration.ofSeconds(30)); // 30 second timeout for PUT requests
 
             return ResponseEntity.ok(responseBody);
 
         } catch (WebClientResponseException e) {
             log.error("PUT {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        } catch (WebClientException e) {
+            log.error("PUT {} request failed (timeout/connection error): {}", uri, e.getMessage());
+            return ResponseEntity.status(504).body("{\"error\":\"Gateway timeout: Service did not respond in time\"}");
+        } catch (Exception e) {
+            log.error("PUT {} unexpected error: {}", uri, e.getMessage(), e);
+            return ResponseEntity.status(500).body("{\"error\":\"Internal server error: " + e.getMessage() + "\"}");
         }
     }
 

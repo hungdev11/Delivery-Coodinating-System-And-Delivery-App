@@ -41,6 +41,14 @@ spring:
   flyway:
     enabled: false
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        "enable.idempotence": true
+
 # Keycloak Configuration (from env.local)
 keycloak:
   auth-server-url: ${KEYCLOAK_URL:https://keycloak.phuongy.works}
@@ -449,8 +457,8 @@ services:
     base-url: ${SETTINGS_SERVICE_URL:http://localhost:21502}
   zone:
     base-url: ${ZONE_SERVICE_URL:http://localhost:21503}
-  api-gateway:
-    base-url: ${API_GATEWAY_URL:http://localhost:21500}
+  parcel:
+    base-url: ${PARCEL_SERVICE_URL:http://localhost:21506}
 
 # Parcel Seed Configuration
 parcel:

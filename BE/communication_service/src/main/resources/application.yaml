@@ -23,6 +23,7 @@ spring:
     show-sql: false
     properties:
       hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
         jdbc:
           time_zone: Asia/Ho_Chi_Minh
@@ -48,6 +49,16 @@ spring:
         enable.idempotence: true
         max.in.flight.requests.per.connection: 5
         compression.type: gzip  # Use gzip instead of snappy (which requires native libraries)
+
+# Snapshot Initialization Configuration
+snapshot:
+  initialization:
+    enabled: ${SNAPSHOT_INIT_ENABLED:true}
+
+# User Service Configuration (for snapshot initialization)
+user:
+  service:
+    url: ${USER_SERVICE_URL:http://localhost:21501}
     properties:
       session.timeout.ms: 30000
       heartbeat.interval.ms: 10000

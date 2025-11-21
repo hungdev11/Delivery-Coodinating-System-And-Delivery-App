@@ -20,9 +20,9 @@ public class WebClientConfig {
                 .build();
     }
 
-    @Bean("apiGatewayWebClient")
-    public WebClient apiGatewayWebClient(
-            @Value("${services.api-gateway.base-url:http://localhost:21500}") String baseUrl) {
+    @Bean("parcelServiceWebClient")
+    public WebClient parcelServiceWebClient(
+            @Value("${services.parcel.base-url:http://localhost:21506}") String baseUrl) {
         return WebClient.builder()
                 .baseUrl(baseUrl)
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 10MB

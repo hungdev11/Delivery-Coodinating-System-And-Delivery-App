@@ -66,6 +66,7 @@ public class GlobalChatService implements ChatWebSocketListener {
     public void initialize() {
         String jwtToken = authManager.getAccessToken();
         String userId = authManager.getUserId();
+        List<String> userRoles = authManager.getRoles();
 
         if (jwtToken == null || userId == null || userId.isEmpty()) {
             Log.w(TAG, "Cannot initialize: Missing token or userId");
@@ -78,7 +79,7 @@ public class GlobalChatService implements ChatWebSocketListener {
         }
 
         Log.d(TAG, "Initializing GlobalChatService...");
-        webSocketManager = new ChatWebSocketManager(SERVER_WEBSOCKET_URL, jwtToken, userId);
+        webSocketManager = new ChatWebSocketManager(SERVER_WEBSOCKET_URL, jwtToken, userId, userRoles);
         webSocketManager.setListener(this);
         webSocketManager.connect();
         

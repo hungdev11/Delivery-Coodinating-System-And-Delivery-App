@@ -400,6 +400,31 @@ public class SettingsService {
     }
 
     /**
+     * Bulk upsert multiple settings in a group
+     * More efficient than calling upsertByKeyAndGroup multiple times
+     */
+    @Transactional
+    @CacheEvict(value = {"settings", "settingsByGroup"}, allEntries = true)
+    public List<SystemSettingDto> bulkUpsertByGroup(String group, List<CreateSettingRequest> requests, String userId) {
+        List<SystemSettingDto> results = new ArrayList<>();
+        
+        for (CreateSettingRequest request : requests) {
+            // Ensure group matches
+            if (!group.equals(request.getGroup())) {
+                log.warn("Skipping setting {} - group mismatch (expected: {}, got: {})", 
+                    request.getKey(), group, request.getGroup());
+                continue;
+            }
+            
+            SystemSettingDto result = upsertByKeyAndGroup(request.getKey(), group, request, userId);
+            results.add(result);
+        }
+        
+        log.info("Bulk upserted {} settings in group: {}", results.size(), group);
+        return results;
+    }
+
+    /**
      * Convert entity to DTO
      */
     private SystemSettingDto toDto(SystemSetting setting) {

@@ -38,16 +38,19 @@ public class PagingRequestV0 {
     /**
      * Sort configuration (optional)
      */
+    @Builder.Default
     private Optional<List<SortConfig>> sorts = Optional.empty();
     
     /**
      * Global search term (optional)
      */
+    @Builder.Default
     private Optional<String> search = Optional.empty();
     
     /**
      * Selected item IDs (optional)
      */
+    @Builder.Default
     private Optional<List<String>> selected = Optional.empty();
     
     /**

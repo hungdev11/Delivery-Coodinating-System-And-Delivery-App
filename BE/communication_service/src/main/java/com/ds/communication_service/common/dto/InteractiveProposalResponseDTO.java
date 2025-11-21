@@ -22,6 +22,7 @@ public class InteractiveProposalResponseDTO {
 
     private String actionType; // Ví dụ: "ACCEPT_DECLINE", "DATE_PICKER"
     private String resultData; // Ví dụ: "2025-11-10"
+    private UUID sessionId; // ID của delivery session liên quan
 
     public static InteractiveProposalResponseDTO from (InteractiveProposal p) {
         if (p == null) {
@@ -36,6 +37,7 @@ public class InteractiveProposalResponseDTO {
             .type(p.getType().name())
             .actionType(p.getActionType().name())
             .resultData(p.getResultData())
+            .sessionId(p.getSessionId())
             .build();
     }
 }

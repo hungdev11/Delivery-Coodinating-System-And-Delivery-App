@@ -1,0 +1,144 @@
+{
+  "group": {
+    "default": {
+      "targets": [
+        "settings-service",
+        "zone-service",
+        "user-service",
+        "api-gateway",
+        "communication-service",
+        "management-system-builder",
+        "session-service",
+        "parcel-service"
+      ]
+    }
+  },
+  "target": {
+    "api-gateway": {
+      "context": "E:\\graduate\\DS\\BE\\api-gateway",
+      "dockerfile": "E:\\graduate\\DS\\BE\\api-gateway\\Dockerfile",
+      "labels": {
+        "com.docker.compose.project": "ds",
+        "com.docker.compose.service": "api-gateway",
+        "com.docker.compose.version": "2.39.2"
+      },
+      "tags": [
+        "ds-api-gateway"
+      ],
+      "output": [
+        "type=docker"
+      ]
+    },
+    "communication-service": {
+      "context": "E:\\graduate\\DS\\BE\\communication_service",
+      "dockerfile": "E:\\graduate\\DS\\BE\\communication_service\\Dockerfile",
+      "labels": {
+        "com.docker.compose.project": "ds",
+        "com.docker.compose.service": "communication-service",
+        "com.docker.compose.version": "2.39.2"
+      },
+      "tags": [
+        "ds-communication-service"
+      ],
+      "output": [
+        "type=docker"
+      ]
+    },
+    "management-system-builder": {
+      "context": "E:\\graduate\\DS\\ManagementSystem",
+      "dockerfile": "E:\\graduate\\DS\\ManagementSystem\\Dockerfile",
+      "args": {
+        "VITE_API_URL": "/api",
+        "VITE_ENV": "production",
+        "VITE_MAPTILER_API_KEY": "XuyAZb57rLLbRvyY5lVN",
+        "VITE_WS_URL": "/api/ws"
+      },
+      "labels": {
+        "com.docker.compose.project": "ds",
+        "com.docker.compose.service": "management-system-builder",
+        "com.docker.compose.version": "2.39.2"
+      },
+      "tags": [
+        "dss-management-system:builder"
+      ],
+      "output": [
+        "type=docker"
+      ]
+    },
+    "parcel-service": {
+      "context": "E:\\graduate\\DS\\BE\\parcel-service",
+      "dockerfile": "E:\\graduate\\DS\\BE\\parcel-service\\Dockerfile",
+      "labels": {
+        "com.docker.compose.project": "ds",
+        "com.docker.compose.service": "parcel-service",
+        "com.docker.compose.version": "2.39.2"
+      },
+      "tags": [
+        "ds-parcel-service"
+      ],
+      "output": [
+        "type=docker"
+      ]
+    },
+    "session-service": {
+      "context": "E:\\graduate\\DS\\BE\\session-service",
+      "dockerfile": "E:\\graduate\\DS\\BE\\session-service\\Dockerfile",
+      "labels": {
+        "com.docker.compose.project": "ds",
+        "com.docker.compose.service": "session-service",
+        "com.docker.compose.version": "2.39.2"
+      },
+      "tags": [
+        "ds-session-service"
+      ],
+      "output": [
+        "type=docker"
+      ]
+    },
+    "settings-service": {
+      "context": "E:\\graduate\\DS\\BE\\Settings_service",
+      "dockerfile": "E:\\graduate\\DS\\BE\\Settings_service\\Dockerfile",
+      "labels": {
+        "com.docker.compose.project": "ds",
+        "com.docker.compose.service": "settings-service",
+        "com.docker.compose.version": "2.39.2"
+      },
+      "tags": [
+        "ds-settings-service"
+      ],
+      "output": [
+        "type=docker"
+      ]
+    },
+    "user-service": {
+      "context": "E:\\graduate\\DS\\BE\\User_service",
+      "dockerfile": "E:\\graduate\\DS\\BE\\User_service\\Dockerfile",
+      "labels": {
+        "com.docker.compose.project": "ds",
+        "com.docker.compose.service": "user-service",
+        "com.docker.compose.version": "2.39.2"
+      },
+      "tags": [
+        "ds-user-service"
+      ],
+      "output": [
+        "type=docker"
+      ]
+    },
+    "zone-service": {
+      "context": "E:\\graduate\\DS\\BE\\zone_service",
+      "dockerfile": "E:\\graduate\\DS\\BE\\zone_service\\Dockerfile",
+      "labels": {
+        "com.docker.compose.project": "ds",
+        "com.docker.compose.service": "zone-service",
+        "com.docker.compose.version": "2.39.2"
+      },
+      "tags": [
+        "ds-zone-service"
+      ],
+      "output": [
+        "type=docker"
+      ]
+    }
+  }
+}

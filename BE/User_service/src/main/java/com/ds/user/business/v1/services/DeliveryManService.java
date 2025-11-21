@@ -16,6 +16,7 @@ import com.ds.user.common.helper.GenericQueryService;
 import com.ds.user.common.interfaces.IDeliveryManService;
 import com.ds.user.common.utils.EnhancedQueryParser;
 import com.ds.user.common.utils.EnhancedQueryParserV2;
+import com.ds.user.infrastructure.kafka.UserEventPublisher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
@@ -37,6 +38,9 @@ public class DeliveryManService implements IDeliveryManService {
     @Autowired
     private FilterableFieldRegistry fieldRegistry;
 
+    @Autowired(required = false)
+    private UserEventPublisher userEventPublisher;
+
     @Override
     @Transactional
     public DeliveryManDto createDeliveryMan(CreateDeliveryManRequest request) {
@@ -56,6 +60,12 @@ public class DeliveryManService implements IDeliveryManService {
                 .build();
 
         DeliveryMan saved = deliveryManRepository.save(deliveryMan);
+        
+        // Publish event for snapshot synchronization
+        if (userEventPublisher != null) {
+            userEventPublisher.publishDeliveryManCreated(saved, user);
+        }
+        
         return mapToDto(saved);
     }
 
@@ -71,15 +81,31 @@ public class DeliveryManService implements IDeliveryManService {
         }
 
         DeliveryMan updated = deliveryManRepository.save(deliveryMan);
+        
+        // Get user for event publishing
+        User user = updated.getUser();
+        
+        // Publish event for snapshot synchronization
+        if (userEventPublisher != null) {
+            userEventPublisher.publishDeliveryManUpdated(updated, user);
+        }
+        
         return mapToDto(updated);
     }
 
     @Override
     @Transactional
     public void deleteDeliveryMan(UUID id) {
-        if (!deliveryManRepository.existsById(id)) {
-            throw new RuntimeException("Delivery man not found with id: " + id);
+        DeliveryMan deliveryMan = deliveryManRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Delivery man not found with id: " + id));
+        
+        String userId = deliveryMan.getUser().getId();
+        
+        // Publish event before deletion
+        if (userEventPublisher != null) {
+            userEventPublisher.publishDeliveryManDeleted(userId);
         }
+        
         deliveryManRepository.deleteById(id);
     }
 

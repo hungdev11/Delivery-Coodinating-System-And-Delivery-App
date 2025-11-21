@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 @FeignClient(
-    name = "api-gateway", 
-    url = "http://api-gateway:21500"
+    name = "zone-service", 
+    url = "${services.zone.base-url:http://zone-service:21503}"
 )
 public interface ZoneClient {
     @GetMapping("/api/v1/addresses/{id}")

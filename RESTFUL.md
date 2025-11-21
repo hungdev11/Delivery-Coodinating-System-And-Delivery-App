@@ -600,3 +600,112 @@ Response:
   "message": "User created successfully"
 }
 ```
+
+---
+
+## Header Rules
+
+### Standard Headers
+
+All API requests and WebSocket connections must follow these header conventions:
+
+#### For REST API Requests
+
+**Clients (ManagementSystem, DeliveryApp):**
+- **Authorization**: `Bearer <JWT_TOKEN>` - JWT token for authentication
+- **Content-Type**: `application/json` (for POST/PUT requests)
+
+**API Gateway:**
+- Extracts user ID and roles from JWT token
+- Forwards to downstream services:
+  - **X-User-Id**: User ID extracted from JWT token
+  - **X-User-Roles**: Comma-separated list of user roles (e.g., `ADMIN,SHIPPER,CLIENT`)
+  - Filters out Keycloak default roles (`default-roles-delivery-system`, `offline_access`, `uma_authorization`)
+
+**Downstream Services:**
+- Receive headers from API Gateway:
+  - **X-User-Id**: User ID (required for authenticated endpoints)
+  - **X-User-Roles**: Comma-separated roles (optional, for role-based authorization)
+
+#### For WebSocket Connections
+
+**Clients (ManagementSystem, DeliveryApp):**
+- **Authorization**: `Bearer <USER_ID>` - User ID (not JWT token) for WebSocket authentication
+- **X-User-Id**: User ID (for consistency)
+- **X-User-Roles**: Comma-separated list of user roles (optional)
+- **Client-Type**: `WEB` (ManagementSystem) or `ANDROID` (DeliveryApp)
+
+**Communication Service:**
+- Accepts WebSocket connections with:
+  - **Authorization** header (preferred): `Bearer <USER_ID>`
+  - **X-User-Id** header (fallback): User ID if Authorization header is missing
+  - **X-User-Roles** header (optional): For logging and future role-based features
+  - **Client-Type** header: To identify client type for targeted notifications
+
+### Header Examples
+
+#### REST API Request (from Client)
+```http
+POST /api/v1/parcels
+Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+
+{
+  "code": "PARCEL001",
+  "senderId": "user-123"
+}
+```
+
+#### API Gateway → Downstream Service
+```http
+POST /api/v1/parcels
+X-User-Id: user-123
+X-User-Roles: ADMIN,SHIPPER
+Content-Type: application/json
+
+{
+  "code": "PARCEL001",
+  "senderId": "user-123"
+}
+```
+
+#### WebSocket Connection (ManagementSystem)
+```javascript
+const client = new Client({
+  connectHeaders: {
+    Authorization: `Bearer ${userId}`,
+    'X-User-Id': userId,
+    'X-User-Roles': 'ADMIN,CLIENT',
+    'Client-Type': 'WEB'
+  }
+})
+```
+
+#### WebSocket Connection (DeliveryApp)
+```java
+Map<String, String> headers = new HashMap<>();
+headers.put("Authorization", "Bearer " + userId);
+headers.put("X-User-Id", userId);
+headers.put("X-User-Roles", String.join(",", userRoles));
+headers.put("Client-Type", "ANDROID");
+```
+
+### Important Notes
+
+1. **JWT Token vs User ID**: 
+   - REST API uses JWT token in `Authorization` header
+   - WebSocket uses User ID in `Authorization` header (not JWT token)
+
+2. **Role Format**: 
+   - Roles are comma-separated strings: `"ADMIN,SHIPPER,CLIENT"`
+   - No spaces after commas
+   - Sorted alphabetically for consistency
+
+3. **Header Forwarding**:
+   - API Gateway automatically extracts and forwards `X-User-Id` and `X-User-Roles`
+   - Clients should NOT manually set these headers for REST API requests
+   - Clients MUST set these headers for WebSocket connections
+
+4. **Backward Compatibility**:
+   - Services should handle missing `X-User-Roles` header gracefully
+   - `X-User-Id` is required for authenticated endpoints

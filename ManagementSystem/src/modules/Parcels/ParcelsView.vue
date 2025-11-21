@@ -29,6 +29,8 @@ import type { SortingState, Column } from '@tanstack/table-core'
 import type { FilterCondition, FilterGroup } from '../../common/types/filter'
 import { createSortConfig } from '../../common/utils/query-builder'
 import TableHeaderCell from '../../common/components/TableHeaderCell.vue'
+import { useRouter } from 'vue-router'
+import { getCurrentUser } from '@/common/guards/roleGuard.guard'
 
 // Dynamic imports to avoid TypeScript issues
 const PageHeader = defineAsyncComponent(() => import('../../common/components/PageHeader.vue'))
@@ -44,6 +46,8 @@ const UButton = resolveComponent('UButton')
 const overlay = useOverlay()
 const table = useTemplateRef('table')
 const toast = useToast()
+const router = useRouter()
+const currentUser = getCurrentUser()
 
 // Export composable
 const { exportParcels } = useParcelExport()
@@ -292,13 +296,17 @@ const columns: TableColumn<ParcelDto>[] = [
         column,
         config: {
           variant: 'ghost',
-          label: 'Sender ID',
+          label: 'Sender',
           class: '-mx-2.5',
           activeColor: 'primary',
           inactiveColor: 'neutral',
           filterable: true,
         },
       }),
+    cell: ({ row }) => {
+      const parcel = row.original
+      return h('span', parcel.senderName || parcel.senderId)
+    },
   },
   {
     accessorKey: 'receiverId',
@@ -307,13 +315,17 @@ const columns: TableColumn<ParcelDto>[] = [
         column,
         config: {
           variant: 'ghost',
-          label: 'Receiver ID',
+          label: 'Receiver',
           class: '-mx-2.5',
           activeColor: 'primary',
           inactiveColor: 'neutral',
           filterable: true,
         },
       }),
+    cell: ({ row }) => {
+      const parcel = row.original
+      return h('span', parcel.receiverName || parcel.receiverId)
+    },
   },
   {
     accessorKey: 'deliveryType',
@@ -442,6 +454,13 @@ const columns: TableColumn<ParcelDto>[] = [
       const parcel = row.original
       return h('div', { class: 'flex space-x-2' }, [
         h(UButton, {
+          icon: 'i-heroicons-chat-bubble-left-right',
+          size: 'sm',
+          variant: 'ghost',
+          title: 'Chat with receiver',
+          onClick: () => openChat(parcel),
+        }),
+        h(UButton, {
           icon: 'i-heroicons-qr-code',
           size: 'sm',
           variant: 'ghost',
@@ -539,6 +558,26 @@ const openQRModal = async (parcel: ParcelDto) => {
   const modal = overlay.create(LazyParcelQRModal)
   const instance = modal.open({ parcelId: parcel.id, parcelCode: parcel.code })
   await instance.result
+}
+
+/**
+ * Open chat with receiver
+ */
+const openChat = async (parcel: ParcelDto) => {
+  if (!currentUser?.id || !parcel.receiverId) {
+    toast.add({
+      title: 'Error',
+      description: 'Cannot open chat: missing user or receiver information',
+      color: 'error',
+    })
+    return
+  }
+
+  // Navigate to chat with receiver
+  router.push({
+    name: 'communication-chat',
+    query: { partnerId: parcel.receiverId },
+  })
 }
 
 /**

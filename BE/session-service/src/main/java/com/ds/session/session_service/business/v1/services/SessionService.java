@@ -14,26 +14,36 @@ import com.ds.session.session_service.app_context.models.DeliveryAssignment;
 import com.ds.session.session_service.app_context.models.DeliverySession;
 import com.ds.session.session_service.app_context.repositories.DeliveryAssignmentRepository;
 import com.ds.session.session_service.app_context.repositories.DeliverySessionRepository;
-import com.ds.session.session_service.application.client.parcelclient.ParcelServiceClient;
+import com.ds.session.session_service.application.client.parcelclient.ParcelServiceClient; 
 import com.ds.session.session_service.application.client.parcelclient.response.ParcelResponse;
 import com.ds.session.session_service.application.client.userclient.UserServiceClient;
 import com.ds.session.session_service.application.client.userclient.response.DeliveryManResponse;
 import com.ds.session.session_service.application.client.zoneclient.ZoneServiceClient;
 import com.ds.session.session_service.application.client.zoneclient.request.RouteRequest;
 import com.ds.session.session_service.application.client.zoneclient.response.RouteResponse;
+import com.ds.session.session_service.common.entities.dto.common.PagedData;
 import com.ds.session.session_service.common.entities.dto.request.CreateSessionRequest;
+import com.ds.session.session_service.common.entities.dto.request.PagingRequestV2;
 import com.ds.session.session_service.common.entities.dto.response.AssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.SessionResponse;
+import com.ds.session.session_service.common.entities.dto.sort.SortConfig;
 import com.ds.session.session_service.common.enums.AssignmentStatus;
 import com.ds.session.session_service.common.enums.ParcelEvent;
 import com.ds.session.session_service.common.enums.SessionStatus;
 import com.ds.session.session_service.common.exceptions.ResourceNotFound;
 import com.ds.session.session_service.common.interfaces.ISessionService;
+import com.ds.session.session_service.common.utils.EnhancedQueryParserV2;
+import com.ds.session.session_service.infrastructure.kafka.ParcelEventPublisher;
 
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 
 @Service
 @RequiredArgsConstructor
@@ -42,7 +52,8 @@ public class SessionService implements ISessionService {
 
     private final DeliverySessionRepository sessionRepository;
     private final DeliveryAssignmentRepository assignmentRepository;
-    private final ParcelServiceClient parcelApiClient;
+    private final ParcelServiceClient parcelApiClient; 
+    private final ParcelEventPublisher parcelEventPublisher;
     private final UserServiceClient userServiceClient;
     private final ZoneServiceClient zoneServiceClient;
     
@@ -55,10 +66,13 @@ public class SessionService implements ISessionService {
     @Override
     @Transactional
     public AssignmentResponse acceptParcelToSession(String deliveryManId, String parcelId) {
+        long startTime = System.currentTimeMillis();
         log.info("Processing scan for parcel {} by shipper {}", parcelId, deliveryManId);
 
         // 1. Kiểm tra trạng thái đơn hàng từ ParcelService
+        long fetchStart = System.currentTimeMillis();
         ParcelResponse parcelInfo = parcelApiClient.fetchParcelResponse(parcelId);
+        log.debug("Fetched parcel info in {}ms", System.currentTimeMillis() - fetchStart);
         if (parcelInfo == null || !"IN_WAREHOUSE".equals(parcelInfo.getStatus())) {
             throw new IllegalStateException("Parcel " + parcelId + " is not IN_WAREHOUSE or does not exist. Current status: " + (parcelInfo != null ? parcelInfo.getStatus() : "N/A"));
         }
@@ -131,7 +145,9 @@ public class SessionService implements ISessionService {
                 sessionToUse.getId(), currentParcelCount);
             
             // Validate routing time
+            long routingStart = System.currentTimeMillis();
             validateRoutingTime(sessionToUse, parcelInfo);
+            log.info("Routing validation completed in {}ms", System.currentTimeMillis() - routingStart);
         }
 
         // 8. Liên kết task vào session
@@ -139,15 +155,16 @@ public class SessionService implements ISessionService {
 
         // 9. Gọi Parcel-Service để cập nhật trạng thái đơn hàng
         try {
-            parcelApiClient.changeParcelStatus(parcelId, ParcelEvent.SCAN_QR);
+            parcelEventPublisher.publish(parcelId, ParcelEvent.SCAN_QR);
         } catch (Exception e) {
-            log.error("Failed to call Parcel-Service for parcel {}: {}", parcelId, e.getMessage());
-            throw new RuntimeException("Failed to update parcel status via API: " + e.getMessage(), e);
+            log.error("Failed to publish parcel status event for parcel {}: {}", parcelId, e.getMessage());
+            throw new RuntimeException("Failed to publish parcel status event: " + e.getMessage(), e);
         }
 
         // 10. Lưu session (và task mới sẽ được lưu theo nhờ CascadeType.ALL)
         sessionRepository.save(sessionToUse);
-        log.info("Successfully added parcel {} to session {}.", parcelId, sessionToUse.getId());
+        long totalTime = System.currentTimeMillis() - startTime;
+        log.info("Successfully added parcel {} to session {} in {}ms.", parcelId, sessionToUse.getId(), totalTime);
 
         // Trả về task vừa được tạo
         return toAssignmentResponse(newAssignment);
@@ -189,11 +206,10 @@ public class SessionService implements ISessionService {
 
             // 4. TODO: Báo cho Parcel-Service biết đơn hàng này đã ON_ROUTE
             try {
-                parcelApiClient.changeParcelStatus(parcelId, ParcelEvent.SCAN_QR);
+                parcelEventPublisher.publish(parcelId, ParcelEvent.SCAN_QR);
             } catch (Exception e) {
-                // Xử lý nếu gọi API thất bại (ví dụ: dùng @Retryable)
-                log.error("Failed to call Parcel-Service for parcel {}: {}", parcelId, e.getMessage());
-                throw new RuntimeException("Failed to update parcel status via API: " + e.getMessage(), e);
+                log.error("Failed to publish parcel status event for parcel {}: {}", parcelId, e.getMessage());
+                throw new RuntimeException("Failed to publish parcel status event: " + e.getMessage(), e);
             }
         }
         
@@ -245,7 +261,25 @@ public class SessionService implements ISessionService {
 
         session.setStatus(SessionStatus.IN_PROGRESS);
         DeliverySession savedSession = sessionRepository.save(session);
-        log.info("Session {} started successfully.", sessionId);
+        
+        // Update all parcels in the session to ON_ROUTE status
+        List<DeliveryAssignment> assignments = savedSession.getAssignments().stream()
+            .filter(a -> a.getStatus() == AssignmentStatus.IN_PROGRESS)
+            .toList();
+        
+        log.info("Session {} started. Updating {} parcels to ON_ROUTE status", sessionId, assignments.size());
+        
+        for (DeliveryAssignment assignment : assignments) {
+            try {
+                parcelEventPublisher.publish(assignment.getParcelId(), ParcelEvent.SCAN_QR);
+                log.debug("Published SCAN_QR event for parcel {} to update to ON_ROUTE", assignment.getParcelId());
+            } catch (Exception e) {
+                log.error("Failed to publish SCAN_QR event for parcel {}: {}", assignment.getParcelId(), e.getMessage());
+                // Don't throw - continue with other parcels
+            }
+        }
+        
+        log.info("Session {} started successfully. {} parcels updated to ON_ROUTE", sessionId, assignments.size());
 
         return toSessionResponse(savedSession);
     }
@@ -445,6 +479,8 @@ public class SessionService implements ISessionService {
 
             // Lấy thông tin location của tất cả parcels
             List<RouteRequest.Waypoint> waypoints = new ArrayList<>();
+            log.debug("Fetching location info for {} parcels for routing validation", parcelIds.size());
+            long fetchStart = System.currentTimeMillis();
             for (String pid : parcelIds) {
                 ParcelResponse parcel = parcelApiClient.fetchParcelResponse(pid);
                 if (parcel == null || parcel.getLat() == null || parcel.getLon() == null) {
@@ -459,6 +495,7 @@ public class SessionService implements ISessionService {
                     .build();
                 waypoints.add(waypoint);
             }
+            log.debug("Fetched {} waypoints in {}ms", waypoints.size(), System.currentTimeMillis() - fetchStart);
 
             if (waypoints.size() < 2) {
                 log.warn("Not enough waypoints for routing validation. Skipping.");
@@ -472,7 +509,10 @@ public class SessionService implements ISessionService {
                 .annotations(false)
                 .build();
 
+            log.debug("Calling zone-service to calculate route for {} waypoints", waypoints.size());
+            long routeStart = System.currentTimeMillis();
             RouteResponse routeResponse = zoneServiceClient.calculateRoute(routeRequest);
+            log.debug("Route calculation completed in {}ms", System.currentTimeMillis() - routeStart);
             
             if (routeResponse == null || routeResponse.getRoute() == null) {
                 log.warn("Failed to get routing response. Allowing parcel addition.");
@@ -586,5 +626,70 @@ public class SessionService implements ISessionService {
             .scanedAt(assignment.getScanedAt())
             .updatedAt(assignment.getUpdatedAt())
             .build();
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public PagedData<SessionResponse> searchSessionsV2(PagingRequestV2 request) {
+        log.info("Searching delivery sessions with V2 filters: page={}, size={}", request.getPage(), request.getSize());
+        
+        // Build specification from V2 filters
+        Specification<DeliverySession> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
+        if (request.getFiltersOrNull() != null) {
+            Specification<DeliverySession> filterSpec = EnhancedQueryParserV2.parseFilterGroup(request.getFiltersOrNull(), DeliverySession.class);
+            if (filterSpec != null) {
+                spec = filterSpec;
+            }
+        }
+        
+        // Build sort
+        Sort sort = buildSort(request.getSortsOrEmpty());
+        
+        // Build pageable
+        Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), sort);
+        
+        // Execute query
+        Page<DeliverySession> page = sessionRepository.findAll(spec, pageable);
+        
+        // Convert to SessionResponse
+        List<SessionResponse> sessionResponses = page.getContent().stream()
+            .map(this::toSessionResponse)
+            .collect(Collectors.toList());
+        
+        // Build paged data response
+        PagedData.Paging<String> paging = PagedData.Paging.<String>builder()
+            .page(page.getNumber())
+            .size(page.getSize())
+            .totalElements(page.getTotalElements())
+            .totalPages(page.getTotalPages())
+            .filters(request.getFiltersOrNull())
+            .sorts(request.getSortsOrEmpty())
+            .selected(request.getSelectedOrEmpty())
+            .build();
+        
+        return PagedData.<SessionResponse>builder()
+            .data(sessionResponses)
+            .page(paging)
+            .build();
+    }
+    
+    /**
+     * Build Sort from SortConfig list
+     */
+    private Sort buildSort(List<SortConfig> sortConfigs) {
+        if (sortConfigs == null || sortConfigs.isEmpty()) {
+            return Sort.by(Sort.Direction.DESC, "startTime"); // Default sort
+        }
+        
+        List<Sort.Order> orders = sortConfigs.stream()
+            .map(config -> {
+                Sort.Direction direction = "desc".equalsIgnoreCase(config.getDirection()) 
+                    ? Sort.Direction.DESC 
+                    : Sort.Direction.ASC;
+                return new Sort.Order(direction, config.getField());
+            })
+            .collect(Collectors.toList());
+        
+        return Sort.by(orders);
     }
 }

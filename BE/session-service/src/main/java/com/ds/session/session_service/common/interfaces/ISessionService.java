@@ -2,7 +2,9 @@ package com.ds.session.session_service.common.interfaces;
 
 import java.util.UUID;
 
+import com.ds.session.session_service.common.entities.dto.common.PagedData;
 import com.ds.session.session_service.common.entities.dto.request.CreateSessionRequest;
+import com.ds.session.session_service.common.entities.dto.request.PagingRequestV2;
 import com.ds.session.session_service.common.entities.dto.response.AssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.SessionResponse;
 
@@ -54,4 +56,11 @@ public interface ISessionService {
      * @return Thông tin phiên đang hoạt động, hoặc null nếu không có
      */
     SessionResponse getActiveSession(String deliveryManId);
+    
+    /**
+     * Search delivery sessions with V2 enhanced filtering
+     * @param request Paging request with filters, sorts, pagination
+     * @return PagedData with sessions
+     */
+    PagedData<SessionResponse> searchSessionsV2(PagingRequestV2 request);
 }

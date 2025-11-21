@@ -26,6 +26,7 @@ import com.ds.communication_service.common.interfaces.IConversationService;
 import com.ds.communication_service.common.interfaces.IMessageService;
 import com.ds.communication_service.app_context.repositories.MessageRepository;
 import com.ds.communication_service.business.v1.services.UserServiceClient;
+import com.ds.communication_service.business.v1.services.WebSocketSessionManager;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +41,7 @@ public class ConversationApiController {
     private final IConversationService conversationService;
     private final MessageRepository messageRepository;
     private final UserServiceClient userServiceClient;
+    private final WebSocketSessionManager webSocketSessionManager;
 
     @GetMapping("/{conversationId}/messages")
     public ResponseEntity<PageResponse<MessageResponse>> getMessages(
@@ -91,13 +93,43 @@ public class ConversationApiController {
     public ResponseEntity<List<ConversationResponse>> getMyConversations(
             @PathVariable String currentUserId
     ) {
-        List<Conversation> conversations = conversationService.getConversationsForUser(currentUserId);
+        try {
+            List<Conversation> conversations = conversationService.getConversationsForUser(currentUserId);
+            
+            if (conversations == null || conversations.isEmpty()) {
+                log.debug("No conversations found for user: {}", currentUserId);
+                return ResponseEntity.ok(List.of());
+            }
 
-        List<ConversationResponse> responseDtos = conversations.stream()
-                .map(conv -> mapToConversationResponse(conv, currentUserId)) 
-                .collect(Collectors.toList());
+            log.debug("Processing {} conversations for user: {}", conversations.size(), currentUserId);
+            
+            // Process conversations with error handling to prevent one failure from blocking all
+            List<ConversationResponse> responseDtos = conversations.stream()
+                    .map(conv -> {
+                        try {
+                            return mapToConversationResponse(conv, currentUserId);
+                        } catch (Exception e) {
+                            log.error("Error mapping conversation {} for user {}: {}", 
+                                    conv.getId(), currentUserId, e.getMessage(), e);
+                            // Return a minimal response instead of failing completely
+                            return ConversationResponse.builder()
+                                    .conversationId(conv.getId().toString())
+                                    .partnerId(conv.getUser1Id().equals(currentUserId) 
+                                            ? conv.getUser2Id() 
+                                            : conv.getUser1Id())
+                                    .partnerName("Unknown User")
+                                    .unreadCount(0)
+                                    .build();
+                        }
+                    })
+                    .collect(Collectors.toList());
 
-        return ResponseEntity.ok(responseDtos);
+            log.debug("Successfully processed {} conversations for user: {}", responseDtos.size(), currentUserId);
+            return ResponseEntity.ok(responseDtos);
+        } catch (Exception e) {
+            log.error("Error getting conversations for user {}: {}", currentUserId, e.getMessage(), e);
+            return ResponseEntity.ok(List.of()); // Return empty list instead of error
+        }
     }
 
     private ConversationResponse mapToConversationResponse(Conversation conversation, String currentUserId) {
@@ -106,23 +138,55 @@ public class ConversationApiController {
             ? conversation.getUser2Id() 
             : conversation.getUser1Id();
         
-        // Get last message time
-        LocalDateTime lastMessageTime = messageRepository
-            .findLastMessageTimeByConversationId(conversation.getId())
-            .orElse(conversation.getCreatedAt());
+        // Get last message time (with error handling)
+        LocalDateTime lastMessageTime;
+        try {
+            lastMessageTime = messageRepository
+                .findLastMessageTimeByConversationId(conversation.getId())
+                .orElse(conversation.getCreatedAt());
+        } catch (Exception e) {
+            log.warn("Error getting last message time for conversation {}: {}", 
+                    conversation.getId(), e.getMessage());
+            lastMessageTime = conversation.getCreatedAt();
+        }
         
-        // Get last message content
-        String lastMessageContent = messageRepository
-            .findLastMessageContentByConversationId(conversation.getId())
-            .orElse(null);
+        // Get last message content (with error handling)
+        // Simplified: just get from query, no expensive fallback queries
+        String lastMessageContent = null;
+        try {
+            lastMessageContent = messageRepository
+                .findLastMessageContentByConversationId(conversation.getId())
+                .orElse(null);
+            
+            // If empty string, convert to null for cleaner response
+            if (lastMessageContent != null && lastMessageContent.isEmpty()) {
+                lastMessageContent = null;
+            }
+        } catch (Exception e) {
+            log.warn("Error getting last message content for conversation {}: {}", 
+                    conversation.getId(), e.getMessage());
+            lastMessageContent = null;
+        }
         
         // Calculate unread count (messages where sender != currentUserId and status != READ)
-        long unreadCount = messageRepository.countUnreadMessagesByConversationIdAndUserId(
-            conversation.getId(), currentUserId
-        );
+        long unreadCount = 0;
+        try {
+            unreadCount = messageRepository.countUnreadMessagesByConversationIdAndUserId(
+                conversation.getId(), currentUserId
+            );
+        } catch (Exception e) {
+            log.warn("Error counting unread messages for conversation {}: {}", 
+                    conversation.getId(), e.getMessage());
+            unreadCount = 0;
+        }
         
-        // Fetch user info from User Service
-        UserInfoDto userInfo = userServiceClient.getUserById(partnerId);
+        // Fetch user info from User Service (with error handling)
+        UserInfoDto userInfo = null;
+        try {
+            userInfo = userServiceClient.getUserById(partnerId);
+        } catch (Exception e) {
+            log.warn("Error fetching user info for partnerId {}: {}", partnerId, e.getMessage());
+        }
         
         String partnerName;
         String partnerUsername = null;
@@ -132,7 +196,17 @@ public class ConversationApiController {
         } else {
             // Fallback if user service is unavailable
             partnerName = "User " + partnerId.substring(0, Math.min(4, partnerId.length()));
-            log.warn("Could not fetch user info for partnerId: {}, using fallback name", partnerId);
+            log.debug("Could not fetch user info for partnerId: {}, using fallback name", partnerId);
+        }
+        
+        // Check online status from WebSocket session manager (with error handling)
+        Boolean isOnline = null;
+        try {
+            if (webSocketSessionManager != null) {
+                isOnline = webSocketSessionManager.isUserOnline(partnerId);
+            }
+        } catch (Exception e) {
+            log.debug("Could not check online status for user {}: {}", partnerId, e.getMessage());
         }
         
         ConversationResponse dto = ConversationResponse.builder()
@@ -141,7 +215,7 @@ public class ConversationApiController {
             .partnerName(partnerName)
             .partnerUsername(partnerUsername)
             .partnerAvatar(null) // TODO: Add avatar support when available
-            .isOnline(null) // TODO: Implement online status tracking
+            .isOnline(isOnline)
             .lastMessageTime(lastMessageTime)
             .lastMessageContent(lastMessageContent)
             .unreadCount((int) unreadCount)

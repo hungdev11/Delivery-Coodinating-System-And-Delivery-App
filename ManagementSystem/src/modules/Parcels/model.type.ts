@@ -14,7 +14,9 @@ export class ParcelDto {
   id: string
   code: string
   senderId: string
+  senderName?: string // Full name from UserSnapshot
   receiverId: string
+  receiverName?: string // Full name from UserSnapshot
   receiverPhoneNumber?: string
   deliveryType: DeliveryType
   receiveFrom: string
@@ -34,7 +36,9 @@ export class ParcelDto {
     this.id = data.id
     this.code = data.code
     this.senderId = data.senderId
+    this.senderName = data.senderName
     this.receiverId = data.receiverId
+    this.receiverName = data.receiverName
     this.receiverPhoneNumber = data.receiverPhoneNumber
     this.deliveryType = data.deliveryType
     this.receiveFrom = data.receiveFrom

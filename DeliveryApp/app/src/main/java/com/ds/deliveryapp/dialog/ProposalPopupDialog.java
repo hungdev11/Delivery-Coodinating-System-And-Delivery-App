@@ -189,15 +189,37 @@ public class ProposalPopupDialog extends Dialog {
         }
 
         String proposalId = proposalMessage.getProposal().getId().toString();
-        ChatWebSocketManager webSocketManager = globalChatService.getWebSocketManager();
+        
+        // Convert action to resultData format expected by backend
+        String resultData;
+        if ("ACCEPT".equals(action) || "CONFIRM".equals(action)) {
+            resultData = "ACCEPTED";
+        } else if ("DECLINE".equals(action)) {
+            resultData = "DECLINED";
+        } else {
+            resultData = action; // Fallback for other actions
+        }
 
-        if (webSocketManager != null && webSocketManager.isConnected()) {
-            Map<String, Object> data = Map.of(
-                "proposalId", proposalId,
-                "action", action
-            );
-            webSocketManager.sendQuickAction(proposalId, action, data);
-            Log.d(TAG, "Sent proposal action: " + action + " for proposal: " + proposalId);
+        // Use REST API to respond to proposal (same as ChatActivity)
+        // This ensures proper resultData format is sent
+        try {
+            // Get ChatClient from GlobalChatService or create new instance
+            // For now, we'll use the WebSocket quick action but with proper resultData
+            ChatWebSocketManager webSocketManager = globalChatService.getWebSocketManager();
+            
+            if (webSocketManager != null && webSocketManager.isConnected()) {
+                // Send via WebSocket with resultData
+                Map<String, Object> data = new java.util.HashMap<>();
+                data.put("proposalId", proposalId);
+                data.put("action", action);
+                data.put("resultData", resultData);
+                webSocketManager.sendQuickAction(proposalId, action, data);
+                Log.d(TAG, "Sent proposal action: " + action + " with resultData: " + resultData + " for proposal: " + proposalId);
+            } else {
+                Log.e(TAG, "Cannot send proposal action: WebSocket not connected");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error sending proposal action", e);
         }
 
         dismiss();

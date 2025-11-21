@@ -67,6 +67,7 @@ public class MessageConsumer {
     /**
      * Consume message status updates from Kafka
      * Broadcast status changes via WebSocket to relevant users
+     * Note: This consumer expects MessageStatusUpdate, but may receive other types due to topic misconfiguration
      */
     @KafkaListener(
         topics = KafkaConfig.TOPIC_MESSAGE_STATUS,
@@ -74,15 +75,28 @@ public class MessageConsumer {
         containerFactory = "kafkaListenerContainerFactory"
     )
     public void consumeStatusUpdate(
-            @Payload MessageStatusUpdate statusUpdate,
+            @Payload Object payload,
             @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
             @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
             @Header(KafkaHeaders.OFFSET) long offset,
             Acknowledgment acknowledgment) {
         
         try {
-            log.debug("📥 Received status update from Kafka. Topic: {}, Partition: {}, Offset: {}", 
+            log.debug("📥 Received message from Kafka topic: {}, Partition: {}, Offset: {}", 
                 topic, partition, offset);
+            
+            // Check if payload is MessageStatusUpdate
+            if (!(payload instanceof MessageStatusUpdate)) {
+                log.warn("⚠️ Received unexpected message type in message-status-events topic: {}. Expected MessageStatusUpdate. Skipping...", 
+                    payload != null ? payload.getClass().getName() : "null");
+                // Acknowledge to skip this message and avoid reprocessing
+                if (acknowledgment != null) {
+                    acknowledgment.acknowledge();
+                }
+                return;
+            }
+            
+            MessageStatusUpdate statusUpdate = (MessageStatusUpdate) payload;
             
             // Send status update to message sender via WebSocket
             messagingTemplate.convertAndSendToUser(
@@ -101,7 +115,10 @@ public class MessageConsumer {
             
         } catch (Exception e) {
             log.error("❌ Error consuming status update from Kafka: {}", e.getMessage(), e);
-            // Don't acknowledge - message will be reprocessed
+            // Acknowledge to avoid infinite retry loop for malformed messages
+            if (acknowledgment != null) {
+                acknowledgment.acknowledge();
+            }
         }
     }
 

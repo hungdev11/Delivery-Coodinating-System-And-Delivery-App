@@ -121,11 +121,18 @@ export function useWebSocket() {
         return
       }
 
+      // Get user roles from token
+      const { getUserRoles: getUserRolesFromToken } = await import('@/common/utils/jwtDecode/jwtDecode.util')
+      const userRoles = getUserRolesFromToken(token)
+      const rolesHeader = userRoles.length > 0 ? userRoles.join(',') : ''
+
       const socket = new SockJS(getWebSocketUrl())
       const client = new Client({
         webSocketFactory: () => socket as any,
         connectHeaders: {
           Authorization: `Bearer ${userId}`, // Communication service expects userId in Bearer token
+          'X-User-Id': userId, // Also send as header for consistency
+          'X-User-Roles': rolesHeader, // Send roles as comma-separated string
         },
         reconnectDelay: 5000,
         heartbeatIncoming: 10000, // Server heartbeat every 10 seconds

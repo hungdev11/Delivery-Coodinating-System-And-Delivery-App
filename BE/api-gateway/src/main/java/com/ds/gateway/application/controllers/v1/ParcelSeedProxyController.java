@@ -1,14 +1,16 @@
 package com.ds.gateway.application.controllers.v1;
 
+import com.ds.gateway.application.controllers.support.ProxyControllerSupport;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Proxy controller for Parcel Seed endpoints - V1
@@ -20,7 +22,9 @@ import org.springframework.web.client.RestTemplate;
 @RequiredArgsConstructor
 public class ParcelSeedProxyController {
 
-    private final RestTemplate restTemplate;
+    private static final String USER_SERVICE = "user-service";
+
+    private final ProxyControllerSupport proxyControllerSupport;
 
     @Value("${services.user.base-url}")
     private String userServiceBaseUrl;
@@ -39,11 +43,6 @@ public class ParcelSeedProxyController {
     @PostMapping
     public ResponseEntity<?> seedParcels(@RequestBody Object requestBody) {
         log.info("POST /api/v1/parcels/seed - proxy to User Service");
-        try {
-            return restTemplate.postForEntity(parcelSeedUrl, requestBody, Object.class);
-        } catch (HttpClientErrorException | HttpServerErrorException ex) {
-            log.error("Parcel seed proxy failed: {}", ex.getMessage());
-            return ResponseEntity.status(ex.getStatusCode()).body(ex.getResponseBodyAsString());
-        }
+        return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.POST, parcelSeedUrl, requestBody);
     }
 }

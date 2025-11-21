@@ -1,5 +1,6 @@
 package com.ds.gateway.application.controllers.v1;
 
+import com.ds.gateway.annotations.AuthRequired;
 import com.ds.gateway.business.v1.services.DeliverySessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 @Validated
+@AuthRequired
 public class DeliverySessionController {
 
     private final DeliverySessionService deliverySessionService;

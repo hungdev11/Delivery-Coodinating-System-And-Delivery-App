@@ -25,6 +25,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.ds.deliveryapp.adapter.TasksAdapter;
 import com.ds.deliveryapp.clients.SessionClient;
 import com.ds.deliveryapp.clients.req.SessionFailRequest;
+import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.DeliverySession;
 import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.clients.res.UpdateNotification;
@@ -134,22 +135,26 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
      */
     private void checkActiveSession() {
         SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
-        Call<DeliverySession> call = service.getActiveSession(driverId);
+        Call<BaseResponse<DeliverySession>> call = service.getActiveSession(driverId);
         
-        call.enqueue(new Callback<DeliverySession>() {
+        call.enqueue(new Callback<BaseResponse<DeliverySession>>() {
             @Override
-            public void onResponse(Call<DeliverySession> call, Response<DeliverySession> response) {
+            public void onResponse(Call<BaseResponse<DeliverySession>> call, Response<BaseResponse<DeliverySession>> response) {
                 if (response.isSuccessful() && response.body() != null) {
-                    // Active session found - show tasks
-                    DeliverySession session = response.body();
-                    activeSessionId = session.getId().toString();
-                    activeSessionStatus = session.getStatus().toString();
-                    Log.d(TAG, "Active session found: " + activeSessionId + ", Status: " + activeSessionStatus);
-                    resetAndFetchTasks();
-                } else if (response.code() == 204) {
-                    // No active session - navigate to dashboard
-                    Log.d(TAG, "No active session found. Navigating to dashboard.");
-                    navigateToDashboard();
+                    BaseResponse<DeliverySession> baseResponse = response.body();
+                    // Check if result exists (active session found)
+                    if (baseResponse.getResult() != null) {
+                        // Active session found - show tasks
+                        DeliverySession session = baseResponse.getResult();
+                        activeSessionId = session.getId().toString();
+                        activeSessionStatus = session.getStatus().toString();
+                        Log.d(TAG, "Active session found: " + activeSessionId + ", Status: " + activeSessionStatus);
+                        resetAndFetchTasks();
+                    } else {
+                        // No active session (result is null, message indicates no session)
+                        Log.d(TAG, "No active session found: " + baseResponse.getMessage());
+                        navigateToDashboard();
+                    }
                 } else {
                     // Error - try to fetch tasks anyway
                     Log.w(TAG, "Error checking active session: " + response.code());
@@ -158,7 +163,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             }
 
             @Override
-            public void onFailure(Call<DeliverySession> call, Throwable t) {
+            public void onFailure(Call<BaseResponse<DeliverySession>> call, Throwable t) {
                 Log.e(TAG, "Network error checking active session: " + t.getMessage());
                 // On error, try to fetch tasks anyway
                 resetAndFetchTasks();

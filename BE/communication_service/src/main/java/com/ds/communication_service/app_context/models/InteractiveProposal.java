@@ -106,4 +106,12 @@ public class InteractiveProposal {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * ID của delivery session mà proposal này liên quan đến.
+     * Nếu proposal được tạo trong context của một session đang hoạt động,
+     * proposal này sẽ ảnh hưởng đến tất cả assignments trong session đó.
+     */
+    @Column(name = "session_id", nullable = true)
+    private UUID sessionId;
 }

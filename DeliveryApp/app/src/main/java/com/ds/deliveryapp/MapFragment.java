@@ -33,6 +33,7 @@ import androidx.fragment.app.Fragment;
 import com.ds.deliveryapp.clients.RoutingApi;
 import com.ds.deliveryapp.clients.SessionClient;
 import com.ds.deliveryapp.clients.req.RoutingRequestDto;
+import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.DeliverySession;
 import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.clients.res.RoutingResponseDto;
@@ -1265,9 +1266,9 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         // Check session status asynchronously
         new Thread(() -> {
             try {
-                Response<DeliverySession> response = sessionClient.getActiveSession(driverId).execute();
+                Response<BaseResponse<DeliverySession>> response = sessionClient.getActiveSession(driverId).execute();
                 
-                if (!response.isSuccessful() || response.code() == 204 || response.body() == null) {
+                if (!response.isSuccessful() || response.body() == null) {
                     // No active session - session ended (COMPLETED or FAILED)
                     Log.w(TAG, "No active session found. Session may have ended. Cleaning up map...");
                     if (getActivity() != null) {
@@ -1276,7 +1277,17 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                     return;
                 }
                 
-                DeliverySession session = response.body();
+                BaseResponse<DeliverySession> baseResponse = response.body();
+                if (baseResponse.getResult() == null) {
+                    // No active session (result is null)
+                    Log.w(TAG, "No active session found: " + baseResponse.getMessage());
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> cleanupMap());
+                    }
+                    return;
+                }
+                
+                DeliverySession session = baseResponse.getResult();
                 String status = session.getStatus();
                 
                 if ("COMPLETED".equals(status) || "FAILED".equals(status)) {

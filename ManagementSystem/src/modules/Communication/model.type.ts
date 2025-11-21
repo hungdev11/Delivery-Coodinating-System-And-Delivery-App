@@ -37,6 +37,8 @@ export interface ConversationResponse {
   partnerUsername?: string | null // Add username for display
   isOnline?: boolean | null // Online status (null if unavailable)
   lastMessageTime?: string | null // ISO date string of last message time
+  lastMessageContent?: string | null // Content of last message
+  unreadCount?: number // Number of unread messages
 }
 
 /**
@@ -67,6 +69,7 @@ export interface InteractiveProposalResponseDTO {
   data: string // JSON string
   actionType: string
   resultData?: string | null
+  sessionId?: string | null // ID of delivery session this proposal relates to
 }
 
 /**
@@ -80,6 +83,7 @@ export interface CreateProposalRequest {
   fallbackContent?: string // Optional: text content to display in message
   senderId: string
   senderRoles: string[] // Array of role strings
+  sessionId?: string // Optional: ID of delivery session this proposal relates to
 }
 
 /**

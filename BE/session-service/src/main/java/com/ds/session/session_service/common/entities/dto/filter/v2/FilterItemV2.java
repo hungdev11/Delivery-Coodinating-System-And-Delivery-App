@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @NoArgsConstructor
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type", defaultImpl = FilterGroupItemV2.class, visible = true)
 @JsonSubTypes({
     @JsonSubTypes.Type(value = FilterConditionItemV2.class, name = "condition"),
     @JsonSubTypes.Type(value = FilterOperatorItemV2.class, name = "operator"),

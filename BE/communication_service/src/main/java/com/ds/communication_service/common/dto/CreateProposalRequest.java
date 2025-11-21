@@ -25,5 +25,10 @@ public class CreateProposalRequest {
 
     private String senderId;
     private Collection<String> senderRoles;
+    
+    /**
+     * ID của delivery session mà proposal này liên quan đến.
+     * Nếu được cung cấp, proposal sẽ ảnh hưởng đến tất cả assignments trong session đó.
+     */
+    private UUID sessionId;
 }
-

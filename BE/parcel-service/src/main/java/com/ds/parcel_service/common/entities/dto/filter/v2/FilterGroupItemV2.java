@@ -1,5 +1,6 @@
 package com.ds.parcel_service.common.entities.dto.filter.v2;
 
+import com.fasterxml.jackson.annotation.JsonTypeName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,6 +18,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonTypeName("group")
 public class FilterGroupItemV2 extends FilterItemV2 {
     /**
      * List of filter items (conditions, operators, or nested groups)

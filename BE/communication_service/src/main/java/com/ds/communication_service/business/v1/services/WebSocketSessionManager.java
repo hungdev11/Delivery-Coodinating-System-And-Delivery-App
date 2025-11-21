@@ -126,12 +126,27 @@ public class WebSocketSessionManager {
             log.warn("⚠️ Cannot unregister session {}: userId not found", sessionId);
         }
     }
+
+    public String findUserIdBySession(String sessionId) {
+        return sessionToUser.get(sessionId);
+    }
     
     /**
      * Check if a user has active WebSocket connections
      */
     public boolean isUserConnected(String userId) {
         return userSessions.containsKey(userId) && !userSessions.get(userId).isEmpty();
+    }
+    
+    /**
+     * Check if a user is online (has active WebSocket connections)
+     * Alias for isUserConnected for better readability
+     */
+    public Boolean isUserOnline(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+        return isUserConnected(userId);
     }
     
     /**

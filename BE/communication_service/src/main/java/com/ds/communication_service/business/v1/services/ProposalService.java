@@ -86,6 +86,7 @@ public class ProposalService implements IProposalService{
         proposal.setType(dto.getType()); 
         proposal.setData(dto.getData());
         proposal.setStatus(ProposalStatus.PENDING);
+        proposal.setSessionId(dto.getSessionId()); // Set sessionId if provided
         
         proposal.setActionType(config.getResponseActionType()); 
         
@@ -165,12 +166,18 @@ public class ProposalService implements IProposalService{
             savedProposal.getProposerId(), "/queue/proposal-updates", updateDto
         );
         
-        if (proposal.getType().equals(ProposalType.CONFIRM_REFUSAL)) {
-            callRefuseParcelApi(proposal.getProposerId(), proposal.getData());
-        }
+        // Only call external APIs if proposal is ACCEPTED
+        if (savedProposal.getStatus() == ProposalStatus.ACCEPTED) {
+            if (proposal.getType().equals(ProposalType.CONFIRM_REFUSAL)) {
+                callRefuseParcelApi(proposal.getProposerId(), proposal.getData());
+            }
 
-        if (proposal.getType().equals(ProposalType.POSTPONE_REQUEST)) {
-            callPostponeParcelApi(currentUserId, proposal.getData());
+            if (proposal.getType().equals(ProposalType.POSTPONE_REQUEST)) {
+                // For POSTPONE_REQUEST: proposer is CLIENT, recipient is SHIPPER
+                // When SHIPPER accepts, use recipientId (SHIPPER) as deliveryManId
+                String deliveryManId = savedProposal.getRecipientId();
+                callPostponeParcelApi(deliveryManId, proposal.getData());
+            }
         }
 
         log.info("Proposal {} đã được PHẢN HỒI bởi User {}", proposalId, currentUserId);
@@ -231,10 +238,16 @@ public class ProposalService implements IProposalService{
             JsonNode node = mapper.readTree(data);
 
             // Lấy parcelId ra và bỏ khỏi dữ liệu gửi đi
-            String parcelId = node.has("parcelId") ? node.get("parcelId").asText() : null;
-
-            if (parcelId == null) {
-                log.warn("Không tìm thấy parcelId trong dữ liệu postpone.");
+            JsonNode parcelIdNode = node.get("parcelId");
+            if (parcelIdNode == null || parcelIdNode.isNull()) {
+                log.warn("⚠️ Không tìm thấy parcelId trong dữ liệu postpone. Data: {}", data);
+                log.warn("⚠️ Available fields in data: {}", node.fieldNames());
+                return;
+            }
+            
+            String parcelId = parcelIdNode.asText();
+            if (parcelId == null || parcelId.isEmpty()) {
+                log.warn("⚠️ parcelId is empty in postpone proposal data: {}", data);
                 return;
             }
 
@@ -256,14 +269,19 @@ public class ProposalService implements IProposalService{
             HttpEntity<String> entity = new HttpEntity<>(cleanedData, headers);
 
             // Thực hiện gọi API
-            restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
-
-            log.info("Gọi API postpone parcel thành công cho Parcel ID: {}", parcelId);
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+            
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("✅ Gọi API postpone parcel thành công cho Parcel ID: {}", parcelId);
+            } else {
+                log.warn("⚠️ API postpone parcel trả về status code: {} cho Parcel ID: {}", 
+                    response.getStatusCode(), parcelId);
+            }
 
         } catch (JsonProcessingException e) {
-            log.error("Lỗi parse JSON trong callPostponeParcelApi", e);
+            log.error("❌ Lỗi parse JSON trong callPostponeParcelApi. Data: {}", data, e);
         } catch (Exception e) {
-            log.error("Lỗi khi gọi postpone parcel API", e);
+            log.error("❌ Lỗi khi gọi postpone parcel API: {}", e.getMessage(), e);
         }
     }
 
