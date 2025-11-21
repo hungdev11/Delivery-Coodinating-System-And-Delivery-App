@@ -9,6 +9,7 @@ import com.ds.session.session_service.common.entities.dto.request.PagingRequestV
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.PageResponse;
+import com.ds.session.session_service.common.entities.dto.response.LatestAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.ShipperInfo;
 
 /**
@@ -23,6 +24,19 @@ public interface IDeliveryAssignmentService {
     DeliveryAssignmentResponse rejectedByCustomer(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
 
     DeliveryAssignmentResponse postponeByCustomer(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
+    
+    /**
+     * Postpone assignment directly by assignmentId.
+     * This is used when we already have the assignmentId (e.g., from proposal response).
+     */
+    DeliveryAssignmentResponse postponeByAssignmentId(UUID assignmentId, String reason, RouteInfo routeInfo);
+    
+    /**
+     * Get active assignment ID for a parcel and delivery man.
+     * Returns the assignmentId of the active assignment (in CREATED or IN_PROGRESS session).
+     * This is used by Communication Service to find assignmentId before calling postpone endpoint.
+     */
+    Optional<UUID> getActiveAssignmentId(String parcelId, String deliveryManId);
     
     /**
      * Update assignment status by sessionId and assignmentId
@@ -72,4 +86,6 @@ public interface IDeliveryAssignmentService {
     );
 
     Optional<ShipperInfo> getLatestDriverIdForParcel(String parcelId);
+
+    Optional<LatestAssignmentResponse> getLatestAssignmentForParcel(String parcelId);
 }

@@ -58,6 +58,14 @@ public interface ISessionService {
     SessionResponse getActiveSession(String deliveryManId);
     
     /**
+     * Lấy tất cả sessions của một shipper.
+     * @param deliveryManId ID của shipper
+     * @param excludeParcelId (Optional) ParcelId để exclude - không trả về sessions chứa parcel này
+     * @return Danh sách sessions của shipper
+     */
+    java.util.List<SessionResponse> getAllSessionsForDeliveryMan(String deliveryManId, String excludeParcelId);
+    
+    /**
      * Search delivery sessions with V2 enhanced filtering
      * @param request Paging request with filters, sorts, pagination
      * @return PagedData with sessions

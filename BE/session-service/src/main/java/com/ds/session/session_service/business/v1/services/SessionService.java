@@ -427,6 +427,48 @@ public class SessionService implements ISessionService {
         return null; // No active session
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<SessionResponse> getAllSessionsForDeliveryMan(String deliveryManId, String excludeParcelId) {
+        log.info("Getting all sessions for delivery man {} (excludeParcelId: {})", deliveryManId, excludeParcelId);
+        
+        // Use Specification to query all sessions by deliveryManId
+        Specification<DeliverySession> spec = (root, query, criteriaBuilder) -> 
+            criteriaBuilder.equal(root.get("deliveryManId"), deliveryManId);
+        
+        // Query all sessions for this delivery man
+        List<DeliverySession> allSessions = sessionRepository.findAll(spec);
+        log.info("Found {} sessions for delivery man {}", allSessions.size(), deliveryManId);
+        
+        // Filter out sessions containing excludeParcelId if provided
+        List<DeliverySession> filteredSessions = allSessions;
+        if (excludeParcelId != null && !excludeParcelId.isEmpty()) {
+            filteredSessions = allSessions.stream()
+                .filter(session -> {
+                    // Check if session contains the parcel to exclude
+                    boolean containsParcel = session.getAssignments().stream()
+                        .anyMatch(assignment -> excludeParcelId.equals(assignment.getParcelId()));
+                    return !containsParcel;
+                })
+                .collect(Collectors.toList());
+            log.info("After excluding parcel {}, {} sessions remain", excludeParcelId, filteredSessions.size());
+        }
+        
+        // Convert to SessionResponse
+        List<SessionResponse> sessionResponses = filteredSessions.stream()
+            .map(this::toSessionResponse)
+            .sorted((a, b) -> {
+                // Sort by startTime descending (newest first)
+                LocalDateTime aStart = a.getStartTime() != null ? a.getStartTime() : LocalDateTime.MIN;
+                LocalDateTime bStart = b.getStartTime() != null ? b.getStartTime() : LocalDateTime.MIN;
+                return bStart.compareTo(aStart);
+            })
+            .collect(Collectors.toList());
+        
+        log.info("Returning {} sessions for delivery man {}", sessionResponses.size(), deliveryManId);
+        return sessionResponses;
+    }
+
     // --- HELPER METHODS ---
 
     /**

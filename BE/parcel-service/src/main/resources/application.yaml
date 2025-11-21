@@ -91,6 +91,8 @@ feign:
 services:
   zone:
     base-url: ${ZONE_SERVICE_URL:http://zone-service:21503}
+  session:
+    base-url: ${SESSION_SERVICE_URL:http://session-service:21505}
 
 # Snapshot Initialization Configuration
 snapshot:

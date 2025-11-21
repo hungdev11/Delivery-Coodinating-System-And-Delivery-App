@@ -27,6 +27,30 @@ export const getParcelsV2 = async (params: QueryPayload): Promise<GetParcelsResp
 }
 
 /**
+ * Get parcels assigned to the current client (receiver scope)
+ */
+export const getClientReceivedParcels = async (
+  params: QueryPayload,
+): Promise<GetParcelsResponse> => {
+  return apiClient.post<GetParcelsResponse, QueryPayload>('/v1/client/parcels/received', params)
+}
+
+export interface ConfirmParcelRequest {
+  confirmationSource: string
+  note?: string
+}
+
+export const confirmParcelReceived = async (
+  parcelId: string,
+  data: ConfirmParcelRequest,
+): Promise<GetParcelResponse> => {
+  return apiClient.post<GetParcelResponse, ConfirmParcelRequest>(
+    `/v1/client/parcels/${parcelId}/confirm`,
+    data,
+  )
+}
+
+/**
  * Get parcel by ID
  */
 export const getParcelById = async (id: string): Promise<GetParcelResponse> => {

@@ -86,7 +86,7 @@ const {
 // Handle page change from UPagination (1-indexed) to API (0-indexed)
 const handlePaginationChange = (newPage: number) => {
   // UPagination uses 1-indexed pages, convert to 0-indexed for API
-  handlePageChange(newPage - 1)
+  handlePageChange(Math.max(newPage - 1, 0))
 }
 
 // Table state
@@ -98,7 +98,6 @@ const advancedFiltersGroup = ref<FilterGroup | undefined>(undefined)
 
 // Search and filter state
 const searchValue = ref('')
-const statusFilter = ref<ParcelStatus | ''>('')
 
 // Advanced filter state
 const showAdvancedFilters = ref(false)
@@ -487,30 +486,8 @@ const columns: TableColumn<ParcelDto>[] = [
   },
 ]
 
-// Client-side filtering for simple mode
-const filteredParcels = computed(() => {
-  let filtered = [...parcels.value]
-
-  // Apply search filter
-  if (searchValue.value) {
-    const search = searchValue.value.toLowerCase()
-    filtered = filtered.filter(
-      (parcel) =>
-        parcel.code.toLowerCase().includes(search) ||
-        parcel.senderId.toLowerCase().includes(search) ||
-        parcel.receiverId.toLowerCase().includes(search) ||
-        parcel.receiveFrom.toLowerCase().includes(search) ||
-        parcel.targetDestination.toLowerCase().includes(search),
-    )
-  }
-
-  // Apply status filter
-  if (statusFilter.value) {
-    filtered = filtered.filter((parcel) => parcel.status === statusFilter.value)
-  }
-
-  return filtered
-})
+// Note: With server-side pagination and filtering, we use parcels directly
+// No client-side filtering needed
 
 /**
  * Open create modal
@@ -915,7 +892,7 @@ watch(
       <UTable
         ref="table"
         :sorting="sorting"
-        :data="filteredParcels"
+        :data="parcels"
         :columns="columns"
         :loading="loading"
         :manual-sorting="true"
@@ -924,7 +901,7 @@ watch(
       />
 
       <!-- Empty State -->
-      <template v-if="!loading && filteredParcels.length === 0">
+      <template v-if="!loading && parcels.length === 0">
         <div class="text-center py-12">
           <div class="mx-auto h-12 w-12 text-gray-400">
             <UIcon name="i-heroicons-cube" class="h-12 w-12" />
@@ -932,14 +909,14 @@ watch(
           <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No parcels found</h3>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {{
-              searchValue || statusFilter
+              searchValue || (filters.conditions && filters.conditions.length > 0)
                 ? 'Try adjusting your search or filter criteria.'
                 : 'Get started by creating a new parcel.'
             }}
           </p>
           <div class="mt-6">
             <UButton
-              v-if="!searchValue && !statusFilter"
+              v-if="!searchValue && (!filters.conditions || filters.conditions.length === 0)"
               icon="i-heroicons-plus"
               @click="openCreateModal"
             >
@@ -952,7 +929,7 @@ watch(
     </UCard>
 
     <!-- Pagination -->
-    <div v-if="!loading && parcels.length > 0" class="mt-6 flex items-center justify-between">
+    <div v-if="!loading && total > 0" class="mt-6 flex items-center justify-between">
       <div class="text-sm text-gray-700 dark:text-gray-300">
         Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
         {{ total }} results

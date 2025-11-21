@@ -1,16 +1,15 @@
 package com.ds.gateway.business.v1.services;
 
 import com.ds.gateway.common.interfaces.IParcelServiceClient;
+import com.ds.gateway.common.utils.ProxyHeaderUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import reactor.core.publisher.Mono;
-
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
+import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
@@ -95,6 +94,7 @@ public class ParcelServiceClient implements IParcelServiceClient {
         try {
             Object response = parcelServiceWebClient.post()
                     .uri("/api/v2/parcels")
+                    .headers(httpHeaders -> httpHeaders.addAll(ProxyHeaderUtils.createHeadersWithUserId()))
                     .bodyValue(request)
                     .retrieve()
                     .bodyToMono(Object.class)
@@ -102,6 +102,23 @@ public class ParcelServiceClient implements IParcelServiceClient {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Error during getParcelsV2 request: {}", e.getMessage());
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
+    @Override
+    public ResponseEntity<?> getClientReceivedParcels(Object request) {
+        try {
+            Object response = parcelServiceWebClient.post()
+                    .uri("/api/v1/client/parcels/received")
+                    .headers(httpHeaders -> httpHeaders.addAll(ProxyHeaderUtils.createHeadersWithUserId()))
+                    .bodyValue(request)
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error during getClientReceivedParcels request: {}", e.getMessage());
             return ResponseEntity.status(500).body(null);
         }
     }
@@ -122,6 +139,23 @@ public class ParcelServiceClient implements IParcelServiceClient {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Error during changeParcelStatus request: {}", e.getMessage());
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
+    @Override
+    public ResponseEntity<?> confirmParcel(UUID parcelId, Object request) {
+        try {
+            Object response = parcelServiceWebClient.post()
+                    .uri("/api/v1/client/parcels/{parcelId}/confirm", parcelId)
+                    .headers(headers -> headers.addAll(ProxyHeaderUtils.createHeadersWithUserId()))
+                    .bodyValue(request)
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error during confirmParcel request: {}", e.getMessage());
             return ResponseEntity.status(500).body(null);
         }
     }

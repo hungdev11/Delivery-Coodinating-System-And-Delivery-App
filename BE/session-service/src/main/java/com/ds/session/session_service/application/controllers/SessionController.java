@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import com.ds.session.session_service.common.entities.dto.common.BaseResponse;
 import com.ds.session.session_service.common.entities.dto.request.CreateSessionRequest;
@@ -141,6 +142,24 @@ public class SessionController {
             return ResponseEntity.ok(BaseResponse.error("No active session found for delivery man"));
         }
         return ResponseEntity.ok(BaseResponse.success(response));
+    }
+
+    /**
+     * Lấy tất cả sessions của một shipper.
+     * Có thể exclude một parcelId cụ thể (dùng khi cần lấy sessions khác ngoài session hiện tại chứa parcel này).
+     * 
+     * @param deliveryManId ID của shipper
+     * @param excludeParcelId (Optional) ParcelId để exclude - không trả về sessions chứa parcel này
+     * @return Danh sách sessions của shipper
+     */
+    @GetMapping("/drivers/{deliveryManId}/sessions")
+    public ResponseEntity<BaseResponse<java.util.List<SessionResponse>>> getAllSessionsForDeliveryMan(
+            @PathVariable("deliveryManId") String deliveryManId,
+            @RequestParam(required = false) String excludeParcelId
+    ) {
+        log.info("Getting all sessions for delivery man {} (excludeParcelId: {})", deliveryManId, excludeParcelId);
+        java.util.List<SessionResponse> sessions = sessionService.getAllSessionsForDeliveryMan(deliveryManId, excludeParcelId);
+        return ResponseEntity.ok(BaseResponse.success(sessions));
     }
 
     /**

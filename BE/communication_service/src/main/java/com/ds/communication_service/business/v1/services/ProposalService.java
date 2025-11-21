@@ -19,6 +19,7 @@ import org.springframework.web.client.RestTemplate;
 
 import com.ds.communication_service.app_context.models.*; 
 import com.ds.communication_service.app_context.repositories.*; 
+import com.ds.communication_service.common.dto.BaseResponse;
 import com.ds.communication_service.common.dto.CreateProposalRequest;
 import com.ds.communication_service.common.dto.InteractiveProposalResponseDTO;
 import com.ds.communication_service.common.dto.MessageResponse; 
@@ -237,7 +238,7 @@ public class ProposalService implements IProposalService{
             ObjectMapper mapper = new ObjectMapper();
             JsonNode node = mapper.readTree(data);
 
-            // Lấy parcelId ra và bỏ khỏi dữ liệu gửi đi
+            // Lấy parcelId ra
             JsonNode parcelIdNode = node.get("parcelId");
             if (parcelIdNode == null || parcelIdNode.isNull()) {
                 log.warn("⚠️ Không tìm thấy parcelId trong dữ liệu postpone. Data: {}", data);
@@ -251,31 +252,99 @@ public class ProposalService implements IProposalService{
                 return;
             }
 
-            // Tạo payload mới: loại bỏ trường parcelId
+            // Step 1: Query assignmentId từ parcelId + deliveryManId
+            UUID assignmentId = null;
+            try {
+                String queryUrl = String.format("%s/api/v1/assignments/active?parcelId=%s&deliveryManId=%s",
+                        sessionServiceUrl, parcelId, deliveryManId);
+                
+                log.info("🔍 Querying assignmentId for parcelId: {} and deliveryManId: {}", parcelId, deliveryManId);
+                ResponseEntity<String> queryResponse = restTemplate.getForEntity(queryUrl, String.class);
+                
+                if (queryResponse.getStatusCode().is2xxSuccessful() && queryResponse.getBody() != null) {
+                    // Parse JSON response from Session Service (which uses result field)
+                    JsonNode responseNode = mapper.readTree(queryResponse.getBody());
+                    if (responseNode.has("result") && !responseNode.get("result").isNull()) {
+                        String resultStr = responseNode.get("result").asText();
+                        assignmentId = UUID.fromString(resultStr);
+                        log.info("✅ Found assignmentId: {} for parcelId: {} and deliveryManId: {}", assignmentId, parcelId, deliveryManId);
+                    } else {
+                        log.warn("⚠️ No assignmentId found in response. Response: {}", queryResponse.getBody());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("⚠️ Failed to query assignmentId, will fallback to old endpoint: {}", e.getMessage());
+            }
+
+            // Step 2: Gọi endpoint postpone
+            // Tạo payload: loại bỏ trường parcelId (và assignmentId nếu có), giữ lại reason và routeInfo
             ((ObjectNode) node).remove("parcelId");
-            String cleanedData = mapper.writeValueAsString(node);
-
-            // Tạo URL đúng endpoint
-            String url = String.format("%s/api/v1/assignments/drivers/%s/parcels/%s/postpone",
-                    sessionServiceUrl, deliveryManId, parcelId);
-
-            log.info("Đang gọi API ngoài: POST {}", url);
-            log.debug("Payload gửi đi: {}", cleanedData);
-
-            // Header + body
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<String> entity = new HttpEntity<>(cleanedData, headers);
-
-            // Thực hiện gọi API
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+            JsonNode assignmentIdNode = node.get("assignmentId");
+            if (assignmentIdNode != null && !assignmentIdNode.isNull()) {
+                ((ObjectNode) node).remove("assignmentId");
+                // Use assignmentId from data if provided
+                try {
+                    assignmentId = UUID.fromString(assignmentIdNode.asText());
+                    log.info("📋 Using assignmentId from proposal data: {}", assignmentId);
+                } catch (Exception e) {
+                    log.warn("⚠️ Invalid assignmentId in proposal data, using queried assignmentId");
+                }
+            }
             
-            if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("✅ Gọi API postpone parcel thành công cho Parcel ID: {}", parcelId);
+            String reason = node.has("reason") ? node.get("reason").asText() : 
+                           (node.has("resultData") ? node.get("resultData").asText() : 
+                           "Khách yêu cầu hoãn");
+            
+            // Tạo payload cho postpone request
+            ObjectNode postponePayload = mapper.createObjectNode();
+            postponePayload.put("reason", reason);
+            // RouteInfo sẽ null nếu không có trong data (optional)
+            if (node.has("routeInfo")) {
+                postponePayload.set("routeInfo", node.get("routeInfo"));
+            }
+            String postponeData = mapper.writeValueAsString(postponePayload);
+
+            // Gọi endpoint mới nếu có assignmentId, otherwise fallback to old endpoint
+            if (assignmentId != null) {
+                // Use new endpoint with assignmentId
+                String url = String.format("%s/api/v1/assignments/%s/postpone",
+                        sessionServiceUrl, assignmentId);
+
+                log.info("✅ Gọi API postpone bằng assignmentId: PUT {}", url);
+                log.debug("Payload gửi đi: {}", postponeData);
+
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                HttpEntity<String> entity = new HttpEntity<>(postponeData, headers);
+
+                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.PUT, entity, String.class);
+                
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    log.info("✅ Gọi API postpone assignment thành công cho Assignment ID: {}", assignmentId);
+                } else {
+                    log.warn("⚠️ API postpone assignment trả về status code: {} cho Assignment ID: {}", 
+                        response.getStatusCode(), assignmentId);
+                }
             } else {
-                log.warn("⚠️ API postpone parcel trả về status code: {} cho Parcel ID: {}", 
-                    response.getStatusCode(), parcelId);
+                // Fallback to old endpoint (backward compatibility)
+                String url = String.format("%s/api/v1/assignments/drivers/%s/parcels/%s/postpone",
+                        sessionServiceUrl, deliveryManId, parcelId);
+
+                log.warn("⚠️ Không tìm thấy assignmentId, sử dụng endpoint cũ: POST {}", url);
+                log.debug("Payload gửi đi: {}", postponeData);
+
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                HttpEntity<String> entity = new HttpEntity<>(reason, headers);
+
+                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+                
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    log.info("✅ Gọi API postpone parcel thành công (fallback) cho Parcel ID: {}", parcelId);
+                } else {
+                    log.warn("⚠️ API postpone parcel (fallback) trả về status code: {} cho Parcel ID: {}", 
+                        response.getStatusCode(), parcelId);
+                }
             }
 
         } catch (JsonProcessingException e) {
