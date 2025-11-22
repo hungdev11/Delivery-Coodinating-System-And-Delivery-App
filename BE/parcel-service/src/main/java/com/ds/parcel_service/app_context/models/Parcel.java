@@ -79,6 +79,10 @@ public class Parcel {
     private LocalDateTime updatedAt;
 
     private LocalDateTime deliveredAt;
+    private LocalDateTime confirmedAt;
+    private String confirmedBy;
+    @Column(length = 512)
+    private String confirmationNote;
     private LocalTime windowStart;
     private LocalTime windowEnd;
     

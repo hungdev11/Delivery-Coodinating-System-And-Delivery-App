@@ -68,7 +68,7 @@ const { exportUsers } = useUserExport()
 // Handle page change from UPagination (1-indexed) to API (0-indexed)
 const handlePaginationChange = (newPage: number) => {
   // UPagination uses 1-indexed pages, convert to 0-indexed for API
-  handlePageChange(newPage - 1)
+  handlePageChange(Math.max(newPage - 1, 0))
 }
 
 // Table state

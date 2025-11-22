@@ -173,6 +173,25 @@ export const getActiveSessionForDeliveryMan = async (deliveryManId: string): Pro
 }
 
 /**
+ * Get all sessions for a deliveryman
+ * @param deliveryManId ID of the delivery man
+ * @param excludeParcelId (Optional) ParcelId to exclude - sessions containing this parcel will be excluded
+ */
+export const getAllSessionsForDeliveryMan = async (
+  deliveryManId: string,
+  excludeParcelId?: string,
+): Promise<{ result: DeliverySessionDto[] }> => {
+  const params: Record<string, string> = {}
+  if (excludeParcelId) {
+    params.excludeParcelId = excludeParcelId
+  }
+  return apiClient.get<{ result: DeliverySessionDto[] }>(
+    `/v1/sessions/drivers/${deliveryManId}/sessions`,
+    { params },
+  )
+}
+
+/**
  * Get assignments by session ID
  */
 export const getAssignmentsBySessionId = async (

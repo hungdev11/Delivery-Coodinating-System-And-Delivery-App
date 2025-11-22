@@ -24,6 +24,7 @@ import com.ds.session.session_service.infrastructure.kafka.ParcelEventPublisher;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.request.UpdateAssignmentStatusRequest;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
+import com.ds.session.session_service.common.entities.dto.response.LatestAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.PageResponse;
 import com.ds.session.session_service.common.entities.dto.response.ShipperInfo;
 import com.ds.session.session_service.common.enums.AssignmentStatus;
@@ -374,6 +375,89 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             log.info("Tìm thấy tài xế: {} cho parcelId: {}", driverId, parcelId);
             return new ShipperInfo(driverId, "Tài xế", "0912312312");
         });
+    }
+
+    @Override
+    public Optional<UUID> getActiveAssignmentId(String parcelId, String deliveryManId) {
+        log.info("Tìm kiếm assignmentId cho parcelId: {} và deliveryManId: {}", parcelId, deliveryManId);
+        
+        Optional<DeliveryAssignment> assignmentOpt = deliveryAssignmentRepository.findActiveAssignmentByParcelIdAndDeliveryManId(parcelId, deliveryManId);
+        
+        if (assignmentOpt.isEmpty()) {
+            log.warn("Không tìm thấy active assignment cho parcelId: {} và deliveryManId: {}", parcelId, deliveryManId);
+            return Optional.empty();
+        }
+        
+        UUID assignmentId = assignmentOpt.get().getId();
+        log.info("Tìm thấy assignmentId: {} cho parcelId: {} và deliveryManId: {}", assignmentId, parcelId, deliveryManId);
+        return Optional.of(assignmentId);
+    }
+
+    @Override
+    public Optional<LatestAssignmentResponse> getLatestAssignmentForParcel(String parcelId) {
+        return deliveryAssignmentRepository.findFirstByParcelIdOrderByUpdatedAtDesc(parcelId)
+            .map(assignment -> LatestAssignmentResponse.builder()
+                .assignmentId(assignment.getId())
+                .sessionId(assignment.getSession() != null ? assignment.getSession().getId() : null)
+                .status(assignment.getStatus())
+                .deliveryManId(assignment.getSession() != null ? assignment.getSession().getDeliveryManId() : null)
+                .build());
+    }
+
+    @Override
+    @Transactional
+    public DeliveryAssignmentResponse postponeByAssignmentId(UUID assignmentId, String reason, RouteInfo routeInfo) {
+        log.info("Postponing assignment {} with reason: {}", assignmentId, reason);
+        
+        // 1. Find assignment
+        DeliveryAssignment assignment = deliveryAssignmentRepository.findById(assignmentId)
+            .orElseThrow(() -> new ResourceNotFound("Assignment not found: " + assignmentId));
+        
+        // 2. Verify assignment is in active session
+        DeliverySession session = assignment.getSession();
+        if (session.getStatus() != SessionStatus.IN_PROGRESS && session.getStatus() != SessionStatus.CREATED) {
+            throw new IllegalStateException("Assignment " + assignmentId + " is not in an active session. Session status: " + session.getStatus());
+        }
+        
+        // 3. Verify assignment status
+        if (assignment.getStatus() != AssignmentStatus.IN_PROGRESS) {
+            throw new IllegalStateException("Assignment " + assignmentId + " is not IN_PROGRESS. Current status: " + assignment.getStatus());
+        }
+        
+        // 4. Update route info if provided
+        setRouteInfo(assignment, routeInfo);
+        
+        // 5. Publish parcel event
+        try {
+            log.debug("Publishing parcel event: POSTPONE for parcel: {}", assignment.getParcelId());
+            parcelEventPublisher.publish(assignment.getParcelId(), ParcelEvent.POSTPONE);
+            log.info("✅ Successfully published parcel event: POSTPONE for parcel: {}", assignment.getParcelId());
+        } catch (Exception e) {
+            log.error("❌ Failed to publish parcel status event for parcel {}: {}", assignment.getParcelId(), e.getMessage(), e);
+            // Don't throw - allow assignment status update to proceed
+        }
+        
+        // 6. Update assignment status
+        assignment.setStatus(AssignmentStatus.DELAYED);
+        assignment.setFailReason(reason);
+        
+        // 7. Save
+        deliveryAssignmentRepository.save(assignment);
+        log.info("✅ Assignment {} updated to status: DELAYED", assignmentId);
+        
+        // 8. Return DTO
+        ParcelInfo parcel = null;
+        try {
+            ParcelResponse parcelResponse = parcelServiceClient.changeParcelStatus(assignment.getParcelId(), ParcelEvent.POSTPONE);
+            parcel = parcelMapper.toParcelInfo(parcelResponse);
+        } catch (Exception e) {
+            log.warn("Failed to fetch parcel info for parcel {}: {}", assignment.getParcelId(), e.getMessage());
+        }
+        
+        String deliveryManPhone = null;
+        String receiverName = null;
+        
+        return DeliveryAssignmentResponse.from(assignment, parcel, session, deliveryManPhone, receiverName);
     }
 
     // --- UTILITY METHODS ---

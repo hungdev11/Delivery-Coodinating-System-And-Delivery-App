@@ -1,6 +1,7 @@
 package com.ds.parcel_service.business.v1.services;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,12 +12,16 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import com.ds.parcel_service.app_context.models.Parcel;
 import com.ds.parcel_service.app_context.models.ParcelDestination;
+import com.ds.parcel_service.app_context.models.AssignmentSnapshot;
 import com.ds.parcel_service.app_context.repositories.ParcelDestinationRepository;
 import com.ds.parcel_service.app_context.repositories.ParcelRepository;
 import com.ds.parcel_service.app_context.repositories.UserSnapshotRepository;
@@ -25,12 +30,17 @@ import com.ds.parcel_service.application.client.DesDetail;
 import com.ds.parcel_service.application.client.DestinationResponse;
 import com.ds.parcel_service.application.client.ListAddressResponse;
 import com.ds.parcel_service.application.client.ZoneClient;
+import com.ds.parcel_service.application.client.SessionServiceClient;
+import com.ds.parcel_service.application.services.AssignmentSnapshotService;
 import com.ds.parcel_service.common.entities.dto.common.PagedData;
 import com.ds.parcel_service.common.entities.dto.request.ParcelCreateRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelFilterRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelUpdateRequest;
+import com.ds.parcel_service.common.entities.dto.request.ParcelConfirmRequest;
+import com.ds.parcel_service.common.entities.dto.request.PagingRequestV2;
 import com.ds.parcel_service.common.entities.dto.response.PageResponse;
 import com.ds.parcel_service.common.entities.dto.response.ParcelResponse;
+import com.ds.parcel_service.common.entities.dto.sort.SortConfig;
 import com.ds.parcel_service.common.enums.DeliveryType;
 import com.ds.parcel_service.common.enums.DestinationType;
 import com.ds.parcel_service.common.enums.ParcelEvent;
@@ -46,6 +56,7 @@ import com.ds.parcel_service.common.parcelstates.InWarehouseState;
 import com.ds.parcel_service.common.parcelstates.LostState;
 import com.ds.parcel_service.common.parcelstates.OnRouteState;
 import com.ds.parcel_service.common.parcelstates.SuccededState;
+import com.ds.parcel_service.common.utils.EnhancedQueryParserV2;
 import com.ds.parcel_service.common.utils.PageUtil;
 import com.ds.parcel_service.common.utils.ParcelSpecification;
 
@@ -62,6 +73,8 @@ public class ParcelService implements IParcelService{
     private final ParcelDestinationRepository parcelDestinationRepository;
     private final ZoneClient zoneClient;
     private final UserSnapshotRepository userSnapshotRepository;
+    private final AssignmentSnapshotService assignmentSnapshotService;
+    private final SessionServiceClient sessionServiceClient;
 
     private final Map<ParcelStatus, IParcelState> stateMap = Map.of(
         ParcelStatus.IN_WAREHOUSE, new InWarehouseState(),
@@ -124,6 +137,42 @@ public class ParcelService implements IParcelService{
     @Override
     public ParcelResponse changeParcelStatus(UUID parcelId, ParcelEvent event) {
         return toDto(processTransition(parcelId, event));
+    }
+
+    @Override
+    @Transactional
+    public ParcelResponse confirmParcelByClient(UUID parcelId, String userId, ParcelConfirmRequest request) {
+        Parcel parcel = getParcel(parcelId);
+
+        if (!parcel.getReceiverId().equals(userId)) {
+            throw new IllegalStateException("User is not the receiver of this parcel");
+        }
+
+        if (parcel.getStatus() != ParcelStatus.DELIVERED) {
+            throw new IllegalStateException("Parcel must be in DELIVERED state before confirmation");
+        }
+
+        AssignmentSnapshot snapshot = assignmentSnapshotService.getOrFetch(parcelId);
+        if (snapshot == null || snapshot.getAssignmentId() == null || snapshot.getSessionId() == null) {
+            snapshot = assignmentSnapshotService.refreshFromRemote(parcelId);
+        }
+
+        Parcel confirmed = processTransition(parcelId, ParcelEvent.CUSTOMER_RECEIVED);
+        confirmed.setConfirmedAt(java.time.LocalDateTime.now());
+        confirmed.setConfirmedBy(userId);
+        confirmed.setConfirmationNote(request.getNote());
+        Parcel saved = parcelRepository.save(confirmed);
+
+        try {
+            if (snapshot != null && snapshot.getAssignmentId() != null && snapshot.getSessionId() != null) {
+                sessionServiceClient.markAssignmentSuccess(snapshot.getSessionId(), snapshot.getAssignmentId(), request.getNote());
+                assignmentSnapshotService.updateStatus(snapshot.getAssignmentId(), "SUCCESS");
+            }
+        } catch (Exception ex) {
+            log.error("Failed to update assignment status for parcel {}: {}", parcelId, ex.getMessage(), ex);
+        }
+
+        return toDto(saved);
     }
 
     @Override
@@ -254,7 +303,7 @@ public class ParcelService implements IParcelService{
     }
 
     @Override
-    public PageResponse<ParcelResponse> getParcelsV2(com.ds.parcel_service.common.entities.dto.request.PagingRequestV2 request) {
+    public PageResponse<ParcelResponse> getParcelsV2(PagingRequestV2 request) {
         // V2: Enhanced filtering with operations between each pair
         Specification<Parcel> spec = Specification.where(null);
         
@@ -280,8 +329,37 @@ public class ParcelService implements IParcelService{
     /**
      * Get parcels V2 with RESTFUL.md compliant response format
      */
-    public PagedData<ParcelResponse> getParcelsV2Restful(com.ds.parcel_service.common.entities.dto.request.PagingRequestV2 request) {
+    @Override
+    public PagedData<ParcelResponse> getParcelsV2Restful(PagingRequestV2 request) {
         PageResponse<ParcelResponse> pageResponse = getParcelsV2(request);
+        return convertToPagedData(pageResponse, request);
+    }
+    
+    @Override
+    public PagedData<ParcelResponse> getParcelsForReceiver(String receiverId, PagingRequestV2 request) {
+        if (!StringUtils.hasText(receiverId)) {
+            throw new IllegalArgumentException("receiverId is required");
+        }
+
+        Specification<Parcel> spec = (root, query, cb) -> cb.equal(root.get("receiverId"), receiverId);
+
+        if (request.getFiltersOrNull() != null) {
+            Specification<Parcel> additionalFilters = EnhancedQueryParserV2.parseFilterGroup(
+                request.getFiltersOrNull(),
+                Parcel.class
+            );
+            spec = spec.and(additionalFilters);
+        }
+
+        Sort sort = buildSort(request.getSortsOrEmpty());
+        Pageable pageable = PageRequest.of(
+            Math.max(request.getPage(), 0),
+            Math.max(request.getSize(), 1),
+            sort
+        );
+
+        Page<Parcel> parcels = parcelRepository.findAll(spec, pageable);
+        PageResponse<ParcelResponse> pageResponse = PageResponse.from(parcels.map(this::toDto));
         return convertToPagedData(pageResponse, request);
     }
     
@@ -290,7 +368,7 @@ public class ParcelService implements IParcelService{
      */
     private PagedData<ParcelResponse> convertToPagedData(
             PageResponse<ParcelResponse> pageResponse,
-            com.ds.parcel_service.common.entities.dto.request.PagingRequestV2 request) {
+            PagingRequestV2 request) {
         PagedData.Paging<String> paging = PagedData.Paging.<String>builder()
                 .page(pageResponse.page())
                 .size(pageResponse.size())
@@ -305,6 +383,29 @@ public class ParcelService implements IParcelService{
                 .data(pageResponse.content())
                 .page(paging)
                 .build();
+    }
+
+    private Sort buildSort(List<SortConfig> sortConfigs) {
+        if (sortConfigs == null || sortConfigs.isEmpty()) {
+            return Sort.by(Sort.Direction.DESC, "createdAt");
+        }
+
+        List<Sort.Order> orders = new ArrayList<>();
+        for (SortConfig config : sortConfigs) {
+            if (config == null || !PageUtil.isValidSortFieldDeep(Parcel.class, config.getField())) {
+                continue;
+            }
+            Sort.Direction direction = "DESC".equalsIgnoreCase(config.getDirection())
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+            orders.add(new Sort.Order(direction, config.getField()));
+        }
+
+        if (orders.isEmpty()) {
+            return Sort.by(Sort.Direction.DESC, "createdAt");
+        }
+
+        return Sort.by(orders);
     }
 
     private ParcelResponse toDto(Parcel parcel) {
@@ -344,6 +445,9 @@ public class ParcelService implements IParcelService{
                             .createdAt(parcel.getCreatedAt())
                             .updatedAt(parcel.getUpdatedAt())
                             .deliveredAt(parcel.getDeliveredAt())
+                            .confirmedAt(parcel.getConfirmedAt())
+                            .confirmedBy(parcel.getConfirmedBy())
+                            .confirmationNote(parcel.getConfirmationNote())
                             .windowStart(parcel.getWindowStart())
                             .windowEnd(parcel.getWindowEnd())
                             .priority(parcel.getPriority())

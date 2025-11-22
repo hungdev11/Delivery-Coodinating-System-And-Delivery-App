@@ -61,4 +61,11 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
      * (Dùng để kiểm tra lịch sử giao hàng)
      */
     Optional<DeliveryAssignment> findFirstByParcelIdOrderByUpdatedAtDesc(String parcelId);
+
+    /**
+     * Tìm assignment trong active session (CREATED hoặc IN_PROGRESS) của một shipper cho một parcel.
+     * (Dùng để query assignmentId từ parcelId + deliveryManId khi shipper phản hồi proposal postpone)
+     */
+    @Query("SELECT da FROM DeliveryAssignment da JOIN da.session s WHERE da.parcelId = :parcelId AND s.deliveryManId = :deliveryManId AND s.status IN ('CREATED', 'IN_PROGRESS') ORDER BY da.scanedAt DESC")
+    Optional<DeliveryAssignment> findActiveAssignmentByParcelIdAndDeliveryManId(String parcelId, String deliveryManId);
 }

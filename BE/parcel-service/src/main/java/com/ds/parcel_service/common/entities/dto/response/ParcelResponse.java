@@ -35,6 +35,9 @@ public class ParcelResponse {
     private LocalTime windowStart;
     private LocalTime windowEnd;
     private LocalDateTime deliveredAt;
+    private LocalDateTime confirmedAt;
+    private String confirmedBy;
+    private String confirmationNote;
 
     private BigDecimal lat;
     private BigDecimal lon;

@@ -13,15 +13,21 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PutMapping;
 
+import com.ds.session.session_service.common.entities.dto.common.BaseResponse;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.request.TaskFailRequest;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
+import com.ds.session.session_service.common.entities.dto.response.LatestAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.PageResponse;
 import com.ds.session.session_service.common.entities.dto.response.ShipperInfo;
 import com.ds.session.session_service.common.interfaces.IDeliveryAssignmentService;
 
 import jakarta.validation.Valid;
+import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -173,6 +179,69 @@ public class DeliveryAssignmentController {
         } else {
             return ResponseEntity.ok(null);
         }
+    }
+
+    /**
+     * Get active assignment ID for a parcel and delivery man.
+     * Returns the assignmentId of the active assignment (in CREATED or IN_PROGRESS session).
+     * This is used by Communication Service to find assignmentId before calling postpone endpoint.
+     */
+    @GetMapping("/active")
+    public ResponseEntity<BaseResponse<UUID>> getActiveAssignmentId(
+        @RequestParam String parcelId,
+        @RequestParam String deliveryManId
+    ) {
+        log.info("Getting active assignmentId for parcelId: {} and deliveryManId: {}", parcelId, deliveryManId);
+        Optional<UUID> assignmentIdOpt = assignmentService.getActiveAssignmentId(parcelId, deliveryManId);
+        if (assignmentIdOpt.isPresent()) {
+            return ResponseEntity.ok(BaseResponse.success(assignmentIdOpt.get()));
+        } else {
+            return ResponseEntity.ok(BaseResponse.error("No active assignment found for parcel " + parcelId + " and delivery man " + deliveryManId));
+        }
+    }
+
+    /**
+     * Get the latest assignment (any session status) for a parcel.
+     * Used by Parcel Service to resolve assignment/session when client confirms delivery.
+     */
+    @GetMapping("/parcel/{parcelId}/latest-assignment")
+    public ResponseEntity<BaseResponse<LatestAssignmentResponse>> getLatestAssignmentForParcel(
+        @PathVariable String parcelId
+    ) {
+        Optional<LatestAssignmentResponse> infoOpt = assignmentService.getLatestAssignmentForParcel(parcelId);
+        return infoOpt
+            .map(info -> ResponseEntity.ok(BaseResponse.success(info)))
+            .orElseGet(() -> ResponseEntity.ok(BaseResponse.error("No assignments found for parcel " + parcelId)));
+    }
+
+    /**
+     * Postpone assignment directly by assignmentId.
+     * This endpoint is used when we already have the assignmentId (e.g., from proposal response).
+     * This fixes the bug where proposal postpone responses lack assignmentId.
+     */
+    @PutMapping("/{assignmentId}/postpone")
+    public ResponseEntity<DeliveryAssignmentResponse> postponeByAssignmentId(
+        @PathVariable UUID assignmentId,
+        @RequestBody PostponeRequest request
+    ) {
+        log.info("Postponing assignment {} with reason: {}", assignmentId, request.getReason());
+        DeliveryAssignmentResponse response = assignmentService.postponeByAssignmentId(
+            assignmentId,
+            request.getReason(),
+            request.getRouteInfo()
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Request DTO for postpone by assignmentId
+     */
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    static class PostponeRequest {
+        private String reason;
+        private RouteInfo routeInfo;
     }
     
 }
