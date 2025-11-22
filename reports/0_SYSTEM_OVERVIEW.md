@@ -4,11 +4,13 @@ This document provides a high-level overview of the Delivery System architecture
 
 ## Table of Contents
 
-- [System Architecture](#system-architecture)
-- [Layered Architecture View](#layered-architecture-view)
-- [Backend Layer Structure](#backend-layer-structure)
-- [Project Folder Structure](#project-folder-structure)
-- [Related Documentation](#related-documentation)
+- [System Overview](#system-overview)
+  - [Table of Contents](#table-of-contents)
+  - [System Architecture](#system-architecture)
+  - [Layered Architecture View](#layered-architecture-view)
+  - [Backend Layer Structure](#backend-layer-structure)
+  - [Project Folder Structure](#project-folder-structure)
+  - [Related Documentation](#related-documentation)
 
 ## System Architecture
 
