@@ -41,32 +41,44 @@ sequenceDiagram
     
     Note over Client,SessionSvc: Shipper has already completed delivery<br/>Parcel status = DELIVERED
     
+    activate Client
     Client->>Gateway: POST /api/v1/client/parcels/{id}/confirm<br/>{confirmationCode?, note?}
+    activate Gateway
     Gateway->>Gateway: Extract X-User-Id from JWT
     Gateway->>ParcelSvc: POST /api/v1/client/parcels/{id}/confirm<br/>Headers: X-User-Id, X-User-Roles
-    
+    activate ParcelSvc
     ParcelSvc->>ParcelSvc: Validate: user is receiver<br/>Validate: status = DELIVERED
     
     ParcelSvc->>Snapshot: getOrFetch(parcelId)
+    activate Snapshot
     alt Snapshot exists
         Snapshot-->>ParcelSvc: AssignmentSnapshot<br/>(assignmentId, sessionId)
     else Snapshot missing
         ParcelSvc->>SessionSvc: GET /assignments/latest/{parcelId}
+        activate SessionSvc
         SessionSvc-->>ParcelSvc: LatestAssignmentInfo
+        deactivate SessionSvc
         ParcelSvc->>Snapshot: save(AssignmentSnapshot)
         Snapshot-->>ParcelSvc: AssignmentSnapshot
     end
+    deactivate Snapshot
     
     ParcelSvc->>ParcelSvc: Update parcel:<br/>status = SUCCEEDED<br/>confirmedAt = now()<br/>confirmedBy = userId<br/>confirmationNote = note
     
     ParcelSvc->>SessionSvc: PUT /sessions/{sessionId}/assignments/{assignmentId}/success<br/>{note}
+    activate SessionSvc
     SessionSvc->>SessionSvc: Update assignment status = SUCCESS
+    deactivate SessionSvc
     SessionSvc-->>ParcelSvc: Success
     
     ParcelSvc->>Snapshot: updateStatus(assignmentId, "SUCCESS")
-    
+    activate Snapshot
+    deactivate Snapshot
+    deactivate ParcelSvc
     ParcelSvc-->>Gateway: ParcelResponse (status = SUCCEEDED)
+    deactivate Gateway
     Gateway-->>Client: Success response
+    deactivate Client
     
     Note over Client,SessionSvc: Client sees confirmation success<br/>Parcel list refreshes automatically
 ```

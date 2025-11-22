@@ -36,31 +36,36 @@ sequenceDiagram
     participant CommSvc as Communication Service
     participant Client as Client (WebSocket)
     
+    activate Shipper
     Shipper->>Shipper: Collect delivery proof:<br/>routeInfo, photos (optional)
     Shipper->>Gateway: POST /api/v1/assignments/drivers/{id}/parcels/{parcelId}/complete<br/>{routeInfo: {distance, duration, ...}}
+    activate Gateway
     Gateway->>Gateway: Extract X-User-Id from JWT
     Gateway->>SessionSvc: POST /api/v1/assignments/drivers/{id}/parcels/{parcelId}/complete<br/>Headers: X-User-Id
-    
+    activate SessionSvc
     SessionSvc->>SessionSvc: Validate: assignment exists<br/>Validate: deliveryManId matches<br/>Validate: assignment status = ASSIGNED
-    
     SessionSvc->>SessionSvc: Update assignment:<br/>status = COMPLETED<br/>completedAt = now()<br/>routeInfo = request.routeInfo
-    
     SessionSvc->>Kafka: Publish AssignmentCompletedEvent<br/>{assignmentId, parcelId, sessionId}
-    
+    activate Kafka
     Kafka->>ParcelSvc: AssignmentCompletedEvent
+    activate ParcelSvc
     ParcelSvc->>ParcelSvc: Update parcel:<br/>status = SUCCEEDED<br/>deliveredAt = now()
-    
     ParcelSvc->>Kafka: Publish ParcelStatusChangedEvent<br/>{parcelId, status = SUCCEEDED}
-    
+    deactivate ParcelSvc
     Kafka->>CommSvc: ParcelStatusChangedEvent
+    deactivate Kafka
+    activate CommSvc
     CommSvc->>CommSvc: Create notification message<br/>Send to client conversation
-    
     CommSvc->>Client: WebSocket: Notification<br/>"Parcel delivered successfully"
+    activate Client
     Client->>Client: Show notification<br/>Enable "Confirm Received" button
-    
+    deactivate Client
+    deactivate CommSvc
+    deactivate SessionSvc
     SessionSvc-->>Gateway: DeliveryAssignment (status = COMPLETED)
+    deactivate Gateway
     Gateway-->>Shipper: Success response
-    
+    deactivate Shipper
     Shipper->>Shipper: TaskFragment refreshes<br/>Task marked as completed
 ```
 

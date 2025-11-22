@@ -124,12 +124,20 @@ sequenceDiagram
     participant OSRM as OSRM Routing Engine
 
     User->>Client: Requests route calculation (waypoints)
+    activate Client
     Client->>APIGateway: POST /api/v1/routing/route (waypoints)
+    activate APIGateway
     APIGateway->>ZoneService: Calculate Route (waypoints)
+    activate ZoneService
     ZoneService->>OSRM: Request Route (waypoints)
+    activate OSRM
     OSRM-->>ZoneService: Route Data
+    deactivate OSRM
+    deactivate ZoneService
     ZoneService-->>APIGateway: Route Data
+    deactivate APIGateway
     APIGateway-->>Client: Route Data
+    deactivate Client
     Client-->>User: Displays Route
 ```
 

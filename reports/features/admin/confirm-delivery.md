@@ -42,33 +42,47 @@ sequenceDiagram
     
     Note over Admin,Client: Shipper has completed delivery<br/>Parcel status = SUCCEEDED
     
+    activate Admin
     Admin->>Gateway: PUT /api/v1/parcels/{id}/confirm-delivery<br/>(Admin role required)
+    activate Gateway
     Gateway->>Gateway: Validate admin role from JWT
     Gateway->>ParcelSvc: PUT /api/v1/parcels/{id}/confirm-delivery<br/>Headers: X-User-Id, X-User-Roles
-    
+    activate ParcelSvc
     ParcelSvc->>ParcelSvc: Validate: status = SUCCEEDED<br/>Validate: admin role
     
     ParcelSvc->>Snapshot: getOrFetch(parcelId)
+    activate Snapshot
     alt Snapshot exists
         Snapshot-->>ParcelSvc: AssignmentSnapshot<br/>(assignmentId, sessionId)
     else Snapshot missing
         ParcelSvc->>SessionSvc: GET /assignments/latest/{parcelId}
+        activate SessionSvc
         SessionSvc-->>ParcelSvc: LatestAssignmentInfo
+        deactivate SessionSvc
         ParcelSvc->>Snapshot: save(AssignmentSnapshot)
     end
+    deactivate Snapshot
     
     ParcelSvc->>ParcelSvc: Update parcel:<br/>status = DELIVERED<br/>confirmedAt = now()<br/>confirmedBy = adminId
     
     ParcelSvc->>SessionSvc: PUT /sessions/{sessionId}/assignments/{assignmentId}/success
+    activate SessionSvc
     SessionSvc->>SessionSvc: Update assignment status = SUCCESS
+    deactivate SessionSvc
     SessionSvc-->>ParcelSvc: Success
     
     ParcelSvc->>Kafka: Publish ParcelStatusChangedEvent<br/>(status = DELIVERED)
+    activate Kafka
     Kafka->>Client: WebSocket notification
+    activate Client
     Client->>Client: Refresh parcel list
-    
+    deactivate Client
+    deactivate Kafka
+    deactivate ParcelSvc
     ParcelSvc-->>Gateway: ParcelResponse (status = DELIVERED)
+    deactivate Gateway
     Gateway-->>Admin: Success response
+    deactivate Admin
     Admin->>Admin: Refresh parcel list
 ```
 

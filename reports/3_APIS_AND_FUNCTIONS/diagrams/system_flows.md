@@ -14,10 +14,16 @@ sequenceDiagram
     participant UserService as User Service
 
     User->>Client: Enters credentials
+    activate Client
     Client->>APIGateway: POST /api/v1/auth/login (credentials)
+    activate APIGateway
     APIGateway->>UserService: Authenticate User (credentials)
+    activate UserService
     UserService-->>APIGateway: Authentication Result (Token/Error)
+    deactivate UserService
+    deactivate APIGateway
     APIGateway-->>Client: Authentication Result (Token/Error)
+    deactivate Client
     Client-->>User: Login Success/Failure
 ```
 
@@ -35,13 +41,23 @@ sequenceDiagram
     participant Database as Database
 
     User->>Client: Initiates Action
+    activate Client
     Client->>Nginx: HTTP Request
+    activate Nginx
     Nginx->>APIGateway: Forward Request
+    activate APIGateway
     APIGateway->>Microservice: API Call
+    activate Microservice
     Microservice->>Database: Data Access
+    activate Database
     Database-->>Microservice: Data Response
+    deactivate Database
+    deactivate Microservice
     Microservice-->>APIGateway: API Response
+    deactivate APIGateway
     APIGateway-->>Nginx: Forward Response
+    deactivate Nginx
     Nginx-->>Client: HTTP Response
+    deactivate Client
     Client-->>User: Displays Result
 ```

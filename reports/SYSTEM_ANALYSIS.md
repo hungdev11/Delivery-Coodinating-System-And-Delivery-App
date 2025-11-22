@@ -32,14 +32,24 @@ sequenceDiagram
     participant Database as Database
 
     User->>Client: Initiates Action
+    activate Client
     Client->>Nginx: HTTP Request
+    activate Nginx
     Nginx->>APIGateway: Forward Request
+    activate APIGateway
     APIGateway->>Microservice: API Call
+    activate Microservice
     Microservice->>Database: Data Access
+    activate Database
     Database-->>Microservice: Data Response
+    deactivate Database
+    deactivate Microservice
     Microservice-->>APIGateway: API Response
+    deactivate APIGateway
     APIGateway-->>Nginx: Forward Response
+    deactivate Nginx
     Nginx-->>Client: HTTP Response
+    deactivate Client
     Client-->>User: Displays Result
 ```
 
@@ -97,14 +107,24 @@ sequenceDiagram
     participant ZoneService as Zone Service
 
     User->>Client: Enters parcel details
+    activate Client
     Client->>APIGateway: POST /api/v1/parcels (parcel details)
+    activate APIGateway
     APIGateway->>UserService: Validate User (if needed)
+    activate UserService
     UserService-->>APIGateway: User Validation Result
+    deactivate UserService
     APIGateway->>ZoneService: Validate Addresses (if needed)
+    activate ZoneService
     ZoneService-->>APIGateway: Address Validation Result
+    deactivate ZoneService
     APIGateway->>ParcelService: Create Parcel (parcel details)
+    activate ParcelService
     ParcelService-->>APIGateway: Parcel Creation Result
+    deactivate ParcelService
+    deactivate APIGateway
     APIGateway-->>Client: Parcel Creation Confirmation/Error
+    deactivate Client
     Client-->>User: Confirmation/Error
 ```
 

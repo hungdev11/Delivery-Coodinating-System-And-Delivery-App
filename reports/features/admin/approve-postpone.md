@@ -39,23 +39,34 @@ sequenceDiagram
     
     Note over Admin,Shipper: Shipper sends POSTPONE_REQUEST proposal<br/>via ChatActivity
     
+    activate Admin
     Admin->>CommSvc: POST /proposals/{id}/respond<br/>{resultData: "ACCEPTED", assignmentId, parcelId}
+    activate CommSvc
     CommSvc->>CommSvc: Validate proposal exists<br/>Validate admin role
     
     CommSvc->>SessionSvc: PUT /assignments/{assignmentId}/postpone<br/>{reason, approvedBy: adminId}
+    activate SessionSvc
     SessionSvc->>SessionSvc: Update assignment:<br/>status = POSTPONED<br/>approvedBy = adminId
-    
     SessionSvc->>Kafka: Publish AssignmentUpdatedEvent
+    activate Kafka
     Kafka->>ParcelSvc: AssignmentUpdatedEvent
+    activate ParcelSvc
     ParcelSvc->>ParcelSvc: Update parcel:<br/>status = DELAYED<br/>delayedUntil = newDate
-    
     ParcelSvc->>Kafka: Publish ParcelStatusChangedEvent
+    deactivate ParcelSvc
     Kafka->>Shipper: WebSocket notification
+    activate Shipper
+    deactivate Shipper
     Kafka->>Admin: WebSocket notification
-    
+    deactivate Kafka
+    deactivate SessionSvc
     CommSvc->>CommSvc: Update proposal status = ACCEPTED
     CommSvc->>Shipper: WebSocket: Proposal update
+    activate Shipper
+    deactivate Shipper
+    deactivate CommSvc
     CommSvc-->>Admin: Success response
+    deactivate Admin
     
     Note over Admin,Shipper: Both parties see updated status<br/>Parcel can be rescheduled
 ```

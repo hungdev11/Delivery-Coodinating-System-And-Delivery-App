@@ -37,13 +37,17 @@ sequenceDiagram
     participant Kafka as Kafka
     participant Client as Client (WebSocket)
     
+    activate Shipper
     Shipper->>Shipper: Scan QR code (parcel code)
     Shipper->>Gateway: POST /api/v1/sessions/drivers/{id}/accept-parcel<br/>{parcelCode: "ABC123"}
+    activate Gateway
     Gateway->>Gateway: Extract X-User-Id from JWT
     Gateway->>SessionSvc: POST /api/v1/sessions/drivers/{id}/accept-parcel<br/>Headers: X-User-Id
-    
+    activate SessionSvc
     SessionSvc->>ParcelSvc: GET /api/v1/parcels/code/{code}
+    activate ParcelSvc
     ParcelSvc-->>SessionSvc: Parcel (id, status, receiverId)
+    deactivate ParcelSvc
     
     alt Active session exists
         SessionSvc->>SessionSvc: Add assignment to existing session
@@ -52,18 +56,23 @@ sequenceDiagram
     end
     
     SessionSvc->>SessionSvc: Create DeliveryAssignment:<br/>parcelId, sessionId, deliveryManId<br/>status = ASSIGNED
-    
     SessionSvc->>Kafka: Publish AssignmentCreatedEvent
+    activate Kafka
     Kafka->>ParcelSvc: AssignmentCreatedEvent
+    activate ParcelSvc
     ParcelSvc->>ParcelSvc: Update parcel:<br/>status = ON_ROUTE
-    
     ParcelSvc->>Kafka: Publish ParcelStatusChangedEvent
+    deactivate ParcelSvc
     Kafka->>Client: WebSocket notification
+    activate Client
     Client->>Client: Refresh parcel list
-    
+    deactivate Client
+    deactivate Kafka
+    deactivate SessionSvc
     SessionSvc-->>Gateway: DeliveryAssignment (assignmentId, sessionId)
+    deactivate Gateway
     Gateway-->>Shipper: Success response
-    
+    deactivate Shipper
     Shipper->>Shipper: TaskFragment refreshes<br/>MapFragment loads route (optional)
 ```
 
