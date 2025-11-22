@@ -1,0 +1,75 @@
+# ============================================
+# DOCKER COMPOSE DEBUG PROFILE
+# Enable remote debugging for Spring Boot services
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.debug.yml up
+# ============================================
+
+services:
+  # Settings Service - Debug enabled
+  settings-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,docker-debug
+      JAVA_TOOL_OPTIONS: >-
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    ports:
+      - "21502:21502"
+      - "5005:5005"  # Debug port
+
+  # User Service - Debug enabled
+  user-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,docker-debug
+      JAVA_TOOL_OPTIONS: >-
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006
+    ports:
+      - "21501:21501"
+      - "5006:5006"  # Debug port
+
+  # Zone Service - Node.js debug (if needed)
+  zone-service:
+    environment:
+      NODE_OPTIONS: >-
+        --inspect=0.0.0.0:9229
+    ports:
+      - "21503:21503"
+      - "9229:9229"  # Node.js debug port
+
+  # Parcel Service - Debug enabled
+  parcel-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,docker-debug
+      JAVA_TOOL_OPTIONS: >-
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007
+    ports:
+      - "21506:21506"
+      - "5007:5007"  # Debug port
+
+  # Session Service - Debug enabled
+  session-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,docker-debug
+      JAVA_TOOL_OPTIONS: >-
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5008
+    ports:
+      - "21505:21505"
+      - "5008:5008"  # Debug port
+
+  # Communication Service - Debug enabled
+  communication-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,docker-debug
+      JAVA_TOOL_OPTIONS: >-
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5009
+    ports:
+      - "21511:21511"
+      - "5009:5009"  # Debug port
+
+  # API Gateway - Debug enabled
+  api-gateway:
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,docker-debug
+      JAVA_TOOL_OPTIONS: >-
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5010
+    ports:
+      - "21500:21500"
+      - "5010:5010"  # Debug port

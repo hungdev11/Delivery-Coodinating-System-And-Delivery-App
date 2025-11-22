@@ -35,6 +35,28 @@ cd ../.. # Back to root directory
 docker-compose up -d
 ```
 
+### Debug Mode
+
+To enable remote debugging for Spring Boot services:
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.debug.yml up -d
+```
+
+**Debug Ports:**
+- Settings Service: `5005`
+- User Service: `5006`
+- Zone Service (Node.js): `9229`
+- Parcel Service: `5007`
+- Session Service: `5008`
+- Communication Service: `5009`
+- API Gateway: `5010`
+
+**IDE Configuration:**
+- Connect your IDE debugger to `localhost:<debug-port>`
+- Use "Remote JVM Debug" configuration in IntelliJ IDEA or VS Code
+- Ensure `suspend=n` in JAVA_TOOL_OPTIONS (services start without waiting for debugger)
+
 ### Documentation Map
 
 - **Backend overview**: [BE/README.md](BE/README.md)
