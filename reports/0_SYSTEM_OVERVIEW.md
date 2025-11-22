@@ -1,6 +1,140 @@
-# Project Folder Structure Overview
+# System Overview
 
-This document outlines the key directories and files within the project, providing a high-level overview of its architecture.
+This document provides a high-level overview of the Delivery System architecture, including project structure and system-wide component relationships.
+
+## Table of Contents
+
+- [System Architecture](#system-architecture)
+- [Layered Architecture View](#layered-architecture-view)
+- [Backend Layer Structure](#backend-layer-structure)
+- [Project Folder Structure](#project-folder-structure)
+- [Related Documentation](#related-documentation)
+
+## System Architecture
+
+The Delivery System follows a microservices architecture pattern with clear separation between client applications, API gateway, and backend services. The following diagram illustrates the overall system structure:
+
+```mermaid
+packageDiagram
+    package "Clients" {
+        [DeliveryApp (Android)]
+        [ManagementSystem (Web)]
+    }
+
+    package "Backend" {
+        package "API Gateway" {
+            [Nginx]
+            [API Gateway Service]
+        }
+        package "Microservices" {
+            [Communication Service]
+            [Parcel Service]
+            [Session Service]
+            [Settings Service]
+            [User Service]
+            [Zone Service]
+        }
+    }
+
+    "DeliveryApp (Android)" --> "API Gateway"
+    "ManagementSystem (Web)" --> "API Gateway"
+    "API Gateway" --> "Microservices"
+    "API Gateway Service" --> "Communication Service"
+    "API Gateway Service" --> "Parcel Service"
+    "API Gateway Service" --> "Session Service"
+    "API Gateway Service" --> "Settings Service"
+    "API Gateway Service" --> "User Service"
+    "API Gateway Service" --> "Zone Service"
+```
+
+The system consists of two client applications that communicate with backend services through a centralized API Gateway. The API Gateway handles authentication and routes requests to the appropriate microservice. This architecture provides a single entry point for all client requests and simplifies security management.
+
+For detailed information about the API Gateway, see [API Gateway Documentation](2_BACKEND/1_API_GATEWAY.md).
+
+## Layered Architecture View
+
+The system can also be viewed in layers, showing the logical organization from client applications through infrastructure to core services:
+
+```mermaid
+packageDiagram
+    package "Client Layer" {
+        [DeliveryApp (Android)]
+        [ManagementSystem (Web)]
+    }
+
+    package "Infrastructure" {
+        [Nginx (Reverse Proxy)]
+        [API Gateway Service]
+    }
+
+    package "Microservices" {
+        package "Core Services" {
+            [User Service]
+            [Parcel Service]
+            [Session Service]
+            [Zone Service]
+            [Settings Service]
+            [Communication Service]
+        }
+        package "Shared Components" {
+            [Common Libraries]
+            [Utility Modules]
+        }
+    }
+
+    "DeliveryApp (Android)" --> "Nginx (Reverse Proxy)"
+    "ManagementSystem (Web)" --> "Nginx (Reverse Proxy)"
+    "Nginx (Reverse Proxy)" --> "API Gateway Service"
+    "API Gateway Service" --> "Core Services"
+    "Core Services" --> "Shared Components"
+```
+
+This layered view demonstrates how requests flow from client applications through infrastructure components to core business services. The reverse proxy (Nginx) handles initial request routing and load balancing, while the API Gateway Service performs authentication and service routing.
+
+For more information about client applications, see:
+- [Management System](1_CLIENTS/1_MANAGEMENT_SYSTEM.md)
+- [Delivery App](1_CLIENTS/2_DELIVERY_APP.md)
+
+## Backend Layer Structure
+
+The backend services are organized with the API Gateway routing requests to individual microservices:
+
+```mermaid
+packageDiagram
+    package "Backend Layer" {
+        package "API Gateway" {
+            [API Gateway Service]
+        }
+        package "Microservices" {
+            [User Service]
+            [Parcel Service]
+            [Session Service]
+            [Zone Service]
+            [Settings Service]
+            [Communication Service]
+        }
+        package "Shared Components" {
+            [Common Libraries]
+            [Utility Modules]
+        }
+    }
+
+    "API Gateway Service" --> "Microservices"
+    "Microservices" --> "Shared Components"
+```
+
+Each microservice is responsible for a specific domain of functionality:
+
+- **User Service**: Manages user accounts and delivery personnel profiles. See [User Service Documentation](2_BACKEND/6_USER_SERVICE.md).
+- **Parcel Service**: Handles parcel lifecycle from creation to delivery confirmation. See [Parcel Service Documentation](2_BACKEND/3_PARCEL_SERVICE.md).
+- **Session Service**: Coordinates delivery sessions and parcel assignments. See [Session Service Documentation](2_BACKEND/4_SESSION_SERVICE.md).
+- **Zone Service**: Manages geographic zones and route calculation. See [Zone Service Documentation](2_BACKEND/7_ZONE_SERVICE.md).
+- **Settings Service**: Provides centralized configuration management. See [Settings Service Documentation](2_BACKEND/5_SETTINGS_SERVICE.md).
+- **Communication Service**: Enables real-time messaging and notifications. See [Communication Service Documentation](2_BACKEND/2_COMMUNICATION_SERVICE.md).
+
+## Project Folder Structure
+
+This section outlines the key directories and files within the project, providing a detailed view of its organization.
 
 ```
 /mnt/e/graduate/DS/
@@ -107,3 +241,24 @@ This document outlines the key directories and files within the project, providi
 │   └───3_APIS_AND_FUNCTIONS/
 └───scripts/
 ```
+
+The project is organized into several main directories:
+
+- **BE/**: Contains all backend microservices, each in its own subdirectory with source code, configuration files, and Dockerfiles.
+- **DeliveryApp/**: Android mobile application for delivery personnel.
+- **ManagementSystem/**: Web-based application for administrators and clients.
+- **reports/**: Technical documentation and system analysis reports.
+- **scripts/**: Utility scripts for system operations.
+
+Each backend service follows a similar structure with source code organized into application, business, and infrastructure layers. Services are containerized using Docker and can be deployed independently.
+
+## Related Documentation
+
+For more detailed information about specific aspects of the system:
+
+- [System Analysis](SYSTEM_ANALYSIS.md) - Detailed analysis of system components, identified issues, and recommendations
+- [API Gateway](2_BACKEND/1_API_GATEWAY.md) - Entry point and routing layer documentation
+- [Backend Services](2_BACKEND/) - Complete documentation for all backend microservices
+- [Client Applications](1_CLIENTS/) - Documentation for web and mobile applications
+- [API Documentation](3_APIS_AND_FUNCTIONS/README.md) - Detailed API endpoint documentation
+- [Features Documentation](features/README.md) - Feature workflows organized by user persona
