@@ -87,11 +87,11 @@ graph TD
 The service is organized into the following packages:
 
 ```mermaid
-packageDiagram
-    package "Session Service" {
-        [Spring Boot Application (src, pom.xml)]
-        [Dockerfile]
-    }
+flowchart TB
+    subgraph SessionService["Session Service"]
+        SpringBootApp["Spring Boot Application (src, pom.xml)"]
+        Dockerfile["Dockerfile"]
+    end
 ```
 
 ## Key Components
@@ -138,4 +138,4 @@ For detailed API endpoint documentation, see [Session Service API Documentation]
 - [API Gateway](1_API_GATEWAY.md) - Entry point and routing layer
 - [Parcel Service](3_PARCEL_SERVICE.md) - Parcel management service
 - [Communication Service](2_COMMUNICATION_SERVICE.md) - Real-time messaging service
-- [Features Documentation](../../features/README.md) - Feature workflows with session operations
+- [Features Documentation](../features/README.md) - Feature workflows with session operations

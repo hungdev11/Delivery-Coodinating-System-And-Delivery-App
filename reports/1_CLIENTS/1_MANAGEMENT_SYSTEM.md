@@ -79,19 +79,19 @@ graph TD
 The application is organized into the following high-level packages:
 
 ```mermaid
-packageDiagram
-    package "ManagementSystem (Web)" {
-        package "src" {
-            [main.ts (Entry Point)]
-            [App.vue (Root Component)]
-            [Router]
-            [Stores (State Management)]
-            [Modules (Feature Modules)]
-            [Layouts]
-            [Common (Utilities, Components)]
-            [Assets (Images, CSS)]
-        }
-    }
+flowchart TB
+    subgraph ManagementSystem["ManagementSystem (Web)"]
+        subgraph Src["src"]
+            MainTS["main.ts (Entry Point)"]
+            AppVue["App.vue (Root Component)"]
+            Router["Router"]
+            Stores["Stores (State Management)"]
+            Modules["Modules (Feature Modules)"]
+            Layouts["Layouts"]
+            Common["Common (Utilities, Components)"]
+            Assets["Assets (Images, CSS)"]
+        end
+    end
 ```
 
 ## Key Components
@@ -111,8 +111,8 @@ packageDiagram
 **For Clients**: The system allows clients to create parcels, manage their addresses, track parcel delivery status, communicate with delivery personnel through real-time chat, and confirm receipt of delivered parcels.
 
 For detailed feature documentation, see:
-- [Admin Features](../../features/admin/README.md)
-- [Client Features](../../features/client/README.md)
+- [Admin Features](../features/admin/README.md)
+- [Client Features](../features/client/README.md)
 
 ## Technical Details
 

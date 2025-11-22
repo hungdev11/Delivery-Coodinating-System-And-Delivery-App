@@ -15,36 +15,36 @@ This document provides a high-level overview of the Delivery System architecture
 The Delivery System follows a microservices architecture pattern with clear separation between client applications, API gateway, and backend services. The following diagram illustrates the overall system structure:
 
 ```mermaid
-packageDiagram
-    package "Clients" {
-        [DeliveryApp (Android)]
-        [ManagementSystem (Web)]
-    }
+flowchart TB
+    subgraph Clients["Clients"]
+        DeliveryApp["DeliveryApp (Android)"]
+        ManagementSystem["ManagementSystem (Web)"]
+    end
 
-    package "Backend" {
-        package "API Gateway" {
-            [Nginx]
-            [API Gateway Service]
-        }
-        package "Microservices" {
-            [Communication Service]
-            [Parcel Service]
-            [Session Service]
-            [Settings Service]
-            [User Service]
-            [Zone Service]
-        }
-    }
+    subgraph Backend["Backend"]
+        subgraph APIGateway["API Gateway"]
+            Nginx["Nginx"]
+            APIGatewayService["API Gateway Service"]
+        end
+        subgraph Microservices["Microservices"]
+            CommunicationService["Communication Service"]
+            ParcelService["Parcel Service"]
+            SessionService["Session Service"]
+            SettingsService["Settings Service"]
+            UserService["User Service"]
+            ZoneService["Zone Service"]
+        end
+    end
 
-    "DeliveryApp (Android)" --> "API Gateway"
-    "ManagementSystem (Web)" --> "API Gateway"
-    "API Gateway" --> "Microservices"
-    "API Gateway Service" --> "Communication Service"
-    "API Gateway Service" --> "Parcel Service"
-    "API Gateway Service" --> "Session Service"
-    "API Gateway Service" --> "Settings Service"
-    "API Gateway Service" --> "User Service"
-    "API Gateway Service" --> "Zone Service"
+    DeliveryApp --> APIGateway
+    ManagementSystem --> APIGateway
+    APIGateway --> Microservices
+    APIGatewayService --> CommunicationService
+    APIGatewayService --> ParcelService
+    APIGatewayService --> SessionService
+    APIGatewayService --> SettingsService
+    APIGatewayService --> UserService
+    APIGatewayService --> ZoneService
 ```
 
 The system consists of two client applications that communicate with backend services through a centralized API Gateway. The API Gateway handles authentication and routes requests to the appropriate microservice. This architecture provides a single entry point for all client requests and simplifies security management.
@@ -56,37 +56,37 @@ For detailed information about the API Gateway, see [API Gateway Documentation](
 The system can also be viewed in layers, showing the logical organization from client applications through infrastructure to core services:
 
 ```mermaid
-packageDiagram
-    package "Client Layer" {
-        [DeliveryApp (Android)]
-        [ManagementSystem (Web)]
-    }
+flowchart TB
+    subgraph ClientLayer["Client Layer"]
+        DeliveryApp["DeliveryApp (Android)"]
+        ManagementSystem["ManagementSystem (Web)"]
+    end
 
-    package "Infrastructure" {
-        [Nginx (Reverse Proxy)]
-        [API Gateway Service]
-    }
+    subgraph Infrastructure["Infrastructure"]
+        Nginx["Nginx (Reverse Proxy)"]
+        APIGatewayService["API Gateway Service"]
+    end
 
-    package "Microservices" {
-        package "Core Services" {
-            [User Service]
-            [Parcel Service]
-            [Session Service]
-            [Zone Service]
-            [Settings Service]
-            [Communication Service]
-        }
-        package "Shared Components" {
-            [Common Libraries]
-            [Utility Modules]
-        }
-    }
+    subgraph Microservices["Microservices"]
+        subgraph CoreServices["Core Services"]
+            UserService["User Service"]
+            ParcelService["Parcel Service"]
+            SessionService["Session Service"]
+            ZoneService["Zone Service"]
+            SettingsService["Settings Service"]
+            CommunicationService["Communication Service"]
+        end
+        subgraph SharedComponents["Shared Components"]
+            CommonLibraries["Common Libraries"]
+            UtilityModules["Utility Modules"]
+        end
+    end
 
-    "DeliveryApp (Android)" --> "Nginx (Reverse Proxy)"
-    "ManagementSystem (Web)" --> "Nginx (Reverse Proxy)"
-    "Nginx (Reverse Proxy)" --> "API Gateway Service"
-    "API Gateway Service" --> "Core Services"
-    "Core Services" --> "Shared Components"
+    DeliveryApp --> Nginx
+    ManagementSystem --> Nginx
+    Nginx --> APIGatewayService
+    APIGatewayService --> CoreServices
+    CoreServices --> SharedComponents
 ```
 
 This layered view demonstrates how requests flow from client applications through infrastructure components to core business services. The reverse proxy (Nginx) handles initial request routing and load balancing, while the API Gateway Service performs authentication and service routing.
@@ -100,27 +100,27 @@ For more information about client applications, see:
 The backend services are organized with the API Gateway routing requests to individual microservices:
 
 ```mermaid
-packageDiagram
-    package "Backend Layer" {
-        package "API Gateway" {
-            [API Gateway Service]
-        }
-        package "Microservices" {
-            [User Service]
-            [Parcel Service]
-            [Session Service]
-            [Zone Service]
-            [Settings Service]
-            [Communication Service]
-        }
-        package "Shared Components" {
-            [Common Libraries]
-            [Utility Modules]
-        }
-    }
+flowchart TB
+    subgraph BackendLayer["Backend Layer"]
+        subgraph APIGateway["API Gateway"]
+            APIGatewayService["API Gateway Service"]
+        end
+        subgraph Microservices["Microservices"]
+            UserService["User Service"]
+            ParcelService["Parcel Service"]
+            SessionService["Session Service"]
+            ZoneService["Zone Service"]
+            SettingsService["Settings Service"]
+            CommunicationService["Communication Service"]
+        end
+        subgraph SharedComponents["Shared Components"]
+            CommonLibraries["Common Libraries"]
+            UtilityModules["Utility Modules"]
+        end
+    end
 
-    "API Gateway Service" --> "Microservices"
-    "Microservices" --> "Shared Components"
+    APIGatewayService --> Microservices
+    Microservices --> SharedComponents
 ```
 
 Each microservice is responsible for a specific domain of functionality:

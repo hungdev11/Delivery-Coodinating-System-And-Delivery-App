@@ -113,4 +113,4 @@ Confirm receipt of a parcel by the client (receiver). This endpoint validates th
 
 ---
 
-**Navigation**: [← Back to Parcel Service](README.md) | [↑ APIs and Functions](../../../README.md) | [↑ Report Index](../../../../README.md)
+**Navigation**: [← Back to Parcel Service](../README.md) | [↑ APIs and Functions](../../../README.md) | [↑ Report Index](../../../../README.md)

@@ -94,13 +94,13 @@ graph TD
 The application is organized into the following high-level packages:
 
 ```mermaid
-packageDiagram
-    package "DeliveryApp" {
-        package "app" {
-            [Source Code (src)]
-            [Build Configuration (build.gradle)]
-        }
-    }
+flowchart TB
+    subgraph DeliveryApp["DeliveryApp"]
+        subgraph App["app"]
+            SourceCode["Source Code (src)"]
+            BuildConfig["Build Configuration (build.gradle)"]
+        end
+    end
 ```
 
 ## Key Components
@@ -125,7 +125,7 @@ packageDiagram
 
 **Status Updates**: The application tracks and updates parcel delivery status, capturing delivery proof such as photos and route metrics when available.
 
-For detailed feature documentation, see [Shipper Features](../../features/shipper/README.md).
+For detailed feature documentation, see [Shipper Features](../features/shipper/README.md).
 
 ## Technical Details
 

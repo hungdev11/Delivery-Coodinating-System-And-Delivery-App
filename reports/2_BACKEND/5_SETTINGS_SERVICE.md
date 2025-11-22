@@ -81,11 +81,11 @@ graph TD
 The service is organized into the following packages:
 
 ```mermaid
-packageDiagram
-    package "Settings Service" {
-        [Spring Boot Application (src, pom.xml)]
-        [Dockerfile]
-    }
+flowchart TB
+    subgraph SettingsService["Settings Service"]
+        SpringBootApp["Spring Boot Application (src, pom.xml)"]
+        Dockerfile["Dockerfile"]
+    end
 ```
 
 ## Key Components

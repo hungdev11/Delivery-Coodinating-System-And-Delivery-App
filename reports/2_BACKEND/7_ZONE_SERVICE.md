@@ -97,14 +97,14 @@ graph TD
 The service is organized into the following packages:
 
 ```mermaid
-packageDiagram
-    package "Zone Service" {
-        [Node.js/TypeScript Application (src, index.ts)]
-        [Package Configuration (package.json)]
-        [TypeScript Configuration (tsconfig.json)]
-        [Prisma ORM (prisma.ts)]
-        [Dockerfile]
-    }
+flowchart TB
+    subgraph ZoneService["Zone Service"]
+        NodeApp["Node.js/TypeScript Application (src, index.ts)"]
+        PackageConfig["Package Configuration (package.json)"]
+        TSConfig["TypeScript Configuration (tsconfig.json)"]
+        PrismaORM["Prisma ORM (prisma.ts)"]
+        Dockerfile["Dockerfile"]
+    end
 ```
 
 ## Key Components

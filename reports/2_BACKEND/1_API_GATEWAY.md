@@ -85,12 +85,12 @@ graph TD
 The gateway service is organized into the following packages:
 
 ```mermaid
-packageDiagram
-    package "API Gateway" {
-        [Nginx Configuration (nginx.conf)]
-        [Spring Boot Application (src, pom.xml)]
-        [Dockerfile]
-    }
+flowchart TB
+    subgraph APIGateway["API Gateway"]
+        NginxConfig["Nginx Configuration (nginx.conf)"]
+        SpringBootApp["Spring Boot Application (src, pom.xml)"]
+        Dockerfile["Dockerfile"]
+    end
 ```
 
 ## Key Components
