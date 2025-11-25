@@ -2,11 +2,11 @@ name: Backend CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: [ "main", "develop", "release/*" ]
     paths:
       - 'BE/**'
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: [ "main", "develop", "release/*" ]
     paths:
       - 'BE/**'
 
