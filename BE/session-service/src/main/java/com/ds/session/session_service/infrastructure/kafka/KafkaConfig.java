@@ -36,6 +36,12 @@ public class KafkaConfig {
 
     // Topics used by session-service to request parcel transitions
     public static final String TOPIC_PARCEL_STATUS_REQUEST = "parcel-status-request";
+    // Topic for assignment completed events (consumed by communication-service)
+    public static final String TOPIC_ASSIGNMENT_COMPLETED = "assignment-completed";
+    // Topic for parcel postponed events (consumed by communication-service)
+    public static final String TOPIC_PARCEL_POSTPONED = "parcel-postponed";
+    // Topic for session completed events (consumed by communication-service)
+    public static final String TOPIC_SESSION_COMPLETED = "session-completed";
     // TOPIC_PARCEL_STATUS_CHANGED constant removed (not used currently)
 
     @Bean
@@ -123,6 +129,36 @@ public class KafkaConfig {
     public NewTopic parcelStatusRequestTopic() {
         return TopicBuilder.name(TOPIC_PARCEL_STATUS_REQUEST)
                 .partitions(6) // partition by parcelId for ordering
+                .replicas(1)
+                .config("retention.ms", "259200000") // 3 days
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+    
+    @Bean
+    public NewTopic assignmentCompletedTopic() {
+        return TopicBuilder.name(TOPIC_ASSIGNMENT_COMPLETED)
+                .partitions(3) // partition by parcelId for ordering
+                .replicas(1)
+                .config("retention.ms", "259200000") // 3 days
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+    
+    @Bean
+    public NewTopic parcelPostponedTopic() {
+        return TopicBuilder.name(TOPIC_PARCEL_POSTPONED)
+                .partitions(3) // partition by parcelId for ordering
+                .replicas(1)
+                .config("retention.ms", "259200000") // 3 days
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+    
+    @Bean
+    public NewTopic sessionCompletedTopic() {
+        return TopicBuilder.name(TOPIC_SESSION_COMPLETED)
+                .partitions(3) // partition by sessionId for ordering
                 .replicas(1)
                 .config("retention.ms", "259200000") // 3 days
                 .config("cleanup.policy", "delete")

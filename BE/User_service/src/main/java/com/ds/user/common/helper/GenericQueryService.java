@@ -123,7 +123,7 @@ public class GenericQueryService {
             return "desc".equalsIgnoreCase(direction) ? -comparison : comparison;
 
         } catch (Exception e) {
-            log.warn("Error comparing field '{}' for sorting: {}", fieldName, e.getMessage());
+            log.debug("[user-service] [GenericQueryService.compareEntities] Error comparing field '{}' for sorting: {}", fieldName, e.getMessage());
             return 0;
         }
     }
@@ -150,7 +150,7 @@ public class GenericQueryService {
 
             Field field = findField(current.getClass(), part);
             if (field == null) {
-                log.warn("Field '{}' not found in class {}", part, current.getClass().getSimpleName());
+                log.debug("[user-service] [GenericQueryService.getFieldValue] Field '{}' not found in class {}", part, current.getClass().getSimpleName());
                 return null;
             }
 
@@ -158,7 +158,7 @@ public class GenericQueryService {
             try {
                 current = field.get(current);
             } catch (IllegalAccessException e) {
-                log.warn("Error accessing field '{}': {}", part, e.getMessage());
+                log.debug("[user-service] [GenericQueryService.getFieldValue] Error accessing field '{}': {}", part, e.getMessage());
                 return null;
             }
         }
@@ -206,7 +206,7 @@ public class GenericQueryService {
             try {
                 return ((Comparable<Object>) a).compareTo(b);
             } catch (ClassCastException e) {
-                log.warn("Cannot compare {} with {}: {}", a.getClass().getSimpleName(), b.getClass().getSimpleName(),
+                log.debug("[user-service] [GenericQueryService.compareValues] Cannot compare {} with {}: {}", a.getClass().getSimpleName(), b.getClass().getSimpleName(),
                         e.getMessage());
             }
         }

@@ -41,6 +41,8 @@ jobs:
       session-service: ${{ steps.changes.outputs.session-service }}
       communication-service: ${{ steps.changes.outputs.communication-service }}
       any-service: ${{ steps.changes.outputs.any-service }}
+      service-matrix: ${{ steps.service-matrix.outputs.services }}
+      changed-service-names: ${{ steps.service-matrix.outputs.service-names }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -63,6 +65,42 @@ jobs:
               - 'BE/communication_service/**'
             any-service:
               - 'BE/**'
+      - name: Generate service matrix payload
+        id: service-matrix
+        env:
+          API_GATEWAY_CHANGED: ${{ steps.changes.outputs.api-gateway }}
+          USER_SERVICE_CHANGED: ${{ steps.changes.outputs.user-service }}
+          SETTINGS_SERVICE_CHANGED: ${{ steps.changes.outputs.settings-service }}
+          ZONE_SERVICE_CHANGED: ${{ steps.changes.outputs.zone-service }}
+          PARCEL_SERVICE_CHANGED: ${{ steps.changes.outputs.parcel-service }}
+          SESSION_SERVICE_CHANGED: ${{ steps.changes.outputs.session-service }}
+          COMMUNICATION_SERVICE_CHANGED: ${{ steps.changes.outputs.communication-service }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          mapping = [
+              ("api-gateway", "BE/api-gateway", "API_GATEWAY_CHANGED"),
+              ("user-service", "BE/User_service", "USER_SERVICE_CHANGED"),
+              ("settings-service", "BE/Settings_service", "SETTINGS_SERVICE_CHANGED"),
+              ("zone-service", "BE/zone_service", "ZONE_SERVICE_CHANGED"),
+              ("parcel-service", "BE/parcel-service", "PARCEL_SERVICE_CHANGED"),
+              ("session-service", "BE/session-service", "SESSION_SERVICE_CHANGED"),
+              ("communication-service", "BE/communication_service", "COMMUNICATION_SERVICE_CHANGED"),
+          ]
+
+          services = []
+          service_names = []
+          for name, path, env_key in mapping:
+              if os.environ.get(env_key, "false").lower() == "true":
+                  services.append({"name": name, "path": path})
+                  service_names.append(name)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"services={json.dumps(services)}\n")
+              fh.write(f"service-names={' '.join(service_names)}\n")
+          PY
 
   # Job 2: Test API Gateway
   test-api-gateway:
@@ -288,29 +326,9 @@ jobs:
       (needs.test-session-service.result == 'success' || needs.test-session-service.result == 'skipped') &&
       (needs.test-communication-service.result == 'success' || needs.test-communication-service.result == 'skipped')
     strategy:
+      fail-fast: false
       matrix:
-        service:
-          - name: api-gateway
-            path: BE/api-gateway
-            condition: ${{ needs.detect-changes.outputs.api-gateway == 'true' }}
-          - name: user-service
-            path: BE/User_service
-            condition: ${{ needs.detect-changes.outputs.user-service == 'true' }}
-          - name: settings-service
-            path: BE/Settings_service
-            condition: ${{ needs.detect-changes.outputs.settings-service == 'true' }}
-          - name: zone-service
-            path: BE/zone_service
-            condition: ${{ needs.detect-changes.outputs.zone-service == 'true' }}
-          - name: parcel-service
-            path: BE/parcel-service
-            condition: ${{ needs.detect-changes.outputs.parcel-service == 'true' }}
-          - name: session-service
-            path: BE/session-service
-            condition: ${{ needs.detect-changes.outputs.session-service == 'true' }}
-          - name: communication-service
-            path: BE/communication_service
-            condition: ${{ needs.detect-changes.outputs.communication-service == 'true' }}
+        service: ${{ fromJSON(needs.detect-changes.outputs.service-matrix) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -394,7 +412,6 @@ jobs:
             com.ds.run-number=${{ github.run_number }}
 
       - name: Build and push Docker image
-        if: matrix.service.condition == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.service.path }}
@@ -403,3 +420,67 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Job 11: Auto Deploy to aaPanel-managed server
+  auto-deploy:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-and-push]
+    if: |
+      needs.detect-changes.outputs.any-service == 'true' &&
+      needs.build-and-push.result == 'success'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Summarize services scheduled for deployment
+        env:
+          CHANGED_SERVICES: ${{ needs.detect-changes.outputs.changed-service-names }}
+        run: |
+          if [ -z "$CHANGED_SERVICES" ]; then
+            echo "No services selected for deployment."
+          else
+            echo "Services selected for deployment: $CHANGED_SERVICES"
+          fi
+
+      - name: Validate deployment secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          missing=0
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Missing required secret $var"
+              missing=1
+            fi
+          done
+          if [ $missing -eq 1 ]; then
+            exit 1
+          fi
+
+      - name: Deploy updated services via aaPanel host
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          CHANGED_SERVICES: ${{ needs.detect-changes.outputs.changed-service-names }}
+          AAPANEL_STACK_PATH: ${{ secrets.AAPANEL_STACK_PATH }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: CHANGED_SERVICES,AAPANEL_STACK_PATH
+          script_stop: true
+          script: |
+            set -euo pipefail
+            if [ -z "$CHANGED_SERVICES" ]; then
+              echo "No services changed; skipping remote deploy."
+              exit 0
+            fi
+            STACK_PATH="${AAPANEL_STACK_PATH:-/www/server/panel/vhost/docker/delivery-stack}"
+            if [ ! -d "$STACK_PATH" ]; then
+              echo "Stack path $STACK_PATH does not exist on remote host."
+              exit 1
+            fi
+            cd "$STACK_PATH"
+            docker compose pull $CHANGED_SERVICES
+            docker compose up -d $CHANGED_SERVICES
+            echo "aaPanel-managed stack updated successfully."

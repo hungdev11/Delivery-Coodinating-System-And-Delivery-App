@@ -44,7 +44,7 @@ public class SettingsProxyController {
 
     @PostMapping
     public ResponseEntity<?> listSettings(@RequestBody Object query) {
-        log.info("POST /api/v1/settings - Proxying to Settings Service (list)");
+        log.debug("[api-gateway] [SettingsProxyController.listSettings] POST /api/v1/settings - Proxying to Settings Service (list)");
         return proxyControllerSupport.forward(SETTINGS_SERVICE, HttpMethod.POST, settingsBaseUrl, query);
     }
 
@@ -53,7 +53,7 @@ public class SettingsProxyController {
      */
     @GetMapping("/{group}")
     public ResponseEntity<?> getSettingsByGroup(@PathVariable String group) {
-        log.info("GET /api/v1/settings/{} - Proxying to Settings Service", group);
+        log.debug("[api-gateway] [SettingsProxyController.getSettingsByGroup] GET /api/v1/settings/{} - Proxying to Settings Service", group);
         return proxyControllerSupport.forward(SETTINGS_SERVICE, HttpMethod.GET, settingsBaseUrl + "/" + group, null);
     }
 
@@ -62,7 +62,7 @@ public class SettingsProxyController {
      */
     @GetMapping("/{group}/{key}")
     public ResponseEntity<?> getSetting(@PathVariable String group, @PathVariable String key) {
-        log.info("GET /api/v1/settings/{}/{} - Proxying to Settings Service", group, key);
+        log.debug("[api-gateway] [SettingsProxyController.getSetting] GET /api/v1/settings/{}/{} - Proxying to Settings Service", group, key);
         return proxyControllerSupport.forward(SETTINGS_SERVICE, HttpMethod.GET, settingsBaseUrl + "/" + group + "/" + key, null);
     }
 
@@ -71,7 +71,7 @@ public class SettingsProxyController {
      */
     @GetMapping("/{group}/{key}/value")
     public ResponseEntity<String> getSettingValue(@PathVariable String group, @PathVariable String key) {
-        log.info("GET /api/v1/settings/{}/{}/value - Proxying to Settings Service", group, key);
+        log.debug("[api-gateway] [SettingsProxyController.getSettingValue] GET /api/v1/settings/{}/{}/value - Proxying to Settings Service", group, key);
         return proxyControllerSupport.forwardForString(SETTINGS_SERVICE, HttpMethod.GET, settingsBaseUrl + "/" + group + "/" + key + "/value", null);
     }
 
@@ -85,7 +85,7 @@ public class SettingsProxyController {
             @PathVariable String group,
             @PathVariable String key,
             @RequestBody Object request) {
-        log.info("PUT /api/v1/settings/{}/{} - Proxying to Settings Service", group, key);
+        log.debug("[api-gateway] [SettingsProxyController.upsertSetting] PUT /api/v1/settings/{}/{} - Proxying to Settings Service", group, key);
         return proxyControllerSupport.forward(SETTINGS_SERVICE, HttpMethod.PUT, settingsBaseUrl + "/" + group + "/" + key, request);
     }
 
@@ -96,7 +96,7 @@ public class SettingsProxyController {
     @DeleteMapping("/{group}/{key}")
     @AuthRequired
     public ResponseEntity<?> deleteSetting(@PathVariable String group, @PathVariable String key) {
-        log.info("DELETE /api/v1/settings/{}/{} - Proxying to Settings Service", group, key);
+        log.debug("[api-gateway] [SettingsProxyController.deleteSetting] DELETE /api/v1/settings/{}/{} - Proxying to Settings Service", group, key);
         return proxyControllerSupport.forward(SETTINGS_SERVICE, HttpMethod.DELETE, settingsBaseUrl + "/" + group + "/" + key, null);
     }
 }

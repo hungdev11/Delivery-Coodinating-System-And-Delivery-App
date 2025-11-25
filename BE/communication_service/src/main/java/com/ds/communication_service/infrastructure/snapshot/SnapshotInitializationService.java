@@ -65,7 +65,7 @@ public class SnapshotInitializationService {
     @Transactional
     public void doInitializeSnapshot() {
         if (!initializationEnabled) {
-            log.info("⏭️ Snapshot initialization disabled, skipping...");
+            log.debug("[communication-service] [SnapshotInitializationService.doInitializeSnapshot] Snapshot initialization disabled, skipping...");
             return;
         }
 
@@ -74,19 +74,19 @@ public class SnapshotInitializationService {
             long snapshotCount = userSnapshotRepository.count();
             
             if (snapshotCount > 0) {
-                log.info("✅ UserSnapshot table already has {} records, skipping initialization", snapshotCount);
+                log.debug("[communication-service] [SnapshotInitializationService.doInitializeSnapshot] UserSnapshot table already has {} records, skipping initialization", snapshotCount);
                 return;
             }
 
-            log.info("🔄 UserSnapshot table is empty, starting initialization...");
+            log.debug("[communication-service] [SnapshotInitializationService.doInitializeSnapshot] UserSnapshot table is empty, starting initialization...");
             
             // Download and load all users
             int totalLoaded = loadAllUsersFromDump();
             
-            log.info("✅ Snapshot initialization completed: {} users loaded", totalLoaded);
+            log.debug("[communication-service] [SnapshotInitializationService.doInitializeSnapshot] Snapshot initialization completed: {} users loaded", totalLoaded);
             
         } catch (Exception e) {
-            log.error("❌ Error during snapshot initialization: {}", e.getMessage(), e);
+            log.error("[communication-service] [SnapshotInitializationService.doInitializeSnapshot] Error during snapshot initialization", e);
             // Don't throw - allow application to start even if initialization fails
             // Kafka consumer will handle updates going forward
         }
@@ -103,7 +103,7 @@ public class SnapshotInitializationService {
                 String url = String.format("%s/internal/user-dump?page=%d&size=%d", 
                     userServiceUrl, page, pageSize);
                 
-                log.info("📥 Downloading user dump: page={}, size={}", page, pageSize);
+                log.debug("[communication-service] [SnapshotInitializationService.loadAllUsersFromDump] Downloading user dump: page={}, size={}", page, pageSize);
                 
                 ParameterizedTypeReference<Map<String, Object>> responseType = 
                     new ParameterizedTypeReference<Map<String, Object>>() {};
@@ -112,7 +112,7 @@ public class SnapshotInitializationService {
                     url, HttpMethod.GET, null, responseType);
                 
                 if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                    log.error("❌ Failed to download user dump: status={}", response.getStatusCode());
+                    log.error("[communication-service] [SnapshotInitializationService.loadAllUsersFromDump] Failed to download user dump: status={}", response.getStatusCode());
                     break;
                 }
 
@@ -121,7 +121,7 @@ public class SnapshotInitializationService {
                 List<Map<String, Object>> users = (List<Map<String, Object>>) body.get("users");
                 
                 if (users == null || users.isEmpty()) {
-                    log.warn("⚠️ No users returned in dump response");
+                    log.debug("[communication-service] [SnapshotInitializationService.loadAllUsersFromDump] No users returned in dump response");
                     break;
                 }
 
@@ -148,7 +148,7 @@ public class SnapshotInitializationService {
                 userSnapshotRepository.saveAll(snapshots);
                 totalLoaded += snapshots.size();
                 
-                log.info("✅ Loaded {} users (total: {})", snapshots.size(), totalLoaded);
+                log.debug("[communication-service] [SnapshotInitializationService.loadAllUsersFromDump] Loaded {} users (total: {})", snapshots.size(), totalLoaded);
 
                 // Check if there are more pages
                 Boolean hasNext = (Boolean) body.get("hasNext");
@@ -156,7 +156,7 @@ public class SnapshotInitializationService {
                 page++;
 
             } catch (Exception e) {
-                log.error("❌ Error loading users from dump (page {}): {}", page, e.getMessage(), e);
+                log.error("[communication-service] [SnapshotInitializationService.loadAllUsersFromDump] Error loading users from dump (page {})", page, e);
                 break;
             }
         }
@@ -177,7 +177,7 @@ public class SnapshotInitializationService {
             }
             return LocalDateTime.parse(dateTimeStr);
         } catch (Exception e) {
-            log.warn("⚠️ Failed to parse datetime: {}, using now()", dateTimeObj);
+            log.debug("[communication-service] [SnapshotInitializationService.parseDateTime] Failed to parse datetime: {}, using now()", dateTimeObj);
             return LocalDateTime.now();
         }
     }

@@ -60,6 +60,12 @@
         <activity
             android:name=".ParcelDetailActivity"
             android:exported="false" />
+        <activity
+            android:name=".SessionQRDisplayActivity"
+            android:exported="false" />
+        <activity
+            android:name=".SessionQRScanActivity"
+            android:exported="false" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

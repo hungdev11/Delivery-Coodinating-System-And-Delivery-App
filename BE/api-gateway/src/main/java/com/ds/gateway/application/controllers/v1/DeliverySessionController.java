@@ -29,7 +29,7 @@ public class DeliverySessionController {
      */
     @GetMapping("/{sessionId}/with-assignments")
     public ResponseEntity<?> getSessionWithAssignments(@PathVariable UUID sessionId) {
-        log.info("Getting session {} with all assignments", sessionId);
+        log.debug("[api-gateway] [DeliverySessionController.getSessionWithAssignments] Getting session {} with all assignments", sessionId);
         return deliverySessionService.getSessionWithAssignments(sessionId);
     }
 
@@ -40,7 +40,7 @@ public class DeliverySessionController {
      */
     @GetMapping("/{sessionId}/demo-route")
     public ResponseEntity<?> getDemoRouteForSession(@PathVariable UUID sessionId) {
-        log.info("Getting demo route for session {}", sessionId);
+        log.debug("[api-gateway] [DeliverySessionController.getDemoRouteForSession] Getting demo route for session {}", sessionId);
         return deliverySessionService.getDemoRouteForSession(sessionId);
     }
 
@@ -53,7 +53,7 @@ public class DeliverySessionController {
             @PathVariable UUID sessionId,
             @PathVariable UUID assignmentId,
             @RequestBody Object statusUpdateRequest) {
-        log.info("Updating assignment {} and parcel status for session {}", assignmentId, sessionId);
+        log.debug("[api-gateway] [DeliverySessionController.updateAssignmentAndParcelStatus] Updating assignment {} and parcel status for session {}", assignmentId, sessionId);
         return deliverySessionService.updateAssignmentAndParcelStatus(sessionId, assignmentId, statusUpdateRequest);
     }
 }

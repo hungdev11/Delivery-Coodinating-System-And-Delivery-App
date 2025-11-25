@@ -37,10 +37,10 @@ public class SettingsClient {
                 return (String) response.get("result");
             }
             
-            log.warn("Setting {}/{} not found or has no value", group, key);
+            log.debug("[api-gateway] [SettingsClient.getSettingValue] Setting {}/{} not found or has no value", group, key);
             return null;
         } catch (Exception e) {
-            log.error("Failed to fetch setting {}/{}: {}", group, key, e.getMessage());
+            log.error("[api-gateway] [SettingsClient.getSettingValue] Failed to fetch setting {}/{}", group, key, e);
             return null;
         }
     }

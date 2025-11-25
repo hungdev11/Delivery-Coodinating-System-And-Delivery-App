@@ -34,7 +34,7 @@ public class DeliverySessionControllerV2 {
     public ResponseEntity<BaseResponse<PagedData<SessionResponse>>> searchSessions(
         @Valid @RequestBody PagingRequestV2 request
     ) {
-        log.info("POST /api/v2/delivery-sessions - Search delivery sessions with enhanced filtering (V2)");
+        log.debug("[session-service] [DeliverySessionControllerV2.searchSessions] POST /api/v2/delivery-sessions - Search delivery sessions with enhanced filtering (V2)");
         PagedData<SessionResponse> pagedData = sessionService.searchSessionsV2(request);
         return ResponseEntity.ok(BaseResponse.success(pagedData));
     }

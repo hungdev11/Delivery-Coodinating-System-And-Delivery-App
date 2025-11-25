@@ -24,6 +24,7 @@ export interface GlobalChatListener {
   onNotificationReceived?: (notification: any) => void
   onProposalReceived?: (proposal: MessageResponse) => void
   onProposalUpdate?: (update: ProposalUpdateDTO) => void
+  onUpdateNotificationReceived?: (updateNotification: any) => void
 }
 
 let globalChatInstance: ReturnType<typeof useGlobalChat> | null = null
@@ -38,12 +39,12 @@ export function useGlobalChat() {
   const { connected, connect, disconnect } = useWebSocket()
   const { handleNotification } = useNotifications()
   const { loadConversations } = useConversations()
-  
+
   const unreadCounts = ref<Map<string, number>>(new Map())
   const processedMessageIds = ref<Set<string>>(new Set())
   const pendingProposals = ref<MessageResponse[]>([])
   const listeners = ref<GlobalChatListener[]>([])
-  
+
   const currentUser = getCurrentUser()
   const currentUserId = ref(currentUser?.id || '')
 
@@ -144,10 +145,39 @@ export function useGlobalChat() {
     if (message.type === 'INTERACTIVE_PROPOSAL') {
       handleProposalMessage(message)
     } else {
-      // Normal message - increment unread count if not from current user
-      if (message.conversationId && message.senderId !== currentUserId.value) {
-        const currentCount = getUnreadCount(message.conversationId)
-        updateUnreadCount(message.conversationId, currentCount + 1)
+      // Check if message is delivery completed notification
+      try {
+        const content = message.content
+        if (content && typeof content === 'string') {
+          const messageData = JSON.parse(content)
+          if (messageData && messageData.type === 'DELIVERY_COMPLETED') {
+            // This is a delivery completed message - handle specially
+            console.log('[GlobalChat] Delivery completed message received:', messageData)
+            // Still increment unread count
+            if (message.conversationId && message.senderId !== currentUserId.value) {
+              const currentCount = getUnreadCount(message.conversationId)
+              updateUnreadCount(message.conversationId, currentCount + 1)
+            }
+          } else {
+            // Normal message - increment unread count if not from current user
+            if (message.conversationId && message.senderId !== currentUserId.value) {
+              const currentCount = getUnreadCount(message.conversationId)
+              updateUnreadCount(message.conversationId, currentCount + 1)
+            }
+          }
+        } else {
+          // Normal message - increment unread count if not from current user
+          if (message.conversationId && message.senderId !== currentUserId.value) {
+            const currentCount = getUnreadCount(message.conversationId)
+            updateUnreadCount(message.conversationId, currentCount + 1)
+          }
+        }
+      } catch (e) {
+        // Not JSON or parse error - treat as normal message
+        if (message.conversationId && message.senderId !== currentUserId.value) {
+          const currentCount = getUnreadCount(message.conversationId)
+          updateUnreadCount(message.conversationId, currentCount + 1)
+        }
       }
     }
 
@@ -254,7 +284,7 @@ export function useGlobalChat() {
         // onNotification - handle notifications
         console.log('[GlobalChat] Notification received:', notification)
         handleNotification(notification)
-        
+
         // Notify all listeners
         listeners.value.forEach((listener) => {
           if (listener.onNotificationReceived) {
@@ -266,7 +296,22 @@ export function useGlobalChat() {
           }
         })
       },
-      handleProposalUpdate // onProposalUpdate
+      handleProposalUpdate, // onProposalUpdate
+      (updateNotification) => {
+        // onUpdateNotification - handle update notifications (parcel/assignment updates)
+        console.log('[GlobalChat] Update notification received:', updateNotification)
+
+        // Notify all listeners
+        listeners.value.forEach((listener) => {
+          if (listener.onUpdateNotificationReceived) {
+            try {
+              listener.onUpdateNotificationReceived(updateNotification)
+            } catch (error) {
+              console.error('[GlobalChat] Error notifying update notification listener:', error)
+            }
+          }
+        })
+      }
     )
   }
 

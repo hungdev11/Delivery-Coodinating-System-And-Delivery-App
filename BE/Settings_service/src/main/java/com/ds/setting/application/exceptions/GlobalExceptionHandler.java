@@ -1,5 +1,6 @@
 package com.ds.setting.application.exceptions;
 
+import com.ds.setting.common.entities.dto.common.BaseResponse;
 import com.ds.setting.common.exceptions.ReadOnlySettingException;
 import com.ds.setting.common.exceptions.SettingNotFoundException;
 import lombok.extern.slf4j.Slf4j;
@@ -10,10 +11,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * Global exception handler for REST API
  */
@@ -22,80 +19,49 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(SettingNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleSettingNotFound(SettingNotFoundException ex) {
-        log.error("Setting not found: {}", ex.getMessage());
-        ErrorResponse error = ErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .status(HttpStatus.NOT_FOUND.value())
-                .error("Not Found")
-                .message(ex.getMessage())
-                .build();
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    public ResponseEntity<BaseResponse<Object>> handleSettingNotFound(SettingNotFoundException ex) {
+        log.debug("[settings-service] [GlobalExceptionHandler.handleSettingNotFound] Setting not found: {}",
+                ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(BaseResponse.error("Không tìm thấy cài đặt"));
     }
 
     @ExceptionHandler(ReadOnlySettingException.class)
-    public ResponseEntity<ErrorResponse> handleReadOnlySetting(ReadOnlySettingException ex) {
-        log.error("Read-only setting modification attempted: {}", ex.getMessage());
-        ErrorResponse error = ErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .status(HttpStatus.FORBIDDEN.value())
-                .error("Forbidden")
-                .message(ex.getMessage())
-                .build();
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+    public ResponseEntity<BaseResponse<Object>> handleReadOnlySetting(ReadOnlySettingException ex) {
+        log.debug(
+                "[settings-service] [GlobalExceptionHandler.handleReadOnlySetting] Read-only setting modification attempted: {}",
+                ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(BaseResponse.error("Không thể thay đổi cài đặt này"));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
-        log.error("Illegal argument: {}", ex.getMessage());
-        ErrorResponse error = ErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .status(HttpStatus.BAD_REQUEST.value())
-                .error("Bad Request")
-                .message(ex.getMessage())
-                .build();
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    public ResponseEntity<BaseResponse<Object>> handleIllegalArgument(IllegalArgumentException ex) {
+        log.debug("[settings-service] [GlobalExceptionHandler.handleIllegalArgument] Illegal argument: {}",
+                ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(BaseResponse.error(ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationErrors(MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new HashMap<>();
+    public ResponseEntity<BaseResponse<Object>> handleValidationErrors(MethodArgumentNotValidException ex) {
+        StringBuilder errorMessage = new StringBuilder("Dữ liệu không hợp lệ: ");
         ex.getBindingResult().getAllErrors().forEach(error -> {
             String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
+            String message = error.getDefaultMessage();
+            errorMessage.append(fieldName).append(" - ").append(message).append("; ");
         });
 
-        ErrorResponse error = ErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .status(HttpStatus.BAD_REQUEST.value())
-                .error("Validation Failed")
-                .message("Invalid request parameters")
-                .validationErrors(errors)
-                .build();
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        log.debug("[settings-service] [GlobalExceptionHandler.handleValidationErrors] Validation failed: {}",
+                errorMessage);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(BaseResponse.error(errorMessage.toString()));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
-        log.error("Unexpected error: ", ex);
-        ErrorResponse error = ErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                .error("Internal Server Error")
-                .message("An unexpected error occurred")
-                .build();
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
-    }
-
-    @lombok.Data
-    @lombok.Builder
-    public static class ErrorResponse {
-        private LocalDateTime timestamp;
-        private int status;
-        private String error;
-        private String message;
-        private Map<String, String> validationErrors;
+    public ResponseEntity<BaseResponse<Object>> handleGlobalException(Exception ex) {
+        log.error("[settings-service] [GlobalExceptionHandler.handleGlobalException] Unexpected error", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(BaseResponse.error("System have a technical issues!"));
     }
 }
-

@@ -10,6 +10,7 @@ import androidx.lifecycle.MutableLiveData;
 
 import com.ds.deliveryapp.clients.ParcelClient;
 import com.ds.deliveryapp.clients.SessionClient;
+import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.ShipperInfo;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.Parcel;
@@ -73,22 +74,29 @@ public class ParcelTrackViewModel extends AndroidViewModel {
 
         // 1. Gọi API lấy thông tin đơn hàng
         parcelClient.getParcelByCode(code)
-                .enqueue(new Callback<Parcel>() {
+                .enqueue(new Callback<BaseResponse<Parcel>>() {
                     @Override
-                    public void onResponse(@NonNull Call<Parcel> call, @NonNull Response<Parcel> response) {
+                    public void onResponse(@NonNull Call<BaseResponse<Parcel>> call, @NonNull Response<BaseResponse<Parcel>> response) {
                         if (response.isSuccessful() && response.body() != null) {
-                            Parcel parcel = response.body();
-                            parcelResult.setValue(parcel);
-                            Log.i("PPPP", response.body().getCode());
-                            // 2. Nếu thành công, gọi API lấy thông tin tài xế
-                            fetchShipperInfo(parcel.getId());
+                            BaseResponse<Parcel> baseResponse = response.body();
+                            if (baseResponse.getResult() != null) {
+                                Parcel parcel = baseResponse.getResult();
+                                parcelResult.setValue(parcel);
+                                Log.i("PPPP", parcel.getCode());
+                                // 2. Nếu thành công, gọi API lấy thông tin tài xế
+                                fetchShipperInfo(parcel.getId());
+                            } else {
+                                isLoading.setValue(false);
+                                String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không tìm thấy đơn hàng";
+                                errorMessage.setValue(errorMsg);
+                            }
                         } else {
                             isLoading.setValue(false);
                             errorMessage.setValue("Không tìm thấy đơn hàng?: " + response.code());
                         }
                     }
                     @Override
-                    public void onFailure(@NonNull Call<Parcel> call, @NonNull Throwable t) {
+                    public void onFailure(@NonNull Call<BaseResponse<Parcel>> call, @NonNull Throwable t) {
                         isLoading.setValue(false);
                         errorMessage.setValue("Lỗi mạng (Parcel): " + t.getMessage());
                     }
@@ -98,23 +106,30 @@ public class ParcelTrackViewModel extends AndroidViewModel {
     private void fetchShipperInfo(String parcelId) {
         // 2. Gọi API lấy thông tin tài xế
         sessionClient.getLastestShipperInfoForParcel(parcelId)
-                .enqueue(new Callback<ShipperInfo>() {
+                .enqueue(new Callback<BaseResponse<ShipperInfo>>() {
                     @Override
-                    public void onResponse(@NonNull Call<ShipperInfo> call, @NonNull Response<ShipperInfo> response) {
+                    public void onResponse(@NonNull Call<BaseResponse<ShipperInfo>> call, @NonNull Response<BaseResponse<ShipperInfo>> response) {
                         isLoading.setValue(false); // (Hoàn thành cả 2 API)
                         Log.i("PASD", parcelId);
                         if (response.isSuccessful() && response.body() != null) {
-                            // Có thông tin tài xế
-                            Log.i("PASD", "Have shipper");
-                            shipperInfoResult.setValue(response.body());
+                            BaseResponse<ShipperInfo> baseResponse = response.body();
+                            if (baseResponse.getResult() != null) {
+                                // Có thông tin tài xế
+                                Log.i("PASD", "Have shipper");
+                                shipperInfoResult.setValue(baseResponse.getResult());
+                            } else {
+                                // Không có tài xế (result null) -> bình thường
+                                Log.i("PASD", "No shipper");
+                                shipperInfoResult.setValue(null);
+                            }
                         } else {
                             // Không có tài xế (response 404 hoặc rỗng) -> bình thường
-                            Log.i("PASD", "Hve shipper");
+                            Log.i("PASD", "No shipper (response error)");
                             shipperInfoResult.setValue(null);
                         }
                     }
                     @Override
-                    public void onFailure(@NonNull Call<ShipperInfo> call, @NonNull Throwable t) {
+                    public void onFailure(@NonNull Call<BaseResponse<ShipperInfo>> call, @NonNull Throwable t) {
                         isLoading.setValue(false);
                         // Lỗi, nhưng vẫn hiển thị thông tin đơn hàng
                         shipperInfoResult.setValue(null);
@@ -128,13 +143,20 @@ public class ParcelTrackViewModel extends AndroidViewModel {
         errorMessage.setValue(null);
 
         parcelClient.changeParcelStatus(parcelId, event)
-                .enqueue(new Callback<Parcel>() {
+                .enqueue(new Callback<BaseResponse<Parcel>>() {
                     @Override
-                    public void onResponse(@NonNull Call<Parcel> call, @NonNull Response<Parcel> response) {
+                    public void onResponse(@NonNull Call<BaseResponse<Parcel>> call, @NonNull Response<BaseResponse<Parcel>> response) {
                         isLoading.setValue(false);
                         if (response.isSuccessful() && response.body() != null) {
-                            parcelResult.setValue(response.body());
-                            statusChangeSuccess.setValue(true);
+                            BaseResponse<Parcel> baseResponse = response.body();
+                            if (baseResponse.getResult() != null) {
+                                parcelResult.setValue(baseResponse.getResult());
+                                statusChangeSuccess.setValue(true);
+                            } else {
+                                String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể cập nhật trạng thái";
+                                errorMessage.setValue(errorMsg);
+                                statusChangeSuccess.setValue(false);
+                            }
                         } else {
                             errorMessage.setValue("Không thể cập nhật trạng thái (" + response.code() + ")");
                             statusChangeSuccess.setValue(false);
@@ -142,7 +164,7 @@ public class ParcelTrackViewModel extends AndroidViewModel {
                     }
 
                     @Override
-                    public void onFailure(@NonNull Call<Parcel> call, @NonNull Throwable t) {
+                    public void onFailure(@NonNull Call<BaseResponse<Parcel>> call, @NonNull Throwable t) {
                         isLoading.setValue(false);
                         errorMessage.setValue("Lỗi mạng (Đổi trạng thái): " + t.getMessage());
                         statusChangeSuccess.setValue(false);

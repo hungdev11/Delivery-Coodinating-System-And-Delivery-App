@@ -49,10 +49,11 @@ public class UserController {
     @PostMapping("/create")
     @Operation(summary = "Create a new user")
     public ResponseEntity<BaseResponse<UserDto>> createUser(@Valid @RequestBody CreateUserRequest request) {
-        log.info("POST /api/v1/users/create - Create user: username={}", request.getUsername());
-        
+        log.debug("Create user: username={}", request.getUsername());
+
         // Note: User ID must be set from Keycloak ID before creating
-        // The request should include the Keycloak ID which will be used as the primary key
+        // The request should include the Keycloak ID which will be used as the primary
+        // key
         User user = User.builder()
                 .id(request.getKeycloakId()) // Use Keycloak ID as the primary key
                 .username(request.getUsername())
@@ -64,27 +65,27 @@ public class UserController {
                 .identityNumber(request.getIdentityNumber())
                 .status(request.getStatus())
                 .build();
-        
+
         User created = userService.createUser(user);
         UserDto dto = buildUserDto(created);
-        
+
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(BaseResponse.success(dto, "User created successfully"));
+                .body(BaseResponse.success(dto));
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Get user by ID")
     public ResponseEntity<BaseResponse<UserDto>> getUser(@PathVariable String id) {
-        log.info("GET /api/v1/users/{} - Get user by ID", id);
-        
+        log.debug("Get user by ID: {}", id);
+
         try {
             // ID is now a String (Keycloak ID)
             Optional<User> userOpt = userService.getUser(id);
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
                 UserDto dto = buildUserDto(user);
-                log.info("Found user: {} with ID: {}", user.getUsername(), user.getId());
+                log.debug("Found user: {} with ID: {}", user.getUsername(), user.getId());
                 return ResponseEntity.ok(BaseResponse.success(dto));
             } else {
                 log.warn("User not found with ID: {}", id);
@@ -104,33 +105,33 @@ public class UserController {
     @Operation(summary = "Get current user")
     public ResponseEntity<BaseResponse<UserDto>> getCurrentUser(
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        log.info("GET /api/v1/users/me - Get current user, header userId={}", userId);
+        log.debug("Get current user, header userId={}", userId);
 
         if (userId == null || userId.isBlank()) {
             return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(BaseResponse.error("Missing X-User-Id header"));
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(BaseResponse.error("Missing X-User-Id header"));
         }
 
         try {
             return userService.getUser(userId)
-                .map(user -> ResponseEntity.ok(BaseResponse.success(buildUserDto(user))))
-                .orElseGet(() -> ResponseEntity
-                    .status(HttpStatus.NOT_FOUND)
-                    .body(BaseResponse.error("User not found")));
+                    .map(user -> ResponseEntity.ok(BaseResponse.success(buildUserDto(user))))
+                    .orElseGet(() -> ResponseEntity
+                            .status(HttpStatus.NOT_FOUND)
+                            .body(BaseResponse.error("User not found")));
         } catch (Exception e) {
             log.error("Error getting current user {}: {}", userId, e.getMessage(), e);
             return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(BaseResponse.error("Failed to load current user: " + e.getMessage()));
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(BaseResponse.error("Failed to load current user: " + e.getMessage()));
         }
     }
 
     @GetMapping("/username/{username}")
     @Operation(summary = "Get user by username")
     public ResponseEntity<BaseResponse<UserDto>> getUserByUsername(@PathVariable String username) {
-        log.info("GET /api/v1/users/username/{} - Get user by username", username);
-        
+        log.debug("Get user by username: {}", username);
+
         return userService.getUserByUsername(username)
                 .map(user -> ResponseEntity.ok(BaseResponse.success(buildUserDto(user))))
                 .orElse(ResponseEntity
@@ -141,36 +142,36 @@ public class UserController {
     @PostMapping
     @Operation(summary = "Get all users with advanced filtering and sorting")
     public ResponseEntity<BaseResponse<PagedData<UserDto>>> getUsers(@Valid @RequestBody PagingRequest query) {
-        log.info("POST /api/v1/users - Get users with advanced filtering and sorting");
+        log.debug("Get users with advanced filtering and sorting");
         log.debug("Query payload: {}", query);
-        
+
         try {
             // Get users using the service
             PagedData<User> userPage = userService.getUsers(query);
-            
+
             // Batch fetch roles for all users in parallel
             List<String> userIds = userPage.getData().stream()
                     .map(User::getId)
                     .filter(id -> id != null && !id.isBlank())
                     .toList();
-            
-            Map<String, List<String>> rolesMap = userIds.isEmpty() 
-                    ? Collections.emptyMap() 
+
+            Map<String, List<String>> rolesMap = userIds.isEmpty()
+                    ? Collections.emptyMap()
                     : externalAuthFacade.batchGetUserRoles(userIds);
-            
+
             // Convert to PagedData<UserDto> with roles
             List<UserDto> userDtos = userPage.getData().stream()
                     .map(user -> buildUserDto(user, rolesMap.getOrDefault(user.getId(), Collections.emptyList())))
                     .toList();
-            
+
             // Use the existing paging from userPage
             PagedData<UserDto> pagedData = PagedData.<UserDto>builder()
                     .data(userDtos)
                     .page(userPage.getPage())
                     .build();
-            
+
             return ResponseEntity.ok(BaseResponse.success(pagedData));
-            
+
         } catch (Exception e) {
             log.error("Error searching users: {}", e.getMessage(), e);
             return ResponseEntity
@@ -179,14 +180,13 @@ public class UserController {
         }
     }
 
-
     @PutMapping("/{id}")
     @Operation(summary = "Update a user")
     public ResponseEntity<BaseResponse<UserDto>> updateUser(
-            @PathVariable String id, 
+            @PathVariable String id,
             @Valid @RequestBody UpdateUserRequest request) {
-        log.info("PUT /api/v1/users/{} - Update user", id);
-        
+        log.debug("Update user: {}", id);
+
         try {
             // ID is now a String (Keycloak ID)
             User user = User.builder()
@@ -198,11 +198,11 @@ public class UserController {
                     .identityNumber(request.getIdentityNumber())
                     .status(request.getStatus())
                     .build();
-            
+
             User updated = userService.updateUser(id, user);
             UserDto dto = buildUserDto(updated);
-            
-            return ResponseEntity.ok(BaseResponse.success(dto, "User updated successfully"));
+
+            return ResponseEntity.ok(BaseResponse.success(dto));
         } catch (Exception e) {
             log.error("Error updating user with ID {}: {}", id, e.getMessage(), e);
             return ResponseEntity
@@ -214,12 +214,12 @@ public class UserController {
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete a user")
     public ResponseEntity<BaseResponse<Void>> deleteUser(@PathVariable String id) {
-        log.info("DELETE /api/v1/users/{} - Delete user", id);
-        
+        log.debug("Delete user: {}", id);
+
         try {
             // ID is now a String (Keycloak ID)
             userService.deleteUser(id);
-            return ResponseEntity.ok(BaseResponse.success(null, "User deleted successfully"));
+            return ResponseEntity.ok(BaseResponse.success(null));
         } catch (Exception e) {
             log.error("Error deleting user with ID {}: {}", id, e.getMessage(), e);
             return ResponseEntity
@@ -231,24 +231,23 @@ public class UserController {
     @PostMapping("/sync")
     @Operation(summary = "Sync user from Keycloak")
     public ResponseEntity<BaseResponse<UserDto>> upsertByKeycloakId(@Valid @RequestBody SyncUserRequest request) {
-        log.info("POST /api/v1/users/sync - Sync user: keycloakId={}", request.getKeycloakId());
-        
+        log.debug("Sync user: keycloakId={}", request.getKeycloakId());
+
         User result = userService.upsertByKeycloakId(
-            request.getKeycloakId(),
-            request.getUsername(),
-            request.getEmail(),
-            request.getFirstName(),
-            request.getLastName()
-        );
-        
+                request.getKeycloakId(),
+                request.getUsername(),
+                request.getEmail(),
+                request.getFirstName(),
+                request.getLastName());
+
         UserDto dto = buildUserDto(result);
-        return ResponseEntity.ok(BaseResponse.success(dto, "User synced successfully"));
+        return ResponseEntity.ok(BaseResponse.success(dto));
     }
 
     private UserDto buildUserDto(User user) {
         return buildUserDto(user, null);
     }
-    
+
     private UserDto buildUserDto(User user, List<String> roles) {
         if (user == null) {
             return null;
@@ -263,7 +262,8 @@ public class UserController {
                 try {
                     roles = externalAuthFacade.getUserRoles(userId);
                 } catch (Exception e) {
-                    log.warn("Failed to load roles for user {} (id={}): {}", user.getUsername(), userId, e.getMessage());
+                    log.warn("Failed to load roles for user {} (id={}): {}", user.getUsername(), userId,
+                            e.getMessage());
                 }
             }
         }

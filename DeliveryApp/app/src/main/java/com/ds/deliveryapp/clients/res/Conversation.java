@@ -18,6 +18,13 @@ public class Conversation {
     private String currentParcelId;
     private String currentParcelCode;
     
-    // Online status
+    // Online status (maps to "isOnline" from backend EnrichedConversationResponse)
     private Boolean partnerOnline;
+    private Boolean isOnline;
+    
+    // Helper method to get online status (checks both fields for compatibility)
+    public Boolean getPartnerOnline() {
+        if (partnerOnline != null) return partnerOnline;
+        return isOnline;
+    }
 }

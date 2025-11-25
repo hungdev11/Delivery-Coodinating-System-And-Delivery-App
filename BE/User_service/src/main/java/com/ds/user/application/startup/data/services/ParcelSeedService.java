@@ -20,7 +20,8 @@ import java.util.stream.Collectors;
 
 /**
  * Service for seeding parcels (orders) for testing
- * Randomly selects shops and clients, uses their primary addresses to create parcels
+ * Randomly selects shops and clients, uses their primary addresses to create
+ * parcels
  */
 @Slf4j
 @Service
@@ -30,15 +31,15 @@ public class ParcelSeedService {
     private final UserAddressRepository userAddressRepository;
     private final WebClient zoneServiceWebClient;
     private final WebClient parcelServiceWebClient;
-    
+
     private final ObjectMapper objectMapper = new ObjectMapper();
-    
+
     @Value("${parcel.seed.enabled:true}")
     private boolean seedEnabled;
-    
+
     @Value("${parcel.seed.count:20}")
     private int seedCount;
-    
+
     public ParcelSeedService(
             UserRepository userRepository,
             UserAddressRepository userAddressRepository,
@@ -57,7 +58,7 @@ public class ParcelSeedService {
      */
     public void seedParcels() {
         if (!seedEnabled) {
-            log.info("📦 Parcel seeding is DISABLED (parcel.seed.enabled=false)");
+            log.debug("Parcel seeding is DISABLED (parcel.seed.enabled=false)");
             return;
         }
         seedParcels(seedCount, null);
@@ -66,7 +67,8 @@ public class ParcelSeedService {
     /**
      * Seed parcels for shops and clients
      * Randomly selects shops and clients, uses their primary addresses
-     * @param count number of parcels to create
+     * 
+     * @param count         number of parcels to create
      * @param authorization optional Authorization header token (for API calls)
      * @return result with success/fail counts
      */
@@ -76,20 +78,22 @@ public class ParcelSeedService {
 
     /**
      * Seed parcels with optional shop/client selection
-     * @param count number of parcels to create
-     * @param shopId optional shop ID (if null, randomly selects)
-     * @param clientId optional client ID (if null, randomly selects)
+     * 
+     * @param count         number of parcels to create
+     * @param shopId        optional shop ID (if null, randomly selects)
+     * @param clientId      optional client ID (if null, randomly selects)
      * @param authorization optional Authorization header token (for API calls)
      * @return result with success/fail counts
      */
-    public ParcelSeedService.SeedParcelsResult seedParcelsWithSelection(int count, String shopId, String clientId, String authorization) {
-        log.info("📦 Starting parcel seeding...");
-        log.info("   Target count: {} parcels", count);
+    public ParcelSeedService.SeedParcelsResult seedParcelsWithSelection(int count, String shopId, String clientId,
+            String authorization) {
+        log.debug("Starting parcel seeding...");
+        log.debug("   Target count: {} parcels", count);
         if (shopId != null) {
-            log.info("   Using shop: {}", shopId);
+            log.debug("   Using shop: {}", shopId);
         }
         if (clientId != null) {
-            log.info("   Using client: {}", clientId);
+            log.debug("   Using client: {}", clientId);
         }
 
         try {
@@ -110,12 +114,12 @@ public class ParcelSeedService {
                     .collect(Collectors.toList());
 
             if (shops.isEmpty() || clients.isEmpty()) {
-                log.warn("⚠️ Cannot seed parcels: No shops or clients found");
-                log.warn("   Shops: {}, Clients: {}", shops.size(), clients.size());
+                log.debug("[user-service] [ParcelSeedService.seedParcels] Cannot seed parcels: No shops or clients found");
+                log.debug("[user-service] [ParcelSeedService.seedParcels]    Shops: {}, Clients: {}", shops.size(), clients.size());
                 return new SeedParcelsResult(0, count, count);
             }
 
-            log.info("   Found {} shops and {} clients", shops.size(), clients.size());
+            log.debug("   Found {} shops and {} clients", shops.size(), clients.size());
 
             // Get primary addresses for shops and clients
             Map<String, String> shopAddresses = new HashMap<>();
@@ -129,25 +133,26 @@ public class ParcelSeedService {
             }
 
             for (User client : clients) {
-                Optional<UserAddress> primaryAddress = userAddressRepository.findByUserIdAndIsPrimaryTrue(client.getId());
+                Optional<UserAddress> primaryAddress = userAddressRepository
+                        .findByUserIdAndIsPrimaryTrue(client.getId());
                 if (primaryAddress.isPresent()) {
                     clientAddresses.put(client.getId(), primaryAddress.get().getDestinationId());
                 }
             }
 
             if (shopAddresses.isEmpty() || clientAddresses.isEmpty()) {
-                log.warn("⚠️ Cannot seed parcels: Shops or clients missing primary addresses");
-                log.warn("   Shops with addresses: {}, Clients with addresses: {}", 
+                log.debug("[user-service] [ParcelSeedService.seedParcels] Cannot seed parcels: Shops or clients missing primary addresses");
+                log.debug("[user-service] [ParcelSeedService.seedParcels]    Shops with addresses: {}, Clients with addresses: {}",
                         shopAddresses.size(), clientAddresses.size());
                 return new SeedParcelsResult(0, count, count);
             }
 
-            log.info("   Shops with primary addresses: {}", shopAddresses.size());
-            log.info("   Clients with primary addresses: {}", clientAddresses.size());
+            log.debug("   Shops with primary addresses: {}", shopAddresses.size());
+            log.debug("   Clients with primary addresses: {}", clientAddresses.size());
 
             // Get address details for shop and client addresses
             Map<String, AddressInfo> addressInfoMap = new HashMap<>();
-            
+
             Set<String> allDestinationIds = new HashSet<>();
             allDestinationIds.addAll(shopAddresses.values());
             allDestinationIds.addAll(clientAddresses.values());
@@ -159,19 +164,19 @@ public class ParcelSeedService {
                         addressInfoMap.put(destinationId, info);
                     }
                 } catch (Exception e) {
-                    log.warn("⚠️ Failed to get address info for {}: {}", destinationId, e.getMessage());
+                    log.debug("[user-service] [ParcelSeedService.seedParcels] Failed to get address info for {}: {}", destinationId, e.getMessage());
                 }
             }
 
-            log.info("   Retrieved address details for {} addresses", addressInfoMap.size());
+            log.debug("   Retrieved address details for {} addresses", addressInfoMap.size());
 
             // Validate specific shop/client if provided
             if (shopId != null && !shopAddresses.containsKey(shopId)) {
-                log.error("❌ Shop ID {} not found or missing primary address", shopId);
+                log.error("[user-service] [ParcelSeedService.seedParcels] Shop ID {} not found or missing primary address", shopId);
                 return new SeedParcelsResult(0, 0, count);
             }
             if (clientId != null && !clientAddresses.containsKey(clientId)) {
-                log.error("❌ Client ID {} not found or missing primary address", clientId);
+                log.error("[user-service] [ParcelSeedService.seedParcels] Client ID {} not found or missing primary address", clientId);
                 return new SeedParcelsResult(0, 0, count);
             }
 
@@ -179,8 +184,8 @@ public class ParcelSeedService {
             Random random = new Random();
             List<String> shopIds = new ArrayList<>(shopAddresses.keySet());
             List<String> clientIds = new ArrayList<>(clientAddresses.keySet());
-            
-            String[] deliveryTypes = {"NORMAL", "EXPRESS", "SUPER_EXPRESS"};
+
+            String[] deliveryTypes = { "NORMAL", "EXPRESS", "FAST", "URGENT", "ECONOMY" };
             int successCount = 0;
             int failCount = 0;
 
@@ -190,13 +195,14 @@ public class ParcelSeedService {
                 try {
                     // Select shop and client (use provided or randomly select)
                     String selectedShopId = shopId != null ? shopId : shopIds.get(random.nextInt(shopIds.size()));
-                    String selectedClientId = clientId != null ? clientId : clientIds.get(random.nextInt(clientIds.size()));
-                    
+                    String selectedClientId = clientId != null ? clientId
+                            : clientIds.get(random.nextInt(clientIds.size()));
+
                     String senderDestinationId = shopAddresses.get(selectedShopId);
                     String receiverDestinationId = clientAddresses.get(selectedClientId);
 
                     if (senderDestinationId == null || receiverDestinationId == null) {
-                        log.warn("⚠️ Skipping parcel {}: Missing address", i + 1);
+                        log.debug("[user-service] [ParcelSeedService.seedParcels] Skipping parcel {}: Missing address", i + 1);
                         failCount++;
                         continue;
                     }
@@ -205,7 +211,7 @@ public class ParcelSeedService {
                     AddressInfo receiverAddress = addressInfoMap.get(receiverDestinationId);
 
                     if (senderAddress == null || receiverAddress == null) {
-                        log.warn("⚠️ Skipping parcel {}: Missing address info", i + 1);
+                        log.debug("[user-service] [ParcelSeedService.seedParcels] Skipping parcel {}: Missing address info", i + 1);
                         failCount++;
                         continue;
                     }
@@ -236,12 +242,12 @@ public class ParcelSeedService {
                             .uri("/api/v1/parcels")
                             .contentType(MediaType.APPLICATION_JSON)
                             .bodyValue(parcelRequest);
-                    
+
                     // Add authorization header if provided (from web UI request)
                     if (authorization != null && !authorization.isBlank()) {
                         requestSpec = requestSpec.header("Authorization", authorization);
                     }
-                    
+
                     String responseBody = requestSpec
                             .retrieve()
                             .bodyToMono(String.class)
@@ -249,43 +255,48 @@ public class ParcelSeedService {
 
                     if (responseBody != null && !responseBody.isBlank()) {
                         JsonNode responseJson = objectMapper.readTree(responseBody);
-                        if (responseJson.has("success") && responseJson.get("success").asBoolean()) {
+                        // Check if response has "success" field (wrapped response) or "id" field
+                        // (direct ParcelResponse)
+                        boolean isSuccess = (responseJson.has("success") && responseJson.get("success").asBoolean())
+                                || responseJson.has("id"); // ParcelResponse has "id" field if successful
+
+                        if (isSuccess) {
                             successCount++;
                             if ((i + 1) % 5 == 0) {
-                                log.info("   Created {}/{} parcels...", i + 1, count);
+                                log.debug("   Created {}/{} parcels...", i + 1, count);
                             }
                         } else {
                             failCount++;
-                            log.warn("⚠️ Failed to create parcel {}: {}", code, responseBody);
+                            log.debug("[user-service] [ParcelSeedService.seedParcels] Failed to create parcel {}: {}", code, responseBody);
                         }
                     } else {
                         failCount++;
-                        log.warn("⚠️ Failed to create parcel {}: Empty response", code);
+                        log.debug("[user-service] [ParcelSeedService.seedParcels] Failed to create parcel {}: Empty response", code);
                     }
 
                 } catch (WebClientResponseException e) {
                     failCount++;
                     String errorBody = e.getResponseBodyAsString();
-                    log.error("❌ Failed to create parcel {}: HTTP {} - Status: {}, Body: {}", 
+                    log.error("[user-service] [ParcelSeedService.seedParcels] Failed to create parcel {}: HTTP {} - Status: {}, Body: {}",
                             code != null ? code : (i + 1), e.getStatusCode(), e.getStatusCode().value(), errorBody);
                     if ((i + 1) == 1 && parcelRequest != null) {
                         // Log detailed error for first failure to help debug
-                        log.error("   First failure details - Request: {}", parcelRequest);
+                        log.error("[user-service] [ParcelSeedService.seedParcels]    First failure details - Request: {}", parcelRequest);
                     }
                 } catch (Exception e) {
                     failCount++;
-                    log.error("❌ Failed to create parcel {}: {}", code != null ? code : (i + 1), e.getMessage(), e);
+                    log.error("[user-service] [ParcelSeedService.seedParcels] Failed to create parcel {}", code != null ? code : (i + 1), e);
                     if ((i + 1) == 1 && parcelRequest != null) {
-                        log.error("   First failure exception - Request: {}", parcelRequest, e);
+                        log.error("[user-service] [ParcelSeedService.seedParcels]    First failure exception - Request: {}", parcelRequest, e);
                     }
                 }
             }
 
-            log.info("✓ Parcel seeding completed: {} successful, {} failed", successCount, failCount);
+            log.debug("[user-service] [ParcelSeedService.seedParcels] Parcel seeding completed: {} successful, {} failed", successCount, failCount);
             return new SeedParcelsResult(successCount, failCount, count);
 
         } catch (Exception e) {
-            log.error("❌ Error during parcel seeding: {}", e.getMessage(), e);
+            log.error("[user-service] [ParcelSeedService.seedParcels] Error during parcel seeding", e);
             return new SeedParcelsResult(0, count, count);
         }
     }
@@ -331,7 +342,7 @@ public class ParcelSeedService {
 
             return new AddressInfo(name, addressText);
         } catch (Exception e) {
-            log.warn("⚠️ Failed to get address info for {}: {}", destinationId, e.getMessage());
+            log.warn("Failed to get address info for {}: {}", destinationId, e.getMessage());
             return null;
         }
     }

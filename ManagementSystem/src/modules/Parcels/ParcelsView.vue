@@ -31,6 +31,9 @@ import { createSortConfig } from '../../common/utils/query-builder'
 import TableHeaderCell from '../../common/components/TableHeaderCell.vue'
 import { useRouter } from 'vue-router'
 import { getCurrentUser } from '@/common/guards/roleGuard.guard'
+import { useGlobalChat, type GlobalChatListener } from '../Communication/composables'
+import { useConversations } from '../Communication/composables'
+import { onUnmounted } from 'vue'
 
 // Dynamic imports to avoid TypeScript issues
 const PageHeader = defineAsyncComponent(() => import('../../common/components/PageHeader.vue'))
@@ -48,6 +51,50 @@ const table = useTemplateRef('table')
 const toast = useToast()
 const router = useRouter()
 const currentUser = getCurrentUser()
+const { findOrCreateConversation } = useConversations()
+
+// Global chat service for update notifications
+const globalChat = useGlobalChat()
+
+// Update notification listener
+const updateNotificationListener: GlobalChatListener = {
+  onUpdateNotificationReceived: (updateNotification: any) => {
+    if (!updateNotification) return
+
+    const entityType = updateNotification.entityType
+    const action = updateNotification.action
+
+    // Handle SESSION_UPDATE: when session completed, clear in-progress parcels
+    if (entityType === 'SESSION' && action === 'COMPLETED') {
+      const message = updateNotification.message || 'Phiên giao hàng đã kết thúc'
+      toast.add({
+        title: 'Phiên giao hàng đã kết thúc',
+        description: message,
+        color: 'info',
+        icon: 'i-heroicons-truck',
+      })
+
+      // Refresh parcel list to clear in-progress parcels
+      loadParcels()
+    }
+
+    // Handle PARCEL_UPDATE notifications
+    if (entityType === 'PARCEL') {
+      if (action === 'STATUS_CHANGED' || action === 'UPDATED' || action === 'COMPLETED') {
+        // Show light notification
+        const message = updateNotification.message || 'Đơn hàng đã được cập nhật'
+        toast.add({
+          title: 'Cập nhật đơn hàng',
+          description: message,
+          color: 'success',
+        })
+
+        // Refresh parcel list
+        loadParcels()
+      }
+    }
+  },
+}
 
 // Export composable
 const { exportParcels } = useParcelExport()
@@ -256,6 +303,44 @@ const handleFiltersUpdate = ({ columnId, filters }: ColumnFilterUpdatePayload) =
 // Table columns configuration
 const columns: TableColumn<ParcelDto>[] = [
   {
+    accessorKey: 'actions',
+    header: 'Actions',
+    cell: ({ row }) => {
+      const parcel = row.original
+      return h('div', { class: 'flex space-x-2' }, [
+        h(UButton, {
+          icon: 'i-heroicons-chat-bubble-left-right',
+          size: 'sm',
+          variant: 'ghost',
+          title: 'Chat with receiver',
+          onClick: () => openChat(parcel),
+        }),
+        h(UButton, {
+          icon: 'i-heroicons-qr-code',
+          size: 'sm',
+          variant: 'ghost',
+          title: 'Show QR Code',
+          onClick: () => openQRModal(parcel),
+        }),
+        h(UButton, {
+          icon: 'i-heroicons-pencil',
+          size: 'sm',
+          variant: 'ghost',
+          title: 'Edit parcel',
+          onClick: () => openEditModal(parcel),
+        }),
+        h(UButton, {
+          icon: 'i-heroicons-trash',
+          size: 'sm',
+          variant: 'ghost',
+          color: 'error',
+          title: 'Delete parcel',
+          onClick: () => openDeleteModal(parcel),
+        }),
+      ])
+    },
+  },
+  {
     id: 'select',
     header: ({ table }) =>
       h(UCheckbox, {
@@ -367,6 +452,25 @@ const columns: TableColumn<ParcelDto>[] = [
     },
   },
   {
+    accessorKey: 'createdAt',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost',
+          label: 'Created At',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: true,
+        },
+      }),
+    cell: ({ row }) => {
+      const createdAt = row.getValue('createdAt') as string
+      return h('span', new Date(createdAt).toLocaleString())
+    },
+  },
+  {
     accessorKey: 'weight',
     header: ({ column }) =>
       setupHeader({
@@ -446,44 +550,6 @@ const columns: TableColumn<ParcelDto>[] = [
     accessorKey: 'id',
     header: 'ID',
   },
-  {
-    accessorKey: 'actions',
-    header: 'Actions',
-    cell: ({ row }) => {
-      const parcel = row.original
-      return h('div', { class: 'flex space-x-2' }, [
-        h(UButton, {
-          icon: 'i-heroicons-chat-bubble-left-right',
-          size: 'sm',
-          variant: 'ghost',
-          title: 'Chat with receiver',
-          onClick: () => openChat(parcel),
-        }),
-        h(UButton, {
-          icon: 'i-heroicons-qr-code',
-          size: 'sm',
-          variant: 'ghost',
-          title: 'Show QR Code',
-          onClick: () => openQRModal(parcel),
-        }),
-        h(UButton, {
-          icon: 'i-heroicons-pencil',
-          size: 'sm',
-          variant: 'ghost',
-          title: 'Edit parcel',
-          onClick: () => openEditModal(parcel),
-        }),
-        h(UButton, {
-          icon: 'i-heroicons-trash',
-          size: 'sm',
-          variant: 'ghost',
-          color: 'error',
-          title: 'Delete parcel',
-          onClick: () => openDeleteModal(parcel),
-        }),
-      ])
-    },
-  },
 ]
 
 // Note: With server-side pagination and filtering, we use parcels directly
@@ -550,11 +616,33 @@ const openChat = async (parcel: ParcelDto) => {
     return
   }
 
-  // Navigate to chat with receiver
-  router.push({
-    name: 'communication-chat',
-    query: { partnerId: parcel.receiverId },
-  })
+  try {
+    // Find or create conversation between current user and receiver
+    const conversation = await findOrCreateConversation(currentUser.id, parcel.receiverId)
+
+    if (!conversation || !conversation.conversationId) {
+      toast.add({
+        title: 'Error',
+        description: 'Failed to create or find conversation',
+        color: 'error',
+      })
+      return
+    }
+
+    // Navigate to chat with conversationId as required param
+    router.push({
+      name: 'communication-chat',
+      params: { conversationId: conversation.conversationId },
+      query: { partnerId: parcel.receiverId },
+    })
+  } catch (error) {
+    console.error('Failed to open chat:', error)
+    toast.add({
+      title: 'Error',
+      description: 'Failed to open chat',
+      color: 'error',
+    })
+  }
 }
 
 /**
@@ -719,8 +807,15 @@ const getOperatorLabel = (operator: string): string => {
 }
 
 // Load parcels on mount
+// Register update notification listener
 onMounted(async () => {
+  globalChat.addListener(updateNotificationListener)
   await loadParcels()
+})
+
+// Cleanup: remove listener on unmount
+onUnmounted(() => {
+  globalChat.removeListener(updateNotificationListener)
 })
 
 // Watch for search changes with debounce

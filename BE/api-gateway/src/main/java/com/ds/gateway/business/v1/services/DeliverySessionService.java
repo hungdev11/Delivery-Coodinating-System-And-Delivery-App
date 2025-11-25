@@ -29,16 +29,16 @@ public class DeliverySessionService {
      * This is a nesting query that combines session and assignment data
      */
     public ResponseEntity<?> getSessionWithAssignments(java.util.UUID sessionId) {
-        log.info("Fetching session {} with all assignments", sessionId);
+        log.debug("[api-gateway] [DeliverySessionService.getSessionWithAssignments] Fetching session {} with all assignments", sessionId);
         
         // Call session service to get session with assignments
         ResponseEntity<?> sessionResponse = sessionServiceClient.getSessionById(sessionId);
         
         if (sessionResponse.getStatusCode().is2xxSuccessful() && sessionResponse.getBody() != null) {
-            log.info("Successfully retrieved session {} with assignments", sessionId);
+            log.debug("[api-gateway] [DeliverySessionService.getSessionWithAssignments] Successfully retrieved session {} with assignments", sessionId);
             return sessionResponse;
         } else {
-            log.error("Failed to retrieve session {}", sessionId);
+            log.error("[api-gateway] [DeliverySessionService.getSessionWithAssignments] Failed to retrieve session {}", sessionId);
             return ResponseEntity.status(sessionResponse.getStatusCode()).body(sessionResponse.getBody());
         }
     }
@@ -49,14 +49,14 @@ public class DeliverySessionService {
      * It takes session data and calculates a demo route for all assignments
      */
     public ResponseEntity<?> getDemoRouteForSession(java.util.UUID sessionId) {
-        log.info("Calculating demo route for session {}", sessionId);
+        log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Calculating demo route for session {}", sessionId);
         
         try {
             // Step 1: Get session with assignments (API 1)
             ResponseEntity<?> sessionResponse = sessionServiceClient.getSessionById(sessionId);
             
             if (!sessionResponse.getStatusCode().is2xxSuccessful() || sessionResponse.getBody() == null) {
-                log.error("Failed to retrieve session {} for route calculation", sessionId);
+                log.error("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Failed to retrieve session {} for route calculation", sessionId);
                 return ResponseEntity.status(sessionResponse.getStatusCode()).body(sessionResponse.getBody());
             }
 
@@ -65,7 +65,7 @@ public class DeliverySessionService {
             List<Map<String, Object>> assignments = (List<Map<String, Object>>) sessionData.get("assignments");
             
             if (assignments == null || assignments.isEmpty()) {
-                log.warn("No assignments found for session {}", sessionId);
+                log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] No assignments found for session {}", sessionId);
                 return ResponseEntity.badRequest().body(Map.of("error", "No assignments found for this session"));
             }
 
@@ -83,7 +83,7 @@ public class DeliverySessionService {
                                 return (Map<String, Object>) parcelResponse.getBody();
                             }
                         } catch (Exception e) {
-                            log.error("Error fetching parcel {}: {}", parcelId, e.getMessage());
+                            log.error("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Error fetching parcel {}", parcelId, e);
                         }
                         return null;
                     });
@@ -112,7 +112,7 @@ public class DeliverySessionService {
             }
 
             if (waypoints.isEmpty()) {
-                log.warn("No valid waypoints found for session {}", sessionId);
+                log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] No valid waypoints found for session {}", sessionId);
                 return ResponseEntity.badRequest().body(Map.of("error", "No valid waypoints found for route calculation"));
             }
 
@@ -124,11 +124,11 @@ public class DeliverySessionService {
             CompletableFuture<Object> routeFuture = zoneServiceClient.calculateDemoRoute(routeRequest);
             Object routeResponse = routeFuture.get();
 
-            log.info("Successfully calculated demo route for session {} with {} waypoints", sessionId, waypoints.size());
+            log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Successfully calculated demo route for session {} with {} waypoints", sessionId, waypoints.size());
             return ResponseEntity.ok(routeResponse);
 
         } catch (Exception e) {
-            log.error("Error calculating demo route for session {}: {}", sessionId, e.getMessage(), e);
+            log.error("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Error calculating demo route for session {}", sessionId, e);
             return ResponseEntity.status(500).body(Map.of("error", "Failed to calculate demo route: " + e.getMessage()));
         }
     }
@@ -141,14 +141,14 @@ public class DeliverySessionService {
             java.util.UUID sessionId,
             java.util.UUID assignmentId,
             Object statusUpdateRequest) {
-        log.info("Updating assignment {} and parcel status for session {}", assignmentId, sessionId);
+        log.debug("[api-gateway] [DeliverySessionService.updateAssignmentAndParcelStatus] Updating assignment {} and parcel status for session {}", assignmentId, sessionId);
         
         try {
             // Step 1: Get assignment details to find parcel ID
             ResponseEntity<?> sessionResponse = sessionServiceClient.getSessionById(sessionId);
             
             if (!sessionResponse.getStatusCode().is2xxSuccessful() || sessionResponse.getBody() == null) {
-                log.error("Failed to retrieve session {} for status update", sessionId);
+                log.error("[api-gateway] [DeliverySessionService.updateAssignmentAndParcelStatus] Failed to retrieve session {} for status update", sessionId);
                 return ResponseEntity.status(sessionResponse.getStatusCode()).body(sessionResponse.getBody());
             }
 
@@ -164,13 +164,13 @@ public class DeliverySessionService {
             }
 
             if (targetAssignment == null) {
-                log.error("Assignment {} not found in session {}", assignmentId, sessionId);
+                log.error("[api-gateway] [DeliverySessionService.updateAssignmentAndParcelStatus] Assignment {} not found in session {}", assignmentId, sessionId);
                 return ResponseEntity.badRequest().body(Map.of("error", "Assignment not found in this session"));
             }
 
             String parcelId = (String) targetAssignment.get("parcelId");
             if (parcelId == null) {
-                log.error("Parcel ID not found in assignment {}", assignmentId);
+                log.error("[api-gateway] [DeliverySessionService.updateAssignmentAndParcelStatus] Parcel ID not found in assignment {}", assignmentId);
                 return ResponseEntity.badRequest().body(Map.of("error", "Parcel ID not found in assignment"));
             }
 
@@ -197,15 +197,15 @@ public class DeliverySessionService {
             ResponseEntity<?> updateResponse = sessionServiceClient.updateAssignmentStatus(sessionId, assignmentId, updateRequest);
             
             if (!updateResponse.getStatusCode().is2xxSuccessful()) {
-                log.error("Failed to update assignment {} status", assignmentId);
+                log.error("[api-gateway] [DeliverySessionService.updateAssignmentAndParcelStatus] Failed to update assignment {} status", assignmentId);
                 return ResponseEntity.status(updateResponse.getStatusCode()).body(updateResponse.getBody());
             }
 
-            log.info("Successfully updated assignment {} and parcel {} status", assignmentId, parcelId);
+            log.debug("[api-gateway] [DeliverySessionService.updateAssignmentAndParcelStatus] Successfully updated assignment {} and parcel {} status", assignmentId, parcelId);
             return updateResponse;
 
         } catch (Exception e) {
-            log.error("Error updating assignment and parcel status: {}", e.getMessage(), e);
+            log.error("[api-gateway] [DeliverySessionService.updateAssignmentAndParcelStatus] Error updating assignment and parcel status", e);
             return ResponseEntity.status(500).body(Map.of("error", "Failed to update status: " + e.getMessage()));
         }
     }
@@ -234,7 +234,7 @@ public class DeliverySessionService {
                 }
             }
         } catch (Exception e) {
-            log.warn("Error extracting destination from parcel data: {}", e.getMessage());
+            log.debug("[api-gateway] [DeliverySessionService.extractDestinationFromParcel] Error extracting destination from parcel data: {}", e.getMessage());
         }
         return null;
     }

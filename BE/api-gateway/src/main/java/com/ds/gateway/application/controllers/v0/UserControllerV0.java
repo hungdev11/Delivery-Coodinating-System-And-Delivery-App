@@ -39,7 +39,7 @@ public class UserControllerV0 {
 
     @PostMapping
     public ResponseEntity<?> listUsers(@RequestBody Object requestBody) {
-        log.info("POST /api/v0/users - proxy to User Service");
+        log.debug("[api-gateway] [UserControllerV0.listUsers] POST /api/v0/users - proxy to User Service");
         return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.POST, userV0Url, requestBody);
     }
 }

@@ -23,6 +23,7 @@ import androidx.fragment.app.Fragment;
 import com.ds.deliveryapp.clients.SessionClient;
 import com.ds.deliveryapp.clients.req.RouteInfo;
 import com.ds.deliveryapp.clients.req.TaskFailRequest;
+import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.DeliveryAssignment;
 import com.ds.deliveryapp.model.IssueReason;
@@ -170,13 +171,13 @@ public class TaskActionHandler {
                     return;
                 }
                 Toast.makeText(activity, "Đang gửi yêu cầu hoàn thành...", Toast.LENGTH_LONG).show();
+                // Gửi API request và chỉ update UI khi thành công
                 sendCompletionRequest(pendingAssignment);
-                listener.onStatusUpdated("COMPLETED");
             } else {
                 Toast.makeText(activity, "Đã hủy chụp ảnh.", Toast.LENGTH_SHORT).show();
+                pendingAssignment = null;
+                photoURI = null;
             }
-            pendingAssignment = null;
-            photoURI = null;
         }
     }
 
@@ -213,7 +214,7 @@ public class TaskActionHandler {
                 Toast.makeText(activity, "Lý do không được để trống.", Toast.LENGTH_SHORT).show();
             } else {
                 dispatchFailureEvent(assignment, null, customReason);
-                listener.onStatusUpdated("FAILED");
+                // Status will be updated in API callback
             }
         });
         builder.setNegativeButton("Hủy", (dialog, which) -> dialog.cancel());
@@ -226,7 +227,7 @@ public class TaskActionHandler {
                 .setMessage("Lý do: " + reason.display)
                 .setPositiveButton("Xác Nhận", (dialog, id) -> {
                     dispatchFailureEvent(assignment, reason, null);
-                    listener.onStatusUpdated("FAILED");
+                    // Status will be updated in API callback
                 })
                 .setNegativeButton("Hủy", (dialog, id) -> dialog.dismiss())
                 .create().show();
@@ -250,19 +251,43 @@ public class TaskActionHandler {
         Retrofit retrofit = RetrofitClient.getRetrofitInstance(activity.getApplicationContext());
         SessionClient service = retrofit.create(SessionClient.class);
         RouteInfo routeInfo = RouteInfo.builder().distanceM(1000).durationS(1000).waypoints("{}").build();
-        Call<DeliveryAssignment> call = service.completeTask(driverId, assignment.getParcelId(), routeInfo);
-        call.enqueue(new Callback<DeliveryAssignment>() {
+        Call<BaseResponse<DeliveryAssignment>> call = service.completeTask(driverId, assignment.getParcelId(), routeInfo);
+        call.enqueue(new Callback<BaseResponse<DeliveryAssignment>>() {
             @Override
-            public void onResponse(Call<DeliveryAssignment> call, Response<DeliveryAssignment> response) {
-                if (response.isSuccessful())
-                    Log.d(TAG, "Task COMPLETED event sent successfully.");
-                else
+            public void onResponse(Call<BaseResponse<DeliveryAssignment>> call, Response<BaseResponse<DeliveryAssignment>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    BaseResponse<DeliveryAssignment> baseResponse = response.body();
+                    if (baseResponse.getResult() != null) {
+                        Log.d(TAG, "Task COMPLETED event sent successfully.");
+                        // Cập nhật local state và UI sau khi API call thành công
+                        DeliveryAssignment updatedAssignment = baseResponse.getResult();
+                        // Update assignment với dữ liệu từ server
+                        assignment.setStatus(updatedAssignment.getStatus());
+                        assignment.setCompletedAt(updatedAssignment.getCompletedAt());
+                        // Notify listener để update UI
+                        listener.onStatusUpdated("COMPLETED");
+                        Toast.makeText(activity, "Đã hoàn thành giao hàng!", Toast.LENGTH_SHORT).show();
+                    } else {
+                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể hoàn thành đơn hàng";
+                        Log.e(TAG, "Error response: " + errorMsg);
+                        Toast.makeText(activity, errorMsg, Toast.LENGTH_LONG).show();
+                    }
+                } else {
                     Log.e(TAG, "Response unsuccessful: " + response.code());
+                    Toast.makeText(activity, "Lỗi: Không thể hoàn thành đơn hàng (" + response.code() + ")", Toast.LENGTH_LONG).show();
+                }
+                // Cleanup
+                pendingAssignment = null;
+                photoURI = null;
             }
 
             @Override
-            public void onFailure(Call<DeliveryAssignment> call, Throwable t) {
+            public void onFailure(Call<BaseResponse<DeliveryAssignment>> call, Throwable t) {
                 Log.e(TAG, "Network error: " + t.getMessage());
+                Toast.makeText(activity, "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_LONG).show();
+                // Cleanup
+                pendingAssignment = null;
+                photoURI = null;
             }
         });
     }
@@ -277,19 +302,36 @@ public class TaskActionHandler {
     private void callFailApi(DeliveryAssignment assignment, TaskFailRequest body) {
         Retrofit retrofit = RetrofitClient.getRetrofitInstance(activity.getApplicationContext());
         SessionClient service = retrofit.create(SessionClient.class);
-        Call<DeliveryAssignment> call = service.failTask(driverId, assignment.getParcelId(), body);
-        call.enqueue(new Callback<DeliveryAssignment>() {
+        Call<BaseResponse<DeliveryAssignment>> call = service.failTask(driverId, assignment.getParcelId(), body);
+        call.enqueue(new Callback<BaseResponse<DeliveryAssignment>>() {
             @Override
-            public void onResponse(Call<DeliveryAssignment> call, Response<DeliveryAssignment> response) {
-                if (response.isSuccessful())
-                    Log.d(TAG, "Task FAILED event sent successfully.");
-                else
+            public void onResponse(Call<BaseResponse<DeliveryAssignment>> call, Response<BaseResponse<DeliveryAssignment>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    BaseResponse<DeliveryAssignment> baseResponse = response.body();
+                    if (baseResponse.getResult() != null) {
+                        Log.d(TAG, "Task FAILED event sent successfully.");
+                        // Cập nhật local state sau khi API call thành công
+                        DeliveryAssignment updatedAssignment = baseResponse.getResult();
+                        assignment.setStatus(updatedAssignment.getStatus());
+                        assignment.setFailReason(updatedAssignment.getFailReason());
+                        // Notify listener để update UI
+                        listener.onStatusUpdated("FAILED");
+                        Toast.makeText(activity, "Đã báo cáo thất bại", Toast.LENGTH_SHORT).show();
+                    } else {
+                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể báo cáo thất bại";
+                        Log.e(TAG, "Error response: " + errorMsg);
+                        Toast.makeText(activity, errorMsg, Toast.LENGTH_LONG).show();
+                    }
+                } else {
                     Log.e(TAG, "Response (Fail) unsuccessful: " + response.code());
+                    Toast.makeText(activity, "Lỗi: Không thể báo cáo thất bại (" + response.code() + ")", Toast.LENGTH_LONG).show();
+                }
             }
 
             @Override
-            public void onFailure(Call<DeliveryAssignment> call, Throwable t) {
+            public void onFailure(Call<BaseResponse<DeliveryAssignment>> call, Throwable t) {
                 Log.e(TAG, "Network error (Fail): " + t.getMessage());
+                Toast.makeText(activity, "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_LONG).show();
             }
         });
     }

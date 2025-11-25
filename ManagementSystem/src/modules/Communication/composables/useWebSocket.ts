@@ -37,6 +37,7 @@ export function useWebSocket() {
   const typingCallback = ref<((typingIndicator: any) => void) | null>(null)
   const notificationCallback = ref<((notification: any) => void) | null>(null)
   const proposalUpdateCallback = ref<((proposalUpdate: any) => void) | null>(null)
+  const updateNotificationCallback = ref<((updateNotification: any) => void) | null>(null)
 
   /**
    * Get WebSocket URL from environment or auto-detect from current domain
@@ -97,7 +98,8 @@ export function useWebSocket() {
     onStatusUpdate?: (statusUpdate: any) => void,
     onTypingIndicator?: (typingIndicator: any) => void,
     onNotification?: (notification: any) => void,
-    onProposalUpdate?: (proposalUpdate: any) => void
+    onProposalUpdate?: (proposalUpdate: any) => void,
+    onUpdateNotification?: (updateNotification: any) => void
   ) => {
     if (connected.value || connecting.value) {
       return
@@ -281,6 +283,23 @@ export function useWebSocket() {
             })
             subscriptions.value.push(proposalSub)
           }
+
+          // Subscribe to update notifications (for parcel/assignment updates)
+          if (onUpdateNotification && client) {
+            const updateDest = `/user/queue/updates`
+            console.log(`📡 Subscribing to update notifications: ${updateDest}`)
+
+            const updateSub = client.subscribe(updateDest, (message) => {
+              try {
+                const updateNotification = JSON.parse(message.body)
+                console.log('📥 Update notification received:', updateNotification)
+                onUpdateNotification(updateNotification)
+              } catch (error) {
+                console.error('❌ Failed to parse update notification:', error)
+              }
+            })
+            subscriptions.value.push(updateSub)
+          }
         },
         onStompError: (frame) => {
           console.error('STOMP error:', frame)
@@ -323,6 +342,7 @@ export function useWebSocket() {
       typingCallback.value = onTypingIndicator || null
       notificationCallback.value = onNotification || null
       proposalUpdateCallback.value = onProposalUpdate || null
+      updateNotificationCallback.value = onUpdateNotification || null
     } catch (error) {
       console.error(ErrorLog('❌ Failed to connect WebSocket', error))
       connecting.value = false
@@ -362,7 +382,9 @@ export function useWebSocket() {
           onReconnectCallback.value || undefined,
           statusUpdateCallback.value || undefined,
           typingCallback.value || undefined,
-          notificationCallback.value || undefined
+          notificationCallback.value || undefined,
+          proposalUpdateCallback.value || undefined,
+          updateNotificationCallback.value || undefined
         )
       }
     }, delay)
@@ -588,6 +610,8 @@ export function useWebSocket() {
     statusUpdateCallback.value = null
     typingCallback.value = null
     notificationCallback.value = null
+    proposalUpdateCallback.value = null
+    updateNotificationCallback.value = null
     reconnectAttempts.value = 0
   }
 
@@ -604,7 +628,9 @@ export function useWebSocket() {
         onReconnectCallback.value || undefined,
         statusUpdateCallback.value || undefined,
         typingCallback.value || undefined,
-        notificationCallback.value || undefined
+        notificationCallback.value || undefined,
+        proposalUpdateCallback.value || undefined,
+        updateNotificationCallback.value || undefined
       )
     }
   }

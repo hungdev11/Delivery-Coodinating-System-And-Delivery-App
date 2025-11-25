@@ -35,7 +35,7 @@ public class DeliveryAssignmentController {
             @PathVariable UUID sessionId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        log.info("GET /api/v1/assignments/session/{}/tasks - Get tasks by session ID", sessionId);
+        log.debug("[api-gateway] [DeliveryAssignmentController.getTasksBySessionId] GET /api/v1/assignments/session/{}/tasks - Get tasks by session ID", sessionId);
         return assignmentClient.getTasksBySessionId(sessionId, page, size);
     }
 

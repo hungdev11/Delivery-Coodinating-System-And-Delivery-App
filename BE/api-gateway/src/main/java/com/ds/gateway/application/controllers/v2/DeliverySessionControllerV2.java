@@ -39,7 +39,7 @@ public class DeliverySessionControllerV2 {
 
     @PostMapping
     public ResponseEntity<?> listDeliverySessions(@RequestBody Object requestBody) {
-        log.info("POST /api/v2/delivery-sessions - proxy to Session Service");
+        log.debug("[api-gateway] [DeliverySessionControllerV2.listDeliverySessions] POST /api/v2/delivery-sessions - proxy to Session Service");
         return proxyControllerSupport.forward(SESSION_SERVICE, HttpMethod.POST, deliverySessionsV2Url, requestBody);
     }
 }

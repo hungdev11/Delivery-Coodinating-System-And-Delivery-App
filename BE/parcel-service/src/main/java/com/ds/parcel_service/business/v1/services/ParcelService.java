@@ -109,14 +109,14 @@ public class ParcelService implements IParcelService{
                 
         IParcelState currentStateObject = stateMap.get(currentStatus);
         if (currentStateObject == null) {
-            log.error("Missing state handler for status: {}", currentStatus);
+            log.error("[parcel-service] [ParcelService.processTransition] Missing state handler for status: {}", currentStatus);
             throw new IllegalStateException("Missing state handler for current status.");
         }
         
         ParcelStatus nextStatus = currentStateObject.handleTransition(event);
 
         if (currentStatus.equals(nextStatus)) {
-            log.info("Parcel {} state remains {}. Event processed: {}", parcelId, currentStatus, event);
+            log.debug("[parcel-service] [ParcelService.processTransition] Parcel {} state remains {}. Event processed: {}", parcelId, currentStatus, event);
             return parcel; 
         }
 
@@ -169,7 +169,7 @@ public class ParcelService implements IParcelService{
                 assignmentSnapshotService.updateStatus(snapshot.getAssignmentId(), "SUCCESS");
             }
         } catch (Exception ex) {
-            log.error("Failed to update assignment status for parcel {}: {}", parcelId, ex.getMessage(), ex);
+            log.error("[parcel-service] [ParcelService.confirmParcelByClient] Failed to update assignment status for parcel {}", parcelId, ex);
         }
 
         return toDto(saved);
@@ -214,7 +214,7 @@ public class ParcelService implements IParcelService{
             .build();
 
         parcelDestinationRepository.save(receiverPd);
-        log.info("Linked parcel {} to receiver destination {} (PRIMARY, current)", savedParcel.getId(), request.getReceiverDestinationId());
+        log.debug("[parcel-service] [ParcelService.createParcel] Linked parcel {} to receiver destination {} (PRIMARY, current)", savedParcel.getId(), request.getReceiverDestinationId());
 
         // Link parcel to sender destination (SECONDARY) - not current
         ParcelDestination senderPd = ParcelDestination.builder()
@@ -226,7 +226,7 @@ public class ParcelService implements IParcelService{
             .build();
 
         parcelDestinationRepository.save(senderPd);
-        log.info("Linked parcel {} to sender destination {} (SECONDARY)", savedParcel.getId(), request.getSenderDestinationId());
+        log.debug("[parcel-service] [ParcelService.createParcel] Linked parcel {} to sender destination {} (SECONDARY)", savedParcel.getId(), request.getSenderDestinationId());
         
         // Validate: Ensure only one destination is current
         validateSingleCurrentDestination(savedParcel);
@@ -409,9 +409,10 @@ public class ParcelService implements IParcelService{
     }
 
     private ParcelResponse toDto(Parcel parcel) {
-        // Get sender and receiver names from UserSnapshot
+        // Get sender and receiver info from UserSnapshot
         final String[] senderName = {null};
         final String[] receiverName = {null};
+        final String[] receiverPhoneNumber = {null};
         
         try {
             if (parcel.getSenderId() != null) {
@@ -420,14 +421,18 @@ public class ParcelService implements IParcelService{
             }
             if (parcel.getReceiverId() != null) {
                 userSnapshotRepository.findByUserId(parcel.getReceiverId())
-                    .ifPresent(snapshot -> receiverName[0] = snapshot.getFullName());
+                    .ifPresent(snapshot -> {
+                        receiverName[0] = snapshot.getFullName();
+                        receiverPhoneNumber[0] = snapshot.getPhone();
+                    });
             }
         } catch (Exception e) {
-            log.debug("Could not fetch user names for parcel {}: {}", parcel.getId(), e.getMessage());
+            log.debug("Could not fetch user info for parcel {}: {}", parcel.getId(), e.getMessage());
         }
         
         final String finalSenderName = senderName[0];
         final String finalReceiverName = receiverName[0];
+        final String finalReceiverPhoneNumber = receiverPhoneNumber[0];
         
         return ParcelResponse.builder()
                             .id(parcel.getId().toString())
@@ -437,6 +442,7 @@ public class ParcelService implements IParcelService{
                             .senderName(finalSenderName)
                             .receiverId(parcel.getReceiverId())
                             .receiverName(finalReceiverName)
+                            .receiverPhoneNumber(finalReceiverPhoneNumber)
                             .receiveFrom(parcel.getReceiveFrom())
                             .targetDestination(parcel.getSendTo())
                             .weight(parcel.getWeight())
@@ -458,10 +464,10 @@ public class ParcelService implements IParcelService{
 
     private ParcelResponse toDtoWithLocation(Parcel parcel, DestinationResponse<DesDetail> des) {
         ParcelResponse response = toDto(parcel);
-        log.info("before {} {}", des.getResult().getLat(), des.getResult().getLon());
+        log.debug("[parcel-service] [ParcelService.toDtoWithLocation] before {} {}", des.getResult().getLat(), des.getResult().getLon());
         response.setLat(des.getResult().getLat());
         response.setLon(des.getResult().getLon());
-        log.info("after {} {}", response.getLat(), response.getLon());
+        log.debug("[parcel-service] [ParcelService.toDtoWithLocation] after {} {}", response.getLat(), response.getLon());
         return response;
     }
 
@@ -478,13 +484,13 @@ public class ParcelService implements IParcelService{
     private void validateSingleCurrentDestination(Parcel parcel) {
         List<ParcelDestination> currentDestinations = parcelDestinationRepository.findAllByParcelAndIsCurrentTrue(parcel);
         if (currentDestinations.size() > 1) {
-            log.error("Data integrity issue: Parcel {} has {} current destinations. Expected 0 or 1.", 
+            log.error("[parcel-service] [ParcelService.validateSingleCurrentDestination] Data integrity issue: Parcel {} has {} current destinations. Expected 0 or 1.", 
                 parcel.getId(), currentDestinations.size());
             // Fix: Set all but the first one to false
             for (int i = 1; i < currentDestinations.size(); i++) {
                 currentDestinations.get(i).setCurrent(false);
                 parcelDestinationRepository.save(currentDestinations.get(i));
-                log.warn("Fixed: Set destination {} to not current for parcel {}", 
+                log.debug("[parcel-service] [ParcelService.validateSingleCurrentDestination] Fixed: Set destination {} to not current for parcel {}", 
                     currentDestinations.get(i).getId(), parcel.getId());
             }
         }
@@ -499,10 +505,10 @@ public class ParcelService implements IParcelService{
     @Override
     public Map<String, ParcelResponse> fetchParcelsBulk(List<UUID> parcelIds) {
         long startTime = System.currentTimeMillis();
-        log.info("🚀 Starting optimized fetchParcelsBulk for {} parcels", parcelIds.size());
+        log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Starting optimized fetchParcelsBulk for {} parcels", parcelIds.size());
         
         if (parcelIds == null || parcelIds.isEmpty()) {
-            log.warn("⚠️ No parcel IDs provided");
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] No parcel IDs provided");
             return new HashMap<>();
         }
         
@@ -510,21 +516,21 @@ public class ParcelService implements IParcelService{
         
         try {
             // Step 1: Fetch all parcels in batch (1 query instead of N)
-            log.debug("📦 Step 1: Fetching {} parcels from database...", parcelIds.size());
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Step 1: Fetching {} parcels from database...", parcelIds.size());
             List<Parcel> parcels = parcelRepository.findAllById(parcelIds);
             long dbQueryTime = System.currentTimeMillis() - startTime;
-            log.info("✅ Fetched {} parcels from database in {}ms", parcels.size(), dbQueryTime);
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Fetched {} parcels from database in {}ms", parcels.size(), dbQueryTime);
             
             if (parcels.isEmpty()) {
-                log.warn("⚠️ No parcels found for provided IDs");
+                log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] No parcels found for provided IDs");
                 return result;
             }
             
             // Step 2: Fetch all destinations in batch (1 query instead of N)
-            log.debug("📍 Step 2: Fetching destinations for {} parcels...", parcels.size());
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Step 2: Fetching destinations for {} parcels...", parcels.size());
             List<ParcelDestination> destinations = parcelDestinationRepository.findByParcelInAndIsCurrentTrue(parcels);
             long destinationsTime = System.currentTimeMillis() - startTime - dbQueryTime;
-            log.info("✅ Fetched {} destinations in {}ms", destinations.size(), destinationsTime);
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Fetched {} destinations in {}ms", destinations.size(), destinationsTime);
             
             // Step 3: Create map of parcel -> destination for quick lookup
             Map<String, ParcelDestination> parcelToDestination = destinations.stream()
@@ -535,7 +541,7 @@ public class ParcelService implements IParcelService{
                 ));
             
             // Step 4: Fetch zone destinations in parallel (N parallel calls instead of sequential)
-            log.debug("🌐 Step 3: Fetching zone destinations for {} addresses...", destinations.size());
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Step 3: Fetching zone destinations for {} addresses...", destinations.size());
             List<String> destinationIds = destinations.stream()
                 .map(ParcelDestination::getDestinationId)
                 .distinct()
@@ -552,7 +558,7 @@ public class ParcelService implements IParcelService{
                     try {
                         return zoneClient.getDestination(destinationId);
                     } catch (Exception e) {
-                        log.error("❌ Failed to fetch zone destination {}: {}", destinationId, e.getMessage());
+                        log.error("[parcel-service] [ParcelService.fetchParcelsBulk] Failed to fetch zone destination {}", destinationId, e);
                         return null;
                     }
                 }, executor);
@@ -571,7 +577,7 @@ public class ParcelService implements IParcelService{
                         destinationMap.put(entry.getKey(), response);
                     }
                 } catch (Exception e) {
-                    log.error("❌ Error getting zone destination {}: {}", entry.getKey(), e.getMessage());
+                    log.error("[parcel-service] [ParcelService.fetchParcelsBulk] Error getting zone destination {}", entry.getKey(), e);
                 }
             }
             
@@ -579,17 +585,17 @@ public class ParcelService implements IParcelService{
             executor.shutdown();
             
             long zoneTime = System.currentTimeMillis() - zoneStartTime;
-            log.info("✅ Fetched {} zone destinations in {}ms (parallel)", destinationMap.size(), zoneTime);
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Fetched {} zone destinations in {}ms (parallel)", destinationMap.size(), zoneTime);
             
             // Step 5: Build result map by combining parcel, destination, and zone data
-            log.debug("🔨 Step 4: Building response for {} parcels...", parcels.size());
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Step 4: Building response for {} parcels...", parcels.size());
             for (Parcel parcel : parcels) {
                 try {
                     String parcelIdStr = parcel.getId().toString();
                     ParcelDestination destination = parcelToDestination.get(parcelIdStr);
                     
                     if (destination == null) {
-                        log.warn("⚠️ No destination found for parcel {}", parcelIdStr);
+                        log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] No destination found for parcel {}", parcelIdStr);
                         // Return parcel without location
                         result.put(parcelIdStr, toDto(parcel));
                         continue;
@@ -598,7 +604,7 @@ public class ParcelService implements IParcelService{
                     DestinationResponse<DesDetail> zoneResponse = destinationMap.get(destination.getDestinationId());
                     
                     if (zoneResponse == null || zoneResponse.getResult() == null) {
-                        log.warn("⚠️ No zone data found for destination {} (parcel {})", 
+                        log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] No zone data found for destination {} (parcel {})", 
                                 destination.getDestinationId(), parcelIdStr);
                         // Return parcel without location
                         result.put(parcelIdStr, toDto(parcel));
@@ -609,18 +615,18 @@ public class ParcelService implements IParcelService{
                     ParcelResponse parcelResponse = toDtoWithLocation(parcel, zoneResponse);
                     result.put(parcelIdStr, parcelResponse);
                 } catch (Exception e) {
-                    log.error("❌ Error building response for parcel {}: {}", parcel.getId(), e.getMessage(), e);
+                    log.error("[parcel-service] [ParcelService.fetchParcelsBulk] Error building response for parcel {}", parcel.getId(), e);
                     // Return parcel without location as fallback
                     result.put(parcel.getId().toString(), toDto(parcel));
                 }
             }
             
             long totalTime = System.currentTimeMillis() - startTime;
-            log.info("✅ Completed fetchParcelsBulk: {} parcels in {}ms (DB: {}ms, Destinations: {}ms, Zone: {}ms)", 
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Completed fetchParcelsBulk: {} parcels in {}ms (DB: {}ms, Destinations: {}ms, Zone: {}ms)", 
                     result.size(), totalTime, dbQueryTime, destinationsTime, zoneTime);
             
         } catch (Exception e) {
-            log.error("❌ Critical error in fetchParcelsBulk: {}", e.getMessage(), e);
+            log.error("[parcel-service] [ParcelService.fetchParcelsBulk] Critical error in fetchParcelsBulk", e);
             // Fallback: return empty map or parcels without locations
             try {
                 List<Parcel> parcels = parcelRepository.findAllById(parcelIds);
@@ -628,7 +634,7 @@ public class ParcelService implements IParcelService{
                     result.put(parcel.getId().toString(), toDto(parcel));
                 }
             } catch (Exception fallbackError) {
-                log.error("❌ Fallback also failed: {}", fallbackError.getMessage(), fallbackError);
+                log.error("[parcel-service] [ParcelService.fetchParcelsBulk] Fallback also failed", fallbackError);
             }
         }
         
@@ -659,7 +665,7 @@ public class ParcelService implements IParcelService{
         Parcel parcel = parcelRepository.findById(parcelId)
             .orElseThrow(() -> new ResourceNotFound("Parcel not found with id: " + parcelId));
         
-        log.info("Updating priority for parcel {} from {} to {}", parcelId, parcel.getPriority(), priority);
+        log.debug("[parcel-service] [ParcelService.updatePriority] Updating priority for parcel {} from {} to {}", parcelId, parcel.getPriority(), priority);
         parcel.setPriority(priority);
         
         Parcel updatedParcel = parcelRepository.save(parcel);
@@ -672,7 +678,7 @@ public class ParcelService implements IParcelService{
         Parcel parcel = parcelRepository.findById(parcelId)
             .orElseThrow(() -> new ResourceNotFound("Parcel not found with id: " + parcelId));
         
-        log.info("Delaying parcel {} until {}", parcelId, delayedUntil);
+        log.debug("[parcel-service] [ParcelService.delayParcel] Delaying parcel {} until {}", parcelId, delayedUntil);
         parcel.setIsDelayed(true);
         parcel.setDelayedUntil(delayedUntil);
         
@@ -686,7 +692,7 @@ public class ParcelService implements IParcelService{
         Parcel parcel = parcelRepository.findById(parcelId)
             .orElseThrow(() -> new ResourceNotFound("Parcel not found with id: " + parcelId));
         
-        log.info("Undelaying parcel {}", parcelId);
+        log.debug("[parcel-service] [ParcelService.undelayParcel] Undelaying parcel {}", parcelId);
         parcel.setIsDelayed(false);
         parcel.setDelayedUntil(null);
         

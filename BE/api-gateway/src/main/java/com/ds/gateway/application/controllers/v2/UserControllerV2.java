@@ -44,13 +44,13 @@ public class UserControllerV2 {
 
     @PostMapping
     public ResponseEntity<?> listUsers(@RequestBody Object requestBody) {
-        log.info("POST /api/v2/users - proxy to User Service");
+        log.debug("[api-gateway] [UserControllerV2.listUsers] POST /api/v2/users - proxy to User Service");
         return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.POST, userV2Url, requestBody);
     }
 
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser() {
-        log.info("GET /api/v2/users/me - proxy to User Service");
+        log.debug("[api-gateway] [UserControllerV2.getCurrentUser] GET /api/v2/users/me - proxy to User Service");
         return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.GET, currentUserUrl, null);
     }
 }

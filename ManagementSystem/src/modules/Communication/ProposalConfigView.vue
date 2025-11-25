@@ -137,7 +137,7 @@ const handleCancel = () => {
             <UFormGroup label="Type" required>
               <USelect
                 :model-value="editingConfig?.type || ''"
-                :items="['CONFIRM_REFUSAL', 'RESCHEDULE', 'CANCEL_ORDER', 'OTHER']"
+                :items="['CONFIRM_REFUSAL', 'POSTPONE_REQUEST', 'DELAY_ORDER_RECEIVE']"
                 placeholder="Select type"
               />
             </UFormGroup>

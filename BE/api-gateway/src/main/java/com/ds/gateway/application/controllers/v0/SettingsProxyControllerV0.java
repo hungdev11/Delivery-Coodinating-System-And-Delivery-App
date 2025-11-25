@@ -37,7 +37,7 @@ public class SettingsProxyControllerV0 {
 
     @PostMapping
     public ResponseEntity<?> listSettings(@RequestBody Object requestBody) {
-        log.info("POST /api/v0/settings - proxy to Settings Service");
+        log.debug("[api-gateway] [SettingsProxyControllerV0.listSettings] POST /api/v0/settings - proxy to Settings Service");
         return proxyControllerSupport.forward(SETTINGS_SERVICE, HttpMethod.POST, settingsV0Url, requestBody);
     }
 }

@@ -71,4 +71,33 @@ public interface ISessionService {
      * @return PagedData with sessions
      */
     PagedData<SessionResponse> searchSessionsV2(PagingRequestV2 request);
+    
+    /**
+     * Calculate delivery time for a list of parcels
+     * Used to validate if postpone time is within session time
+     * @param request Request with parcel IDs and optional current location
+     * @return Delivery time response with estimated completion time
+     */
+    com.ds.session.session_service.common.entities.dto.response.DeliveryTimeResponse calculateDeliveryTime(
+        com.ds.session.session_service.common.entities.dto.request.CalculateDeliveryTimeRequest request
+    );
+    
+    /**
+     * Transfer a parcel from current shipper to another shipper
+     * Only allows transferring ON_ROUTE parcels
+     * @param fromDeliveryManId ID of shipper transferring the parcel
+     * @param request Request containing parcelId and targetSessionId
+     * @return Assignment response for the new assignment
+     */
+    AssignmentResponse transferParcel(String fromDeliveryManId, 
+        com.ds.session.session_service.common.entities.dto.request.TransferParcelRequest request);
+    
+    /**
+     * Accept a transferred parcel by scanning source session QR
+     * @param toDeliveryManId ID of shipper accepting the parcel
+     * @param request Request containing sourceSessionId and parcelId
+     * @return Assignment response for the new assignment
+     */
+    AssignmentResponse acceptTransferredParcel(String toDeliveryManId,
+        com.ds.session.session_service.common.entities.dto.request.AcceptTransferredParcelRequest request);
 }

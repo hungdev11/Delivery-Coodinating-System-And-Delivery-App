@@ -35,6 +35,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
     private LinearLayout layoutCompletedAt, layoutFailReason;
     private DeliveryAssignment currentTask;
     private TaskActionHandler actionHandler;
+    private String sessionStatus; // CREATED, IN_PROGRESS, etc.
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,11 +47,13 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         Intent intent = getIntent();
         if (intent != null && intent.hasExtra("TASK_DETAIL")) {
             currentTask = (DeliveryAssignment) intent.getSerializableExtra("TASK_DETAIL");
+            sessionStatus = intent.getStringExtra("SESSION_STATUS");
 
             if (currentTask != null) {
                 actionHandler = new TaskActionHandler(this, this);
                 displayData(currentTask);
                 setupEventListeners(currentTask);
+                updateButtonsBasedOnSessionStatus();
             } else {
                 Toast.makeText(this, "Lỗi tải dữ liệu chi tiết.", Toast.LENGTH_LONG).show();
                 finish();
@@ -140,6 +143,27 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         }
     }
 
+    /**
+     * Disable actions when session is not IN_PROGRESS (e.g., CREATED).
+     * Only allow: call, chat, and cancel/delay (btnFailAction).
+     */
+    private void updateButtonsBasedOnSessionStatus() {
+        boolean isSessionActive = "IN_PROGRESS".equals(sessionStatus);
+        
+        if (!isSessionActive) {
+            // Session not started - disable completion action
+            if (btnMainAction != null) {
+                btnMainAction.setEnabled(false);
+                btnMainAction.setText("BẮT ĐẦU PHIÊN ĐỂ GIAO HÀNG");
+                btnMainAction.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                    getResources().getColor(android.R.color.darker_gray)));
+            }
+            // btnFailAction is allowed (for DELAY/cancel)
+            // btnCallReceiver is allowed
+            // btnChatReceiver is allowed
+        }
+    }
+
     private void setupEventListeners(DeliveryAssignment task) {
         if (btnCallReceiver != null) {
             btnCallReceiver.setOnClickListener(v -> {
@@ -221,7 +245,10 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         currentTask.setStatus(newStatus);
         updateMainActionButton(newStatus);
 
+        // Pass updated task info back to TaskFragment
         Intent resultIntent = new Intent();
+        resultIntent.putExtra("UPDATED_TASK", currentTask);
+        resultIntent.putExtra("NEW_STATUS", newStatus);
         setResult(Activity.RESULT_OK, resultIntent);
 
         displayData(currentTask);
@@ -230,4 +257,3 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         finish();
     }
 }
-

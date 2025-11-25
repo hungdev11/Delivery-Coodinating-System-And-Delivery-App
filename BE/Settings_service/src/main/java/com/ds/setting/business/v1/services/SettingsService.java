@@ -294,7 +294,7 @@ public class SettingsService {
                     existing.setUpdatedBy(userId);
                     
                     SystemSetting updated = settingRepository.save(existing);
-                    log.info("Updated setting: key={}, group={}, updatedBy={}", key, group, userId);
+                    log.debug("[settings-service] [SettingsService.upsertByKeyAndGroup] Updated setting: key={}, group={}, updatedBy={}", key, group, userId);
                     return toDto(updated);
                 })
                 .orElseGet(() -> {
@@ -311,7 +311,7 @@ public class SettingsService {
                             .updatedBy(userId)
                             .build();
                     SystemSetting saved = settingRepository.save(setting);
-                    log.info("Created setting: key={}, group={}, createdBy={}", key, group, userId);
+                    log.debug("[settings-service] [SettingsService.upsertByKeyAndGroup] Created setting: key={}, group={}, createdBy={}", key, group, userId);
                     return toDto(saved);
                 });
     }
@@ -345,7 +345,7 @@ public class SettingsService {
         setting.setUpdatedBy(updatedBy);
 
         SystemSetting updated = settingRepository.save(setting);
-        log.info("Updated setting: key={}, updatedBy={}", key, updatedBy);
+        log.debug("[settings-service] [SettingsService.updateSetting] Updated setting: key={}, updatedBy={}", key, updatedBy);
 
         return toDto(updated);
     }
@@ -380,7 +380,7 @@ public class SettingsService {
         setting.setUpdatedBy(updatedBy);
 
         SystemSetting updated = settingRepository.save(setting);
-        log.info("Updated setting: key={}, group={}, updatedBy={}", key, group, updatedBy);
+        log.debug("[settings-service] [SettingsService.updateByKeyAndGroup] Updated setting: key={}, group={}, updatedBy={}", key, group, updatedBy);
 
         return toDto(updated);
     }
@@ -396,7 +396,7 @@ public class SettingsService {
                         String.format("Setting not found: key=%s, group=%s", key, group)));
 
         settingRepository.delete(setting);
-        log.info("Deleted setting: key={}, group={}", key, group);
+        log.debug("[settings-service] [SettingsService.deleteByKeyAndGroup] Deleted setting: key={}, group={}", key, group);
     }
 
     /**

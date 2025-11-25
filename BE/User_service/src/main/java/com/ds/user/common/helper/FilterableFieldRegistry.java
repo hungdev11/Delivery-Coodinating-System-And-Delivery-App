@@ -28,7 +28,7 @@ public class FilterableFieldRegistry {
      */
     public void registerFields(Class<?> entityClass, Set<FilterableFieldInfo> fieldInfos) {
         fieldRegistry.put(entityClass, fieldInfos);
-        log.info("Registered {} filterable fields for {}", fieldInfos.size(), entityClass.getSimpleName());
+        log.debug("[user-service] [FilterableFieldRegistry.registerFields] Registered {} filterable fields for {}", fieldInfos.size(), entityClass.getSimpleName());
     }
 
     /**

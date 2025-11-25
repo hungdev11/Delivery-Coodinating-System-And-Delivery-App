@@ -193,11 +193,24 @@ public class ProposalPopupDialog extends Dialog {
         // Convert action to resultData format expected by backend
         String resultData;
         if ("ACCEPT".equals(action) || "CONFIRM".equals(action)) {
-            resultData = "ACCEPTED";
+            JsonObject result = new JsonObject();
+            result.addProperty("status", "ACCEPTED");
+            // Add timestamp for when it was accepted
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                result.addProperty("acceptedAt", java.time.Instant.now().toString());
+            } else {
+                result.addProperty("acceptedAt", String.valueOf(System.currentTimeMillis()));
+            }
+            resultData = result.toString();
         } else if ("DECLINE".equals(action)) {
-            resultData = "DECLINED";
+            JsonObject result = new JsonObject();
+            result.addProperty("status", "DECLINED");
+            resultData = result.toString();
         } else {
-            resultData = action; // Fallback for other actions
+            // Fallback for other actions - wrap in JSON as well
+            JsonObject result = new JsonObject();
+            result.addProperty("status", action);
+            resultData = result.toString();
         }
 
         // Use REST API to respond to proposal (same as ChatActivity)

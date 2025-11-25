@@ -99,7 +99,7 @@ public class ProxyRequestLogger {
                     errorMessage
                 );
             } catch (Exception e) {
-                log.warn("⚠️ Failed to publish proxy log for {} {} -> {}: {}", context.getHttpMethod(),
+                log.debug("[api-gateway] [ProxyRequestLogger.publishAsync] Failed to publish proxy log for {} {} -> {}: {}", context.getHttpMethod(),
                     context.getSourceEndpoint(), context.getTargetUrl(), e.getMessage());
             }
         }, auditLogExecutor);

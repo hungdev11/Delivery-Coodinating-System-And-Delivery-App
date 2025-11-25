@@ -39,9 +39,8 @@ public class ClientParcelController {
     @PostMapping("/received")
     public ResponseEntity<BaseResponse<PagedData<ParcelResponse>>> getReceivedParcels(
             @RequestHeader("X-User-Id") String userId,
-            @Valid @RequestBody PagingRequestV2 request
-    ) {
-        log.info("POST /api/v1/client/parcels/received - Fetching parcels for receiver {}", userId);
+            @Valid @RequestBody PagingRequestV2 request) {
+        log.debug("Fetching parcels for receiver {}", userId);
         PagedData<ParcelResponse> result = parcelService.getParcelsForReceiver(userId, request);
         return ResponseEntity.ok(BaseResponse.success(result));
     }
@@ -50,9 +49,8 @@ public class ClientParcelController {
     public ResponseEntity<BaseResponse<ParcelResponse>> confirmParcel(
             @RequestHeader("X-User-Id") String userId,
             @PathVariable("parcelId") UUID parcelId,
-            @Valid @RequestBody ParcelConfirmRequest request
-    ) {
-        log.info("POST /api/v1/client/parcels/{}/confirm by {}", parcelId, userId);
+            @Valid @RequestBody ParcelConfirmRequest request) {
+        log.debug("Confirm parcel {} by user {}", parcelId, userId);
         ParcelResponse response = parcelService.confirmParcelByClient(parcelId, userId, request);
         return ResponseEntity.ok(BaseResponse.success(response));
     }

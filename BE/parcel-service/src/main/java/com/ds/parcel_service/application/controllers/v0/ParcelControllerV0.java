@@ -28,7 +28,7 @@ public class ParcelControllerV0 {
 
     @PostMapping
     public ResponseEntity<PageResponse<ParcelResponse>> getParcels(@Valid @RequestBody PagingRequestV0 request) {
-        log.info("POST /api/v0/parcels - Get parcels with simple paging (V0)");
+        log.debug("[parcel-service] [ParcelControllerV0.getParcels] POST /api/v0/parcels - Get parcels with simple paging (V0)");
         PageResponse<ParcelResponse> response = parcelService.getParcelsV0(request);
         return ResponseEntity.ok(response);
     }

@@ -113,7 +113,7 @@ public class ProposalService implements IProposalService{
         // 6. GỬI SỰ KIỆN TẠO MỚI QUA WEBSOCKET
         // MessageResponse (được tạo bởi toDto) cần trả về
         // toàn bộ object 'proposal' hoặc ít nhất là 'actionType' của nó.
-        log.info("Gửi sự kiện TẠO PROPOSAL đến 2 user: {} và {}", senderId, dto.getRecipientId());
+        log.debug("[communication-service] [ProposalService.createProposal] Gửi sự kiện TẠO PROPOSAL đến 2 user: {} và {}", senderId, dto.getRecipientId());
         MessageResponse messageResponse = toDto(savedMessage);
 
         messagingTemplate.convertAndSendToUser(
@@ -123,7 +123,7 @@ public class ProposalService implements IProposalService{
             senderId, "/queue/messages", messageResponse             
         );
         
-        log.info("Proposal {} (Type: {}) đã được tạo bởi User {}", savedProposal.getId(), dto.getType(), senderId);
+        log.debug("[communication-service] [ProposalService.createProposal] Proposal {} (Type: {}) đã được tạo bởi User {}", savedProposal.getId(), dto.getType(), senderId);
         return savedProposal; 
     }
 
@@ -152,20 +152,42 @@ public class ProposalService implements IProposalService{
         InteractiveProposal savedProposal = proposalRepo.save(proposal);
         
         // 4. GỬI SỰ KIỆN CẬP NHẬT QUA WEBSOCKET (Giống logic cũ)
-        log.info("Gửi sự kiện RESPOND proposal {} (Status: {}) đến 2 user.", proposalId, savedProposal.getStatus());
+        log.debug("[communication-service] [ProposalService.respondToProposal] Gửi sự kiện RESPOND proposal {} (Status: {}) đến 2 user.", proposalId, savedProposal.getStatus());
+        
+        // Null check for conversation to prevent NullPointerException
+        Conversation conversation = savedProposal.getConversation();
+        if (conversation == null) {
+            log.error("[communication-service] [ProposalService.respondToProposal] Proposal {} has null conversation. Cannot send WebSocket update.", proposalId);
+            throw new IllegalStateException("Proposal " + proposalId + " has no associated conversation");
+        }
+        
         ProposalUpdateRequest updateDto = new ProposalUpdateRequest(
             savedProposal.getId(), 
             savedProposal.getStatus(), 
-            savedProposal.getConversation().getId(),
+            conversation.getId(),
             savedProposal.getResultData()
         );
         
-        messagingTemplate.convertAndSendToUser(
-            savedProposal.getRecipientId(), "/queue/proposal-updates", updateDto
-        );
-        messagingTemplate.convertAndSendToUser(
-            savedProposal.getProposerId(), "/queue/proposal-updates", updateDto
-        );
+        // Send WebSocket messages with error handling (don't fail transaction if WebSocket fails)
+        try {
+            messagingTemplate.convertAndSendToUser(
+                savedProposal.getRecipientId(), "/queue/proposal-updates", updateDto
+            );
+            log.debug("[communication-service] [ProposalService.respondToProposal] Proposal update sent to recipient: {}", savedProposal.getRecipientId());
+        } catch (Exception e) {
+            log.error("[communication-service] [ProposalService.respondToProposal] Failed to send proposal update to recipient {}", savedProposal.getRecipientId(), e);
+            // Don't throw - WebSocket failure shouldn't fail the transaction
+        }
+        
+        try {
+            messagingTemplate.convertAndSendToUser(
+                savedProposal.getProposerId(), "/queue/proposal-updates", updateDto
+            );
+            log.debug("[communication-service] [ProposalService.respondToProposal] Proposal update sent to proposer: {}", savedProposal.getProposerId());
+        } catch (Exception e) {
+            log.error("[communication-service] [ProposalService.respondToProposal] Failed to send proposal update to proposer {}", savedProposal.getProposerId(), e);
+            // Don't throw - WebSocket failure shouldn't fail the transaction
+        }
         
         // Only call external APIs if proposal is ACCEPTED
         if (savedProposal.getStatus() == ProposalStatus.ACCEPTED) {
@@ -177,11 +199,22 @@ public class ProposalService implements IProposalService{
                 // For POSTPONE_REQUEST: proposer is CLIENT, recipient is SHIPPER
                 // When SHIPPER accepts, use recipientId (SHIPPER) as deliveryManId
                 String deliveryManId = savedProposal.getRecipientId();
-                callPostponeParcelApi(deliveryManId, proposal.getData());
+                
+                // Debug logging
+                log.debug("[communication-service] [ProposalService.respondToProposal] Processing POSTPONE_REQUEST proposal. ProposalId: {}, DeliveryManId: {}", 
+                    savedProposal.getId(), deliveryManId);
+                log.debug("[communication-service] [ProposalService.respondToProposal] Original proposal data: {}", savedProposal.getData());
+                log.debug("[communication-service] [ProposalService.respondToProposal] ResultData from shipper: {}", savedProposal.getResultData());
+                
+                // Merge original data (contains parcelId) with resultData (contains postponeDateTime from shipper)
+                String mergedData = mergeProposalData(savedProposal.getData(), savedProposal.getResultData());
+                log.debug("[communication-service] [ProposalService.respondToProposal] Merged data: {}", mergedData);
+                
+                callPostponeParcelApi(deliveryManId, mergedData);
             }
         }
 
-        log.info("Proposal {} đã được PHẢN HỒI bởi User {}", proposalId, currentUserId);
+        log.debug("[communication-service] [ProposalService.respondToProposal] Proposal {} đã được PHẢN HỒI bởi User {}", proposalId, currentUserId);
         return savedProposal;
     }
 
@@ -189,27 +222,27 @@ public class ProposalService implements IProposalService{
         ObjectMapper mapper = new ObjectMapper();
         JsonNode node;
         try {
-            log.info("🔍 callRefuseParcelApi - deliveryManId: {}, data: {}", deliveryManId, data);
+            log.debug("[communication-service] [ProposalService.callRefuseParcelApi] callRefuseParcelApi - deliveryManId: {}, data: {}", deliveryManId, data);
             node = mapper.readTree(data);
             
             // Check if parcelId exists in data
             JsonNode parcelIdNode = node.get("parcelId");
             if (parcelIdNode == null || parcelIdNode.isNull()) {
-                log.warn("⚠️ parcelId not found in proposal data: {}", data);
-                log.warn("⚠️ Available fields in data: {}", node.fieldNames());
+                log.debug("[communication-service] [ProposalService.callRefuseParcelApi] parcelId not found in proposal data: {}", data);
+                log.debug("[communication-service] [ProposalService.callRefuseParcelApi] Available fields in data: {}", node.fieldNames());
                 return; // Skip API call if parcelId is missing
             }
             
             String parcelId = parcelIdNode.asText();
             if (parcelId == null || parcelId.isEmpty()) {
-                log.warn("⚠️ parcelId is empty in proposal data: {}", data);
+                log.debug("[communication-service] [ProposalService.callRefuseParcelApi] parcelId is empty in proposal data: {}", data);
                 return; // Skip API call if parcelId is empty
             }
             
             String url = String.format("%s/api/v1/assignments/drivers/%s/parcels/%s/refuse",
                                    sessionServiceUrl, deliveryManId, parcelId);
         
-            log.info("✅ Đang gọi API ngoài: POST {}", url);
+            log.debug("[communication-service] [ProposalService.callRefuseParcelApi] Đang gọi API ngoài: POST {}", url);
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -219,36 +252,60 @@ public class ProposalService implements IProposalService{
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
             
             if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("✅ Gọi API Refuse Parcel thành công cho Parcel ID: {}", parcelId);
+                log.debug("[communication-service] [ProposalService.callRefuseParcelApi] Gọi API Refuse Parcel thành công cho Parcel ID: {}", parcelId);
             } else {
-                log.warn("⚠️ API Refuse Parcel trả về status code: {} cho Parcel ID: {}", 
+                log.debug("[communication-service] [ProposalService.callRefuseParcelApi] API Refuse Parcel trả về status code: {} cho Parcel ID: {}", 
                     response.getStatusCode(), parcelId);
             }
         } catch (JsonProcessingException e) {
-            log.error("❌ Lỗi parse JSON khi gọi Refuse Parcel API. Data: {}", data, e);
+            log.error("[communication-service] [ProposalService.callRefuseParcelApi] Lỗi parse JSON khi gọi Refuse Parcel API. Data: {}", data, e);
             // Don't throw - this is a side effect, shouldn't fail proposal response
         } catch (Exception e) {
-            log.error("❌ Lỗi khi gọi Refuse Parcel API", e);
+            log.error("[communication-service] [ProposalService.callRefuseParcelApi] Lỗi khi gọi Refuse Parcel API", e);
             // Don't throw - this is a side effect, shouldn't fail proposal response
         }
     }
 
     private void callPostponeParcelApi(String deliveryManId, String data) {
         try {
+            log.debug("[communication-service] [ProposalService.callPostponeParcelApi] callPostponeParcelApi - deliveryManId: {}, data: {}", deliveryManId, data);
             ObjectMapper mapper = new ObjectMapper();
             JsonNode node = mapper.readTree(data);
 
+            // Debug: Log all fields in data
+            log.debug("[communication-service] [ProposalService.callPostponeParcelApi] All fields in merged data: {}", node.fieldNames());
+            
             // Lấy parcelId ra
             JsonNode parcelIdNode = node.get("parcelId");
             if (parcelIdNode == null || parcelIdNode.isNull()) {
-                log.warn("⚠️ Không tìm thấy parcelId trong dữ liệu postpone. Data: {}", data);
-                log.warn("⚠️ Available fields in data: {}", node.fieldNames());
+                log.error("[communication-service] [ProposalService.callPostponeParcelApi] Không tìm thấy parcelId trong dữ liệu postpone. Data: {}", data);
+                java.util.List<String> fieldNames = new java.util.ArrayList<>();
+                node.fieldNames().forEachRemaining(fieldNames::add);
+                log.error("[communication-service] [ProposalService.callPostponeParcelApi] Available fields in data: {}", fieldNames);
                 return;
             }
             
             String parcelId = parcelIdNode.asText();
             if (parcelId == null || parcelId.isEmpty()) {
-                log.warn("⚠️ parcelId is empty in postpone proposal data: {}", data);
+                log.error("[communication-service] [ProposalService.callPostponeParcelApi] parcelId is empty in postpone proposal data: {}", data);
+                return;
+            }
+            
+            // Validate UUID format
+            try {
+                UUID.fromString(parcelId);
+                log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Extracted parcelId (valid UUID): {} from proposal data", parcelId);
+            } catch (IllegalArgumentException e) {
+                log.error("[communication-service] [ProposalService.callPostponeParcelApi] parcelId is not a valid UUID: {}", parcelId);
+                return;
+            }
+            
+            // Validate deliveryManId format
+            try {
+                UUID.fromString(deliveryManId);
+                log.debug("[communication-service] [ProposalService.callPostponeParcelApi] deliveryManId (valid UUID): {}", deliveryManId);
+            } catch (IllegalArgumentException e) {
+                log.error("[communication-service] [ProposalService.callPostponeParcelApi] deliveryManId is not a valid UUID: {}", deliveryManId);
                 return;
             }
 
@@ -258,22 +315,59 @@ public class ProposalService implements IProposalService{
                 String queryUrl = String.format("%s/api/v1/assignments/active?parcelId=%s&deliveryManId=%s",
                         sessionServiceUrl, parcelId, deliveryManId);
                 
-                log.info("🔍 Querying assignmentId for parcelId: {} and deliveryManId: {}", parcelId, deliveryManId);
+                log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Querying assignmentId for parcelId: {} and deliveryManId: {}", parcelId, deliveryManId);
                 ResponseEntity<String> queryResponse = restTemplate.getForEntity(queryUrl, String.class);
                 
                 if (queryResponse.getStatusCode().is2xxSuccessful() && queryResponse.getBody() != null) {
+                    log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Raw response from getActiveAssignmentId: {}", queryResponse.getBody());
+                    
                     // Parse JSON response from Session Service (which uses result field)
                     JsonNode responseNode = mapper.readTree(queryResponse.getBody());
+                    java.util.List<String> responseKeys = new java.util.ArrayList<>();
+                    responseNode.fieldNames().forEachRemaining(responseKeys::add);
+                    log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Parsed response node keys: {}", responseKeys);
+                    
                     if (responseNode.has("result") && !responseNode.get("result").isNull()) {
-                        String resultStr = responseNode.get("result").asText();
-                        assignmentId = UUID.fromString(resultStr);
-                        log.info("✅ Found assignmentId: {} for parcelId: {} and deliveryManId: {}", assignmentId, parcelId, deliveryManId);
+                        JsonNode resultNode = responseNode.get("result");
+                        log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Result node type: {}, value: {}", resultNode.getNodeType(), resultNode);
+                        
+                        // Handle both string and UUID object formats
+                        if (resultNode.isTextual()) {
+                            String resultStr = resultNode.asText();
+                            log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Result is textual: {}", resultStr);
+                            assignmentId = UUID.fromString(resultStr);
+                        } else if (resultNode.isObject() && resultNode.has("uuid")) {
+                            // If result is an object with uuid field
+                            log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Result is object with uuid field: {}", resultNode.get("uuid"));
+                            assignmentId = UUID.fromString(resultNode.get("uuid").asText());
+                        } else {
+                            // Try to parse as UUID directly
+                            try {
+                                log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Attempting to parse result as UUID directly: {}", resultNode);
+                                assignmentId = UUID.fromString(resultNode.asText());
+                            } catch (Exception e) {
+                                log.error("[communication-service] [ProposalService.callPostponeParcelApi] Failed to parse assignmentId from result. Result node: {}", resultNode, e);
+                            }
+                        }
+                        if (assignmentId != null) {
+                            log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Found assignmentId: {} for parcelId: {} and deliveryManId: {}", assignmentId, parcelId, deliveryManId);
+                        } else {
+                            log.error("[communication-service] [ProposalService.callPostponeParcelApi] assignmentId is null after parsing. Result node: {}", resultNode);
+                        }
                     } else {
-                        log.warn("⚠️ No assignmentId found in response. Response: {}", queryResponse.getBody());
+                        log.error("[communication-service] [ProposalService.callPostponeParcelApi] No assignmentId found in response. Response body: {}", queryResponse.getBody());
+                        log.error("[communication-service] [ProposalService.callPostponeParcelApi] Response has 'result' field: {}, isNull: {}", 
+                            responseNode.has("result"), 
+                            responseNode.has("result") ? responseNode.get("result").isNull() : "N/A");
                     }
+                } else {
+                    log.error("[communication-service] [ProposalService.callPostponeParcelApi] Query assignmentId API returned non-2xx status: {} or empty body. Status: {}, Body: {}", 
+                        queryResponse.getStatusCode(), 
+                        queryResponse.getStatusCode(),
+                        queryResponse.getBody());
                 }
             } catch (Exception e) {
-                log.warn("⚠️ Failed to query assignmentId, will fallback to old endpoint: {}", e.getMessage());
+                log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Failed to query assignmentId, will fallback to old endpoint: {}", e.getMessage());
             }
 
             // Step 2: Gọi endpoint postpone
@@ -285,9 +379,9 @@ public class ProposalService implements IProposalService{
                 // Use assignmentId from data if provided
                 try {
                     assignmentId = UUID.fromString(assignmentIdNode.asText());
-                    log.info("📋 Using assignmentId from proposal data: {}", assignmentId);
+                    log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Using assignmentId from proposal data: {}", assignmentId);
                 } catch (Exception e) {
-                    log.warn("⚠️ Invalid assignmentId in proposal data, using queried assignmentId");
+                    log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Invalid assignmentId in proposal data, using queried assignmentId");
                 }
             }
             
@@ -295,9 +389,41 @@ public class ProposalService implements IProposalService{
                            (node.has("resultData") ? node.get("resultData").asText() : 
                            "Khách yêu cầu hoãn");
             
-            // Tạo payload cho postpone request
+            // Parse postpone datetime from proposal data
+            // Support: specific_datetime, after_datetime, before_datetime, start_datetime (for RANGE)
+            java.time.LocalDateTime postponeDateTime = null;
+            try {
+                if (node.has("specific_datetime") && !node.get("specific_datetime").isNull()) {
+                    String datetimeStr = node.get("specific_datetime").asText();
+                    postponeDateTime = java.time.LocalDateTime.parse(datetimeStr);
+                } else if (node.has("after_datetime") && !node.get("after_datetime").isNull()) {
+                    String datetimeStr = node.get("after_datetime").asText();
+                    postponeDateTime = java.time.LocalDateTime.parse(datetimeStr);
+                } else if (node.has("before_datetime") && !node.get("before_datetime").isNull()) {
+                    String datetimeStr = node.get("before_datetime").asText();
+                    postponeDateTime = java.time.LocalDateTime.parse(datetimeStr);
+                } else if (node.has("start_datetime") && !node.get("start_datetime").isNull()) {
+                    // For RANGE, use start_datetime
+                    String datetimeStr = node.get("start_datetime").asText();
+                    postponeDateTime = java.time.LocalDateTime.parse(datetimeStr);
+                }
+            } catch (Exception e) {
+                log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Failed to parse postpone datetime from proposal data: {}", e.getMessage());
+            }
+            
+            // Determine moveToEnd flag: if postpone is within session time, move to end
+            // We'll let session-service calculate and decide based on postponeDateTime
+            Boolean moveToEnd = null; // Let session-service decide based on postponeDateTime
+            
+            // Tạo payload cho postpone request (PostponeAssignmentRequest)
             ObjectNode postponePayload = mapper.createObjectNode();
             postponePayload.put("reason", reason);
+            if (postponeDateTime != null) {
+                postponePayload.put("postponeDateTime", postponeDateTime.toString());
+            }
+            if (moveToEnd != null) {
+                postponePayload.put("moveToEnd", moveToEnd);
+            }
             // RouteInfo sẽ null nếu không có trong data (optional)
             if (node.has("routeInfo")) {
                 postponePayload.set("routeInfo", node.get("routeInfo"));
@@ -310,8 +436,8 @@ public class ProposalService implements IProposalService{
                 String url = String.format("%s/api/v1/assignments/%s/postpone",
                         sessionServiceUrl, assignmentId);
 
-                log.info("✅ Gọi API postpone bằng assignmentId: PUT {}", url);
-                log.debug("Payload gửi đi: {}", postponeData);
+                log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Gọi API postpone bằng assignmentId: PUT {}", url);
+                log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Payload gửi đi: {}", postponeData);
 
                 HttpHeaders headers = new HttpHeaders();
                 headers.setContentType(MediaType.APPLICATION_JSON);
@@ -320,18 +446,19 @@ public class ProposalService implements IProposalService{
                 ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.PUT, entity, String.class);
                 
                 if (response.getStatusCode().is2xxSuccessful()) {
-                    log.info("✅ Gọi API postpone assignment thành công cho Assignment ID: {}", assignmentId);
+                    log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Gọi API postpone assignment thành công cho Assignment ID: {}", assignmentId);
                 } else {
-                    log.warn("⚠️ API postpone assignment trả về status code: {} cho Assignment ID: {}", 
-                        response.getStatusCode(), assignmentId);
+                    log.error("[communication-service] [ProposalService.callPostponeParcelApi] API postpone assignment trả về status code: {} cho Assignment ID: {}. Response body: {}", 
+                        response.getStatusCode(), assignmentId, response.getBody());
+                    // Don't throw - this is a side effect, shouldn't fail proposal response
                 }
             } else {
                 // Fallback to old endpoint (backward compatibility)
                 String url = String.format("%s/api/v1/assignments/drivers/%s/parcels/%s/postpone",
                         sessionServiceUrl, deliveryManId, parcelId);
 
-                log.warn("⚠️ Không tìm thấy assignmentId, sử dụng endpoint cũ: POST {}", url);
-                log.debug("Payload gửi đi: {}", postponeData);
+                log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Không tìm thấy assignmentId, sử dụng endpoint cũ: POST {}", url);
+                log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Payload gửi đi: {}", postponeData);
 
                 HttpHeaders headers = new HttpHeaders();
                 headers.setContentType(MediaType.APPLICATION_JSON);
@@ -340,17 +467,20 @@ public class ProposalService implements IProposalService{
                 ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
                 
                 if (response.getStatusCode().is2xxSuccessful()) {
-                    log.info("✅ Gọi API postpone parcel thành công (fallback) cho Parcel ID: {}", parcelId);
+                    log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Gọi API postpone parcel thành công (fallback) cho Parcel ID: {}", parcelId);
                 } else {
-                    log.warn("⚠️ API postpone parcel (fallback) trả về status code: {} cho Parcel ID: {}", 
-                        response.getStatusCode(), parcelId);
+                    log.error("[communication-service] [ProposalService.callPostponeParcelApi] API postpone parcel (fallback) trả về status code: {} cho Parcel ID: {}. Response body: {}", 
+                        response.getStatusCode(), parcelId, response.getBody());
+                    // Don't throw - this is a side effect, shouldn't fail proposal response
                 }
             }
 
         } catch (JsonProcessingException e) {
-            log.error("❌ Lỗi parse JSON trong callPostponeParcelApi. Data: {}", data, e);
+            log.error("[communication-service] [ProposalService.callPostponeParcelApi] Lỗi parse JSON trong callPostponeParcelApi. Data: {}", data, e);
+            // Don't throw - this is a side effect, shouldn't fail proposal response
         } catch (Exception e) {
-            log.error("❌ Lỗi khi gọi postpone parcel API: {}", e.getMessage(), e);
+            log.error("[communication-service] [ProposalService.callPostponeParcelApi] Lỗi khi gọi postpone parcel API", e);
+            // Don't throw - this is a side effect, shouldn't fail proposal response
         }
     }
 
@@ -368,33 +498,54 @@ public class ProposalService implements IProposalService{
             return;
         }
 
-        log.info("Tìm thấy {} proposal đã hết hạn. Đang cập nhật trạng thái...", expiredProposals.size());
+        log.debug("[communication-service] [ProposalService.expireProposals] Tìm thấy {} proposal đã hết hạn. Đang cập nhật trạng thái...", expiredProposals.size());
 
         for (InteractiveProposal proposal : expiredProposals) {
             proposal.setStatus(ProposalStatus.EXPIRED);
             
             // --- 5. GỬI SỰ KIỆN CẬP NHẬT QUA WEBSOCKET ---
+            // Null check for conversation to prevent NullPointerException
+            Conversation conversation = proposal.getConversation();
+            if (conversation == null) {
+                log.error("[communication-service] [ProposalService.expireProposals] Proposal {} has null conversation. Skipping WebSocket update.", proposal.getId());
+                continue; // Skip this proposal and continue with others
+            }
+            
             ProposalUpdateRequest updateDto = new ProposalUpdateRequest(
                 proposal.getId(), 
                 proposal.getStatus(), 
-                proposal.getConversation().getId(),
+                conversation.getId(),
                 proposal.getResultData()
             );
 
-            // Gửi đến cả 2 user
-            messagingTemplate.convertAndSendToUser(
-                proposal.getRecipientId(), "/queue/proposal-updates", updateDto
-            );
-            messagingTemplate.convertAndSendToUser(
-                proposal.getProposerId(), "/queue/proposal-updates", updateDto
-            );
+            // Gửi đến cả 2 user with error handling
+            try {
+                messagingTemplate.convertAndSendToUser(
+                    proposal.getRecipientId(), "/queue/proposal-updates", updateDto
+                );
+                log.debug("[communication-service] [ProposalService.expireProposals] Expired proposal update sent to recipient: {}", proposal.getRecipientId());
+            } catch (Exception e) {
+                log.error("[communication-service] [ProposalService.expireProposals] Failed to send expired proposal update to recipient {}", proposal.getRecipientId(), e);
+                // Continue with other proposals even if one fails
+            }
+            
+            try {
+                messagingTemplate.convertAndSendToUser(
+                    proposal.getProposerId(), "/queue/proposal-updates", updateDto
+                );
+                log.debug("[communication-service] [ProposalService.expireProposals] Expired proposal update sent to proposer: {}", proposal.getProposerId());
+            } catch (Exception e) {
+                log.error("[communication-service] [ProposalService.expireProposals] Failed to send expired proposal update to proposer {}", proposal.getProposerId(), e);
+                // Continue with other proposals even if one fails
+            }
         }
         
         proposalRepo.saveAll(expiredProposals);
     }
 
     private InteractiveProposal findProposalAndCheckPermissions(UUID proposalId, String currentUserId) {
-        InteractiveProposal proposal = proposalRepo.findById(proposalId)
+        // Use fetch join to ensure conversation is loaded within transaction
+        InteractiveProposal proposal = proposalRepo.findByIdWithConversation(proposalId)
             .orElseThrow(() -> new EntityNotFoundException("Proposal not found."));
         if (!proposal.getRecipientId().equals(currentUserId)) {
             throw new AccessDeniedException("Bạn không phải người nhận của đề nghị này.");
@@ -403,6 +554,49 @@ public class ProposalService implements IProposalService{
             throw new IllegalStateException("Đề nghị này đã được xử lý hoặc hết hạn.");
         }
         return proposal;
+    }
+    
+    /**
+     * Merge original proposal data (contains parcelId) with resultData (contains postponeDateTime from shipper).
+     * This ensures we have both parcelId and postponeDateTime when calling postpone API.
+     */
+    private String mergeProposalData(String originalData, String resultData) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            ObjectNode merged = mapper.createObjectNode();
+            
+            // Parse original data (contains parcelId)
+            if (originalData != null && !originalData.isEmpty()) {
+                try {
+                    JsonNode originalNode = mapper.readTree(originalData);
+                    merged.setAll((ObjectNode) originalNode);
+                } catch (Exception e) {
+                    log.debug("[communication-service] [ProposalService.mergeProposalData] Failed to parse original proposal data: {}", e.getMessage());
+                }
+            }
+            
+            // Merge resultData (contains postponeDateTime and other fields from shipper)
+            if (resultData != null && !resultData.isEmpty()) {
+                try {
+                    // Check if resultData is JSON or plain string
+                    if (resultData.trim().startsWith("{")) {
+                        JsonNode resultNode = mapper.readTree(resultData);
+                        merged.setAll((ObjectNode) resultNode);
+                    } else {
+                        // If resultData is plain string (e.g., "ACCEPTED"), treat it as reason
+                        merged.put("reason", resultData);
+                    }
+                } catch (Exception e) {
+                    log.debug("[communication-service] [ProposalService.mergeProposalData] Failed to parse resultData, treating as reason: {}", e.getMessage());
+                    merged.put("reason", resultData);
+                }
+            }
+            
+            return mapper.writeValueAsString(merged);
+        } catch (Exception e) {
+            log.error("[communication-service] [ProposalService.mergeProposalData] Failed to merge proposal data. Using original data", e);
+            return originalData != null ? originalData : "{}";
+        }
     }
     
     private MessageResponse toDto(Message message) {        

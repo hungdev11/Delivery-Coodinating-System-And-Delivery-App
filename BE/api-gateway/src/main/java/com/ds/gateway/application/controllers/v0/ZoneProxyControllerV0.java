@@ -39,7 +39,7 @@ public class ZoneProxyControllerV0 {
 
     @PostMapping
     public ResponseEntity<?> listZones(@RequestBody Object requestBody) {
-        log.info("POST /api/v0/zones - proxy to Zone Service");
+        log.debug("[api-gateway] [ZoneProxyControllerV0.listZones] POST /api/v0/zones - proxy to Zone Service");
         return proxyControllerSupport.forward(ZONE_SERVICE, HttpMethod.POST, zoneV0Url, requestBody);
     }
 }

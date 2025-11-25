@@ -30,7 +30,7 @@ public class WebSocketEventListener {
         String userId = user != null ? user.getName() : null;
         String roles = accessor.getFirstNativeHeader("X-User-Roles");
         String clientType = accessor.getFirstNativeHeader("Client-Type");
-        log.info("🔌 WebSocket session connected: userId={}, sessionId={}", userId, sessionId);
+        log.debug("[communication-service] [WebSocketEventListener.handleConnect] WebSocket session connected: userId={}, sessionId={}", userId, sessionId);
         eventLogger.logConnect(userId, sessionId, roles, clientType != null ? clientType : "ALL");
     }
 
@@ -38,7 +38,7 @@ public class WebSocketEventListener {
     public void handleDisconnect(SessionDisconnectEvent event) {
         String sessionId = event.getSessionId();
         String userId = event.getUser() != null ? event.getUser().getName() : sessionManager.findUserIdBySession(sessionId);
-        log.info("🔌 WebSocket session disconnected: userId={}, sessionId={}", userId, sessionId);
+        log.debug("[communication-service] [WebSocketEventListener.handleDisconnect] WebSocket session disconnected: userId={}, sessionId={}", userId, sessionId);
         if (userId != null) {
             sessionManager.unregisterSession(userId, sessionId);
         } else {
@@ -53,7 +53,7 @@ public class WebSocketEventListener {
         Principal user = accessor.getUser();
         String destination = accessor.getDestination();
         if (user != null) {
-            log.debug("📡 WebSocket subscription: userId={}, destination={}", user.getName(), destination);
+            log.debug("[communication-service] [WebSocketEventListener.handleSubscribe] WebSocket subscription: userId={}, destination={}", user.getName(), destination);
             eventLogger.logSubscribe(user.getName(), destination);
         } else {
             eventLogger.logSubscribe(null, destination);
@@ -65,7 +65,7 @@ public class WebSocketEventListener {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
         Principal user = accessor.getUser();
         if (user != null) {
-            log.debug("📡 WebSocket unsubscription: userId={}", user.getName());
+            log.debug("[communication-service] [WebSocketEventListener.handleUnsubscribe] WebSocket unsubscription: userId={}", user.getName());
         }
     }
 }

@@ -37,8 +37,8 @@ import retrofit2.Retrofit;
 public class ParcelDetailActivity extends AppCompatActivity {
 
     private TextView tvParcelCode, tvStatus, tvDeliveryType, tvReceiveFrom,
-            tvTargetDestination, tvDeliveryWindow, tvReceiverName,
-            tvReceiverPhone, tvWeight, tvValue;
+            tvTargetDestination, tvDeliveryWindow, tvSenderName,
+            tvReceiverName, tvReceiverPhone, tvWeight, tvValue;
     private ImageButton btnClose;
     private Button btnAcceptTask;
     private AuthManager mAuthManager;
@@ -85,6 +85,7 @@ public class ParcelDetailActivity extends AppCompatActivity {
         tvReceiveFrom = findViewById(R.id.tvReceiveFrom);
         tvTargetDestination = findViewById(R.id.tvTargetDestination);
         tvDeliveryWindow = findViewById(R.id.tvDeliveryWindow);
+        tvSenderName = findViewById(R.id.tvSenderName);
         tvReceiverName = findViewById(R.id.tvReceiverName);
         tvReceiverPhone = findViewById(R.id.tvReceiverPhone);
         tvWeight = findViewById(R.id.tvWeight);
@@ -112,20 +113,49 @@ public class ParcelDetailActivity extends AppCompatActivity {
         }
 
         parcelId = parcel.getId();
-        tvParcelCode.setText("Mã bưu kiện: #" + parcel.getCode());
-        tvStatus.setText("Trạng thái: " + parcel.getStatus());
-        tvDeliveryType.setText("Loại giao hàng: " + parcel.getDeliveryType());
-        tvReceiveFrom.setText("Từ: " + parcel.getReceiveFrom());
-        tvTargetDestination.setText("Đến: " + parcel.getTargetDestination());
-        tvDeliveryWindow.setText("Thời gian giao: " + parcel.getWindowStart() + " - " + parcel.getWindowEnd());
-        tvReceiverName.setText("Người nhận (ID): " + parcel.getReceiverId());
-        tvReceiverPhone.setText("SĐT: " + parcel.getReceiverPhoneNumber());
-        tvWeight.setText(String.format(Locale.getDefault(), "%.2f kg", parcel.getWeight()));
+        tvParcelCode.setText("Mã bưu kiện: #" + (parcel.getCode() != null ? parcel.getCode() : "N/A"));
+        
+        // Handle null status
+        String statusText = parcel.getStatus() != null ? parcel.getStatus().toString() : "N/A";
+        tvStatus.setText("Trạng thái: " + statusText);
+        
+        tvDeliveryType.setText("Loại giao hàng: " + (parcel.getDeliveryType() != null ? parcel.getDeliveryType().toString() : "N/A"));
+        tvReceiveFrom.setText("Từ: " + (parcel.getReceiveFrom() != null ? parcel.getReceiveFrom() : "N/A"));
+        tvTargetDestination.setText("Đến: " + (parcel.getTargetDestination() != null ? parcel.getTargetDestination() : "N/A"));
+        tvDeliveryWindow.setText("Thời gian giao: " + 
+                (parcel.getWindowStart() != null ? parcel.getWindowStart() : "N/A") + " - " + 
+                (parcel.getWindowEnd() != null ? parcel.getWindowEnd() : "N/A"));
+        
+        // Display sender name (with fallback to ID if name not available)
+        String senderDisplay = parcel.getSenderName() != null && !parcel.getSenderName().isEmpty()
+                ? parcel.getSenderName() + " (" + parcel.getSenderId() + ")"
+                : "Người gửi (ID): " + parcel.getSenderId();
+        tvSenderName.setText(senderDisplay);
+        
+        // Display receiver name (with fallback to ID if name not available)
+        String receiverDisplay = parcel.getReceiverName() != null && !parcel.getReceiverName().isEmpty()
+                ? parcel.getReceiverName() + " (" + parcel.getReceiverId() + ")"
+                : "Người nhận (ID): " + parcel.getReceiverId();
+        tvReceiverName.setText(receiverDisplay);
+        
+        tvReceiverPhone.setText("SĐT: " + (parcel.getReceiverPhoneNumber() != null ? parcel.getReceiverPhoneNumber() : "N/A"));
+        tvWeight.setText(String.format(Locale.getDefault(), "Khối lượng: %.2f kg", parcel.getWeight()));
         tvValue.setText("Giá trị: " + formatCurrency(parcel.getValue()));
 
-        if (!"IN_WAREHOUSE".equals(parcel.getStatus().toString())) {
+        // Allow accepting parcels with status IN_WAREHOUSE or DELAYED
+        // Handle null status gracefully
+        if (parcel.getStatus() == null) {
             btnAcceptTask.setText("KHÔNG THỂ NHẬN NHIỆM VỤ");
             btnAcceptTask.setEnabled(false);
+        } else {
+            String status = parcel.getStatus().toString();
+            if (!"IN_WAREHOUSE".equals(status) && !"DELAYED".equals(status)) {
+                btnAcceptTask.setText("KHÔNG THỂ NHẬN NHIỆM VỤ");
+                btnAcceptTask.setEnabled(false);
+            } else {
+                btnAcceptTask.setText("NHẬN NHIỆM VỤ NÀY");
+                btnAcceptTask.setEnabled(true);
+            }
         }
     }
 
@@ -150,14 +180,22 @@ public class ParcelDetailActivity extends AppCompatActivity {
         SessionClient service = retrofit.create(SessionClient.class);
 
         ScanParcelRequest requestBody = new ScanParcelRequest(parcelIdToAccept);
-        Call<DeliveryAssignment> call = service.acceptParcelToSession(driverId, requestBody);
+        Call<com.ds.deliveryapp.clients.res.BaseResponse<DeliveryAssignment>> call = service.acceptParcelToSession(driverId, requestBody);
 
-        call.enqueue(new Callback<DeliveryAssignment>() {
+        call.enqueue(new Callback<com.ds.deliveryapp.clients.res.BaseResponse<DeliveryAssignment>>() {
             @Override
-            public void onResponse(Call<DeliveryAssignment> call, Response<DeliveryAssignment> response) {
+            public void onResponse(Call<com.ds.deliveryapp.clients.res.BaseResponse<DeliveryAssignment>> call, Response<com.ds.deliveryapp.clients.res.BaseResponse<DeliveryAssignment>> response) {
                 if (response.isSuccessful() && response.body() != null) {
-                    Toast.makeText(ParcelDetailActivity.this, "Nhận đơn thành công.", Toast.LENGTH_SHORT).show();
-                    setResult(RESULT_OK);
+                    com.ds.deliveryapp.clients.res.BaseResponse<DeliveryAssignment> baseResponse = response.body();
+                    if (baseResponse.getResult() != null) {
+                        Toast.makeText(ParcelDetailActivity.this, "Nhận đơn thành công.", Toast.LENGTH_SHORT).show();
+                        setResult(RESULT_OK);
+                    } else {
+                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể nhận nhiệm vụ";
+                        Log.e(TAG, "Lỗi khi nhận đơn: " + errorMsg);
+                        Toast.makeText(ParcelDetailActivity.this, errorMsg, Toast.LENGTH_SHORT).show();
+                        setResult(RESULT_CANCELED);
+                    }
                 } else {
                     Log.e(TAG, "Lỗi khi nhận đơn: " + response.code());
                     Toast.makeText(ParcelDetailActivity.this, "Không thể nhận nhiệm vụ.", Toast.LENGTH_SHORT).show();
@@ -167,7 +205,7 @@ public class ParcelDetailActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onFailure(Call<DeliveryAssignment> call, Throwable t) {
+            public void onFailure(Call<com.ds.deliveryapp.clients.res.BaseResponse<DeliveryAssignment>> call, Throwable t) {
                 Log.e(TAG, "Network error: " + t.getMessage());
                 Toast.makeText(ParcelDetailActivity.this, "Lỗi mạng khi nhận nhiệm vụ.", Toast.LENGTH_SHORT).show();
                 setResult(RESULT_CANCELED);

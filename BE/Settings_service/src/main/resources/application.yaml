@@ -1,60 +1,64 @@
 server:
-  port: 21502
+    port: 21502
 
 spring:
-  application:
-    name: settings-service
-  datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${SETTINGS_DB_NAME:ds_settings_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:root}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-  jpa:
-    hibernate:
-      ddl-auto: ${JPA_DDL_AUTO:validate}
-    show-sql: false
-    properties:
-      hibernate:
-        format_sql: true
-        hbm2ddl:
-          auto: validate
-        dialect: org.hibernate.dialect.MySQLDialect
-  flyway:
-    enabled: true
-    baseline-on-migrate: true
-    locations: classpath:db/migration
-    create-schemas: false  # Disable Flyway schema creation since we use createDatabaseIfNotExist
-  cache:
-    type: simple
-    cache-names:
-      - settings
-      - settingsByGroup
+    application:
+        name: settings-service
+    datasource:
+        url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${SETTINGS_DB_NAME:ds_settings_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+        username: ${DB_USERNAME:root}
+        password: ${DB_PASSWORD:root}
+        driver-class-name: com.mysql.cj.jdbc.Driver
+    jpa:
+        hibernate:
+            ddl-auto: ${JPA_DDL_AUTO:validate}
+        show-sql: false
+        properties:
+            hibernate:
+                format_sql: true
+                hbm2ddl:
+                    auto: validate
+                dialect: org.hibernate.dialect.MySQLDialect
+    flyway:
+        enabled: true
+        baseline-on-migrate: true
+        locations: classpath:db/migration
+        create-schemas: false # Disable Flyway schema creation since we use createDatabaseIfNotExist
+    cache:
+        type: simple
+        cache-names:
+            - settings
+            - settingsByGroup
 
 # Settings Service Configuration
 settings:
-  cache:
-    ttl-minutes: ${CACHE_TTL_MINUTES:60}
+    cache:
+        ttl-minutes: ${CACHE_TTL_MINUTES:60}
 
 # Actuator Configuration
 management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-      base-path: /actuator
-  endpoint:
-    health:
-      show-details: always
+    endpoints:
+        web:
+            exposure:
+                include: health,info
+            base-path: /actuator
+    endpoint:
+        health:
+            show-details: always
 
 # Logging Configuration
-# Only log errors from frameworks/libraries, keep developer logs at INFO
 logging:
-  level:
-    root: ERROR                          # All libraries default to ERROR
-    com.ds: INFO                         # Developer logs at INFO level
-    org.springframework: ERROR           # Spring framework errors only
-    org.springframework.web: ERROR       # Spring web errors only
-    org.springframework.boot: ERROR      # Spring Boot errors only
-    org.hibernate: ERROR                 # Hibernate errors only (no SQL logging)
-    org.flywaydb: ERROR                  # Flyway errors only
-    com.zaxxer.hikari: ERROR             # HikariCP errors only 
+    pattern:
+        console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n'
+    level:
+        root: ERROR
+        com.ds.setting: DEBUG
+        com.ds: DEBUG
+        org.springframework: ERROR
+        org.springframework.web: ERROR
+        org.springframework.boot: ERROR
+        org.springframework.security: ERROR
+        org.hibernate: ERROR
+        org.hibernate.SQL: ERROR
+        org.flywaydb: ERROR
+        com.zaxxer.hikari: ERROR

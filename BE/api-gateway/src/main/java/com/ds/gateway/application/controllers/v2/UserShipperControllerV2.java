@@ -44,7 +44,7 @@ public class UserShipperControllerV2 {
      */
     @PostMapping
     public ResponseEntity<?> listShippers(@RequestBody Object requestBody) {
-        log.info("POST /api/v2/users/shippers - proxy to User Service");
+        log.debug("[api-gateway] [UserShipperControllerV2.listShippers] POST /api/v2/users/shippers - proxy to User Service");
         return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.POST, shipperV2Url, requestBody);
     }
 }

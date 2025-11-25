@@ -19,6 +19,14 @@ export class WaypointDto {
   @IsOptional()
   @IsString()
   parcelId?: string;
+
+  /**
+   * Flag to indicate this parcel should be moved to end of route (nullable)
+   * Used when postpone is within session time - parcel stays IN_PROGRESS but moves to end
+   */
+  @IsOptional()
+  @IsBoolean()
+  moveToEnd?: boolean | null;
 }
 
 /**

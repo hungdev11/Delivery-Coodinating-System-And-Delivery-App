@@ -6,4 +6,10 @@
     <item
         android:id="@+id/menu_fail_session"
         android:title="Báo cáo sự cố (Hủy phiên)" />
+    <item
+        android:id="@+id/menu_show_transfer_qr"
+        android:title="Tạo QR chuyển đơn" />
+    <item
+        android:id="@+id/menu_scan_transfer_qr"
+        android:title="Quét QR nhận đơn chuyển giao" />
 </menu>

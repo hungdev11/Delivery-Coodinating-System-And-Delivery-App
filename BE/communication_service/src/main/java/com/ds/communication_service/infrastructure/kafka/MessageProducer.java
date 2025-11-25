@@ -31,7 +31,7 @@ public class MessageProducer {
             String conversationId, 
             ChatMessagePayload message) {
         
-        log.info("📤 Publishing message to Kafka topic: {}, conversationId: {}", 
+        log.debug("[communication-service] [MessageProducer.publishMessage] Publishing message to Kafka topic: {}, conversationId: {}", 
             KafkaConfig.TOPIC_CHAT_MESSAGES, conversationId);
         
         CompletableFuture<SendResult<String, Object>> future = 
@@ -39,12 +39,12 @@ public class MessageProducer {
         
         future.whenComplete((result, ex) -> {
             if (ex == null) {
-                log.info("✅ Message published successfully to Kafka. Topic: {}, Partition: {}, Offset: {}",
+                log.debug("[communication-service] [MessageProducer.publishMessage] Message published successfully to Kafka. Topic: {}, Partition: {}, Offset: {}",
                     result.getRecordMetadata().topic(),
                     result.getRecordMetadata().partition(),
                     result.getRecordMetadata().offset());
             } else {
-                log.error("❌ Failed to publish message to Kafka: {}", ex.getMessage(), ex);
+                log.error("[communication-service] [MessageProducer.publishMessage] Failed to publish message to Kafka", ex);
             }
         });
         
@@ -64,13 +64,13 @@ public class MessageProducer {
             String conversationId, 
             ChatMessagePayload message) throws Exception {
         
-        log.info("📤 Publishing message to Kafka (sync) topic: {}, conversationId: {}", 
+        log.debug("[communication-service] [MessageProducer.publishMessageSync] Publishing message to Kafka (sync) topic: {}, conversationId: {}", 
             KafkaConfig.TOPIC_CHAT_MESSAGES, conversationId);
         
         SendResult<String, Object> result = kafkaTemplate.send(
             KafkaConfig.TOPIC_CHAT_MESSAGES, conversationId, message).get();
         
-        log.info("✅ Message published successfully (sync) to Kafka. Topic: {}, Partition: {}, Offset: {}",
+        log.debug("[communication-service] [MessageProducer.publishMessageSync] Message published successfully (sync) to Kafka. Topic: {}, Partition: {}, Offset: {}",
             result.getRecordMetadata().topic(),
             result.getRecordMetadata().partition(),
             result.getRecordMetadata().offset());

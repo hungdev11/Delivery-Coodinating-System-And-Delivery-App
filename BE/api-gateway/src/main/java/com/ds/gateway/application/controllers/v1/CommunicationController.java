@@ -23,6 +23,7 @@ import com.ds.gateway.application.security.UserContext;
 import com.ds.gateway.business.v1.services.ConversationEnrichmentService;
 import com.ds.gateway.common.entities.dto.communicate.ConversationRequest;
 import com.ds.gateway.common.entities.dto.communicate.EnrichedConversationResponse;
+import com.ds.gateway.common.entities.dto.common.BaseResponse;
 import com.ds.gateway.infrastructure.http.ProxyHttpClient;
 import com.ds.gateway.infrastructure.logging.ProxyLogContext;
 import com.ds.gateway.infrastructure.logging.ProxyRequestLogger;
@@ -62,7 +63,7 @@ public class CommunicationController {
     @GetMapping("/conversations/user/{userId}")
     @AuthRequired
     public ResponseEntity<?> getMyConversations(@PathVariable String userId) {
-        log.info("GET /api/v1/conversations/user/{} - Proxying to Communication Service", userId);
+        log.debug("[api-gateway] [CommunicationController.getMyConversations] GET /api/v1/conversations/user/{} - Proxying to Communication Service", userId);
         return proxyCommunication(HttpMethod.GET, "/api/v1/conversations/user/" + userId, null);
     }
 
@@ -75,15 +76,15 @@ public class CommunicationController {
      */
     @GetMapping("/conversations")
     @AuthRequired
-    public CompletableFuture<ResponseEntity<List<EnrichedConversationResponse>>> getEnrichedConversations(
+    public CompletableFuture<ResponseEntity<BaseResponse<List<EnrichedConversationResponse>>>> getEnrichedConversations(
             @RequestParam String userId) {
-        log.info("📱 GET /api/v1/conversations?userId={} - Getting enriched conversations for Android", userId);
+        log.debug("[api-gateway] [CommunicationController.getEnrichedConversations] GET /api/v1/conversations?userId={} - Getting enriched conversations for Android", userId);
         
         return conversationEnrichmentService.getEnrichedConversations(userId)
-                .thenApply(ResponseEntity::ok)
+                .thenApply(conversations -> ResponseEntity.ok(BaseResponse.success(conversations)))
                 .exceptionally(ex -> {
-                    log.error("❌ Failed to get enriched conversations: {}", ex.getMessage(), ex);
-                    return ResponseEntity.internalServerError().build();
+                    log.error("[api-gateway] [CommunicationController.getEnrichedConversations] Failed to get enriched conversations", ex);
+                    return ResponseEntity.internalServerError().body(BaseResponse.error("Không thể tải danh sách hội thoại"));
                 });
     }
 
@@ -96,7 +97,7 @@ public class CommunicationController {
     public ResponseEntity<?> getConversationByTwoUsers(
             @RequestParam("user1") String userId1,
             @RequestParam("user2") String userId2) {
-        log.info("GET /api/v1/conversations/find-by-users?user1={}&user2={} - Enriching response", userId1, userId2);
+        log.debug("[api-gateway] [CommunicationController.getConversationByTwoUsers] GET /api/v1/conversations/find-by-users?user1={}&user2={} - Enriching response", userId1, userId2);
         
         // Get current user from UserContext (JWT token)
         String currentUserId = UserContext.getCurrentUser()
@@ -115,6 +116,12 @@ public class CommunicationController {
                 return ResponseEntity.notFound().build();
             }
             JsonNode convNode = objectMapper.valueToTree(conversationObj);
+            if (convNode.has("result")) {
+                convNode = convNode.get("result");
+            }
+            if (convNode == null || convNode.isNull()) {
+                return ResponseEntity.notFound().build();
+            }
             
             // Determine current user and partner
             // Use UserContext first, then try to determine from conversation data
@@ -150,9 +157,9 @@ public class CommunicationController {
             EnrichedConversationResponse enriched = conversationEnrichmentService
                     .enrichSingleConversationSync(convNode, currentUserId, partnerId);
             
-            return ResponseEntity.ok(enriched);
+            return ResponseEntity.ok(BaseResponse.success(enriched));
         } catch (Exception e) {
-            log.error("Error enriching conversation: {}", e.getMessage(), e);
+            log.error("[api-gateway] [CommunicationController.getConversationByTwoUsers] Error enriching conversation", e);
             return proxyCommunication(HttpMethod.GET, path, null);
         }
     }
@@ -162,7 +169,7 @@ public class CommunicationController {
     public ResponseEntity<?> getConversationByTwoUsersUsePost(@RequestBody ConversationRequest request) {
         String userId1 = request.getUserId1();
         String userId2 = request.getUserId2();
-        log.info("POST /api/v1/conversations/find-by-users?user1={}&user2={} - Proxying to Communication Service", userId1, userId2);
+        log.debug("[api-gateway] [CommunicationController.getConversationByTwoUsersUsePost] POST /api/v1/conversations/find-by-users?user1={}&user2={} - Proxying to Communication Service", userId1, userId2);
         return proxyCommunication(HttpMethod.GET, "/api/v1/conversations/find-by-users?user1=" + userId1 + "&user2=" + userId2, null);
     }
 
@@ -178,7 +185,7 @@ public class CommunicationController {
             @RequestParam(defaultValue = "30") int size,
             @RequestParam(defaultValue = "sentAt") String sort,
             @RequestParam(defaultValue = "DESC") String direction) {
-        log.info("GET /api/v1/conversations/{}/messages - Proxying to Communication Service", conversationId);
+        log.debug("[api-gateway] [CommunicationController.getMessages] GET /api/v1/conversations/{}/messages - Proxying to Communication Service", conversationId);
         String path = "/api/v1/conversations/" + conversationId + "/messages" +
                 "?userId=" + userId + "&page=" + page + "&size=" + size + "&sort=" + sort + "&direction=" + direction;
         return proxyCommunication(HttpMethod.GET, path, null);
@@ -194,7 +201,7 @@ public class CommunicationController {
     @PostMapping("/proposals")
     @AuthRequired
     public ResponseEntity<?> createProposal(@RequestBody Object request) {
-        log.info("POST /api/v1/proposals - Proxying to Communication Service");
+        log.debug("[api-gateway] [CommunicationController.createProposal] POST /api/v1/proposals - Proxying to Communication Service");
         return proxyCommunication(HttpMethod.POST, "/api/v1/proposals", request);
     }
 
@@ -207,7 +214,7 @@ public class CommunicationController {
             @PathVariable String proposalId,
             @RequestParam String userId,
             @RequestBody Object request) {
-        log.info("POST /api/v1/proposals/{}/respond - Proxying to Communication Service", proposalId);
+        log.debug("[api-gateway] [CommunicationController.respondToProposal] POST /api/v1/proposals/{}/respond - Proxying to Communication Service", proposalId);
         return proxyCommunication(HttpMethod.POST, "/api/v1/proposals/" + proposalId + "/respond?userId=" + userId, request);
     }
 
@@ -217,7 +224,7 @@ public class CommunicationController {
     @GetMapping("/proposals/available-configs")
     @AuthRequired
     public ResponseEntity<?> getAvailableConfigs(@RequestParam java.util.List<String> roles) {
-        log.info("GET /api/v1/proposals/available-configs - Proxying to Communication Service");
+        log.debug("[api-gateway] [CommunicationController.getAvailableConfigs] GET /api/v1/proposals/available-configs - Proxying to Communication Service");
         String rolesParam = String.join(",", roles);
         return proxyCommunication(HttpMethod.GET, "/api/v1/proposals/available-configs?roles=" + rolesParam, null);
     }
@@ -232,7 +239,7 @@ public class CommunicationController {
     @GetMapping("/admin/proposals/configs")
     @AuthRequired
     public ResponseEntity<?> getAllProposalConfigs() {
-        log.info("GET /api/v1/admin/proposals/configs - Proxying to Communication Service");
+        log.debug("[api-gateway] [CommunicationController.getAllProposalConfigs] GET /api/v1/admin/proposals/configs - Proxying to Communication Service");
         return proxyCommunication(HttpMethod.GET, "/api/v1/admin/proposals/configs", null);
     }
 
@@ -242,7 +249,7 @@ public class CommunicationController {
     @PostMapping("/admin/proposals/configs")
     @AuthRequired
     public ResponseEntity<?> createProposalConfig(@RequestBody Object request) {
-        log.info("POST /api/v1/admin/proposals/configs - Proxying to Communication Service");
+        log.debug("[api-gateway] [CommunicationController.createProposalConfig] POST /api/v1/admin/proposals/configs - Proxying to Communication Service");
         return proxyCommunication(HttpMethod.POST, "/api/v1/admin/proposals/configs", request);
     }
 
@@ -254,7 +261,7 @@ public class CommunicationController {
     public ResponseEntity<?> updateProposalConfig(
             @PathVariable String configId,
             @RequestBody Object request) {
-        log.info("PUT /api/v1/admin/proposals/configs/{} - Proxying to Communication Service", configId);
+        log.debug("[api-gateway] [CommunicationController.updateProposalConfig] PUT /api/v1/admin/proposals/configs/{} - Proxying to Communication Service", configId);
         return proxyCommunication(HttpMethod.PUT, "/api/v1/admin/proposals/configs/" + configId, request);
     }
 
@@ -264,7 +271,7 @@ public class CommunicationController {
     @DeleteMapping("/admin/proposals/configs/{configId}")
     @AuthRequired
     public ResponseEntity<?> deleteProposalConfig(@PathVariable String configId) {
-        log.info("DELETE /api/v1/admin/proposals/configs/{} - Proxying to Communication Service", configId);
+        log.debug("[api-gateway] [CommunicationController.deleteProposalConfig] DELETE /api/v1/admin/proposals/configs/{} - Proxying to Communication Service", configId);
         return proxyCommunication(HttpMethod.DELETE, "/api/v1/admin/proposals/configs/" + configId, null);
     }
 
@@ -278,7 +285,7 @@ public class CommunicationController {
     @PostMapping("/messages")
     @AuthRequired
     public ResponseEntity<?> sendMessage(@RequestBody JsonNode requestBody) {
-        log.info("POST /api/v1/messages - Proxying to Communication Service");
+        log.debug("[api-gateway] [CommunicationController.sendMessage] POST /api/v1/messages - Proxying to Communication Service");
         return proxyCommunication(HttpMethod.POST, "/api/v1/messages", requestBody);
     }
 
@@ -288,7 +295,7 @@ public class CommunicationController {
     @PutMapping("/messages/{messageId}/status")
     @AuthRequired
     public ResponseEntity<?> updateMessageStatus(@PathVariable String messageId, @RequestBody JsonNode requestBody) {
-        log.info("PUT /api/v1/messages/{}/status - Proxying to Communication Service", messageId);
+        log.debug("[api-gateway] [CommunicationController.updateMessageStatus] PUT /api/v1/messages/{}/status - Proxying to Communication Service", messageId);
         return proxyCommunication(HttpMethod.PUT, "/api/v1/messages/" + messageId + "/status", requestBody);
     }
 

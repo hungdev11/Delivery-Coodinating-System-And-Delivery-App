@@ -43,7 +43,7 @@ public class AssignmentSnapshotService {
             .status(info.getStatus())
             .updatedAt(LocalDateTime.now())
             .build();
-        log.info("Persisting assignment snapshot for parcel {} -> assignment {}", parcelId, info.getAssignmentId());
+        log.debug("[parcel-service] [AssignmentSnapshotService.fetchAndPersist] Persisting assignment snapshot for parcel {} -> assignment {}", parcelId, info.getAssignmentId());
         return assignmentSnapshotRepository.save(snapshot);
     }
 
@@ -56,4 +56,3 @@ public class AssignmentSnapshotService {
         });
     }
 }
-

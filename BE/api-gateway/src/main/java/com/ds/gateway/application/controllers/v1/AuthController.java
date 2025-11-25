@@ -41,11 +41,11 @@ public class AuthController {
     @PostMapping("/login")
     public CompletableFuture<ResponseEntity<BaseResponse<LoginResponseDto>>> login(
             @Valid @RequestBody KeycloakLoginRequestDto request) {
-        log.info("🔐 LOGIN REQUEST - Username: {}, Type: {}", request.getUsername(), request.getType());
+        log.debug("[api-gateway] [AuthController.login] LOGIN REQUEST - Username: {}, Type: {}", request.getUsername(), request.getType());
         
         return keycloakAuthService.login(request.getUsername(), request.getPassword(), request.getType())
             .thenApply(loginResponse -> {
-                log.info("✅ LOGIN SUCCESS - Username: {}, UserId: {}, TokenType: {}, ExpiresIn: {}s", 
+                log.debug("[api-gateway] [AuthController.login] LOGIN SUCCESS - Username: {}, UserId: {}, TokenType: {}, ExpiresIn: {}s", 
                     request.getUsername(), 
                     loginResponse.getUser() != null ? loginResponse.getUser().getId() : "N/A",
                     loginResponse.getTokenType(),
@@ -53,7 +53,7 @@ public class AuthController {
                 return ResponseEntity.ok(BaseResponse.success(loginResponse, "Login successful"));
             })
             .exceptionally(ex -> {
-                log.error("❌ LOGIN FAILED - Username: {}, Error: {}", request.getUsername(), ex.getMessage());
+                log.error("[api-gateway] [AuthController.login] LOGIN FAILED - Username: {}", request.getUsername(), ex);
                 return createLoginErrorResponse(ex);
             });
     }
@@ -66,11 +66,11 @@ public class AuthController {
     @PostMapping("/login/default")
     public CompletableFuture<ResponseEntity<BaseResponse<LoginResponseDto>>> defaultLogin(
             @Valid @RequestBody KeycloakLoginRequestDto request) {
-        log.info("🔐 DEFAULT LOGIN REQUEST - Username: {}", request.getUsername());
+        log.debug("[api-gateway] [AuthController.defaultLogin] DEFAULT LOGIN REQUEST - Username: {}", request.getUsername());
         
         return keycloakAuthService.defaultLogin(request.getUsername(), request.getPassword())
             .thenApply(loginResponse -> {
-                log.info("✅ DEFAULT LOGIN SUCCESS - Username: {}, UserId: {}, TokenType: {}, ExpiresIn: {}s", 
+                log.debug("[api-gateway] [AuthController.defaultLogin] DEFAULT LOGIN SUCCESS - Username: {}, UserId: {}, TokenType: {}, ExpiresIn: {}s", 
                     request.getUsername(), 
                     loginResponse.getUser() != null ? loginResponse.getUser().getId() : "N/A",
                     loginResponse.getTokenType(),
@@ -78,7 +78,7 @@ public class AuthController {
                 return ResponseEntity.ok(BaseResponse.success(loginResponse, "Login successful"));
             })
             .exceptionally(ex -> {
-                log.error("❌ DEFAULT LOGIN FAILED - Username: {}, Error: {}", request.getUsername(), ex.getMessage());
+                log.error("[api-gateway] [AuthController.defaultLogin] DEFAULT LOGIN FAILED - Username: {}", request.getUsername(), ex);
                 return createLoginErrorResponse(ex);
             });
     }
@@ -91,7 +91,7 @@ public class AuthController {
     @PostMapping("/login/custom")
     public CompletableFuture<ResponseEntity<BaseResponse<LoginResponseDto>>> customLogin(
             @Valid @RequestBody CustomLoginRequestDto request) {
-        log.info("🔐 CUSTOM LOGIN REQUEST - Username: {}, Realm: {}, Client: {}", 
+        log.debug("[api-gateway] [AuthController.customLogin] CUSTOM LOGIN REQUEST - Username: {}, Realm: {}, Client: {}", 
                 request.getUsername(), request.getRealm(), request.getClientId());
         
         return keycloakAuthService.loginWithRealmAndClient(
@@ -100,7 +100,7 @@ public class AuthController {
                 request.getRealm(), 
                 request.getClientId())
             .thenApply(loginResponse -> {
-                log.info("✅ CUSTOM LOGIN SUCCESS - Username: {}, Realm: {}, UserId: {}, TokenType: {}, ExpiresIn: {}s", 
+                log.debug("[api-gateway] [AuthController.customLogin] CUSTOM LOGIN SUCCESS - Username: {}, Realm: {}, UserId: {}, TokenType: {}, ExpiresIn: {}s", 
                     request.getUsername(), 
                     request.getRealm(),
                     loginResponse.getUser() != null ? loginResponse.getUser().getId() : "N/A",
@@ -109,8 +109,8 @@ public class AuthController {
                 return ResponseEntity.ok(BaseResponse.success(loginResponse, "Login successful"));
             })
             .exceptionally(ex -> {
-                log.error("❌ CUSTOM LOGIN FAILED - Username: {}, Realm: {}, Error: {}", 
-                    request.getUsername(), request.getRealm(), ex.getMessage());
+                log.error("[api-gateway] [AuthController.customLogin] CUSTOM LOGIN FAILED - Username: {}, Realm: {}", 
+                    request.getUsername(), request.getRealm(), ex);
                 return createLoginErrorResponse(ex);
             });
     }
@@ -125,23 +125,23 @@ public class AuthController {
             @RequestHeader("Authorization") String authorization) {
         
         if (!isValidAuthorizationHeader(authorization)) {
-            log.warn("🔍 TOKEN VALIDATION REQUEST - Invalid authorization header format");
+            log.debug("[api-gateway] [AuthController.validateToken] TOKEN VALIDATION REQUEST - Invalid authorization header format");
             return CompletableFuture.completedFuture(
                 ResponseEntity.badRequest().body(BaseResponse.error("Invalid authorization header format"))
             );
         }
         
         String token = extractTokenFromHeader(authorization);
-        log.info("🔍 TOKEN VALIDATION REQUEST - Token length: {} chars", token.length());
+        log.debug("[api-gateway] [AuthController.validateToken] TOKEN VALIDATION REQUEST - Token length: {} chars", token.length());
         
         return keycloakAuthService.validateTokenAndGetUserInfo(token)
             .thenApply(userInfo -> {
-                log.info("✅ TOKEN VALIDATION SUCCESS - Username: {}, Sub: {}", 
+                log.debug("[api-gateway] [AuthController.validateToken] TOKEN VALIDATION SUCCESS - Username: {}, Sub: {}", 
                     userInfo.getPreferredUsername(), userInfo.getSub());
                 return ResponseEntity.ok(BaseResponse.success(userInfo, "Token valid"));
             })
             .exceptionally(ex -> {
-                log.error("❌ TOKEN VALIDATION FAILED - Error: {}", ex.getMessage());
+                log.error("[api-gateway] [AuthController.validateToken] TOKEN VALIDATION FAILED", ex);
                 return ResponseEntity.badRequest().body(BaseResponse.error("Token validation failed: " + ex.getMessage()));
             });
     }
@@ -153,12 +153,12 @@ public class AuthController {
     @PostMapping("/refresh-token")
     public CompletableFuture<ResponseEntity<BaseResponse<KeycloakTokenResponseDto>>> refreshToken(
             @Valid @RequestBody RefreshTokenRequestDto request) {
-        log.info("Refresh token request");
+        log.debug("[api-gateway] [AuthController.refreshToken] Refresh token request");
         
         return keycloakAuthService.refreshToken(request.getRefreshToken())
             .thenApply(response -> ResponseEntity.ok(BaseResponse.success(response, "Token refreshed")))
             .exceptionally(ex -> {
-                log.error("Token refresh failed: {}", ex.getMessage());
+                log.error("[api-gateway] [AuthController.refreshToken] Token refresh failed", ex);
                 return ResponseEntity.badRequest().body(BaseResponse.error("Token refresh failed: " + ex.getMessage()));
             });
     }
@@ -170,12 +170,12 @@ public class AuthController {
     @PostMapping("/logout")
     public CompletableFuture<ResponseEntity<BaseResponse<Boolean>>> logout(
             @Valid @RequestBody RefreshTokenRequestDto request) {
-        log.info("Logout request");
+        log.debug("[api-gateway] [AuthController.logout] Logout request");
         
         return keycloakAuthService.logout(request.getRefreshToken())
             .thenApply(success -> ResponseEntity.ok(BaseResponse.success(success, "Logout successful")))
             .exceptionally(ex -> {
-                log.error("Logout failed: {}", ex.getMessage());
+                log.error("[api-gateway] [AuthController.logout] Logout failed", ex);
                 return ResponseEntity.badRequest().body(BaseResponse.error("Logout failed: " + ex.getMessage()));
             });
     }
@@ -187,14 +187,14 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<BaseResponse<KeycloakUserInfoDto>> getCurrentUser(Authentication authentication) {
         if (!isValidJwtAuthentication(authentication)) {
-            log.warn("👤 GET CURRENT USER REQUEST - No valid JWT token found");
+            log.debug("[api-gateway] [AuthController.getCurrentUser] GET CURRENT USER REQUEST - No valid JWT token found");
             return ResponseEntity.badRequest().body(BaseResponse.error("Authentication required"));
         }
         
         Jwt jwt = (Jwt) authentication.getPrincipal();
         KeycloakUserInfoDto userInfo = keycloakAuthService.extractUserInfoFromJwt(jwt);
         
-        log.info("✅ GET CURRENT USER SUCCESS - Username: {}, Sub: {}", 
+        log.debug("[api-gateway] [AuthController.getCurrentUser] GET CURRENT USER SUCCESS - Username: {}, Sub: {}", 
             userInfo.getPreferredUsername(), userInfo.getSub());
         return ResponseEntity.ok(BaseResponse.success(userInfo, "User info retrieved"));
     }
@@ -206,7 +206,7 @@ public class AuthController {
     @PostMapping("/sync")
     public CompletableFuture<ResponseEntity<BaseResponse<UserDto>>> syncUser(Authentication authentication) {
         if (!isValidJwtAuthentication(authentication)) {
-            log.warn("🔄 SYNC USER REQUEST - No valid JWT token found");
+            log.debug("[api-gateway] [AuthController.syncUser] SYNC USER REQUEST - No valid JWT token found");
             return CompletableFuture.completedFuture(
                 ResponseEntity.badRequest().body(BaseResponse.error("Authentication required"))
             );
@@ -215,7 +215,7 @@ public class AuthController {
         Jwt jwt = (Jwt) authentication.getPrincipal();
         KeycloakUserInfoDto keycloakUserInfo = keycloakAuthService.extractUserInfoFromJwt(jwt);
         
-        log.info("🔄 SYNC USER REQUEST - KeycloakId: {}, Username: {}", 
+        log.debug("[api-gateway] [AuthController.syncUser] SYNC USER REQUEST - KeycloakId: {}, Username: {}", 
                 keycloakUserInfo.getSub(), keycloakUserInfo.getPreferredUsername());
         
         return userServiceClient.syncUserByKeycloakId(
@@ -225,13 +225,13 @@ public class AuthController {
                 keycloakUserInfo.getGivenName(), 
                 keycloakUserInfo.getFamilyName())
             .thenApply(user -> {
-                log.info("✅ SYNC USER SUCCESS - Username: {}, UserId: {}, Email: {}", 
+                log.debug("[api-gateway] [AuthController.syncUser] SYNC USER SUCCESS - Username: {}, UserId: {}, Email: {}", 
                     user.getUsername(), user.getId(), user.getEmail());
                 return ResponseEntity.ok(BaseResponse.success(user, "User synced successfully"));
             })
             .exceptionally(ex -> {
-                log.error("❌ SYNC USER FAILED - KeycloakId: {}, Error: {}", 
-                    keycloakUserInfo.getSub(), ex.getMessage(), ex);
+                log.error("[api-gateway] [AuthController.syncUser] SYNC USER FAILED - KeycloakId: {}", 
+                    keycloakUserInfo.getSub(), ex);
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to sync user: " + ex.getMessage()));
             });
     }
@@ -243,7 +243,7 @@ public class AuthController {
      */
     private ResponseEntity<BaseResponse<LoginResponseDto>> createLoginErrorResponse(Throwable ex) {
         String errorMessage = parseLoginErrorMessage(ex);
-        log.error("Login failed: {}", errorMessage);
+        log.error("[api-gateway] [AuthController.createLoginErrorResponse] Login failed: {}", errorMessage, ex);
         return ResponseEntity.badRequest().body(BaseResponse.error(errorMessage));
     }
     

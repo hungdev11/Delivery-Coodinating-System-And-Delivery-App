@@ -162,7 +162,7 @@ public class UserEventPublisher {
     }
 
     private void publishEvent(String userId, UserEventDto event) {
-        log.info("📤 Publishing user event: {} for user: {}", event.getEventType(), userId);
+        log.debug("[user-service] [UserEventPublisher.publishEvent] Publishing user event: {} for user: {}", event.getEventType(), userId);
         
         CompletableFuture<SendResult<String, Object>> future = 
             kafkaTemplate.send(KafkaConfig.TOPIC_USER_EVENTS, userId, event);

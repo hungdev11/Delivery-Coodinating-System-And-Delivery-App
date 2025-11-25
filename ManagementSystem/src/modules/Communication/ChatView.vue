@@ -305,12 +305,72 @@ const connectWebSocket = async () => {
           from: isFromPartner ? 'partner' : 'me',
           conversationId: message.conversationId,
           currentConversationId: conversationId.value,
+          type: message.type,
         })
         addMessage(message)
 
         // Save to local storage
         if (conversationId.value) {
           chatHistoryStore.addMessage(conversationId.value, message)
+        }
+
+        // If this is a DELIVERY_COMPLETED message, refresh session assignments and update parcel status
+        if (message.type === 'DELIVERY_COMPLETED') {
+          console.log('📦 DELIVERY_COMPLETED message received, refreshing session assignments...')
+
+          // Parse message content to get parcelId
+          try {
+            const messageData = typeof message.content === 'string' ? JSON.parse(message.content) : message.content
+            const parcelId = messageData?.parcelId || messageData?.parcelCode
+
+            if (parcelId) {
+              // Update assignment status in local list immediately (optimistic update)
+              const assignmentIndex = sessionAssignments.value.findIndex(
+                (a) => a.parcelId === parcelId || a.parcelCode === parcelId
+              )
+              if (assignmentIndex !== -1) {
+                sessionAssignments.value[assignmentIndex].status = 'COMPLETED'
+                if (messageData?.completedAt) {
+                  // Update completedAt if available
+                  sessionAssignments.value[assignmentIndex].completedAt = messageData.completedAt
+                }
+                console.log('✅ Updated assignment status to COMPLETED in local list:', parcelId)
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to parse DELIVERY_COMPLETED message content:', e)
+          }
+
+          // Refresh from server to ensure consistency
+          await loadActiveSessionAndAssignments()
+        }
+
+        // If this is a postpone message (TEXT with postpone data), refresh session assignments
+        if (message.type === 'TEXT' && message.content) {
+          try {
+            const messageData = typeof message.content === 'string' ? JSON.parse(message.content) : message.content
+            if (messageData?.postponeDateTime || (messageData?.parcelId && messageData?.reason)) {
+              console.log('⏸️ Postpone message received, refreshing session assignments...')
+              
+              const parcelId = messageData?.parcelId
+              if (parcelId) {
+                // Update assignment status in local list (remove from active session if postponed)
+                const assignmentIndex = sessionAssignments.value.findIndex(
+                  (a) => a.parcelId === parcelId || a.parcelCode === parcelId
+                )
+                if (assignmentIndex !== -1) {
+                  // Remove from active session list (parcel is postponed, no longer in active session)
+                  sessionAssignments.value.splice(assignmentIndex, 1)
+                  console.log('✅ Removed postponed parcel from active session list:', parcelId)
+                }
+              }
+
+              // Refresh from server to ensure consistency
+              await loadActiveSessionAndAssignments()
+            }
+          } catch (e) {
+            // Not a JSON message, ignore
+          }
         }
 
         nextTick(() => scrollToBottom())
@@ -331,8 +391,41 @@ const connectWebSocket = async () => {
     handleStatusUpdate, // Status update callback
     handleTypingIndicator, // Typing indicator callback
     handleNotification, // Notification callback
-    handleProposalUpdate // Proposal update callback
+    handleProposalUpdate, // Proposal update callback
+    handleUpdateNotification // Update notification callback
   )
+}
+
+/**
+ * Handle update notification (session completed, parcel updated, etc.)
+ */
+const handleUpdateNotification = (updateNotification: any) => {
+  if (!updateNotification) return
+
+  const entityType = updateNotification.entityType
+  const action = updateNotification.action
+  const entityId = updateNotification.entityId
+
+  console.log('🔄 Update notification received in ChatView:', {
+    entityType,
+    action,
+    entityId,
+    message: updateNotification.message,
+  })
+
+  // Handle SESSION_UPDATE: refresh session assignments if session completed
+  if (entityType === 'SESSION' && action === 'COMPLETED') {
+    console.log('📦 Session completed, refreshing session assignments...')
+    // Refresh session assignments to clear in-progress parcels
+    loadActiveSessionAndAssignments()
+  }
+
+  // Handle PARCEL_UPDATE: refresh session assignments if parcel status changed
+  if (entityType === 'PARCEL' && (action === 'STATUS_CHANGED' || action === 'UPDATED')) {
+    console.log('📦 Parcel updated, refreshing session assignments...')
+    // Refresh session assignments to reflect parcel status changes
+    loadActiveSessionAndAssignments()
+  }
 }
 
 /**
@@ -935,9 +1028,16 @@ const isMyMessage = (message: MessageResponse) => {
         class="flex"
         :class="{ 'justify-end': isMyMessage(message), 'justify-start': !isMyMessage(message) }"
       >
+        <!-- Delivery Completed Message -->
+        <ChatMessage
+          v-if="message.type === 'DELIVERY_COMPLETED'"
+          :message="message"
+          :is-my-message="isMyMessage(message)"
+        />
+
         <!-- Text Message -->
         <ChatMessage
-          v-if="message.type === 'TEXT'"
+          v-else-if="message.type === 'TEXT'"
           :message="message"
           :is-my-message="isMyMessage(message)"
         />

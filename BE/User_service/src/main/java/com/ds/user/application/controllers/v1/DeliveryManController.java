@@ -31,8 +31,8 @@ public class DeliveryManController {
     @GetMapping("/{userId}/delivery-man")
     @Operation(summary = "Get delivery man by user ID")
     public ResponseEntity<BaseResponse<DeliveryManDto>> getDeliveryManByUserId(@PathVariable String userId) {
-        log.info("GET /api/v1/users/{}/delivery-man - Get delivery man by user ID", userId);
-        
+        log.debug("Get delivery man by user ID: {}", userId);
+
         Optional<DeliveryManDto> deliveryManOpt = deliveryManService.getDeliveryManByUserId(userId);
         if (deliveryManOpt.isPresent()) {
             return ResponseEntity.ok(BaseResponse.success(deliveryManOpt.get()));

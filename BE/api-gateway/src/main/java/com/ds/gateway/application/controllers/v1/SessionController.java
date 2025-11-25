@@ -56,7 +56,7 @@ public class SessionController {
      */
     @PostMapping("/drivers/{deliveryManId}/prepare")
     public ResponseEntity<?> createSessionPrepared(@PathVariable String deliveryManId) {
-        log.info("Creating prepared session (CREATED) for delivery man {}", deliveryManId);
+        log.debug("[api-gateway] [SessionController.createSessionPrepared] Creating prepared session (CREATED) for delivery man {}", deliveryManId);
         return sessionServiceClient.createSessionPrepared(deliveryManId);
     }
 
@@ -66,7 +66,7 @@ public class SessionController {
      */
     @PostMapping("/{sessionId}/start")
     public ResponseEntity<?> startSession(@PathVariable UUID sessionId) {
-        log.info("Starting session {} (CREATED -> IN_PROGRESS)", sessionId);
+        log.debug("[api-gateway] [SessionController.startSession] Starting session {} (CREATED -> IN_PROGRESS)", sessionId);
         return sessionServiceClient.startSession(sessionId);
     }
 
@@ -76,7 +76,7 @@ public class SessionController {
      */
     @GetMapping("/drivers/{deliveryManId}/active")
     public ResponseEntity<?> getActiveSession(@PathVariable String deliveryManId) {
-        log.info("Getting active session for delivery man {}", deliveryManId);
+        log.debug("[api-gateway] [SessionController.getActiveSession] Getting active session for delivery man {}", deliveryManId);
         return sessionServiceClient.getActiveSession(deliveryManId);
     }
 }

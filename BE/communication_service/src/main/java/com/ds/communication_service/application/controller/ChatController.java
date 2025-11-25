@@ -44,7 +44,7 @@ public class ChatController {
         // (Interceptor của bạn đã set "name" của Principal chính là Keycloak User ID (sub))
         String senderId = principal.getName();
         
-        log.info("Tin nhắn nhận được: Từ {} -> Tới {}", senderId, payload.getRecipientId());
+        log.debug("[communication-service] [ChatController.sendMessage] Tin nhắn nhận được: Từ {} -> Tới {}", senderId, payload.getRecipientId());
 
         MessageResponse savedMessage = messageService.processAndSaveMessage(payload, senderId);
 
@@ -54,7 +54,7 @@ public class ChatController {
         
         // Gửi đến recipient (người nhận)
         String recipientDestination = "/user/" + payload.getRecipientId() + "/queue/messages";
-        log.info("📤 Sending message to RECIPIENT: userId={}, destination={}, messageId={}", 
+        log.debug("[communication-service] [ChatController.sendMessage] Sending message to RECIPIENT: userId={}, destination={}, messageId={}", 
             payload.getRecipientId(), recipientDestination, savedMessage.getId());
         
         try {
@@ -63,15 +63,15 @@ public class ChatController {
                 "/queue/messages",             
                 savedMessage             
             );
-            log.info("✅ RECIPIENT message sent successfully");
+            log.debug("[communication-service] [ChatController.sendMessage] RECIPIENT message sent successfully");
         } catch (Exception e) {
-            log.error("❌ Failed to send to RECIPIENT: {}", e.getMessage(), e);
+            log.error("[communication-service] [ChatController.sendMessage] Failed to send to RECIPIENT", e);
         }
         
         // Also send to sender for confirmation (matching ChatActivity.java behavior)
         // This ensures sender sees their own message immediately via WebSocket
         String senderDestination = "/user/" + senderId + "/queue/messages";
-        log.info("📤 Sending message to SENDER: userId={}, destination={}, messageId={}", 
+        log.debug("[communication-service] [ChatController.sendMessage] Sending message to SENDER: userId={}, destination={}, messageId={}", 
             senderId, senderDestination, savedMessage.getId());
         
         try {
@@ -80,16 +80,16 @@ public class ChatController {
                 "/queue/messages",             
                 savedMessage             
             );
-            log.info("✅ SENDER message sent successfully");
+            log.debug("[communication-service] [ChatController.sendMessage] SENDER message sent successfully");
         } catch (Exception e) {
-            log.error("❌ Failed to send to SENDER: {}", e.getMessage(), e);
+            log.error("[communication-service] [ChatController.sendMessage] Failed to send to SENDER", e);
         }
         
         // NEW: If recipient is a shipper, also broadcast to session monitoring topic
         // This allows shippers to monitor all client messages in their active session
         broadcastToShipperSession(savedMessage, senderId, payload.getRecipientId());
         
-        log.info("✅ Message {} sent to both users: sender={}, recipient={}", 
+        log.debug("[communication-service] [ChatController.sendMessage] Message {} sent to both users: sender={}, recipient={}", 
             savedMessage.getId(), senderId, payload.getRecipientId());
     }
     
@@ -109,7 +109,7 @@ public class ChatController {
             
         } catch (Exception e) {
             // Don't fail the whole message send if broadcast fails
-            log.warn("⚠️ Failed to broadcast to shipper session: {}", e.getMessage());
+            log.debug("[communication-service] [ChatController.broadcastToShipperSession] Failed to broadcast to shipper session: {}", e.getMessage());
         }
     }
 
@@ -152,7 +152,7 @@ public class ChatController {
         }
 
         String userId = principal.getName();
-        log.info("👁️ Read receipt received: userId={}, messageIds={}", 
+        log.debug("[communication-service] [ChatController.markAsRead] Read receipt received: userId={}, messageIds={}", 
             userId, payload.getMessageIds().length);
         
         // Mark messages as read
@@ -177,7 +177,7 @@ public class ChatController {
         String userId = principal.getName();
         quickAction.setUserId(userId);
         
-        log.info("⚡ Quick action received: userId={}, action={}, proposalId={}", 
+        log.debug("[communication-service] [ChatController.handleQuickAction] Quick action received: userId={}, action={}, proposalId={}", 
             userId, quickAction.getAction(), quickAction.getProposalId());
         
         try {
@@ -191,11 +191,11 @@ public class ChatController {
                 resultData
             );
             
-            log.info("✅ Quick action processed successfully: action={}, proposalId={}", 
+            log.debug("[communication-service] [ChatController.handleQuickAction] Quick action processed successfully: action={}, proposalId={}", 
                 quickAction.getAction(), quickAction.getProposalId());
                 
         } catch (Exception e) {
-            log.error("❌ Failed to process quick action: {}", e.getMessage(), e);
+            log.error("[communication-service] [ChatController.handleQuickAction] Failed to process quick action", e);
             // TODO: Send error notification to user
         }
     }
@@ -239,7 +239,7 @@ public class ChatController {
         try {
             return mapper.writeValueAsString(resultNode);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            log.error("Failed to serialize result data", e);
+            log.error("[communication-service] [ChatController.buildResultData] Failed to serialize result data", e);
             return "{}";
         }
     }

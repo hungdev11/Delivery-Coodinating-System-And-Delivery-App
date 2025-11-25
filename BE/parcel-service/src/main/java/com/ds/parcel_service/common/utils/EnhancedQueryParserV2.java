@@ -105,7 +105,7 @@ public class EnhancedQueryParserV2 {
 
             Path<?> fieldPath = getFieldPath(root, field);
             if (fieldPath == null) {
-                log.warn("Field path not found: {}", field);
+                log.debug("[parcel-service] [EnhancedQueryParserV2.parseCondition] Field path not found: {}", field);
                 return null;
             }
 
@@ -137,7 +137,7 @@ public class EnhancedQueryParserV2 {
                 case ENDS_WITH:
                     return criteriaBuilder.like(fieldPath.as(String.class), "%" + value);
                 default:
-                    log.warn("Unsupported operator: {}", operator);
+                    log.debug("[parcel-service] [EnhancedQueryParserV2.parseCondition] Unsupported operator: {}", operator);
                     return null;
             }
             
@@ -156,7 +156,7 @@ public class EnhancedQueryParserV2 {
             }
             return path;
         } catch (Exception e) {
-            log.warn("Error getting field path for: {}, error: {}", field, e.getMessage());
+            log.debug("[parcel-service] [EnhancedQueryParserV2.getFieldPath] Error getting field path for: {}, error: {}", field, e.getMessage());
             return null;
         }
     }

@@ -27,7 +27,7 @@ public class SettingsControllerV0 {
     public ResponseEntity<BaseResponse<PagedData<SystemSettingDto>>> getSettings(
         @Valid @RequestBody PagingRequestV0 query
     ) {
-        log.info("POST /api/v0/settings - Get settings with simple paging (V0)");
+        log.debug("[settings-service] [SettingsControllerV0.getSettings] POST /api/v0/settings - Get settings with simple paging (V0)");
         PagedData<SystemSettingDto> result = settingsService.getSettingsV0(query);
         return ResponseEntity.ok(BaseResponse.success(result));
     }

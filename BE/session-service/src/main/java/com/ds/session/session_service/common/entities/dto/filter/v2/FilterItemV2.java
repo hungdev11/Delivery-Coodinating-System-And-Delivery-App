@@ -9,7 +9,6 @@ import lombok.NoArgsConstructor;
  * Base class for V2 filter items
  * V2 allows operations between each pair of conditions/groups
  */
-@Data
 @NoArgsConstructor
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type", defaultImpl = FilterGroupItemV2.class, visible = true)
 @JsonSubTypes({
@@ -19,4 +18,17 @@ import lombok.NoArgsConstructor;
 })
 public abstract class FilterItemV2 {
     private FilterItemType type;
+    
+    /**
+     * Get the type of this filter item
+     * Subclasses should override this to return their specific type
+     */
+    public abstract FilterItemType getType();
+    
+    /**
+     * Set the type (for Jackson deserialization)
+     */
+    public void setType(FilterItemType type) {
+        this.type = type;
+    }
 }

@@ -35,11 +35,11 @@ public class SessionServiceClient {
                 .buildAndExpand(parcelId.toString())
                 .toUriString();
 
-        log.info("Calling Session Service for latest assignment of parcel {}", parcelId);
-        ParameterizedTypeReference<BaseResponse<LatestAssignmentInfo>> type =
-                new ParameterizedTypeReference<>() {};
-        ResponseEntity<BaseResponse<LatestAssignmentInfo>> response =
-                restTemplate.exchange(uri, HttpMethod.GET, null, type);
+        log.debug("Calling Session Service for latest assignment of parcel {}", parcelId);
+        ParameterizedTypeReference<BaseResponse<LatestAssignmentInfo>> type = new ParameterizedTypeReference<>() {
+        };
+        ResponseEntity<BaseResponse<LatestAssignmentInfo>> response = restTemplate.exchange(uri, HttpMethod.GET, null,
+                type);
         BaseResponse<LatestAssignmentInfo> body = response.getBody();
         if (body != null && body.getResult() != null) {
             return body.getResult();
@@ -54,14 +54,14 @@ public class SessionServiceClient {
                 .toUriString();
 
         UpdateAssignmentStatusPayload payload = new UpdateAssignmentStatusPayload();
-        payload.setAssignmentStatus("SUCCESS");
+        payload.setAssignmentStatus("COMPLETED"); // Use COMPLETED instead of SUCCESS (enum value)
         payload.setParcelEvent("CUSTOMER_RECEIVED");
         payload.setFailReason(note);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
-        log.info("Marking assignment {} in session {} as SUCCESS", assignmentId, sessionId);
+        log.debug("Marking assignment {} in session {} as COMPLETED", assignmentId, sessionId);
         restTemplate.exchange(uri, HttpMethod.PUT, new HttpEntity<>(payload, headers), Void.class);
     }
 
@@ -80,4 +80,3 @@ public class SessionServiceClient {
         private String failReason;
     }
 }
-

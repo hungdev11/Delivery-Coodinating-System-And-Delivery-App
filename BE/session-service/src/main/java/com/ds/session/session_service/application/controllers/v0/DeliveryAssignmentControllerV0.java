@@ -33,7 +33,7 @@ public class DeliveryAssignmentControllerV0 {
     public ResponseEntity<PageResponse<DeliveryAssignmentResponse>> getAssignments(
         @Valid @RequestBody PagingRequestV0 request
     ) {
-        log.info("POST /api/v0/assignments - Get assignments with simple paging (V0)");
+        log.debug("[session-service] [DeliveryAssignmentControllerV0.getAssignments] POST /api/v0/assignments - Get assignments with simple paging (V0)");
         PageResponse<DeliveryAssignmentResponse> response = assignmentService.getDailyTasksV0(request);
         return ResponseEntity.ok(response);
     }

@@ -50,14 +50,14 @@ public class KeycloakAuthService implements IKeycloakAuthService {
     
     @Override
     public CompletableFuture<LoginResponseDto> login(String username, String password, String type) {
-        log.debug("🔐 SERVICE LOGIN - Username: {}, Type: {}", username, type);
+        log.debug("[api-gateway] [KeycloakAuthService.login] SERVICE LOGIN - Username: {}, Type: {}", username, type);
         
         // Get login type configuration
         LoginType loginType = LoginType.fromString(type);
         String targetRealm = loginType.getRealm();
         String targetClientId = loginType.getClientId();
         
-        log.debug("🔐 SERVICE LOGIN - Using realm: {} and client: {} for login type: {}", targetRealm, targetClientId, loginType);
+        log.debug("[api-gateway] [KeycloakAuthService.login] SERVICE LOGIN - Using realm: {} and client: {} for login type: {}", targetRealm, targetClientId, loginType);
         
         return loginWithRealmAndClient(username, password, targetRealm, targetClientId);
     }
@@ -67,7 +67,7 @@ public class KeycloakAuthService implements IKeycloakAuthService {
      */
     @Override
     public CompletableFuture<LoginResponseDto> loginWithRealmAndClient(String username, String password, String realm, String clientId) {
-        log.debug("🔐 SERVICE LOGIN - Username: {}, Realm: {}, Client: {}", username, realm, clientId);
+        log.debug("[api-gateway] [KeycloakAuthService.loginWithRealmAndClient] SERVICE LOGIN - Username: {}, Realm: {}, Client: {}", username, realm, clientId);
         
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
         formData.add("grant_type", "password");
@@ -77,9 +77,9 @@ public class KeycloakAuthService implements IKeycloakAuthService {
         String clientSecret = resolveClientSecret(clientId);
         if (clientSecret != null && !clientSecret.isBlank()) {
             formData.add("client_secret", clientSecret);
-            log.debug("🔐 SERVICE LOGIN - Using client secret for client: {}", clientId);
+            log.debug("[api-gateway] [KeycloakAuthService.loginWithRealmAndClient] SERVICE LOGIN - Using client secret for client: {}", clientId);
         } else {
-            log.debug("🔐 SERVICE LOGIN - No client secret for client: {}", clientId);
+            log.debug("[api-gateway] [KeycloakAuthService.loginWithRealmAndClient] SERVICE LOGIN - No client secret for client: {}", clientId);
         }
         
         return keycloakWebClient.post()
@@ -89,15 +89,15 @@ public class KeycloakAuthService implements IKeycloakAuthService {
             .retrieve()
             .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
             .map(tokenMap -> {
-                log.debug("🔐 SERVICE LOGIN - Keycloak token response received for user: {}", username);
+                log.debug("[api-gateway] [KeycloakAuthService.loginWithRealmAndClient] SERVICE LOGIN - Keycloak token response received for user: {}", username);
                 return mapToTokenResponseDto(tokenMap);
             })
             .flatMap(tokenResponse -> {
-                log.debug("🔐 SERVICE LOGIN - Fetching user info from User Service for user: {}", username);
+                log.debug("[api-gateway] [KeycloakAuthService.loginWithRealmAndClient] SERVICE LOGIN - Fetching user info from User Service for user: {}", username);
                 // Get user info from User Service after successful Keycloak login
                 return Mono.fromFuture(userServiceClient.getUserByUsername(username))
                     .map(user -> {
-                        log.debug("🔐 SERVICE LOGIN - User info retrieved, building LoginResponseDto for user: {}", username);
+                        log.debug("[api-gateway] [KeycloakAuthService.loginWithRealmAndClient] SERVICE LOGIN - User info retrieved, building LoginResponseDto for user: {}", username);
                         return LoginResponseDto.builder()
                             .message("Login successful")
                             .accessToken(tokenResponse.getAccessToken())
@@ -109,7 +109,7 @@ public class KeycloakAuthService implements IKeycloakAuthService {
                     });
             })
             .onErrorMap(ex -> {
-                log.error("❌ SERVICE LOGIN - Keycloak authentication failed for user: {}, error: {}", username, ex.getMessage());
+                log.error("[api-gateway] [KeycloakAuthService.login] SERVICE LOGIN - Keycloak authentication failed for user: {}", username, ex);
                 return new ServiceUnavailableException("Keycloak login service unavailable: " + ex.getMessage(), ex);
             })
             .toFuture();
@@ -120,7 +120,7 @@ public class KeycloakAuthService implements IKeycloakAuthService {
      */
     @Override
     public CompletableFuture<LoginResponseDto> defaultLogin(String username, String password) {
-        log.debug("🔐 SERVICE DEFAULT LOGIN - Username: {}", username);
+        log.debug("[api-gateway] [KeycloakAuthService.defaultLogin] SERVICE DEFAULT LOGIN - Username: {}", username);
         
         // Get dynamic default values from Settings Service
         String dynamicRealm = settingsClient.getDefaultRealm();
@@ -130,13 +130,13 @@ public class KeycloakAuthService implements IKeycloakAuthService {
         String targetRealm = (dynamicRealm != null) ? dynamicRealm : defaultRealm;
         String targetClientId = (dynamicClientId != null) ? dynamicClientId : defaultClientId;
         
-        log.debug("🔐 SERVICE DEFAULT LOGIN - Using realm: {} and client: {} for user: {}", targetRealm, targetClientId, username);
+        log.debug("[api-gateway] [KeycloakAuthService.defaultLogin] SERVICE DEFAULT LOGIN - Using realm: {} and client: {} for user: {}", targetRealm, targetClientId, username);
         return loginWithRealmAndClient(username, password, targetRealm, targetClientId);
     }
     
     @Override
     public CompletableFuture<KeycloakUserInfoDto> validateTokenAndGetUserInfo(String accessToken) {
-        log.debug("Validating token and getting user info from Keycloak");
+        log.debug("[api-gateway] [KeycloakAuthService.validateTokenAndGetUserInfo] Validating token and getting user info from Keycloak");
         
         return keycloakWebClient.get()
             .uri("/realms/{realm}/protocol/openid-connect/userinfo", backendRealm)
@@ -150,7 +150,7 @@ public class KeycloakAuthService implements IKeycloakAuthService {
     
     @Override
     public CompletableFuture<KeycloakTokenResponseDto> refreshToken(String refreshToken) {
-        log.debug("Refreshing token via Keycloak");
+        log.debug("[api-gateway] [KeycloakAuthService.refreshToken] Refreshing token via Keycloak");
         
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
         formData.add("grant_type", "refresh_token");
@@ -174,7 +174,7 @@ public class KeycloakAuthService implements IKeycloakAuthService {
     
     @Override
     public KeycloakUserInfoDto extractUserInfoFromJwt(Jwt jwt) {
-        log.debug("Extracting user info from JWT token");
+        log.debug("[api-gateway] [KeycloakAuthService.extractUserInfoFromJwt] Extracting user info from JWT token");
         
         return KeycloakUserInfoDto.builder()
             .sub(jwt.getSubject())
@@ -196,7 +196,7 @@ public class KeycloakAuthService implements IKeycloakAuthService {
     
     @Override
     public CompletableFuture<Boolean> isTokenValid(String accessToken) {
-        log.debug("Checking token validity");
+        log.debug("[api-gateway] [KeycloakAuthService.isTokenValid] Checking token validity");
         
         return validateTokenAndGetUserInfo(accessToken)
             .thenApply(userInfo -> {
@@ -208,14 +208,14 @@ public class KeycloakAuthService implements IKeycloakAuthService {
                 return true; // If no expiration claim, assume valid
             })
             .exceptionally(ex -> {
-                log.warn("Token validation failed: {}", ex.getMessage());
+                log.debug("[api-gateway] [KeycloakAuthService.isTokenValid] Token validation failed: {}", ex.getMessage());
                 return false;
             });
     }
     
     @Override
     public CompletableFuture<Boolean> logout(String refreshToken) {
-        log.debug("Logging out user via Keycloak");
+        log.debug("[api-gateway] [KeycloakAuthService.logout] Logging out user via Keycloak");
         
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
         formData.add("refresh_token", refreshToken);
@@ -233,7 +233,7 @@ public class KeycloakAuthService implements IKeycloakAuthService {
             .bodyToMono(Void.class)
             .thenReturn(true)
             .onErrorResume(ex -> {
-                log.warn("Logout failed: {}", ex.getMessage());
+                log.debug("[api-gateway] [KeycloakAuthService.logout] Logout failed: {}", ex.getMessage());
                 return Mono.just(false);
             })
             .toFuture();
@@ -279,7 +279,7 @@ public class KeycloakAuthService implements IKeycloakAuthService {
                 return (List<String>) realmAccess.get("roles");
             }
         } catch (Exception e) {
-            log.warn("Failed to extract roles from JWT: {}", e.getMessage());
+            log.debug("[api-gateway] [KeycloakAuthService.extractRoles] Failed to extract roles from JWT: {}", e.getMessage());
         }
         return List.of();
     }

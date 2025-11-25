@@ -1,5 +1,6 @@
 package com.ds.deliveryapp.clients;
 
+import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.model.Parcel;
 
@@ -13,24 +14,24 @@ import retrofit2.http.Query;
 
 public interface ParcelClient {
     @GET("parcels/{parcelId}")
-    Call<Parcel> getParcelById(@Path("parcelId") String parcelId);
+    Call<BaseResponse<Parcel>> getParcelById(@Path("parcelId") String parcelId);
 
     @GET("parcels/code/{code}")
-    Call<Parcel> getParcelByCode(@Path("code") String code);
+    Call<BaseResponse<Parcel>> getParcelByCode(@Path("code") String code);
 
     @GET("parcels/me")
-    Call<PageResponse<Parcel>> getParcelSent(
+    Call<BaseResponse<PageResponse<Parcel>>> getParcelSent(
             @Query("customerId") String customerId,
             @Query("page") int page,
             @Query("size") int size
     );
 
     @GET("parcels/me/receive")
-    Call<PageResponse<Parcel>> getParcelReceive(@Query("customerId") String customerId,
+    Call<BaseResponse<PageResponse<Parcel>>> getParcelReceive(@Query("customerId") String customerId,
                                                 @Query("page") int page,
                                                 @Query("size") int size
     );
 
     @PUT("parcels/change-status/{parcelId}")
-    Call<Parcel> changeParcelStatus(@Path("parcelId") String parcelId, @Query("event") String event);
+    Call<BaseResponse<Parcel>> changeParcelStatus(@Path("parcelId") String parcelId, @Query("event") String event);
 }

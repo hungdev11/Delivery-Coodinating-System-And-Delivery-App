@@ -39,7 +39,7 @@ public class ParcelServiceControllerV2 {
 
     @PostMapping
     public ResponseEntity<?> listParcels(@RequestBody Object request) {
-        log.info("POST /api/v2/parcels - proxy to Parcel Service");
+        log.debug("[api-gateway] [ParcelServiceControllerV2.listParcels] POST /api/v2/parcels - proxy to Parcel Service");
         return proxyControllerSupport.forward(PARCEL_SERVICE, HttpMethod.POST, parcelV2Url, request);
     }
 }

@@ -73,30 +73,30 @@ public class AuditEventPublisher {
             // Add callback for error handling (non-blocking)
             future.whenComplete((result, ex) -> {
                 if (ex == null) {
-                    log.debug("✅ Audit event published successfully: eventId={}, operation={}, resourceType={}", 
+                    log.debug("[api-gateway] [AuditEventPublisher.publishAuditEvent] Audit event published successfully: eventId={}, operation={}, resourceType={}", 
                         event.getEventId(), event.getOperationType(), event.getResourceType());
                 } else {
                     // Log error but don't throw - audit logging should never block API
-                    log.warn("⚠️ Failed to publish audit event (non-critical): eventId={}, operation={}, resourceType={}, error={}", 
+                    log.debug("[api-gateway] [AuditEventPublisher.publishAuditEvent] Failed to publish audit event (non-critical): eventId={}, operation={}, resourceType={}, error={}", 
                         event.getEventId(), event.getOperationType(), event.getResourceType(), ex.getMessage());
                     
                     // Try to send to Dead Letter Queue (also non-blocking)
                     try {
                         sendToDeadLetterQueue(event, ex);
                     } catch (Exception dlqEx) {
-                        log.error("❌ Failed to send audit event to DLQ (non-critical): {}", dlqEx.getMessage());
+                        log.error("[api-gateway] [AuditEventPublisher.publishAuditEvent] Failed to send audit event to DLQ (non-critical)", dlqEx);
                     }
                 }
             });
             
         } catch (Exception e) {
             // Never throw exception - audit logging should never block API
-            log.warn("⚠️ Error publishing audit event (non-critical): {}", e.getMessage());
+            log.debug("[api-gateway] [AuditEventPublisher.publishAuditEvent] Error publishing audit event (non-critical): {}", e.getMessage());
             // Try to send to Dead Letter Queue (also non-blocking)
             try {
                 sendToDeadLetterQueue(event, e);
             } catch (Exception dlqEx) {
-                log.error("❌ Failed to send audit event to DLQ (non-critical): {}", dlqEx.getMessage());
+                log.error("[api-gateway] [AuditEventPublisher.publishAuditEvent] Failed to send audit event to DLQ (non-critical)", dlqEx);
             }
         }
     }
@@ -133,16 +133,16 @@ public class AuditEventPublisher {
             
             dlqFuture.whenComplete((result, ex) -> {
                 if (ex == null) {
-                    log.debug("📋 Audit event sent to DLQ: eventId={}", event.getEventId());
+                    log.debug("[api-gateway] [AuditEventPublisher.sendToDeadLetterQueue] Audit event sent to DLQ: eventId={}", event.getEventId());
                 } else {
-                    log.warn("⚠️ Failed to send audit event to DLQ (non-critical): eventId={}, error={}", 
+                    log.debug("[api-gateway] [AuditEventPublisher.sendToDeadLetterQueue] Failed to send audit event to DLQ (non-critical): eventId={}, error={}", 
                         event.getEventId(), ex.getMessage());
                 }
             });
             
         } catch (Exception e) {
             // Never throw - audit logging should never block API
-            log.warn("⚠️ Error sending audit event to DLQ (non-critical): {}", e.getMessage());
+            log.debug("[api-gateway] [AuditEventPublisher.sendToDeadLetterQueue] Error sending audit event to DLQ (non-critical): {}", e.getMessage());
         }
     }
 

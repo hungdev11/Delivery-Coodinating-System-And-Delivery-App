@@ -257,6 +257,37 @@ const columns: TableColumn<UserDto>[] = [
       }),
   },
   {
+    accessorKey: 'actions',
+    header: 'Actions',
+    cell: ({ row }) => {
+      const user = row.original
+      return h('div', { class: 'flex space-x-2' }, [
+        h(UButton, {
+          icon: 'i-heroicons-eye',
+          size: 'sm',
+          variant: 'ghost',
+          title: 'View user details',
+          onClick: () => viewUserDetail(user),
+        }),
+        h(UButton, {
+          icon: 'i-heroicons-pencil',
+          size: 'sm',
+          variant: 'ghost',
+          title: 'Edit user',
+          onClick: () => openEditModal(user),
+        }),
+        h(UButton, {
+          icon: 'i-heroicons-trash',
+          size: 'sm',
+          variant: 'ghost',
+          color: 'error',
+          title: 'Delete user',
+          onClick: () => openDeleteModal(user),
+        }),
+      ])
+    },
+  },
+  {
     accessorKey: 'username',
     header: ({ column }) =>
       setupHeader({

@@ -9,6 +9,8 @@
 import { ref, onMounted, computed } from 'vue'
 import type { MessageResponse } from '../model.type'
 import MessageStatusIndicator from './MessageStatusIndicator.vue'
+import DeliveryCompletedMessage from './DeliveryCompletedMessage.vue'
+import PostponeMessage from './PostponeMessage.vue'
 import { getActiveSessionForDeliveryMan, getAssignmentsBySessionId, getDeliverySessions } from '../../Delivery/api'
 import type { DeliveryAssignmentTask } from '../../Delivery/model.type'
 import type { DeliverySessionDto } from '../../Delivery/model.type'
@@ -131,11 +133,107 @@ const formatMessageTime = (dateString: string) => {
   const date = new Date(dateString)
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
 }
+
+/**
+ * Check if message is delivery completed notification
+ * Check both message.type and content.type for backward compatibility
+ */
+const isDeliveryCompletedMessage = computed(() => {
+  // First check message.type (new way)
+  if (props.message.type === 'DELIVERY_COMPLETED') {
+    return true
+  }
+
+  // Fallback: check content.type (old way for backward compatibility)
+  if (!props.message.content || typeof props.message.content !== 'string') {
+    return false
+  }
+  try {
+    const messageData = JSON.parse(props.message.content)
+    return messageData && messageData.type === 'DELIVERY_COMPLETED'
+  } catch {
+    return false
+  }
+})
+
+/**
+ * Parse delivery completed message data
+ */
+const deliveryCompletedData = computed(() => {
+  if (!isDeliveryCompletedMessage.value) {
+    return null
+  }
+  try {
+    return JSON.parse(props.message.content)
+  } catch {
+    return null
+  }
+})
+
+/**
+ * Check if message is postpone notification
+ * Postpone messages are sent as TEXT type with JSON content containing postpone info
+ */
+const isPostponeMessage = computed(() => {
+  if (props.message.type !== 'TEXT') {
+    return false
+  }
+  if (!props.message.content || typeof props.message.content !== 'string') {
+    return false
+  }
+  try {
+    const messageData = JSON.parse(props.message.content)
+    // Check if content contains postpone-related fields
+    return messageData && (
+      messageData.postponeDateTime !== undefined ||
+      messageData.parcelId !== undefined && messageData.reason !== undefined
+    )
+  } catch {
+    return false
+  }
+})
+
+/**
+ * Parse postpone message data
+ */
+const postponeData = computed(() => {
+  if (!isPostponeMessage.value) {
+    return null
+  }
+  try {
+    return JSON.parse(props.message.content)
+  } catch {
+    return null
+  }
+})
 </script>
 
 <template>
+  <!-- Delivery Completed Message -->
   <div
-    v-if="message.type === 'TEXT'"
+    v-if="isDeliveryCompletedMessage && deliveryCompletedData"
+    class="max-w-xs lg:max-w-md"
+  >
+    <DeliveryCompletedMessage
+      :message-data="deliveryCompletedData"
+      :sent-at="message.sentAt"
+    />
+  </div>
+
+  <!-- Postpone Message -->
+  <div
+    v-else-if="isPostponeMessage && postponeData"
+    class="max-w-xs lg:max-w-md"
+  >
+    <PostponeMessage
+      :message-data="postponeData"
+      :sent-at="message.sentAt"
+    />
+  </div>
+
+  <!-- Regular Text Message -->
+  <div
+    v-else-if="message.type === 'TEXT'"
     class="max-w-xs lg:max-w-md"
   >
     <!-- Message Content -->

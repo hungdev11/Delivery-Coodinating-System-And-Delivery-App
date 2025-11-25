@@ -42,7 +42,7 @@ public class ParcelSeedProxyController {
      */
     @PostMapping
     public ResponseEntity<?> seedParcels(@RequestBody Object requestBody) {
-        log.info("POST /api/v1/parcels/seed - proxy to User Service");
+        log.debug("[api-gateway] [ParcelSeedProxyController.seedParcels] POST /api/v1/parcels/seed - proxy to User Service");
         return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.POST, parcelSeedUrl, requestBody);
     }
 }

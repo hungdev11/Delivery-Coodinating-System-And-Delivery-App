@@ -48,7 +48,7 @@ public class WebSocketSessionManager {
     
     public WebSocketSessionManager(SimpMessagingTemplate messagingTemplate) {
         this.messagingTemplate = messagingTemplate;
-        log.info("✅ WebSocketSessionManager initialized");
+        log.debug("[communication-service] [WebSocketSessionManager.WebSocketSessionManager] WebSocketSessionManager initialized");
     }
     
     /**
@@ -56,7 +56,7 @@ public class WebSocketSessionManager {
      * Called when a user connects via WebSocket
      */
     public void registerSession(String userId, String sessionId, UpdateNotificationDTO.ClientType clientType) {
-        log.info("🔌 Registering WebSocket session: userId={}, sessionId={}, clientType={}", 
+        log.debug("[communication-service] [WebSocketSessionManager.registerSession] Registering WebSocket session: userId={}, sessionId={}, clientType={}", 
             userId, sessionId, clientType);
         
         userClientTypes.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(clientType);
@@ -64,8 +64,8 @@ public class WebSocketSessionManager {
         sessionToUser.put(sessionId, userId);
         sessionToClientType.put(sessionId, clientType);
         
-        log.info("📊 Active sessions for user {}: {}", userId, userSessions.get(userId).size());
-        log.info("📱 Client types for user {}: {}", userId, userClientTypes.get(userId));
+        log.debug("[communication-service] [WebSocketSessionManager.registerSession] Active sessions for user {}: {}", userId, userSessions.get(userId).size());
+        log.debug("[communication-service] [WebSocketSessionManager.registerSession] Client types for user {}: {}", userId, userClientTypes.get(userId));
     }
     
     /**
@@ -74,13 +74,13 @@ public class WebSocketSessionManager {
      * Can be called with either userId+sessionId or just sessionId
      */
     public void unregisterSession(String userId, String sessionId) {
-        log.info("🔌 Unregistering WebSocket session: userId={}, sessionId={}", userId, sessionId);
+        log.debug("[communication-service] [WebSocketSessionManager.unregisterSession] Unregistering WebSocket session: userId={}, sessionId={}", userId, sessionId);
         
         // If userId is null, try to get it from sessionToUser map
         if (userId == null || userId.isBlank()) {
             userId = sessionToUser.get(sessionId);
             if (userId == null) {
-                log.warn("⚠️ Cannot unregister session {}: userId not found in session registry", sessionId);
+                log.debug("[communication-service] [WebSocketSessionManager.unregisterSession] Cannot unregister session {}: userId not found in session registry", sessionId);
                 return;
             }
         }
@@ -95,7 +95,7 @@ public class WebSocketSessionManager {
                 // All sessions closed for this user
                 userSessions.remove(userId);
                 userClientTypes.remove(userId);
-                log.info("📊 All sessions closed for user {}", userId);
+                log.debug("[communication-service] [WebSocketSessionManager.unregisterSession] All sessions closed for user {}", userId);
             } else {
                 // User still has other sessions
                 // Check if we need to remove client type (if no other sessions have this client type)
@@ -123,7 +123,7 @@ public class WebSocketSessionManager {
         if (userId != null) {
             unregisterSession(userId, sessionId);
         } else {
-            log.warn("⚠️ Cannot unregister session {}: userId not found", sessionId);
+            log.debug("[communication-service] [WebSocketSessionManager.unregisterSessionBySessionId] Cannot unregister session {}: userId not found", sessionId);
         }
     }
 
@@ -194,7 +194,7 @@ public class WebSocketSessionManager {
         if (hasClientType(userId, requiredClientType)) {
             messagingTemplate.convertAndSendToUser(userId, destination, payload);
         } else {
-            log.debug("⏭️ Skipping send to user {}: required clientType={}, user has={}", 
+            log.debug("[communication-service] [WebSocketSessionManager.sendToUserIfClientType] Skipping send to user {}: required clientType={}, user has={}", 
                 userId, requiredClientType, getClientTypes(userId));
         }
     }

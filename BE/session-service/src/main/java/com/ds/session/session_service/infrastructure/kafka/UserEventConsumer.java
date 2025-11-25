@@ -41,7 +41,7 @@ public class UserEventConsumer {
             Acknowledgment acknowledgment) {
         
         try {
-            log.info("📥 Received user event: {} for user: {}", event.getEventType(), userId);
+            log.debug("[session-service] [UserEventConsumer.handleUserEvent] Received user event: {} for user: {}", event.getEventType(), userId);
 
             switch (event.getEventType()) {
                 case USER_CREATED:
@@ -62,15 +62,15 @@ public class UserEventConsumer {
                     snapshotInitializationService.doInitializeSnapshot();
                     break;
                 default:
-                    log.warn("Unknown event type: {}", event.getEventType());
+                    log.debug("[session-service] [UserEventConsumer.handleUserEvent] Unknown event type: {}", event.getEventType());
             }
 
             // Acknowledge message after successful processing
             acknowledgment.acknowledge();
-            log.debug("✅ User event processed successfully: {} for user: {}", event.getEventType(), userId);
+            log.debug("[session-service] [UserEventConsumer.handleUserEvent] User event processed successfully: {} for user: {}", event.getEventType(), userId);
 
         } catch (Exception e) {
-            log.error("❌ Error processing user event: {} for user: {}: {}", 
+            log.error("[session-service] [UserEventConsumer.handleUserEvent] Error processing user event: {} for user: {}: {}", 
                 event.getEventType(), userId, e.getMessage(), e);
             // Don't acknowledge on error - message will be retried
             throw e;
@@ -94,7 +94,7 @@ public class UserEventConsumer {
         userSnapshot.setStatus(event.getStatus());
 
         userSnapshotRepository.save(userSnapshot);
-        log.debug("✅ User snapshot updated: {}", event.getUserId());
+        log.debug("[session-service] [UserEventConsumer.handleUserCreatedOrUpdated] User snapshot updated: {}", event.getUserId());
 
         // Update DeliveryManSnapshot if it exists
         // Note: DeliveryMan-specific fields (vehicleType, capacityKg) are updated separately
@@ -107,14 +107,14 @@ public class UserEventConsumer {
                 dmSnapshot.setEmail(event.getEmail());
                 dmSnapshot.setPhone(event.getPhone());
                 deliveryManSnapshotRepository.save(dmSnapshot);
-                log.debug("✅ DeliveryMan snapshot updated: {}", event.getUserId());
+                log.debug("[session-service] [UserEventConsumer.handleUserCreatedOrUpdated] DeliveryMan snapshot updated: {}", event.getUserId());
             });
     }
 
     private void handleUserDeleted(String userId) {
         userSnapshotRepository.deleteById(userId);
         deliveryManSnapshotRepository.deleteById(userId);
-        log.debug("✅ User and DeliveryMan snapshots deleted: {}", userId);
+        log.debug("[session-service] [UserEventConsumer.handleUserDeleted] User and DeliveryMan snapshots deleted: {}", userId);
     }
 
     private void handleDeliveryManCreatedOrUpdated(UserEventDto event) {
@@ -143,31 +143,31 @@ public class UserEventConsumer {
         }
 
         deliveryManSnapshotRepository.save(dmSnapshot);
-        log.debug("✅ DeliveryMan snapshot created/updated: {}", event.getUserId());
+        log.debug("[session-service] [UserEventConsumer.handleDeliveryManCreatedOrUpdated] DeliveryMan snapshot created/updated: {}", event.getUserId());
     }
 
     private void handleDeliveryManDeleted(String userId) {
         deliveryManSnapshotRepository.deleteById(userId);
-        log.debug("✅ DeliveryMan snapshot deleted: {}", userId);
+        log.debug("[session-service] [UserEventConsumer.handleDeliveryManDeleted] DeliveryMan snapshot deleted: {}", userId);
     }
 
     private void handleUserServiceReady() {
-        log.info("🚀 Received USER_SERVICE_READY event. Triggering snapshot synchronization...");
+        log.debug("[session-service] [UserEventConsumer.handleUserServiceReady] Received USER_SERVICE_READY event. Triggering snapshot synchronization...");
         try {
             // Trigger snapshot initialization if tables are empty
             long userSnapshotCount = userSnapshotRepository.count();
             long deliveryManSnapshotCount = deliveryManSnapshotRepository.count();
             
             if (userSnapshotCount == 0 || deliveryManSnapshotCount == 0) {
-                log.info("📥 Snapshot tables are empty (users: {}, deliveryMen: {}). Starting sync from UserService...", 
+                log.debug("[session-service] [UserEventConsumer.handleUserServiceReady] Snapshot tables are empty (users: {}, deliveryMen: {}). Starting sync from UserService...", 
                     userSnapshotCount, deliveryManSnapshotCount);
                 snapshotInitializationService.doInitializeSnapshot();
             } else {
-                log.info("✅ Snapshot tables already have data (users: {}, deliveryMen: {}). Skipping sync.", 
+                log.debug("[session-service] [UserEventConsumer.handleUserServiceReady] Snapshot tables already have data (users: {}, deliveryMen: {}). Skipping sync.", 
                     userSnapshotCount, deliveryManSnapshotCount);
             }
         } catch (Exception e) {
-            log.error("❌ Error during snapshot sync after USER_SERVICE_READY: {}", e.getMessage(), e);
+            log.error("[session-service] [UserEventConsumer.handleUserServiceReady] Error during snapshot sync after USER_SERVICE_READY", e);
         }
     }
 }
