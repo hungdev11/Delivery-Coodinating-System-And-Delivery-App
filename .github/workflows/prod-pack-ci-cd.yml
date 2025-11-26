@@ -1,0 +1,62 @@
+name: Prod Pack CI/CD
+
+on:
+  push:
+    branches: [ "main", "release/*" ]
+    paths:
+      - 'prod-pack/**'
+      - '.github/workflows/prod-pack-ci-cd.yml'
+
+jobs:
+  deploy-prod-pack:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for prod-pack changes
+        id: changes
+        run: |
+          if git diff --name-only HEAD~1 HEAD | grep -q '^prod-pack/'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to prod branch
+        if: steps.changes.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create orphan branch if not exists, or checkout existing
+          if git ls-remote --heads origin prod | grep -q prod; then
+            git fetch origin prod
+            git checkout prod
+            # Remove all files except .git
+            git rm -rf . || true
+          else
+            git checkout --orphan prod
+            git rm -rf . || true
+          fi
+          
+          # Copy prod-pack contents to root
+          git checkout main -- prod-pack/
+          mv prod-pack/* . 2>/dev/null || true
+          mv prod-pack/.* . 2>/dev/null || true
+          rmdir prod-pack 2>/dev/null || true
+          
+          # Commit and push
+          git add -A
+          git commit -m "Update prod-pack from main @ $(git rev-parse --short main)" || echo "No changes to commit"
+          git push origin prod --force
+          
+          echo ""
+          echo "Deployed to prod branch"
+          echo "Clone: git clone -b prod https://github.com/${{ github.repository }}.git dss-prod"
