@@ -5,10 +5,12 @@ on:
     branches: [ "main", "develop", "release/*" ]
     paths:
       - 'BE/**'
+      - '.github/workflows/backend-ci-cd.yml'
   pull_request:
     branches: [ "main", "develop", "release/*" ]
     paths:
       - 'BE/**'
+      - '.github/workflows/backend-ci-cd.yml'
 
 env:
   REGISTRY: ghcr.io
@@ -33,20 +35,33 @@ jobs:
     needs: validate-token
     runs-on: ubuntu-latest
     outputs:
-      api-gateway: ${{ steps.changes.outputs.api-gateway }}
-      user-service: ${{ steps.changes.outputs.user-service }}
-      settings-service: ${{ steps.changes.outputs.settings-service }}
-      zone-service: ${{ steps.changes.outputs.zone-service }}
-      parcel-service: ${{ steps.changes.outputs.parcel-service }}
-      session-service: ${{ steps.changes.outputs.session-service }}
-      communication-service: ${{ steps.changes.outputs.communication-service }}
-      any-service: ${{ steps.changes.outputs.any-service }}
+      api-gateway: ${{ steps.final.outputs.api-gateway }}
+      user-service: ${{ steps.final.outputs.user-service }}
+      settings-service: ${{ steps.final.outputs.settings-service }}
+      zone-service: ${{ steps.final.outputs.zone-service }}
+      parcel-service: ${{ steps.final.outputs.parcel-service }}
+      session-service: ${{ steps.final.outputs.session-service }}
+      communication-service: ${{ steps.final.outputs.communication-service }}
+      any-service: ${{ steps.final.outputs.any-service }}
       service-matrix: ${{ steps.service-matrix.outputs.services }}
       changed-service-names: ${{ steps.service-matrix.outputs.service-names }}
+      force-build: ${{ steps.check-force.outputs.force-build }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Check for force-build flag
+        id: check-force
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          if echo "$COMMIT_MSG" | grep -qi '\[force-build\]'; then
+            echo "🔨 Force build detected in commit message"
+            echo "force-build=true" >> $GITHUB_OUTPUT
+          else
+            echo "force-build=false" >> $GITHUB_OUTPUT
+          fi
+
       - uses: dorny/paths-filter@v3
         id: changes
         with:
@@ -67,16 +82,43 @@ jobs:
               - 'BE/communication_service/**'
             any-service:
               - 'BE/**'
+
+      - name: Determine final change status
+        id: final
+        run: |
+          FORCE="${{ steps.check-force.outputs.force-build }}"
+          if [ "$FORCE" = "true" ]; then
+            echo "🔨 Force build: marking all services as changed"
+            echo "api-gateway=true" >> $GITHUB_OUTPUT
+            echo "user-service=true" >> $GITHUB_OUTPUT
+            echo "settings-service=true" >> $GITHUB_OUTPUT
+            echo "zone-service=true" >> $GITHUB_OUTPUT
+            echo "parcel-service=true" >> $GITHUB_OUTPUT
+            echo "session-service=true" >> $GITHUB_OUTPUT
+            echo "communication-service=true" >> $GITHUB_OUTPUT
+            echo "any-service=true" >> $GITHUB_OUTPUT
+          else
+            echo "api-gateway=${{ steps.changes.outputs.api-gateway }}" >> $GITHUB_OUTPUT
+            echo "user-service=${{ steps.changes.outputs.user-service }}" >> $GITHUB_OUTPUT
+            echo "settings-service=${{ steps.changes.outputs.settings-service }}" >> $GITHUB_OUTPUT
+            echo "zone-service=${{ steps.changes.outputs.zone-service }}" >> $GITHUB_OUTPUT
+            echo "parcel-service=${{ steps.changes.outputs.parcel-service }}" >> $GITHUB_OUTPUT
+            echo "session-service=${{ steps.changes.outputs.session-service }}" >> $GITHUB_OUTPUT
+            echo "communication-service=${{ steps.changes.outputs.communication-service }}" >> $GITHUB_OUTPUT
+            echo "any-service=${{ steps.changes.outputs.any-service }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Generate service matrix payload
         id: service-matrix
         env:
-          API_GATEWAY_CHANGED: ${{ steps.changes.outputs.api-gateway }}
-          USER_SERVICE_CHANGED: ${{ steps.changes.outputs.user-service }}
-          SETTINGS_SERVICE_CHANGED: ${{ steps.changes.outputs.settings-service }}
-          ZONE_SERVICE_CHANGED: ${{ steps.changes.outputs.zone-service }}
-          PARCEL_SERVICE_CHANGED: ${{ steps.changes.outputs.parcel-service }}
-          SESSION_SERVICE_CHANGED: ${{ steps.changes.outputs.session-service }}
-          COMMUNICATION_SERVICE_CHANGED: ${{ steps.changes.outputs.communication-service }}
+          FORCE_BUILD: ${{ steps.check-force.outputs.force-build }}
+          API_GATEWAY_CHANGED: ${{ steps.final.outputs.api-gateway }}
+          USER_SERVICE_CHANGED: ${{ steps.final.outputs.user-service }}
+          SETTINGS_SERVICE_CHANGED: ${{ steps.final.outputs.settings-service }}
+          ZONE_SERVICE_CHANGED: ${{ steps.final.outputs.zone-service }}
+          PARCEL_SERVICE_CHANGED: ${{ steps.final.outputs.parcel-service }}
+          SESSION_SERVICE_CHANGED: ${{ steps.final.outputs.session-service }}
+          COMMUNICATION_SERVICE_CHANGED: ${{ steps.final.outputs.communication-service }}
         run: |
           python - <<'PY'
           import json
@@ -418,6 +460,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GITHUB_REPOSITORY=${{ github.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
