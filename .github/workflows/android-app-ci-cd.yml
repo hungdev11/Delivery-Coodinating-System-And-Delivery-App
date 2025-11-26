@@ -2,15 +2,15 @@ name: Android App CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: [ "main", "release/*" ]
     paths:
       - 'DeliveryApp/**'
-    tags:
-      - 'v*'
+      - '.github/workflows/android-app-ci-cd.yml'
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: [ "main", "release/*" ]
     paths:
       - 'DeliveryApp/**'
+      - '.github/workflows/android-app-ci-cd.yml'
 
 jobs:
   # Job 1: Detect changes
@@ -18,8 +18,23 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       delivery-app: ${{ steps.tag-check.outputs.delivery-app }}
+      force-build: ${{ steps.check-force.outputs.force-build }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for force-build flag
+        id: check-force
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          if echo "$COMMIT_MSG" | grep -qi '\[force-build\]'; then
+            echo "🔨 Force build detected in commit message"
+            echo "force-build=true" >> $GITHUB_OUTPUT
+          else
+            echo "force-build=false" >> $GITHUB_OUTPUT
+          fi
+
       - uses: dorny/paths-filter@v3
         id: changes
         with:
@@ -27,15 +42,18 @@ jobs:
             delivery-app:
               - 'DeliveryApp/**'
           list-files: shell
-      - name: Check if tag push
+      - name: Determine final change status
         id: tag-check
         run: |
+          FORCE="${{ steps.check-force.outputs.force-build }}"
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "delivery-app=true" >> $GITHUB_OUTPUT
+          elif [ "$FORCE" = "true" ]; then
+            echo "🔨 Force build: marking delivery-app as changed"
             echo "delivery-app=true" >> $GITHUB_OUTPUT
           else
             echo "delivery-app=${{ steps.changes.outputs.delivery-app }}" >> $GITHUB_OUTPUT
           fi
-
   # Job 2: Run Unit Tests
   test:
     runs-on: ubuntu-latest
