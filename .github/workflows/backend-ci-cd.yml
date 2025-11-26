@@ -6,11 +6,13 @@ on:
     paths:
       - 'BE/**'
       - 'docker-compose.*.yml'
+      - 'docker-compose.yml'
   pull_request:
     branches: [ "main", "develop", "release/*" ]
     paths:
       - 'BE/**'
       - 'docker-compose.*.yml'
+      - 'docker-compose.yml'
 
 env:
   REGISTRY: ghcr.io
