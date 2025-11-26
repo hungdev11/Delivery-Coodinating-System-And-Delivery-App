@@ -5,10 +5,12 @@ on:
     branches: [ "main", "release/*" ]
     paths:
       - 'DeliveryApp/**'
+      - '.github/workflows/android-app-ci-cd.yml'
   pull_request:
     branches: [ "main", "release/*" ]
     paths:
       - 'DeliveryApp/**'
+      - '.github/workflows/android-app-ci-cd.yml'
 
 jobs:
   # Job 1: Detect changes
