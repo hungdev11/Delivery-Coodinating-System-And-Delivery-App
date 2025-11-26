@@ -2,11 +2,7 @@ services:
   # Note: MySQL database is NOT deployed here - use external database
   # Set DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD in .env file
   # All services share the same external database server
-
-  # ============================================
-  # CORE INFRASTRUCTURE SERVICES (Start First)
-  # ============================================
-
+  
   # Settings Service (from CI/CD)
   settings-service:
     image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER}/dss-settings-service:${IMAGE_TAG:-latest}
