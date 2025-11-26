@@ -2,13 +2,11 @@ name: Android App CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: [ "main", "release/*" ]
     paths:
       - 'DeliveryApp/**'
-    tags:
-      - 'v*'
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: [ "main", "release/*" ]
     paths:
       - 'DeliveryApp/**'
 
