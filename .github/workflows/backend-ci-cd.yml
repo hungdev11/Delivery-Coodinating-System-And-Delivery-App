@@ -5,10 +5,12 @@ on:
     branches: [ "main", "develop", "release/*" ]
     paths:
       - 'BE/**'
+      - '.github/workflows/backend-ci-cd.yml'
   pull_request:
     branches: [ "main", "develop", "release/*" ]
     paths:
       - 'BE/**'
+      - '.github/workflows/backend-ci-cd.yml'
 
 env:
   REGISTRY: ghcr.io
