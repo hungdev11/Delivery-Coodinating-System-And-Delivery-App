@@ -29,6 +29,7 @@ jobs:
             exit 1
           fi
           echo "DEPLOY_TOKEN: configured"
+
   # Job 1: Detect changed services
   detect-changes:
     needs: validate-token
@@ -61,6 +62,7 @@ jobs:
             echo "force-build: false"
             echo "force-build=false" >> $GITHUB_OUTPUT
           fi
+
       - uses: dorny/paths-filter@v3
         id: changes
         with:
@@ -81,6 +83,7 @@ jobs:
               - 'BE/communication_service/**'
             any-service:
               - 'BE/**'
+
       - name: Determine final change status
         id: final
         run: |
@@ -104,6 +107,7 @@ jobs:
             echo "communication-service=${{ steps.changes.outputs.communication-service }}" >> $GITHUB_OUTPUT
             echo "any-service=${{ steps.changes.outputs.any-service }}" >> $GITHUB_OUTPUT
           fi
+
       - name: Generate service matrix payload
         id: service-matrix
         env:
@@ -117,6 +121,7 @@ jobs:
         run: |
           python - <<'PY'
           import json, os
+
           mapping = [
               ("api-gateway", "BE/api-gateway", "API_GATEWAY_CHANGED"),
               ("user-service", "BE/User_service", "USER_SERVICE_CHANGED"),
@@ -126,18 +131,21 @@ jobs:
               ("session-service", "BE/session-service", "SESSION_SERVICE_CHANGED"),
               ("communication-service", "BE/communication_service", "COMMUNICATION_SERVICE_CHANGED"),
           ]
+
           services = []
           service_names = []
           for name, path, env_key in mapping:
               if os.environ.get(env_key, "false").lower() == "true":
                   services.append({"name": name, "path": path})
                   service_names.append(name)
+
           with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
               fh.write(f"services={json.dumps(services)}\n")
               fh.write(f"service-names={' '.join(service_names)}\n")
           
           print(f"Changed services: {', '.join(service_names) if service_names else 'none'}")
           PY
+
   # Job 2: Test API Gateway
   test-api-gateway:
     runs-on: ubuntu-latest
@@ -159,6 +167,7 @@ jobs:
         run: |
           chmod +x mvnw
           ./mvnw -B -ntp -q clean test
+
   # Job 3: Test User Service
   test-user-service:
     runs-on: ubuntu-latest
@@ -180,6 +189,7 @@ jobs:
         run: |
           chmod +x mvnw
           ./mvnw -B -ntp -q clean test
+
   # Job 4: Test Settings Service
   test-settings-service:
     runs-on: ubuntu-latest
@@ -201,6 +211,7 @@ jobs:
         run: |
           chmod +x mvnw
           ./mvnw -B -ntp -q clean test
+
   # Job 5: Test Zone Service
   test-zone-service:
     runs-on: ubuntu-latest
@@ -221,6 +232,7 @@ jobs:
         run: |
           npm ci --silent
           npm run build --silent
+
   # Job 6: Test Parcel Service
   test-parcel-service:
     runs-on: ubuntu-latest
@@ -242,6 +254,7 @@ jobs:
         run: |
           chmod +x mvnw 2>/dev/null || true
           ./mvnw -B -ntp -q clean test 2>/dev/null || mvn -B -ntp -q clean test
+
   # Job 7: Test Session Service
   test-session-service:
     runs-on: ubuntu-latest
@@ -263,6 +276,7 @@ jobs:
         run: |
           chmod +x mvnw 2>/dev/null || true
           ./mvnw -B -ntp -q clean test 2>/dev/null || mvn -B -ntp -q clean test
+
   # Job 8: Test Communication Service
   test-communication-service:
     runs-on: ubuntu-latest
@@ -284,6 +298,7 @@ jobs:
         run: |
           chmod +x mvnw 2>/dev/null || true
           ./mvnw -B -ntp -q clean test 2>/dev/null || mvn -B -ntp -q clean test
+
   # Job 9: Integration Tests (Non-blocking)
   integration-tests:
     runs-on: ubuntu-latest
@@ -300,6 +315,7 @@ jobs:
         run: |
           docker-compose -f docker-compose.test.yml up -d --build
           sleep 60
+
       - name: Check service health
         run: |
           echo "Health checks:"
@@ -307,6 +323,7 @@ jobs:
           curl -sf http://localhost:21500/actuator/health && echo "  api-gateway: ok" || echo "  api-gateway: failed"
           curl -sf http://localhost:21501/actuator/health && echo "  user-service: ok" || echo "  user-service: failed"
           curl -sf http://localhost:21502/actuator/health && echo "  settings-service: ok" || echo "  settings-service: failed"
+
       - name: Run Integration Tests
         continue-on-error: true
         run: |
@@ -314,6 +331,7 @@ jobs:
           echo ""
           # Add integration test commands here
           echo "Integration tests: completed (non-blocking)"
+
       - name: Show service logs on failure
         if: failure()
         run: |
@@ -323,10 +341,12 @@ jobs:
           docker logs dss-user-service-test --tail 50 || true
           echo "=== Settings Service Logs ==="
           docker logs dss-settings-service-test --tail 50 || true
+
       - name: Stop services
         if: always()
         run: |
           docker-compose -f docker-compose.test.yml down -v || true
+
   # Job 10: Build and Push Docker Images
   build-and-push:
     runs-on: ubuntu-latest
@@ -402,6 +422,7 @@ jobs:
           fi
           
           echo "Package info extracted"
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -439,6 +460,7 @@ jobs:
             com.ds.workflow=${{ github.workflow }}
             com.ds.run-id=${{ github.run_id }}
             com.ds.run-number=${{ github.run_number }}
+
       - name: Build and push Docker image
         id: push
         uses: docker/build-push-action@v5
@@ -453,7 +475,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Link package and sync visibility
+      - name: Link package to repository
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
@@ -467,43 +489,25 @@ jobs:
           echo "Package: ghcr.io/${OWNER_LOWER}/${PACKAGE_NAME_LOWER}"
           
           REPO_ID=$(gh api "/repos/${OWNER}/${REPO_NAME}" --jq '.id')
-          REPO_VISIBILITY=$(gh api "/repos/${OWNER}/${REPO_NAME}" --jq '.visibility')
-          
           sleep 5
           
-          # Link package to repository
+          # Try user endpoint first, then users endpoint for private packages
           if gh api --method PUT \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "/user/packages/container/${PACKAGE_NAME_LOWER}/repository" \
             -f repository_id="${REPO_ID}" 2>/dev/null; then
-            echo "Link: success"
+            echo "Status: linked"
           elif gh api --method PUT \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "/users/${OWNER_LOWER}/packages/container/${PACKAGE_NAME_LOWER}/repository" \
             -f repository_id="${REPO_ID}" 2>/dev/null; then
-            echo "Link: success"
+            echo "Status: linked"
           else
-            echo "Link: already linked"
+            echo "Status: already linked or manual setup needed"
           fi
-          
-          # Sync visibility with repository
-          if gh api --method PATCH \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "/user/packages/container/${PACKAGE_NAME_LOWER}" \
-            -f visibility="${REPO_VISIBILITY}" 2>/dev/null; then
-            echo "Visibility: ${REPO_VISIBILITY}"
-          elif gh api --method PATCH \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "/users/${OWNER_LOWER}/packages/container/${PACKAGE_NAME_LOWER}" \
-            -f visibility="${REPO_VISIBILITY}" 2>/dev/null; then
-            echo "Visibility: ${REPO_VISIBILITY}"
-          else
-            echo "Visibility: unchanged"
-          fi
+
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
         with:
@@ -543,6 +547,7 @@ jobs:
             exit 1
           fi
           echo "Deployment secrets: configured"
+
       - name: Deploy updated services via aaPanel host
         uses: appleboy/ssh-action@v1.0.3
         env:
