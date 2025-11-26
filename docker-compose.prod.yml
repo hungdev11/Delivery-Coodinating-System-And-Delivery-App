@@ -1,21 +1,29 @@
+# ==============================================
+# Production Docker Compose for DSS
+# ==============================================
+# Required environment variables (set in .env or export):
+#   - DB_HOST: MySQL host
+#   - DB_USERNAME: MySQL username
+#   - DB_PASSWORD: MySQL password
+#
+# Optional (has defaults):
+#   - REPOSITORY_OWNER: GitHub username (default: phuongp2003)
+#   - REGISTRY: Container registry (default: ghcr.io)
+#   - IMAGE_TAG: Image tag (default: latest)
+# ==============================================
+
 services:
-  # Note: MySQL database is NOT deployed here - use external database
-  # Set DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD in .env file
-  # All services share the same external database server
-  
   # Settings Service (from CI/CD)
   settings-service:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER}/dss-settings-service:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-settings-service:${IMAGE_TAG:-latest}
     container_name: dss-settings-service
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      DB_HOST: ${DB_HOST}
+      DB_HOST: ${DB_HOST:-127.0.0.1}
       DB_PORT: ${DB_PORT:-3306}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
       SETTINGS_DB_NAME: ${SETTINGS_DB_NAME:-ds_settings_service}
       SERVER_PORT: 21502
     healthcheck:
@@ -27,17 +35,15 @@ services:
 
   # User Service (from CI/CD)
   user-service:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER}/dss-user-service:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-user-service:${IMAGE_TAG:-latest}
     container_name: dss-user-service
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      DB_HOST: ${DB_HOST}
+      DB_HOST: ${DB_HOST:-127.0.0.1}
       DB_PORT: ${DB_PORT:-3306}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
       USER_DB_NAME: ${USER_DB_NAME:-ds_user_service}
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-delivery-system}
@@ -109,14 +115,12 @@ services:
 
   # Zone Service (from CI/CD)
   zone-service:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER}/dss-zone-service:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-zone-service:${IMAGE_TAG:-latest}
     container_name: dss-zone-service
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       NODE_ENV: production
-      ZONE_DB_CONNECTION: ${ZONE_DB_CONNECTION:-mysql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT:-3306}/${ZONE_DB_NAME:-ds_zone_service}}
+      ZONE_DB_CONNECTION: mysql://${DB_USERNAME:-root}:${DB_PASSWORD:-root}@${DB_HOST:-127.0.0.1}:${DB_PORT:-3306}/${ZONE_DB_NAME:-ds_zone_service}
       SETTINGS_SERVICE_URL: http://settings-service:21502
       # OSRM V2 URLs (Simplified Architecture)
       OSRM_V2_FULL_URL: http://osrm-v2-full:5000
@@ -136,17 +140,15 @@ services:
 
   # Parcel Service (from CI/CD)
   parcel-service:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER}/dss-parcel-service:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-parcel-service:${IMAGE_TAG:-latest}
     container_name: dss-parcel-service
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      DB_HOST: ${DB_HOST}
+      DB_HOST: ${DB_HOST:-127.0.0.1}
       DB_PORT: ${DB_PORT:-3306}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
       PARCEL_DB_NAME: ${PARCEL_DB_NAME:-ds_parcel_service}
       USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
       ZONE_SERVICE_URL: ${ZONE_SERVICE_URL:-http://zone-service:21503}
@@ -168,17 +170,15 @@ services:
 
   # Session Service (from CI/CD)
   session-service:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER}/dss-session-service:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-session-service:${IMAGE_TAG:-latest}
     container_name: dss-session-service
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      DB_HOST: ${DB_HOST}
+      DB_HOST: ${DB_HOST:-127.0.0.1}
       DB_PORT: ${DB_PORT:-3306}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
       SESSION_DB_NAME: ${SESSION_DB_NAME:-ds_session_service}
       PARCEL_SERVICE_URL: ${PARCEL_SERVICE_URL:-http://parcel-service:21506}
       USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
@@ -205,17 +205,15 @@ services:
 
   # Communication Service (from CI/CD)
   communication-service:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER}/dss-communication-service:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-communication-service:${IMAGE_TAG:-latest}
     container_name: dss-communication-service
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      DB_HOST: ${DB_HOST}
+      DB_HOST: ${DB_HOST:-127.0.0.1}
       DB_PORT: ${DB_PORT:-3306}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
       COMMUNICATION_DB_NAME: ${COMMUNICATION_DB_NAME:-ds_communication_service}
       SESSION_SERVICE_URL: ${SESSION_SERVICE_URL:-http://session-service:21505}
       USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
@@ -243,11 +241,9 @@ services:
 
   # API Gateway (from CI/CD)
   api-gateway:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER}/dss-api-gateway:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-api-gateway:${IMAGE_TAG:-latest}
     container_name: dss-api-gateway
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       SPRING_PROFILES_ACTIVE: docker
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
@@ -285,7 +281,7 @@ services:
 
   # ManagementSystem Frontend (from CI/CD)
   management-system:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER}/dss-management-system:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-management-system:${IMAGE_TAG:-latest}
     container_name: dss-management-system
     restart: unless-stopped
     command: ["sh", "-c", "cp -r /app/dist/* /shared/ && echo 'ManagementSystem files copied to shared volume' && tail -f /dev/null"]
@@ -319,18 +315,6 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
-
-  # Cloudflare Tunnel - Exposes nginx-proxy to internet
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: dss-cloudflared
-    restart: unless-stopped
-    command: tunnel --config /etc/cloudflared/config.yml run
-    volumes:
-      - ./cloudflared:/etc/cloudflared:ro
-    depends_on:
-      nginx-proxy:
-        condition: service_healthy
 
   # ============================================
   # OSRM V2 Services (Simplified Architecture)

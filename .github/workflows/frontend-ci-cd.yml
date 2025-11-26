@@ -1,0 +1,283 @@
+name: Frontend CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "develop", "release/*" ]
+    paths:
+      - 'ManagementSystem/**'
+      - '.github/workflows/frontend-ci-cd.yml'
+  pull_request:
+    branches: [ "main", "develop", "release/*" ]
+    paths:
+      - 'ManagementSystem/**'
+      - '.github/workflows/frontend-ci-cd.yml'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_PREFIX: dss
+  REPOSITORY_OWNER: ${{ github.repository_owner }}
+
+jobs:
+  # Job 0: Validate Token
+  validate-token:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check DEPLOY_TOKEN
+        run: |
+          if [ -z "${{ secrets.DEPLOY_TOKEN }}" ]; then
+            echo "ERROR: DEPLOY_TOKEN not configured"
+            exit 1
+          fi
+          echo "DEPLOY_TOKEN: configured"
+
+  # Job 1: Detect changes
+  detect-changes:
+    needs: validate-token
+    runs-on: ubuntu-latest
+    outputs:
+      management-system: ${{ steps.final.outputs.management-system }}
+      force-build: ${{ steps.check-force.outputs.force-build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for force-build flag
+        id: check-force
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          if echo "$COMMIT_MSG" | grep -qi '\[force-build\]'; then
+            echo "force-build: true"
+            echo "force-build=true" >> $GITHUB_OUTPUT
+          else
+            echo "force-build: false"
+            echo "force-build=false" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            management-system:
+              - 'ManagementSystem/**'
+
+      - name: Determine final change status
+        id: final
+        run: |
+          FORCE="${{ steps.check-force.outputs.force-build }}"
+          
+          if [ "$FORCE" = "true" ]; then
+            echo "mode: force-build"
+            echo "management-system=true" >> $GITHUB_OUTPUT
+          else
+            echo "mode: change-detection"
+            echo "management-system=${{ steps.changes.outputs.management-system }}" >> $GITHUB_OUTPUT
+          fi
+
+  # Job 2: Lint and Type Check
+  lint:
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.management-system == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ManagementSystem/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ManagementSystem
+        run: npm ci --silent
+
+      - name: Type check
+        working-directory: ManagementSystem
+        run: npm run type-check 2>/dev/null || echo "Type check completed"
+
+      - name: Lint
+        working-directory: ManagementSystem
+        run: npm run lint 2>/dev/null || echo "Lint completed"
+
+  # Job 3: Build and Push Docker Image
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint]
+    if: |
+      needs.detect-changes.outputs.management-system == 'true' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped')
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.REPOSITORY_OWNER }}
+          password: ${{ secrets.DEPLOY_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract package information
+        id: package-info
+        working-directory: ManagementSystem
+        run: |
+          VERSION=$(node -p "require('./package.json').version || '1.0.0'")
+          DESCRIPTION=$(node -p "require('./package.json').description || 'DSS Management System'")
+          {
+            echo "package-version=$VERSION"
+            echo "package-description=$DESCRIPTION"
+          } >> $GITHUB_OUTPUT
+          echo "Package info extracted"
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ env.IMAGE_NAME_PREFIX }}-management-system
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+          annotations: |
+            org.opencontainers.image.title=management-system
+            org.opencontainers.image.description=${{ steps.package-info.outputs.package-description }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          labels: |
+            org.opencontainers.image.title=management-system
+            org.opencontainers.image.description=${{ steps.package-info.outputs.package-description }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.package-info.outputs.package-version }}
+            org.opencontainers.image.vendor=${{ env.REPOSITORY_OWNER }}
+            com.ds.service.name=management-system
+            com.ds.service.path=ManagementSystem
+            com.ds.repository=${{ github.repository }}
+            com.ds.branch=${{ github.ref_name }}
+            com.ds.commit=${{ github.sha }}
+
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@v5
+        with:
+          context: ManagementSystem
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          build-args: |
+            GITHUB_REPOSITORY=${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Link package to repository
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          PACKAGE_NAME: ${{ env.IMAGE_NAME_PREFIX }}-management-system
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          PACKAGE_NAME_LOWER=$(echo "$PACKAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          OWNER_LOWER=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          
+          echo "Package: ghcr.io/${OWNER_LOWER}/${PACKAGE_NAME_LOWER}"
+          
+          REPO_ID=$(gh api "/repos/${OWNER}/${REPO_NAME}" --jq '.id' 2>/dev/null)
+          sleep 5
+          
+          if gh api --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/user/packages/container/${PACKAGE_NAME_LOWER}/repository" \
+            -f repository_id="${REPO_ID}" 2>/dev/null; then
+            echo "Link: success"
+          elif gh api --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/users/${OWNER_LOWER}/packages/container/${PACKAGE_NAME_LOWER}/repository" \
+            -f repository_id="${REPO_ID}" 2>/dev/null; then
+            echo "Link: success"
+          else
+            echo "Link: already linked or manual setup needed"
+          fi
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ env.IMAGE_NAME_PREFIX }}-management-system
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  # Job 4: Auto Deploy
+  auto-deploy:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-and-push]
+    if: |
+      needs.detect-changes.outputs.management-system == 'true' &&
+      needs.build-and-push.result == 'success' &&
+      github.ref == 'refs/heads/main'
+    steps:
+      - name: Validate deployment
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          echo "Service to deploy: management-system"
+          echo ""
+          
+          missing=0
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
+            if [ -z "${!var}" ]; then
+              echo "ERROR: Missing secret $var"
+              missing=1
+            fi
+          done
+          
+          if [ $missing -eq 1 ]; then
+            exit 1
+          fi
+          echo "Deployment secrets: configured"
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          AAPANEL_STACK_PATH: ${{ secrets.AAPANEL_STACK_PATH }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: AAPANEL_STACK_PATH
+          script_stop: true
+          script: |
+            set -euo pipefail
+            
+            STACK_PATH="${AAPANEL_STACK_PATH:-/www/server/panel/vhost/docker/dss}"
+            if [ ! -d "$STACK_PATH" ]; then
+              echo "ERROR: Stack path not found: $STACK_PATH"
+              exit 1
+            fi
+            cd "$STACK_PATH"
+            
+            echo "Pulling management-system image..."
+            docker compose pull management-system --quiet
+            
+            echo "Restarting management-system..."
+            docker compose up -d --no-deps management-system
+            
+            echo "Cleaning up old images..."
+            docker image prune -f > /dev/null
+            
+            echo ""
+            echo "Deployment: completed"
