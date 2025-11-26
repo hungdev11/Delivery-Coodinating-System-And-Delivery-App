@@ -352,7 +352,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, test-api-gateway, test-user-service, test-settings-service, test-zone-service, test-parcel-service, test-session-service, test-communication-service]
     if: |
+      always() &&
       needs.detect-changes.outputs.any-service == 'true' &&
+      needs.detect-changes.outputs.service-matrix != '[]' &&
       (needs.test-api-gateway.result == 'success' || needs.test-api-gateway.result == 'skipped') &&
       (needs.test-user-service.result == 'success' || needs.test-user-service.result == 'skipped') &&
       (needs.test-settings-service.result == 'success' || needs.test-settings-service.result == 'skipped') &&
