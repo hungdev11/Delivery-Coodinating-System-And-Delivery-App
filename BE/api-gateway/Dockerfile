@@ -1,3 +1,5 @@
+# Build argument for repository source (auto-link package to repo)
+ARG GITHUB_REPOSITORY=""
 
 FROM maven:3.9-eclipse-temurin-22 AS build
 
@@ -10,6 +12,10 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 FROM eclipse-temurin:22-jre-jammy
+
+# Label for GitHub Container Registry auto-linking
+ARG GITHUB_REPOSITORY=""
+LABEL org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
 
 # Install wget for health checks
 RUN apt-get update -qq && \

@@ -1,4 +1,7 @@
 # Multi-stage build for Settings Service
+# Build argument for repository source (auto-link package to repo)
+ARG GITHUB_REPOSITORY=""
+
 FROM eclipse-temurin:21-jdk-alpine AS builder
 
 # Set working directory
@@ -20,6 +23,10 @@ RUN ./mvnw clean package -DskipTests -B
 
 # Runtime stage
 FROM eclipse-temurin:21-jre-alpine AS runtime
+
+# Label for GitHub Container Registry auto-linking
+ARG GITHUB_REPOSITORY=""
+LABEL org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
 
 # Install curl for health checks
 RUN apk add --no-cache curl
