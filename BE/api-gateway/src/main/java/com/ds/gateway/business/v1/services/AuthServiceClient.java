@@ -90,7 +90,7 @@ public class AuthServiceClient implements IAuthServiceClient {
             .bodyToMono(new ParameterizedTypeReference<BaseResponse<Boolean>>() {})
             .map(BaseResponse::getResult)
             .onErrorResume(ex -> {
-                log.warn("Token verification failed: {}", ex.getMessage());
+                log.debug("[api-gateway] [AuthServiceClient.verifyToken] Token verification failed: {}", ex.getMessage());
                 return Mono.just(false);
             })
             .toFuture();

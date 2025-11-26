@@ -31,10 +31,6 @@
     "check:nodes": "tsx processors/check/check-node-sharing.ts",
     "check:segments": "tsx processors/check/debug-segments.ts",
     "check:all": "tsx processors/check/index.ts",
-    "test:routing": "tsx test/test-osrm-hard-routes.ts",
-    "test:stress": "tsx test/test-service-stress.ts",
-    "test:traffic": "tsx test/test-traffic-service.ts",
-    "test:all": "tsx test/test-all-comprehensive.ts",
     "clean": "rimraf dist",
     "prebuild": "npm run clean && npm run prisma:generate"
   },

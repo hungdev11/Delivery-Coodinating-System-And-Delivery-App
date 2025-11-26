@@ -74,7 +74,7 @@ public class WebSocketEventLogger {
                         errorMessage
                 );
             } catch (Exception e) {
-                log.warn("Failed to log WebSocket event {} {}: {}", method, endpoint, e.getMessage());
+                log.debug("[communication-service] [WebSocketEventLogger.publish] Failed to log WebSocket event {} {}: {}", method, endpoint, e.getMessage());
             }
         }, auditLogExecutor);
     }

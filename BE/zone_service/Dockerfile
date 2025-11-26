@@ -1,4 +1,7 @@
 # Build stage
+# Build argument for repository source (auto-link package to repo)
+ARG GITHUB_REPOSITORY=""
+
 FROM node:20-alpine AS builder
 
 WORKDIR /app
@@ -40,6 +43,10 @@ RUN npm run build
 
 # Production stage
 FROM node:20-alpine AS production
+
+# Label for GitHub Container Registry auto-linking
+ARG GITHUB_REPOSITORY=""
+LABEL org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \

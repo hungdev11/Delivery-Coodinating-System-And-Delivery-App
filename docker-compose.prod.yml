@@ -1,10 +1,8 @@
-version: '3.8'
-
 services:
   # Note: MySQL database is NOT deployed here - use external database
   # Set DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD in .env file
   # All services share the same external database server
-
+  
   # Settings Service (from CI/CD)
   settings-service:
     image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER}/dss-settings-service:${IMAGE_TAG:-latest}
@@ -20,8 +18,6 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       SETTINGS_DB_NAME: ${SETTINGS_DB_NAME:-ds_settings_service}
       SERVER_PORT: 21502
-    ports:
-      - "21502:21502"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21502/actuator/health"]
       interval: 10s
@@ -44,14 +40,12 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       USER_DB_NAME: ${USER_DB_NAME:-ds_user_service}
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
-      KEYCLOAK_REALM: master
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-delivery-system}
       KEYCLOAK_CLIENT_ID: dss-client
       KEYCLOAK_CLIENT_SECRET: dss-secret
       SETTINGS_SERVICE_URL: http://settings-service:21502
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21501
-    ports:
-      - "21501:21501"
     depends_on:
       settings-service:
         condition: service_healthy
@@ -64,6 +58,55 @@ services:
       retries: 120
       start_period: 30s
 
+  # ============================================
+  # MESSAGE BROKER SERVICES (Start Early)
+  # ============================================
+
+  # Zookeeper (Required for Kafka)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: dss-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: dss-kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  # ============================================
+  # BUSINESS SERVICES (Depend on Settings & Kafka)
+  # ============================================
+
   # Zone Service (from CI/CD)
   zone-service:
     image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER}/dss-zone-service:${IMAGE_TAG:-latest}
@@ -73,7 +116,7 @@ services:
       - .env
     environment:
       NODE_ENV: production
-      ZONE_DB_CONNECTION: mysql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT:-3306}/${ZONE_DB_NAME:-ds_zone_service}
+      ZONE_DB_CONNECTION: ${ZONE_DB_CONNECTION:-mysql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT:-3306}/${ZONE_DB_NAME:-ds_zone_service}}
       SETTINGS_SERVICE_URL: http://settings-service:21502
       # OSRM V2 URLs (Simplified Architecture)
       OSRM_V2_FULL_URL: http://osrm-v2-full:5000
@@ -81,17 +124,15 @@ services:
       OSRM_V2_BLOCKING_URL: http://osrm-v2-blocking-only:5000
       OSRM_V2_BASE_URL: http://osrm-v2-base:5000
       PORT: 21503
-    ports:
-      - "21503:21503"
     depends_on:
       settings-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "http://127.0.0.1:21503/health"]
-      interval: 10s
-      timeout: 10s
-      retries: 120
-      start_period: 30s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:21503/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
 
   # Parcel Service (from CI/CD)
   parcel-service:
@@ -108,11 +149,12 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       PARCEL_DB_NAME: ${PARCEL_DB_NAME:-ds_parcel_service}
       USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
+      ZONE_SERVICE_URL: ${ZONE_SERVICE_URL:-http://zone-service:21503}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21506
-    ports:
-      - "21506:21506"
     depends_on:
+      settings-service:
+        condition: service_healthy
       user-service:
         condition: service_healthy
       kafka:
@@ -138,16 +180,19 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       SESSION_DB_NAME: ${SESSION_DB_NAME:-ds_session_service}
-      PARCEL_SERVICE_URL: http://parcel-service:21506
+      PARCEL_SERVICE_URL: ${PARCEL_SERVICE_URL:-http://parcel-service:21506}
       USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
+      ZONE_SERVICE_URL: ${ZONE_SERVICE_URL:-http://zone-service:21503}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21505
-    ports:
-      - "21505:21505"
     depends_on:
+      settings-service:
+        condition: service_healthy
       parcel-service:
         condition: service_healthy
       user-service:
+        condition: service_healthy
+      zone-service:
         condition: service_healthy
       kafka:
         condition: service_healthy
@@ -176,9 +221,9 @@ services:
       USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21511
-    ports:
-      - "21511:21511"
     depends_on:
+      settings-service:
+        condition: service_healthy
       session-service:
         condition: service_healthy
       user-service:
@@ -192,51 +237,9 @@ services:
       retries: 120
       start_period: 30s
 
-  # Zookeeper (Required for Kafka)
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    container_name: dss-zookeeper
-    restart: unless-stopped
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-    healthcheck:
-      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  # Kafka
-  kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    container_name: dss-kafka
-    restart: unless-stopped
-    depends_on:
-      zookeeper:
-        condition: service_healthy
-    ports:
-      - "9092:9092"
-      - "9094:9094"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9094
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9094
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-    healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
+  # ============================================
+  # GATEWAY & FRONTEND SERVICES (Start Last)
+  # ============================================
 
   # API Gateway (from CI/CD)
   api-gateway:
@@ -248,18 +251,16 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
-      KEYCLOAK_REALM: master
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-delivery-system}
       KEYCLOAK_CLIENT_ID: dss-client
-      USER_SERVICE_URL: http://user-service:21501
-      SETTINGS_SERVICE_URL: http://settings-service:21502
-      ZONE_SERVICE_URL: http://zone-service:21503
-      SESSION_SERVICE_URL: http://session-service:21505
-      PARCEL_SERVICE_URL: http://parcel-service:21506
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
+      SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:-http://settings-service:21502}
+      ZONE_SERVICE_URL: ${ZONE_SERVICE_URL:-http://zone-service:21503}
+      SESSION_SERVICE_URL: ${SESSION_SERVICE_URL:-http://session-service:21505}
+      PARCEL_SERVICE_URL: ${PARCEL_SERVICE_URL:-http://parcel-service:21506}
       COMMUNICATION_SERVICE_URL: ${COMMUNICATION_SERVICE_URL:-http://communication-service:21511}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21500
-    ports:
-      - "21500:21500"
     depends_on:
       user-service:
         condition: service_healthy
@@ -282,35 +283,36 @@ services:
       retries: 3
       start_period: 30s
 
-  # ManagementSystem Frontend (build only - files shared with nginx)
-  # This service builds the frontend and copies files to shared volume, then exits
-  management-system-builder:
-    build:
-      context: ./ManagementSystem
-      dockerfile: Dockerfile
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
-        VITE_ENV: ${VITE_ENV:-production}
-    container_name: dss-management-system-builder
-    image: dss-management-system:builder
-    command: ["sh", "-c", "cp -r /usr/share/nginx/html/* /shared/ && echo 'ManagementSystem files copied to shared volume'"]
+  # ManagementSystem Frontend (from CI/CD)
+  management-system:
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER}/dss-management-system:${IMAGE_TAG:-latest}
+    container_name: dss-management-system
+    restart: unless-stopped
+    command: ["sh", "-c", "cp -r /app/dist/* /shared/ && echo 'ManagementSystem files copied to shared volume' && tail -f /dev/null"]
     volumes:
       - management-system-dist:/shared
-    restart: "no"
+    healthcheck:
+      test: ["CMD", "test", "-f", "/shared/index.html"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
-  # Nginx Reverse Proxy (serves ManagementSystem + proxies API)
+  # Nginx Reverse Proxy - Serves frontend and proxies API requests
   nginx-proxy:
     image: nginx:alpine
     container_name: dss-nginx-proxy
     restart: unless-stopped
     volumes:
-      - ./BE/api-gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - management-system-dist:/usr/share/nginx/html:ro
     ports:
       - "8080:8080"
     depends_on:
-      - management-system-builder
-      - api-gateway
+      management-system:
+        condition: service_healthy
+      api-gateway:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "pgrep nginx || exit 1"]
       interval: 10s
@@ -318,29 +320,17 @@ services:
       retries: 3
       start_period: 5s
 
-  # ManagementSystem Frontend (standalone - optional, if you want separate port)
-  management-system:
-    build:
-      context: ./ManagementSystem
-      dockerfile: Dockerfile
-    container_name: dss-management-system
+  # Cloudflare Tunnel - Exposes nginx-proxy to internet
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: dss-cloudflared
     restart: unless-stopped
-    environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
-      VITE_ENV: ${VITE_ENV:-production}
-    ports:
-      - "3000:80"
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
     depends_on:
       nginx-proxy:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/ || exit 1"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-    profiles:
-      - standalone-frontend
 
   # ============================================
   # OSRM V2 Services (Simplified Architecture)
@@ -352,10 +342,8 @@ services:
     container_name: dss-osrm-v2-full
     restart: on-failure
     volumes:
-      - ./BE/zone_service/osrm_data/osrm-full:/data:ro
+      - ./osrm_data/osrm-full:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
-    ports:
-      - "25920:5000"
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
@@ -369,10 +357,8 @@ services:
     container_name: dss-osrm-v2-rating-only
     restart: on-failure
     volumes:
-      - ./BE/zone_service/osrm_data/osrm-rating-only:/data:ro
+      - ./osrm_data/osrm-rating-only:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
-    ports:
-      - "25921:5000"
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
@@ -386,10 +372,8 @@ services:
     container_name: dss-osrm-v2-blocking-only
     restart: on-failure
     volumes:
-      - ./BE/zone_service/osrm_data/osrm-blocking-only:/data:ro
+      - ./osrm_data/osrm-blocking-only:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
-    ports:
-      - "25922:5000"
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
@@ -403,10 +387,8 @@ services:
     container_name: dss-osrm-v2-base
     restart: on-failure
     volumes:
-      - ./BE/zone_service/osrm_data/osrm-base:/data:ro
+      - ./osrm_data/osrm-base:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
-    ports:
-      - "25923:5000"
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s

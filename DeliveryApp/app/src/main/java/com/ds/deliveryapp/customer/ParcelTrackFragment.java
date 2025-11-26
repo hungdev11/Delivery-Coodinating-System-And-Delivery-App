@@ -193,9 +193,10 @@ public class ParcelTrackFragment extends Fragment {
 
         currentParcel = parcel;
         layoutTrackResult.setVisibility(View.VISIBLE);
-        textResultCode.setText("Mã đơn: " + parcel.getCode());
-        textResultStatus.setText("Trạng thái: " + parcel.getStatus().toString()); // (Cần Enum)
-        textResultDestination.setText("Đến: " + parcel.getTargetDestination());
+        textResultCode.setText("Mã đơn: " + (parcel.getCode() != null ? parcel.getCode() : "N/A"));
+        // Use the status variable that was already extracted, with null check
+        textResultStatus.setText("Trạng thái: " + (status != null ? status.toString() : "N/A"));
+        textResultDestination.setText("Đến: " + (parcel.getTargetDestination() != null ? parcel.getTargetDestination() : "N/A"));
     }
 
     // Xử lý khi lấy được thông tin tài xế
@@ -219,5 +220,3 @@ public class ParcelTrackFragment extends Fragment {
         Toast.makeText(getContext(), error, Toast.LENGTH_LONG).show();
     }
 }
-
-

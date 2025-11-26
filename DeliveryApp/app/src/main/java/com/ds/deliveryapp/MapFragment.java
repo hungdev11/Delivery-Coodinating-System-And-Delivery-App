@@ -180,7 +180,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                     int tasksWithLocation = 0;
                     
                     while (hasMore && allTasks.size() < maxTasks) {
-                        Response<PageResponse<DeliveryAssignment>> taskResponse = fragment.sessionClient
+                        Response<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<DeliveryAssignment>>> taskResponse = fragment.sessionClient
                                 .getSessionTasks(fragment.driverId, List.of("CREATED", "IN_PROGRESS"), page, pageSize)
                                 .execute();
 
@@ -197,14 +197,14 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                             break; // Stop if error after first page
                         }
                         
-                        if (taskResponse.body() == null || taskResponse.body().content() == null) {
+                        if (taskResponse.body() == null || taskResponse.body().getResult() == null || taskResponse.body().getResult().content() == null) {
                             if (page == 0) {
                                 throw new IOException("Không thể lấy danh sách nhiệm vụ: response body is null");
                             }
                             break; // Stop if error after first page
                         }
 
-                        PageResponse<DeliveryAssignment> pageResponse = taskResponse.body();
+                        PageResponse<DeliveryAssignment> pageResponse = taskResponse.body().getResult();
                         List<DeliveryAssignment> pageTasks = pageResponse.content();
                         
                         if (pageTasks == null || pageTasks.isEmpty()) {
@@ -249,7 +249,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                 Log.d(TAG, "Routing API Payload: " + payloadJson.substring(0, Math.min(1000, payloadJson.length())));
 
                 // 3. Gọi API Routing
-                Response<RoutingResponseDto> routeApiResponse = fragment.routingApi
+                Response<com.ds.deliveryapp.clients.res.BaseResponse<RoutingResponseDto>> routeApiResponse = fragment.routingApi
                         .getOptimalRoute(routeRequest)
                         .execute();
 
@@ -257,7 +257,13 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                     throw new IOException("Không thể lấy tuyến đường: " + routeApiResponse.message());
                 }
 
-                RoutingResponseDto routeResponseWrapper = routeApiResponse.body();
+                com.ds.deliveryapp.clients.res.BaseResponse<RoutingResponseDto> baseResponse = routeApiResponse.body();
+                if (baseResponse.getResult() == null) {
+                    String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể lấy tuyến đường";
+                    throw new IOException(errorMsg);
+                }
+
+                RoutingResponseDto routeResponseWrapper = baseResponse.getResult();
                 RoutingResponseDto.RouteResponseDto routeResponse = routeResponseWrapper.getResult();
                 Log.d(TAG, "Routing API Response: " + gson.toJson(routeResponse).substring(0, Math.min(1000, gson.toJson(routeResponse).length())));
 

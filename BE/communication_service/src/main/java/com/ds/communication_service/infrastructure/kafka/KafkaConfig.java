@@ -19,7 +19,6 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
-import com.ds.communication_service.infrastructure.kafka.dto.UserEventDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -56,6 +55,21 @@ public class KafkaConfig {
      * Communication service consumes and forwards to clients via WebSocket
      */
     public static final String TOPIC_UPDATE_NOTIFICATIONS = "update-notifications";
+    /**
+     * Topic for assignment completed events from session-service
+     * Triggers notifications for both shipper and client
+     */
+    public static final String TOPIC_ASSIGNMENT_COMPLETED = "assignment-completed";
+    /**
+     * Topic for parcel postponed events from session-service
+     * Triggers message to user when parcel is postponed (out of session)
+     */
+    public static final String TOPIC_PARCEL_POSTPONED = "parcel-postponed";
+    /**
+     * Topic for session completed events from session-service
+     * Triggers notifications to all related clients/shippers
+     */
+    public static final String TOPIC_SESSION_COMPLETED = "session-completed";
     /**
      * Topic for audit events (CREATE/UPDATE/DELETE operations)
      * Shared topic used by all services for audit logging
@@ -116,15 +130,18 @@ public class KafkaConfig {
         config.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         
-        // Create JsonDeserializer that ignores type info from producer and uses local DTO
-        JsonDeserializer<UserEventDto> jsonDeserializer = new JsonDeserializer<>(UserEventDto.class);
+        // Create JsonDeserializer for Object to handle multiple message types
+        // Different topics may contain different message types (ChatMessagePayload, UserEventDto, etc.)
+        // We deserialize to Object and let consumers check the type
+        JsonDeserializer<Object> jsonDeserializer = new JsonDeserializer<>(Object.class);
         jsonDeserializer.setUseTypeHeaders(false);
         jsonDeserializer.setRemoveTypeHeaders(true);
         jsonDeserializer.addTrustedPackages("com.ds.communication_service.common.dto", 
-                "com.ds.communication_service.infrastructure.kafka.dto");
+                "com.ds.communication_service.infrastructure.kafka.dto",
+                "com.ds.session.session_service.common.entities.dto.event");
         
         // Wrap with ErrorHandlingDeserializer
-        ErrorHandlingDeserializer<UserEventDto> errorHandlingDeserializer = 
+        ErrorHandlingDeserializer<Object> errorHandlingDeserializer = 
                 new ErrorHandlingDeserializer<>(jsonDeserializer);
         
         // Consumer reliability settings
@@ -226,6 +243,36 @@ public class KafkaConfig {
                 .partitions(1)
                 .replicas(1)
                 .config("retention.ms", "7776000000") // 90 days (longer retention for failed events)
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+    
+    @Bean
+    public NewTopic assignmentCompletedTopic() {
+        return TopicBuilder.name(TOPIC_ASSIGNMENT_COMPLETED)
+                .partitions(3) // Partition by parcelId for ordering
+                .replicas(1)
+                .config("retention.ms", "259200000") // 3 days
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+    
+    @Bean
+    public NewTopic parcelPostponedTopic() {
+        return TopicBuilder.name(TOPIC_PARCEL_POSTPONED)
+                .partitions(3) // Partition by parcelId for ordering
+                .replicas(1)
+                .config("retention.ms", "259200000") // 3 days
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+    
+    @Bean
+    public NewTopic sessionCompletedTopic() {
+        return TopicBuilder.name(TOPIC_SESSION_COMPLETED)
+                .partitions(3) // Partition by sessionId for ordering
+                .replicas(1)
+                .config("retention.ms", "259200000") // 3 days
                 .config("cleanup.policy", "delete")
                 .build();
     }

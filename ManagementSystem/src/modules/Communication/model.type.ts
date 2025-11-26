@@ -9,7 +9,7 @@ import type { IApiResponse } from '@/common/types'
 /**
  * Content Type
  */
-export type ContentType = 'TEXT' | 'PROPOSAL' | 'INTERACTIVE_PROPOSAL' | 'IMAGE' | 'FILE'
+export type ContentType = 'TEXT' | 'PROPOSAL' | 'INTERACTIVE_PROPOSAL' | 'IMAGE' | 'FILE' | 'DELIVERY_COMPLETED'
 
 /**
  * Proposal Status
@@ -18,8 +18,9 @@ export type ProposalStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED'
 
 /**
  * Proposal Type
+ * Must match backend enum: CONFIRM_REFUSAL, POSTPONE_REQUEST, DELAY_ORDER_RECEIVE
  */
-export type ProposalType = 'CONFIRM_REFUSAL' | 'RESCHEDULE' | 'CANCEL_ORDER' | 'OTHER'
+export type ProposalType = 'CONFIRM_REFUSAL' | 'POSTPONE_REQUEST' | 'DELAY_ORDER_RECEIVE'
 
 /**
  * Proposal Action Type

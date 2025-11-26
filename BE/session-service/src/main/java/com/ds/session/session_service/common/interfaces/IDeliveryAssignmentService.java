@@ -28,8 +28,13 @@ public interface IDeliveryAssignmentService {
     /**
      * Postpone assignment directly by assignmentId.
      * This is used when we already have the assignmentId (e.g., from proposal response).
+     * 
+     * @param assignmentId Assignment ID to postpone
+     * @param request Postpone request with reason, route info, postpone datetime, and moveToEnd flag
+     * @return Updated assignment response
      */
-    DeliveryAssignmentResponse postponeByAssignmentId(UUID assignmentId, String reason, RouteInfo routeInfo);
+    DeliveryAssignmentResponse postponeByAssignmentId(UUID assignmentId, 
+        com.ds.session.session_service.common.entities.dto.request.PostponeAssignmentRequest request);
     
     /**
      * Get active assignment ID for a parcel and delivery man.

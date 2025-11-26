@@ -29,14 +29,14 @@ public class PageResponse<T> {
      * @return PageResponse<T>
      */
     public static <T> PageResponse<T> from(Page<T> page) {
-        return new PageResponse<>(
-            page.getContent(),
-            page.getNumber(),
-            page.getSize(),
-            page.getTotalElements(),
-            page.getTotalPages(),
-            page.isLast()
-        );
+        return PageResponse.<T>builder()
+                .content(page.getContent())
+                .pageNo(page.getNumber())
+                .pageSize(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .last(page.isLast())
+                .build();
     }
 
      /**
@@ -47,13 +47,13 @@ public class PageResponse<T> {
      * @return PageResponse<T>
      */
     public static <T> PageResponse<T> from(Page<?> page, List<T> content) {
-        return new PageResponse<>(
-            content,
-            page.getNumber(),
-            page.getSize(),
-            page.getTotalElements(),
-            page.getTotalPages(),
-            page.isLast()
-        );
+        return PageResponse.<T>builder()
+                .content(content)
+                .pageNo(page.getNumber())
+                .pageSize(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .last(page.isLast())
+                .build();
     }
 }

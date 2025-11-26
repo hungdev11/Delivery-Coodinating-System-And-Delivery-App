@@ -456,14 +456,16 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         }
         Log.d(TAG, "Fetching conversation ID between " + mCurrentUserId + " and " + mRecipientId);
 
-        Call<Conversation> call =
+        Call<com.ds.deliveryapp.clients.res.BaseResponse<Conversation>> call =
                 mChatClient.getConversationBy2Users(mCurrentUserId, mRecipientId);
 
-        call.enqueue(new Callback<Conversation>() {
+        call.enqueue(new Callback<com.ds.deliveryapp.clients.res.BaseResponse<Conversation>>() {
             @Override
-            public void onResponse(@NonNull Call<Conversation> call, @NonNull Response<Conversation> response) {
-                if (response.isSuccessful() && response.body() != null && response.body().getConversationId() != null) {
-                    Conversation conversation = response.body();
+            public void onResponse(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<Conversation>> call, @NonNull Response<com.ds.deliveryapp.clients.res.BaseResponse<Conversation>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    com.ds.deliveryapp.clients.res.BaseResponse<Conversation> baseResponse = response.body();
+                    if (baseResponse.getResult() != null && baseResponse.getResult().getConversationId() != null) {
+                        Conversation conversation = baseResponse.getResult();
                     mConversationId = conversation.getConversationId();
                     Log.i(TAG, "✅ Conversation ID fetched/found: " + mConversationId);
 
@@ -511,13 +513,18 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                         connectWebSocket(); // Will initialize GlobalChatService if needed
                     }
 
+                    } else {
+                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Could not find or create conversation";
+                        Log.e(TAG, "Error response: " + errorMsg);
+                        showErrorToast(errorMsg);
+                    }
                 } else {
                     Log.e(TAG, "Failed to fetch conversation ID (API Error: " + response.code() + ")");
                     showErrorToast("Could not find or create conversation.");
                 }
             }
             @Override
-            public void onFailure(@NonNull Call<Conversation> call, @NonNull Throwable t) {
+            public void onFailure(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<Conversation>> call, @NonNull Throwable t) {
                 Log.e(TAG, "Network error fetching conversation ID", t);
             }
         });
@@ -536,54 +543,62 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
         mCurrentPage = 0;
         mHasMoreMessages = true;
         
-        Call<PageResponse<Message>> call =
+        Call<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<Message>>> call =
                 mChatClient.getChatHistory(mConversationId, mCurrentUserId, 0, PAGE_SIZE);
-        call.enqueue(new Callback<PageResponse<Message>>() {
+        call.enqueue(new Callback<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<Message>>>() {
             @Override
-            public void onResponse(@NonNull Call<PageResponse<Message>> call, @NonNull Response<PageResponse<Message>> response) {
-                if (response.isSuccessful() && response.body() != null && response.body().content() != null) {
-                    PageResponse<Message> pageResponse = response.body();
-                    List<Message> history = pageResponse.content();
+            public void onResponse(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<Message>>> call, @NonNull Response<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<Message>>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<Message>> baseResponse = response.body();
+                    if (baseResponse.getResult() != null && baseResponse.getResult().content() != null) {
+                        PageResponse<Message> pageResponse = baseResponse.getResult();
+                        List<Message> history = pageResponse.content();
 
-                    // Check if there are more pages
-                    mHasMoreMessages = !pageResponse.last();
-                    
-                    if (!history.isEmpty()) {
-                        // Log proposal messages for debugging
-                        int proposalCount = 0;
-                        for (Message msg : history) {
-                            if (msg.getType() == ContentType.INTERACTIVE_PROPOSAL) {
-                                proposalCount++;
+                        // Check if there are more pages
+                        mHasMoreMessages = !pageResponse.last();
+
+                        if (!history.isEmpty()) {
+                            // Log proposal messages for debugging
+                            int proposalCount = 0;
+                            for (Message msg : history) {
+                                if (msg.getType() == ContentType.INTERACTIVE_PROPOSAL) {
+                                    proposalCount++;
+                                }
                             }
+                            Log.d(TAG, "📊 Total proposal messages in history: " + proposalCount);
                         }
-                        Log.d(TAG, "📊 Total proposal messages in history: " + proposalCount);
+
+                        runOnUiThread(() -> {
+                            if (mAdapter != null) {
+                                // Messages come sorted DESC (newest first) from backend
+                                // Reverse to display oldest first (scroll down to see new messages)
+                                Collections.reverse(history);
+
+                                // Sync mMessages list with adapter
+                                mMessages.clear();
+                                mMessages.addAll(history);
+                                mAdapter.setMessages(history);
+                                scrollToBottom();
+
+                                // Mark all messages as read when conversation is opened
+                                markMessagesAsRead(history);
+
+                                // Also mark all messages as read (in case there are more pages)
+                                markAllMessagesAsRead();
+
+                                Log.d(TAG, "✅ Initial messages displayed (reversed), total: " + history.size() + ", hasMore=" + mHasMoreMessages);
+                            }
+                        });
+                    } else {
+                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể tải lịch sử tin nhắn";
+                        Log.e(TAG, "Error response: " + errorMsg);
                     }
-                    
-                    runOnUiThread(() -> {
-                        if (mAdapter != null) {
-                            // Messages come sorted DESC (newest first) from backend
-                            // Reverse to display oldest first (scroll down to see new messages)
-                            Collections.reverse(history);
-                            
-                            // Sync mMessages list with adapter
-                            mMessages.clear();
-                            mMessages.addAll(history);
-                            mAdapter.setMessages(history);
-                            scrollToBottom();
-                            
-                            // Mark all messages as read when conversation is opened
-                            markMessagesAsRead(history);
-                            
-                            // Also mark all messages as read (in case there are more pages)
-                            markAllMessagesAsRead();
-                            
-                            Log.d(TAG, "✅ Initial messages displayed (reversed), total: " + history.size() + ", hasMore=" + mHasMoreMessages);
-                        }
-                    });
+                } else {
+                    Log.e(TAG, "❌ Failed to load history: " + response.code());
                 }
             }
             @Override
-            public void onFailure(@NonNull Call<PageResponse<Message>> call, @NonNull Throwable t) {
+            public void onFailure(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<Message>>> call, @NonNull Throwable t) {
                 Log.e(TAG, "❌ Network error loading history", t);
             }
         });
@@ -609,82 +624,79 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
             }
         });
         
-        Call<PageResponse<Message>> call =
+        Call<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<Message>>> call =
                 mChatClient.getChatHistory(mConversationId, mCurrentUserId, nextPage, PAGE_SIZE);
-        call.enqueue(new Callback<PageResponse<Message>>() {
+        call.enqueue(new Callback<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<Message>>>() {
             @Override
-            public void onResponse(@NonNull Call<PageResponse<Message>> call, @NonNull Response<PageResponse<Message>> response) {
+            public void onResponse(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<Message>>> call, @NonNull Response<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<Message>>> response) {
                 mIsLoadingMore = false;
                 
-                if (response.isSuccessful() && response.body() != null && response.body().content() != null) {
-                    PageResponse<Message> pageResponse = response.body();
-                    List<Message> newMessages = pageResponse.content();
-                    
-                    Log.d(TAG, "✅ Loaded " + newMessages.size() + " more messages (page " + nextPage + ")");
-                    
-                    // Log proposal messages for debugging
-                    int proposalCount = 0;
-                    for (Message msg : newMessages) {
-                        if (msg.getType() == ContentType.INTERACTIVE_PROPOSAL) {
-                            proposalCount++;
-                            Log.d(TAG, "📋 Found PROPOSAL in page " + nextPage + ": id=" + msg.getId() + 
-                                  ", proposal=" + (msg.getProposal() != null ? msg.getProposal().getId() : "null"));
+                if (response.isSuccessful() && response.body() != null) {
+                    com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<Message>> baseResponse = response.body();
+                    if (baseResponse.getResult() != null && baseResponse.getResult().content() != null) {
+                        PageResponse<Message> pageResponse = baseResponse.getResult();
+                        List<Message> newMessages = pageResponse.content();
+
+                        Log.d(TAG, "✅ Loaded " + newMessages.size() + " more messages (page " + nextPage + ")");
+
+                        // Log proposal messages for debugging
+                        int proposalCount = 0;
+                        for (Message msg : newMessages) {
+                            if (msg.getType() == ContentType.INTERACTIVE_PROPOSAL) {
+                                proposalCount++;
+                                Log.d(TAG, "📋 Found PROPOSAL in page " + nextPage + ": id=" + msg.getId() +
+                                      ", proposal=" + (msg.getProposal() != null ? msg.getProposal().getId() : "null"));
+                            }
                         }
-                    }
-                    if (proposalCount > 0) {
-                        Log.d(TAG, "📊 Found " + proposalCount + " proposal messages in page " + nextPage);
-                    }
-                    
-                    if (!newMessages.isEmpty()) {
-                        // Update pagination state
-                        mCurrentPage = nextPage;
-                        mHasMoreMessages = !pageResponse.last();
-                        
-                        // Messages come sorted DESC (newest first) from backend
-                        // Reverse to display oldest first, then prepend older messages at the BEGINNING
-                        Collections.reverse(newMessages);
-                        
-                        // Use post() to defer UI updates until after any scroll callbacks complete
-                        rvMessages.post(() -> {
-                            if (mAdapter != null) {
-                                // Hide loading indicator first
-                                mAdapter.setLoadingMore(false);
-                                
-                                // Prepend older messages at the BEGINNING of list (after reverse)
-                                // Use adapter's addMessages() but need to prepend instead
-                                // Get current list, prepend new messages, then set
-                                List<Message> currentMessages = new ArrayList<>(mMessages);
-                                currentMessages.addAll(0, newMessages); // Insert at beginning
-                                mAdapter.setMessages(currentMessages);
-                                
-                                Log.d(TAG, "✅ Prepended " + newMessages.size() + " older messages at beginning, hasMore=" + mHasMoreMessages);
-                            }
-                        });
+                        if (proposalCount > 0) {
+                            Log.d(TAG, "📊 Found " + proposalCount + " proposal messages in page " + nextPage);
+                        }
+
+                        if (!newMessages.isEmpty()) {
+                            // Update pagination state
+                            mCurrentPage = nextPage;
+                            mHasMoreMessages = !pageResponse.last();
+
+                            // Messages come sorted DESC (newest first) from backend
+                            // Reverse to display oldest first, then prepend older messages at the BEGINNING
+                            Collections.reverse(newMessages);
+
+                            // Use post() to defer UI updates until after any scroll callbacks complete
+                            rvMessages.post(() -> {
+                                if (mAdapter != null) {
+                                    // Hide loading indicator first
+                                    mAdapter.setLoadingMore(false);
+
+                                    // Prepend older messages at the BEGINNING of list (after reverse)
+                                    List<Message> currentMessages = new ArrayList<>(mMessages);
+                                    currentMessages.addAll(0, newMessages); // Insert at beginning
+                                    mAdapter.setMessages(currentMessages);
+
+                                    Log.d(TAG, "✅ Prepended " + newMessages.size() + " older messages at beginning, hasMore=" + mHasMoreMessages);
+                                }
+                            });
+                        } else {
+                            mHasMoreMessages = false;
+                            Log.d(TAG, "📭 No more messages to load");
+                        }
                     } else {
-                        mHasMoreMessages = false;
-                        Log.d(TAG, "📭 No more messages to load");
-                        
-                        // Hide loading indicator
-                        rvMessages.post(() -> {
-                            if (mAdapter != null) {
-                                mAdapter.setLoadingMore(false);
-                            }
-                        });
+                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể tải thêm tin nhắn";
+                        Log.e(TAG, "Error response: " + errorMsg);
                     }
                 } else {
                     Log.e(TAG, "❌ Failed to load more messages: " + response.code());
-                    
-                    // Hide loading indicator on error
-                    rvMessages.post(() -> {
-                        if (mAdapter != null) {
-                            mAdapter.setLoadingMore(false);
-                        }
-                    });
                 }
+
+                // Hide loading indicator after handling response
+                rvMessages.post(() -> {
+                    if (mAdapter != null) {
+                        mAdapter.setLoadingMore(false);
+                    }
+                });
             }
             
             @Override
-            public void onFailure(@NonNull Call<PageResponse<Message>> call, @NonNull Throwable t) {
+            public void onFailure(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<Message>>> call, @NonNull Throwable t) {
                 mIsLoadingMore = false;
                 
                 Log.e(TAG, "❌ Network error loading more messages", t);
@@ -705,19 +717,24 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     private void loadAvailableProposals() {
         if (mJwtToken == null) return;
 
-        Call<List<ProposalTypeConfig>> call = mChatClient.getAvailableConfigs(mCurrentRoles);
-        call.enqueue(new Callback<List<ProposalTypeConfig>>() {
+        Call<com.ds.deliveryapp.clients.res.BaseResponse<List<ProposalTypeConfig>>> call = mChatClient.getAvailableConfigs(mCurrentRoles);
+        call.enqueue(new Callback<com.ds.deliveryapp.clients.res.BaseResponse<List<ProposalTypeConfig>>>() {
             @Override
-            public void onResponse(@NonNull Call<List<ProposalTypeConfig>> call, @NonNull Response<List<ProposalTypeConfig>> response) {
+            public void onResponse(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<List<ProposalTypeConfig>>> call, @NonNull Response<com.ds.deliveryapp.clients.res.BaseResponse<List<ProposalTypeConfig>>> response) {
                 if (response.isSuccessful() && response.body() != null) {
-                    Log.i(TAG, "Đã tải " + response.body().size() + " proposal khả dụng.");
-                    mAvailableProposals = response.body();
+                    com.ds.deliveryapp.clients.res.BaseResponse<List<ProposalTypeConfig>> baseResponse = response.body();
+                    if (baseResponse.getResult() != null) {
+                        Log.i(TAG, "Đã tải " + baseResponse.getResult().size() + " proposal khả dụng.");
+                        mAvailableProposals = baseResponse.getResult();
+                    } else {
+                        Log.e(TAG, "Lỗi tải proposal configs: " + baseResponse.getMessage());
+                    }
                 } else {
                     Log.e(TAG, "Lỗi tải proposal configs: " + response.code());
                 }
             }
             @Override
-            public void onFailure(@NonNull Call<List<ProposalTypeConfig>> call, @NonNull Throwable t) {
+            public void onFailure(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<List<ProposalTypeConfig>>> call, @NonNull Throwable t) {
                 Log.e(TAG, "Lỗi mạng khi tải proposal configs", t);
             }
         });
@@ -1111,28 +1128,35 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
                 mCurrentUserId, mCurrentRoles
         );
 
-        Call<InteractiveProposal> call = mChatClient.createProposal(payload);
+        Call<com.ds.deliveryapp.clients.res.BaseResponse<InteractiveProposal>> call = mChatClient.createProposal(payload);
 
-        call.enqueue(new Callback<InteractiveProposal>() {
+        call.enqueue(new Callback<com.ds.deliveryapp.clients.res.BaseResponse<InteractiveProposal>>() {
             @Override
-            public void onResponse(@NonNull Call<InteractiveProposal> call, @NonNull Response<InteractiveProposal> response) {
+            public void onResponse(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<InteractiveProposal>> call, @NonNull Response<com.ds.deliveryapp.clients.res.BaseResponse<InteractiveProposal>> response) {
                 isSendingProposal = false;
                 setButtonsLoadingState(false);
 
-                if (response.isSuccessful()) {
-                    Log.i(TAG, "✅ Gửi proposal thành công. Chờ WebSocket echo...");
-                    // ❌ REMOVED: Don't reload entire history - WebSocket will deliver the message
-                    // loadChatHistory();
-                    
-                    // Message with proposal will arrive via onMessageReceived()
-                    runOnUiThread(() -> showErrorToast("Proposal sent! Waiting for response..."));
+                if (response.isSuccessful() && response.body() != null) {
+                    com.ds.deliveryapp.clients.res.BaseResponse<InteractiveProposal> baseResponse = response.body();
+                    if (baseResponse.getResult() != null) {
+                        Log.i(TAG, "✅ Gửi proposal thành công. Chờ WebSocket echo...");
+                        // ❌ REMOVED: Don't reload entire history - WebSocket will deliver the message
+                        // loadChatHistory();
+                        
+                        // Message with proposal will arrive via onMessageReceived()
+                        runOnUiThread(() -> showErrorToast("Proposal sent! Waiting for response..."));
+                    } else {
+                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Gửi yêu cầu thất bại";
+                        Log.e(TAG, "❌ Error response: " + errorMsg);
+                        runOnUiThread(() -> showErrorToast(errorMsg));
+                    }
                 } else {
                     Log.e(TAG, "❌ Gửi proposal thất bại: " + response.code());
                     runOnUiThread(() -> showErrorToast("Gửi yêu cầu thất bại."));
                 }
             }
             @Override
-            public void onFailure(@NonNull Call<InteractiveProposal> call, @NonNull Throwable t) {
+            public void onFailure(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<InteractiveProposal>> call, @NonNull Throwable t) {
                 isSendingProposal = false;
                 setButtonsLoadingState(false);
                 Log.e(TAG, "❌ Lỗi mạng khi gửi proposal", t);
@@ -1161,32 +1185,39 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
 
         ProposalResponseRequest payload = new ProposalResponseRequest(resultData);
 
-        Call<InteractiveProposal> call = mChatClient.respondToProposal(
+        Call<com.ds.deliveryapp.clients.res.BaseResponse<InteractiveProposal>> call = mChatClient.respondToProposal(
                 proposalId,
                 mCurrentUserId,
                 payload
         );
 
-        call.enqueue(new Callback<InteractiveProposal>() {
+        call.enqueue(new Callback<com.ds.deliveryapp.clients.res.BaseResponse<InteractiveProposal>>() {
             @Override
-            public void onResponse(@NonNull Call<InteractiveProposal> call, @NonNull Response<InteractiveProposal> response) {
+            public void onResponse(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<InteractiveProposal>> call, @NonNull Response<com.ds.deliveryapp.clients.res.BaseResponse<InteractiveProposal>> response) {
                 isSendingProposal = false;
                 setButtonsLoadingState(false);
 
-                if (response.isSuccessful()) {
-                    Log.i(TAG, "✅ Phản hồi proposal thành công. Chờ WebSocket update...");
-                    // ❌ REMOVED: Don't reload entire history - WebSocket will deliver the update
-                    // loadChatHistory();
-                    
-                    // Proposal update will arrive via onProposalUpdateReceived()
-                    runOnUiThread(() -> showErrorToast("Phản hồi đã gửi!"));
+                if (response.isSuccessful() && response.body() != null) {
+                    com.ds.deliveryapp.clients.res.BaseResponse<InteractiveProposal> baseResponse = response.body();
+                    if (baseResponse.getResult() != null) {
+                        Log.i(TAG, "✅ Phản hồi proposal thành công. Chờ WebSocket update...");
+                        // ❌ REMOVED: Don't reload entire history - WebSocket will deliver the update
+                        // loadChatHistory();
+                        
+                        // Proposal update will arrive via onProposalUpdateReceived()
+                        runOnUiThread(() -> showErrorToast("Phản hồi đã gửi!"));
+                    } else {
+                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Thao tác thất bại";
+                        Log.e(TAG, "❌ Error response: " + errorMsg);
+                        runOnUiThread(() -> showErrorToast(errorMsg));
+                    }
                 } else {
                     Log.e(TAG, "❌ Phản hồi proposal thất bại: " + response.code());
                     runOnUiThread(() -> showErrorToast("Thao tác thất bại."));
                 }
             }
             @Override
-            public void onFailure(@NonNull Call<InteractiveProposal> call, @NonNull Throwable t) {
+            public void onFailure(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<InteractiveProposal>> call, @NonNull Throwable t) {
                 isSendingProposal = false;
                 setButtonsLoadingState(false);
                 Log.e(TAG, "❌ Lỗi mạng khi phản hồi proposal", t);

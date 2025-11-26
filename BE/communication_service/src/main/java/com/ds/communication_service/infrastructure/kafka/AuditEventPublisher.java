@@ -101,10 +101,10 @@ public class AuditEventPublisher {
             
             // Send to DLQ
             kafkaTemplate.send(KafkaConfig.TOPIC_AUDIT_EVENTS_DLQ, event.getEventId(), event);
-            log.warn("📋 Audit event sent to DLQ: eventId={}", event.getEventId());
+            log.debug("[communication-service] [AuditEventPublisher.sendToDLQ] Audit event sent to DLQ: eventId={}", event.getEventId());
             
         } catch (Exception e) {
-            log.error("❌ CRITICAL: Failed to send audit event to DLQ: {}", e.getMessage(), e);
+            log.error("[communication-service] [AuditEventPublisher.sendToDLQ] CRITICAL: Failed to send audit event to DLQ", e);
             // At this point, we can only log to application logs
             // Consider implementing a fallback mechanism (e.g., file-based logging)
         }

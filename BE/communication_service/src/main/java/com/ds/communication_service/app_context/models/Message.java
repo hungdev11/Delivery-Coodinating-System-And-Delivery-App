@@ -4,7 +4,6 @@ import java.sql.Types;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 
 import com.ds.communication_service.common.enums.ContentType;
@@ -47,7 +46,7 @@ public class Message {
     private String senderId;
 
     @Enumerated(EnumType.STRING) 
-    @Column(name = "content_type", nullable = false)
+    @Column(name = "content_type", nullable = false, length = 50)
     private ContentType type;
 
     @Column(name = "content", columnDefinition = "TEXT") 

@@ -68,4 +68,26 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
      */
     @Query("SELECT da FROM DeliveryAssignment da JOIN da.session s WHERE da.parcelId = :parcelId AND s.deliveryManId = :deliveryManId AND s.status IN ('CREATED', 'IN_PROGRESS') ORDER BY da.scanedAt DESC")
     Optional<DeliveryAssignment> findActiveAssignmentByParcelIdAndDeliveryManId(String parcelId, String deliveryManId);
+    
+    /**
+     * Tìm assignment IN_PROGRESS của một shipper cho một parcel (bất kể session status).
+     * Cho phép complete task ngay cả khi session đã completed/failed (có thể do race condition).
+     * (Dùng để complete task khi session có thể đã completed nhưng assignment vẫn IN_PROGRESS)
+     */
+    @Query("SELECT da FROM DeliveryAssignment da JOIN da.session s WHERE da.parcelId = :parcelId AND s.deliveryManId = :deliveryManId AND da.status = 'IN_PROGRESS' ORDER BY da.scanedAt DESC")
+    Optional<DeliveryAssignment> findInProgressAssignmentByParcelIdAndDeliveryManId(String parcelId, String deliveryManId);
+    
+    /**
+     * Tìm assignment IN_PROGRESS trong một session cụ thể cho một parcel.
+     * (Dùng để transfer parcel giữa các shipper)
+     */
+    @Query("SELECT da FROM DeliveryAssignment da WHERE da.session.id = :sessionId AND da.parcelId = :parcelId AND da.status = 'IN_PROGRESS'")
+    Optional<DeliveryAssignment> findInProgressAssignmentBySessionIdAndParcelId(UUID sessionId, String parcelId);
+    
+    /**
+     * Đếm số lượng task chưa hoàn thành (CREATED hoặc IN_PROGRESS) trong một session.
+     * (Dùng để kiểm tra xem có thể tự động kết thúc session không)
+     */
+    @Query("SELECT COUNT(da) FROM DeliveryAssignment da WHERE da.session.id = :sessionId AND da.status IN ('CREATED', 'IN_PROGRESS')")
+    long countPendingTasksBySessionId(UUID sessionId);
 }

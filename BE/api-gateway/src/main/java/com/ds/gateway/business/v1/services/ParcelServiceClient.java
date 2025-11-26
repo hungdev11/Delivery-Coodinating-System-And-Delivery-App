@@ -101,7 +101,7 @@ public class ParcelServiceClient implements IParcelServiceClient {
                     .block();
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("Error during getParcelsV2 request: {}", e.getMessage());
+            log.error("[api-gateway] [ParcelServiceClient.getParcelsV2] Error during request", e);
             return ResponseEntity.status(500).body(null);
         }
     }
@@ -118,7 +118,7 @@ public class ParcelServiceClient implements IParcelServiceClient {
                     .block();
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("Error during getClientReceivedParcels request: {}", e.getMessage());
+            log.error("[api-gateway] [ParcelServiceClient.getClientReceivedParcels] Error during request", e);
             return ResponseEntity.status(500).body(null);
         }
     }
@@ -138,7 +138,7 @@ public class ParcelServiceClient implements IParcelServiceClient {
                     .block();
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("Error during changeParcelStatus request: {}", e.getMessage());
+            log.error("[api-gateway] [ParcelServiceClient.changeParcelStatus] Error during request", e);
             return ResponseEntity.status(500).body(null);
         }
     }
@@ -155,7 +155,7 @@ public class ParcelServiceClient implements IParcelServiceClient {
                     .block();
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("Error during confirmParcel request: {}", e.getMessage());
+            log.error("[api-gateway] [ParcelServiceClient.confirmParcel] Error during request", e);
             return ResponseEntity.status(500).body(null);
         }
     }
@@ -170,7 +170,7 @@ public class ParcelServiceClient implements IParcelServiceClient {
                     .block();
             return ResponseEntity.noContent().build();
         } catch (Exception e) {
-            log.error("Error during deleteParcel request: {}", e.getMessage());
+            log.error("[api-gateway] [ParcelServiceClient.deleteParcel] Error during request", e);
             return ResponseEntity.status(500).body(null);
         }
     }
@@ -182,12 +182,12 @@ public class ParcelServiceClient implements IParcelServiceClient {
                     .retrieve()
                     .bodyToMono(Object.class)
                     .onErrorResume(e -> {
-                        log.error("Error during request to {}: {}", url, e.getMessage());
+                        log.error("[api-gateway] [ParcelServiceClient.executeGet] Error during request to {}", url, e);
                         return Mono.empty();
                     })
                     .block();
         } catch (Exception e) {
-            log.error("Unexpected error: {}", e.getMessage());
+            log.error("[api-gateway] [ParcelServiceClient.executeGet] Unexpected error", e);
             return null;
         }
     }

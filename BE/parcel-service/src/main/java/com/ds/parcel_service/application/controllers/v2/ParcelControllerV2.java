@@ -29,7 +29,7 @@ public class ParcelControllerV2 {
 
     @PostMapping
     public ResponseEntity<BaseResponse<PagedData<ParcelResponse>>> getParcels(@Valid @RequestBody PagingRequestV2 request) {
-        log.info("POST /api/v2/parcels - Get parcels with enhanced filtering (V2)");
+        log.debug("[parcel-service] [ParcelControllerV2.getParcels] POST /api/v2/parcels - Get parcels with enhanced filtering (V2)");
         PagedData<ParcelResponse> pagedData = ((com.ds.parcel_service.business.v1.services.ParcelService) parcelService).getParcelsV2Restful(request);
         return ResponseEntity.ok(BaseResponse.success(pagedData));
     }

@@ -36,12 +36,12 @@ public class UserController {
         UserContext currentUser = UserContext.getCurrentUser()
             .orElseThrow(() -> new RuntimeException("User not authenticated"));
         
-        log.info("Get current user: {}", currentUser.getUserId());
+        log.debug("[api-gateway] [UserController.getCurrentUser] Get current user: {}", currentUser.getUserId());
         
         return userServiceClient.getUserByUsername(currentUser.getUsername())
             .thenApply(user -> ResponseEntity.ok(BaseResponse.success(user)))
             .exceptionally(ex -> {
-                log.error("Failed to get current user: {}", ex.getMessage());
+                log.error("[api-gateway] [UserController.getCurrentUser] Failed to get current user", ex);
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to get user: " + ex.getMessage()));
             });
     }
@@ -50,35 +50,35 @@ public class UserController {
     @AuthRequired({"ADMIN", "MANAGER"})
     public CompletableFuture<ResponseEntity<BaseResponse<PagedData<UserDto>>>> getUsers(
             @RequestBody PagingRequest query) {
-        log.info("Get users (POST) with query");
+        log.debug("[api-gateway] [UserController.getUsers] Get users (POST) with query");
         return userServiceClient.getUsers(query)
             .thenApply(pagedUsers -> ResponseEntity.ok(BaseResponse.success(pagedUsers)))
             .exceptionally(ex -> {
-                log.error("Failed to get users: {}", ex.getMessage());
+                log.error("[api-gateway] [UserController.getUsers] Failed to get users", ex);
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to get users: " + ex.getMessage()));
             });
     }
     
     @GetMapping("/{id}")
     public CompletableFuture<ResponseEntity<BaseResponse<UserDto>>> getUserById(@PathVariable String id) {
-        log.info("Get user by ID: {}", id);
+        log.debug("[api-gateway] [UserController.getUserById] Get user by ID: {}", id);
         
         return userServiceClient.getUserById(id)
             .thenApply(user -> ResponseEntity.ok(BaseResponse.success(user)))
             .exceptionally(ex -> {
-                log.error("Failed to get user: {}", ex.getMessage());
+                log.error("[api-gateway] [UserController.getUserById] Failed to get user", ex);
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to get user: " + ex.getMessage()));
             });
     }
     
     @GetMapping("/username/{username}")
     public CompletableFuture<ResponseEntity<BaseResponse<UserDto>>> getUserByUsername(@PathVariable String username) {
-        log.info("Get user by username: {}", username);
+        log.debug("[api-gateway] [UserController.getUserByUsername] Get user by username: {}", username);
         
         return userServiceClient.getUserByUsername(username)
             .thenApply(user -> ResponseEntity.ok(BaseResponse.success(user)))
             .exceptionally(ex -> {
-                log.error("Failed to get user by username: {}", ex.getMessage());
+                log.error("[api-gateway] [UserController.getUserByUsername] Failed to get user by username", ex);
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to get user: " + ex.getMessage()));
             });
     }
@@ -87,12 +87,12 @@ public class UserController {
     @AuthRequired({"ADMIN"})
     public CompletableFuture<ResponseEntity<BaseResponse<UserDto>>> createUser(
             @Valid @RequestBody CreateUserRequestDto request) {
-        log.info("Create user: {}", request.getUsername());
+        log.debug("[api-gateway] [UserController.createUser] Create user: {}", request.getUsername());
         
         return userServiceClient.createUser(request)
             .thenApply(user -> ResponseEntity.ok(BaseResponse.success(user, "User created successfully")))
             .exceptionally(ex -> {
-                log.error("Failed to create user: {}", ex.getMessage());
+                log.error("[api-gateway] [UserController.createUser] Failed to create user", ex);
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to create user: " + ex.getMessage()));
             });
     }
@@ -101,12 +101,12 @@ public class UserController {
     public CompletableFuture<ResponseEntity<BaseResponse<UserDto>>> updateUser(
             @PathVariable String id,
             @Valid @RequestBody UpdateUserRequestDto request) {
-        log.info("Update user: {}", id);
+        log.debug("[api-gateway] [UserController.updateUser] Update user: {}", id);
         
         return userServiceClient.updateUser(id, request)
             .thenApply(user -> ResponseEntity.ok(BaseResponse.success(user, "User updated successfully")))
             .exceptionally(ex -> {
-                log.error("Failed to update user: {}", ex.getMessage());
+                log.error("[api-gateway] [UserController.updateUser] Failed to update user", ex);
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to update user: " + ex.getMessage()));
             });
     }
@@ -114,12 +114,12 @@ public class UserController {
     @DeleteMapping("/{id}")
     @AuthRequired({"ADMIN"})
     public CompletableFuture<ResponseEntity<BaseResponse<Void>>> deleteUser(@PathVariable String id) {
-        log.info("Delete user: {}", id);
+        log.debug("[api-gateway] [UserController.deleteUser] Delete user: {}", id);
         
         return userServiceClient.deleteUser(id)
             .thenApply(v -> ResponseEntity.ok(BaseResponse.<Void>success(null, "User deleted successfully")))
             .exceptionally(ex -> {
-                log.error("Failed to delete user: {}", ex.getMessage());
+                log.error("[api-gateway] [UserController.deleteUser] Failed to delete user", ex);
                 return ResponseEntity.badRequest().body(BaseResponse.error("Failed to delete user: " + ex.getMessage()));
             });
     }

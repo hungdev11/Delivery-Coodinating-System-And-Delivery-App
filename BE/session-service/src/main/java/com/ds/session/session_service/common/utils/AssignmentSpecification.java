@@ -91,7 +91,7 @@ public class AssignmentSpecification {
             } catch (IllegalArgumentException e) {
                 // Xử lý nếu client gửi "status" bậy (ví dụ: "DELIVEREDD")
                 // Trả về 0 kết quả
-                log.warn("Invalid status value provided: {}", status, e);
+                log.debug("[session-service] [AssignmentSpecification.build] Invalid status value provided: {}", status);
                 return criteriaBuilder.disjunction(); 
             }
         };

@@ -39,7 +39,7 @@ public class DeliveryAssignmentControllerV0 {
 
     @PostMapping
     public ResponseEntity<?> listAssignments(@RequestBody Object requestBody) {
-        log.info("POST /api/v0/assignments - proxy to Session Service");
+        log.debug("[api-gateway] [DeliveryAssignmentControllerV0.listAssignments] POST /api/v0/assignments - proxy to Session Service");
         return proxyControllerSupport.forward(SESSION_SERVICE, HttpMethod.POST, assignmentsV0Url, requestBody);
     }
 }

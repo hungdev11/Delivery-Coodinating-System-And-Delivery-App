@@ -57,7 +57,7 @@ public class EnhancedQueryParser {
                             predicates.add(predicate);
                         }
                     } else {
-                        log.warn("Invalid filter condition for field '{}' with operator '{}'", 
+                        log.debug("[user-service] [EnhancedQueryParser.parseFilterGroup] Invalid filter condition for field '{}' with operator '{}'", 
                                 filterCondition.getField(), filterCondition.getOperator());
                     }
                 } else if (condition instanceof Map) {
@@ -218,16 +218,16 @@ public class EnhancedQueryParser {
                 case ARRAY_OVERLAPS:
                 case ARRAY_CONTAINS_ALL:
                 case ARRAY_CONTAINS_ANY:
-                    log.warn("Array operators not yet implemented: {}", operator);
+                    log.debug("[user-service] [EnhancedQueryParser.buildPredicate] Array operators not yet implemented: {}", operator);
                     return null;
                     
                 default:
-                    log.warn("Unsupported operator: {}", operator);
+                    log.debug("[user-service] [EnhancedQueryParser.buildPredicate] Unsupported operator: {}", operator);
                     return null;
             }
         } catch (Exception e) {
-            log.error("Error building predicate: operator={}, value={}, error={}", 
-                    operator, value, e.getMessage());
+            log.error("[user-service] [EnhancedQueryParser.buildPredicate] Error building predicate: operator={}, value={}", 
+                    operator, value, e);
             return null;
         }
     }
@@ -246,7 +246,7 @@ public class EnhancedQueryParser {
             // Get field path
             Path<?> fieldPath = getFieldPath(root, field);
             if (fieldPath == null) {
-                log.warn("Field path not found: {}", field);
+                log.debug("[user-service] [EnhancedQueryParser.parseFilterCondition] Field path not found: {}", field);
                 return null;
             }
 
@@ -254,8 +254,8 @@ public class EnhancedQueryParser {
             return buildPredicate(criteriaBuilder, fieldPath, operator, value, caseSensitive);
             
         } catch (Exception e) {
-            log.error("Error parsing filter condition: field={}, operator={}, value={}, error={}", 
-                    condition.getField(), condition.getOperator(), condition.getValue(), e.getMessage());
+            log.error("[user-service] [EnhancedQueryParser.parseFilterCondition] Error parsing filter condition: field={}, operator={}, value={}", 
+                    condition.getField(), condition.getOperator(), condition.getValue(), e);
             return null;
         }
     }
@@ -325,7 +325,7 @@ public class EnhancedQueryParser {
                 return criteriaBuilder.equal(regexExpr, true);
             }
         } catch (Exception e) {
-            log.warn("Error creating regex predicate: {}", e.getMessage());
+            log.debug("[user-service] [EnhancedQueryParser.createRegexPredicate] Error creating regex predicate: {}", e.getMessage());
             return null;
         }
     }
@@ -342,7 +342,7 @@ public class EnhancedQueryParser {
             }
             return path;
         } catch (Exception e) {
-            log.warn("Error getting field path for: {}, error: {}", field, e.getMessage());
+            log.debug("[user-service] [EnhancedQueryParser.getFieldPath] Error getting field path for: {}, error: {}", field, e.getMessage());
             return null;
         }
     }
@@ -377,7 +377,7 @@ public class EnhancedQueryParser {
                             ? Sort.Direction.DESC : Sort.Direction.ASC;
                     orders.add(new Sort.Order(direction, sortConfig.getField()));
                 } else {
-                    log.warn("Sort field '{}' not found in entity {}", sortConfig.getField(), entityClass.getSimpleName());
+                    log.debug("[user-service] [EnhancedQueryParser.parseSortConfigs] Sort field '{}' not found in entity {}", sortConfig.getField(), entityClass.getSimpleName());
                 }
             }
         }
@@ -414,7 +414,7 @@ public class EnhancedQueryParser {
         
         Object parsedValue = parseDateValue(value);
         if (parsedValue == null) {
-            log.warn("Unable to parse date value: {}", value);
+            log.debug("[user-service] [EnhancedQueryParser.parseDateValue] Unable to parse date value: {}", value);
             return null;
         }
         
@@ -470,7 +470,7 @@ public class EnhancedQueryParser {
                 }
             }
             
-            log.warn("Unable to parse date string: {}", dateStr);
+            log.debug("[user-service] [EnhancedQueryParser.parseDateValue] Unable to parse date string: {}", dateStr);
             return null;
         }
         

@@ -33,7 +33,7 @@ public class ClientParcelController {
     @PostMapping("/received")
     @AuthRequired
     public ResponseEntity<?> getReceivedParcels(@RequestBody Object request) {
-        log.info("POST /api/v1/client/parcels/received - proxying to Parcel Service");
+        log.debug("[api-gateway] [ClientParcelController.getReceivedParcels] POST /api/v1/client/parcels/received - proxying to Parcel Service");
         return ProxyHeaderUtils.cleanResponseHeaders(parcelServiceClient.getClientReceivedParcels(request));
     }
 
@@ -42,7 +42,7 @@ public class ClientParcelController {
     public ResponseEntity<?> confirmParcel(
             @PathVariable UUID parcelId,
             @RequestBody Object request) {
-        log.info("POST /api/v1/client/parcels/{}/confirm - proxying to Parcel Service", parcelId);
+        log.debug("[api-gateway] [ClientParcelController.confirmParcel] POST /api/v1/client/parcels/{}/confirm - proxying to Parcel Service", parcelId);
         return ProxyHeaderUtils.cleanResponseHeaders(parcelServiceClient.confirmParcel(parcelId, request));
     }
 }

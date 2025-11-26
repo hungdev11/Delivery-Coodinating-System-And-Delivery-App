@@ -1,49 +1,56 @@
+server:
+  port: 0
+
 spring:
   application:
-    name: datn_user_module
+    name: user-service-test
   datasource:
-    url: ${USER_MODULE_DB_URL}
-    username: ${USER_MODULE_DB_USERNAME}
-    password: ${USER_MODULE_DB_PASSWORD}
+    url: jdbc:mysql://${TEST_DB_HOST:localhost}:${TEST_DB_PORT:3306}/${TEST_USER_DB_NAME:ds_user_service_test}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+    username: ${TEST_DB_USERNAME:root}
+    password: ${TEST_DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 900000
   jpa:
     hibernate:
-      ddl-auto: update
-    # show-sql: true
-  # security:
-  #   oauth2:
-  #     resourceserver:
-  #       jwt:
-  #         issuer-uri: ${KEYCLOAK_AUTH_SERVER_URL}/realms/${KEYCLOAK_REALM}
-  #         converter:
-  #           resource-id: ${KEYCLOAK_RESOURCE}
+      ddl-auto: ${TEST_JPA_DDL_AUTO:update}
+    show-sql: ${TEST_JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+  flyway:
+    enabled: false
 
-server: 
-  port: ${USER_MODULE_SERVER_PORT}
+services:
+  settings:
+    base-url: ${TEST_SETTINGS_SERVICE_URL:http://localhost:21502}
+  zone:
+    base-url: ${TEST_ZONE_SERVICE_URL:http://localhost:21503}
+  parcel:
+    base-url: ${TEST_PARCEL_SERVICE_URL:http://localhost:21506}
 
-# Bật debug log cho Spring Security và OAuth2
+keycloak:
+  init:
+    enabled: false
+  auth-server-url: ${TEST_KEYCLOAK_URL:https://keycloak.test.local}
+  realm: ${TEST_KEYCLOAK_REALM:delivery-system-test}
+  resource: ${TEST_KEYCLOAK_CLIENT_ID:backend-client}
+  credentials:
+    username: ${TEST_KEYCLOAK_ADMIN_USERNAME:test-admin}
+    password: ${TEST_KEYCLOAK_ADMIN_PASSWORD:test-admin}
+    secret: ${TEST_KEYCLOAK_CLIENT_SECRET:test-secret}
+
 logging:
   level:
-    org:
-      springframework:
-        security: DEBUG
-        security.oauth2: DEBUG
-        web: DEBUG
-      lognet: DEBUG
-    io:
-      grpc: DEBUG
-
-# Keycloak Admin Client (for KeycloakAdminConfig)
-keycloak:
-  auth-server-url: ${KEYCLOAK_AUTH_SERVER_URL}
-  realm: ${KEYCLOAK_REALM}
-  resource: ${KEYCLOAK_RESOURCE}
-  credentials:
-    username: ${KEYCLOAK_CREDENTIALS_USERNAME}
-    password: ${KEYCLOAK_CREDENTIALS_PASSWORD}
-    secret: ${KEYCLOAK_CREDENTIALS_SECRET} 
-
-jwt:
-  converter:
-    resource-id: doantotnghiep
-    principal-attribute: sub 
+    root: ERROR
+    com.ds.user: DEBUG
+    org.springframework: WARN
+    org.hibernate.SQL: OFF

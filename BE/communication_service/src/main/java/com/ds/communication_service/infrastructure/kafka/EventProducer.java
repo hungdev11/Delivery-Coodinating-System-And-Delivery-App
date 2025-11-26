@@ -90,7 +90,7 @@ public class EventProducer {
             String userId, 
             NotificationMessage notification) {
         
-        log.info("📤 Publishing notification to Kafka topic: {}, userId: {}", 
+        log.debug("[communication-service] [EventProducer.publishNotification] Publishing notification to Kafka topic: {}, userId: {}", 
             KafkaConfig.TOPIC_NOTIFICATIONS, userId);
         
         CompletableFuture<SendResult<String, Object>> future = 
@@ -98,10 +98,10 @@ public class EventProducer {
         
         future.whenComplete((result, ex) -> {
             if (ex == null) {
-                log.info("✅ Notification published successfully to Kafka. Type: {}", 
+                log.debug("[communication-service] [EventProducer.publishNotification] Notification published successfully to Kafka. Type: {}", 
                     notification.getType());
             } else {
-                log.error("❌ Failed to publish notification to Kafka: {}", ex.getMessage(), ex);
+                log.error("[communication-service] [EventProducer.publishNotification] Failed to publish notification to Kafka", ex);
             }
         });
         
@@ -121,13 +121,13 @@ public class EventProducer {
             String userId, 
             NotificationMessage notification) throws Exception {
         
-        log.info("📤 Publishing notification to Kafka (sync) topic: {}, userId: {}", 
+        log.debug("[communication-service] [EventProducer.publishNotificationSync] Publishing notification to Kafka (sync) topic: {}, userId: {}", 
             KafkaConfig.TOPIC_NOTIFICATIONS, userId);
         
         SendResult<String, Object> result = kafkaTemplate.send(
             KafkaConfig.TOPIC_NOTIFICATIONS, userId, notification).get();
         
-        log.info("✅ Notification published successfully (sync) to Kafka. Type: {}",
+        log.debug("[communication-service] [EventProducer.publishNotificationSync] Notification published successfully (sync) to Kafka. Type: {}",
             notification.getType());
         
         return result;

@@ -32,11 +32,11 @@ public class NotificationController {
     public ResponseEntity<BaseResponse<Page<NotificationMessage>>> getNotifications(
             @RequestHeader("X-User-Id") String userId,
             Pageable pageable) {
-        
-        log.info("📬 Get notifications for userId={}", userId);
+
+        log.debug("Get notifications for userId={}", userId);
         Page<NotificationMessage> notifications = notificationService.getNotificationsForUser(userId, pageable);
-        
-        return ResponseEntity.ok(BaseResponse.success("Notifications retrieved successfully", notifications));
+
+        return ResponseEntity.ok(BaseResponse.success(notifications));
     }
 
     /**
@@ -45,11 +45,11 @@ public class NotificationController {
     @GetMapping("/unread")
     public ResponseEntity<BaseResponse<List<NotificationMessage>>> getUnreadNotifications(
             @RequestHeader("X-User-Id") String userId) {
-        
-        log.info("📬 Get unread notifications for userId={}", userId);
+
+        log.debug("Get unread notifications for userId={}", userId);
         List<NotificationMessage> notifications = notificationService.getUnreadNotifications(userId);
-        
-        return ResponseEntity.ok(BaseResponse.success("Unread notifications retrieved successfully", notifications));
+
+        return ResponseEntity.ok(BaseResponse.success(notifications));
     }
 
     /**
@@ -58,10 +58,10 @@ public class NotificationController {
     @GetMapping("/unread/count")
     public ResponseEntity<BaseResponse<Long>> getUnreadCount(
             @RequestHeader("X-User-Id") String userId) {
-        
+
         long count = notificationService.getUnreadCount(userId);
-        
-        return ResponseEntity.ok(BaseResponse.success("Unread count retrieved successfully", count));
+
+        return ResponseEntity.ok(BaseResponse.success(count));
     }
 
     /**
@@ -71,11 +71,11 @@ public class NotificationController {
     public ResponseEntity<BaseResponse<NotificationMessage>> markAsRead(
             @PathVariable String notificationId,
             @RequestHeader("X-User-Id") String userId) {
-        
-        log.info("👁️ Mark notification as read: notificationId={}, userId={}", notificationId, userId);
+
+        log.debug("Mark notification as read: notificationId={}, userId={}", notificationId, userId);
         NotificationMessage notification = notificationService.markAsRead(notificationId, userId);
-        
-        return ResponseEntity.ok(BaseResponse.success("Notification marked as read", notification));
+
+        return ResponseEntity.ok(BaseResponse.success(notification));
     }
 
     /**
@@ -84,11 +84,11 @@ public class NotificationController {
     @PutMapping("/read-all")
     public ResponseEntity<BaseResponse<Integer>> markAllAsRead(
             @RequestHeader("X-User-Id") String userId) {
-        
-        log.info("👁️ Mark all notifications as read for userId={}", userId);
+
+        log.debug("Mark all notifications as read for userId={}", userId);
         int count = notificationService.markAllAsRead(userId);
-        
-        return ResponseEntity.ok(BaseResponse.success(count + " notifications marked as read", count));
+
+        return ResponseEntity.ok(BaseResponse.success(count));
     }
 
     /**
@@ -98,10 +98,10 @@ public class NotificationController {
     public ResponseEntity<BaseResponse<Void>> deleteNotification(
             @PathVariable String notificationId,
             @RequestHeader("X-User-Id") String userId) {
-        
-        log.info("🗑️ Delete notification: notificationId={}, userId={}", notificationId, userId);
+
+        log.debug("Delete notification: notificationId={}, userId={}", notificationId, userId);
         notificationService.deleteNotification(notificationId, userId);
-        
-        return ResponseEntity.ok(BaseResponse.success("Notification deleted successfully"));
+
+        return ResponseEntity.ok(BaseResponse.success(null));
     }
 }

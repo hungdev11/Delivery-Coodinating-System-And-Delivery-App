@@ -7,6 +7,7 @@ import android.util.Log;
 import android.widget.Toast;
 
 import com.ds.deliveryapp.clients.ParcelClient;
+import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.Parcel;
 import com.google.zxing.integration.android.IntentIntegrator;
@@ -59,13 +60,19 @@ public class QrScanActivity extends AppCompatActivity {
         ParcelClient service = retrofit.create(ParcelClient.class);
         Log.e(TAG, retrofit.baseUrl().toString());
 
-        Call<Parcel> call = service.getParcelById(scannedCode);
+        Call<BaseResponse<Parcel>> call = service.getParcelById(scannedCode);
 
-        call.enqueue(new Callback<Parcel>() {
+        call.enqueue(new Callback<BaseResponse<Parcel>>() {
             @Override
-            public void onResponse(Call<Parcel> call, Response<Parcel> response) {
+            public void onResponse(Call<BaseResponse<Parcel>> call, Response<BaseResponse<Parcel>> response) {
                 if (response.isSuccessful() && response.body() != null) {
-                    Parcel parcel = response.body();
+                    BaseResponse<Parcel> baseResponse = response.body();
+                    if (baseResponse.getResult() == null) {
+                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không tìm thấy đơn hàng";
+                        Toast.makeText(QrScanActivity.this, errorMsg, Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    Parcel parcel = baseResponse.getResult();
                     Toast.makeText(QrScanActivity.this, "Tải đơn hàng #" + parcel.getCode() + " thành công.", Toast.LENGTH_SHORT).show();
 
                     Intent intent = new Intent(QrScanActivity.this, ParcelDetailActivity.class);
@@ -82,7 +89,7 @@ public class QrScanActivity extends AppCompatActivity {
                 }
             }
             @Override
-            public void onFailure(Call<Parcel> call, Throwable t) {
+            public void onFailure(Call<BaseResponse<Parcel>> call, Throwable t) {
                 Log.e(TAG, "Network error: " + t.getMessage());
                 Toast.makeText(QrScanActivity.this, "Lỗi kết nối mạng: " + t.getMessage(), Toast.LENGTH_LONG).show();
                 finish();

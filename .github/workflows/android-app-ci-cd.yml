@@ -2,15 +2,15 @@ name: Android App CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: [ "main", "release/*" ]
     paths:
       - 'DeliveryApp/**'
-    tags:
-      - 'v*'
+      - '.github/workflows/android-app-ci-cd.yml'
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: [ "main", "release/*" ]
     paths:
       - 'DeliveryApp/**'
+      - '.github/workflows/android-app-ci-cd.yml'
 
 jobs:
   # Job 1: Detect changes
@@ -18,8 +18,24 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       delivery-app: ${{ steps.tag-check.outputs.delivery-app }}
+      force-build: ${{ steps.check-force.outputs.force-build }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for force-build flag
+        id: check-force
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          if echo "$COMMIT_MSG" | grep -qi '\[force-build\]'; then
+            echo "force-build: true"
+            echo "force-build=true" >> $GITHUB_OUTPUT
+          else
+            echo "force-build: false"
+            echo "force-build=false" >> $GITHUB_OUTPUT
+          fi
+
       - uses: dorny/paths-filter@v3
         id: changes
         with:
@@ -27,15 +43,23 @@ jobs:
             delivery-app:
               - 'DeliveryApp/**'
           list-files: shell
-      - name: Check if tag push
+      - name: Determine final change status
         id: tag-check
         run: |
+          FORCE="${{ steps.check-force.outputs.force-build }}"
+          
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "mode: tag release"
+            echo "delivery-app=true" >> $GITHUB_OUTPUT
+          elif [ "$FORCE" = "true" ]; then
+            echo "mode: force-build"
             echo "delivery-app=true" >> $GITHUB_OUTPUT
           else
+            echo "mode: change-detection"
             echo "delivery-app=${{ steps.changes.outputs.delivery-app }}" >> $GITHUB_OUTPUT
           fi
-
+          
+          echo "delivery-app: ${{ steps.changes.outputs.delivery-app }}"
   # Job 2: Run Unit Tests
   test:
     runs-on: ubuntu-latest
@@ -99,19 +123,30 @@ jobs:
         working-directory: DeliveryApp
         run: ./gradlew assembleRelease --no-daemon
       
+      - name: List APK outputs
+        working-directory: DeliveryApp
+        run: |
+          echo "Debug APKs:"
+          find app/build/outputs/apk/debug -name "*.apk" 2>/dev/null || echo "  none"
+          echo ""
+          echo "Release APKs:"
+          find app/build/outputs/apk/release -name "*.apk" 2>/dev/null || echo "  none"
+      
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: delivery-app-debug-apk
-          path: DeliveryApp/app/build/outputs/apk/debug/app-debug.apk
+          path: DeliveryApp/app/build/outputs/apk/debug/*.apk
           retention-days: 30
+          if-no-files-found: warn
       
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
           name: delivery-app-release-apk
-          path: DeliveryApp/app/build/outputs/apk/release/app-release.apk
+          path: DeliveryApp/app/build/outputs/apk/release/*.apk
           retention-days: 30
+          if-no-files-found: warn
 
   # Job 4: Build AAB (Android App Bundle) - for Play Store
   build-aab:
@@ -144,8 +179,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: delivery-app-release-aab
-          path: DeliveryApp/app/build/outputs/bundle/release/app-release.aab
+          path: DeliveryApp/app/build/outputs/bundle/release/*.aab
           retention-days: 90
+          if-no-files-found: warn
 
   # Job 5: Create GitHub Release (on tags)
   release:
@@ -181,9 +217,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            ./artifacts/app-debug.apk
-            ./artifacts/app-release.apk
-            ./artifacts/app-release.aab
+            ./artifacts/*.apk
+            ./artifacts/*.aab
           draft: false
           prerelease: false
         env:

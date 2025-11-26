@@ -47,7 +47,7 @@ public class ClientDeliverySessionController {
      */
     @PostMapping
     public ResponseEntity<?> searchDeliverySessions(@RequestBody Object searchRequest) {
-        log.info("POST /api/v1/client/delivery-sessions - proxy to Session Service for client");
+        log.debug("[api-gateway] [ClientDeliverySessionController.searchDeliverySessions] POST /api/v1/client/delivery-sessions - proxy to Session Service for client");
         return proxyControllerSupport.forward(SESSION_SERVICE, HttpMethod.POST, deliverySessionsV2Url, searchRequest);
     }
 }

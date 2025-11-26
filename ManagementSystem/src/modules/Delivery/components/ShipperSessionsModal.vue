@@ -31,13 +31,14 @@ const loadAllSessions = async () => {
   sessionsLoading.value = true
   try {
     // Query all sessions for this shipper
+    // Note: deliveryManId in database is actually userId (Keycloak ID), not deliveryMan.id
     const filterGroup: FilterGroup = {
       logic: 'AND',
       conditions: [
         {
           field: 'deliveryManId',
           operator: 'eq',
-          value: props.shipper.id,
+          value: props.shipper.userId,
           logic: undefined,
         },
       ],

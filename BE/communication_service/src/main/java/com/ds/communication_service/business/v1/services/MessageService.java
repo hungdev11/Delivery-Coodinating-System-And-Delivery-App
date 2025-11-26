@@ -37,12 +37,12 @@ public class MessageService implements IMessageService{
     public Page<MessageResponse> getMessagesForConversation(UUID conversationId, String userId, Pageable pageable) {
         Conversation conversation = conversationRepository.findById(conversationId)
                     .orElseThrow(() -> {
-                        log.warn("Conversation not found with ID: {}", conversationId);
+                        log.debug("[communication-service] [MessageService.getMessagesForConversation] Conversation not found with ID: {}", conversationId);
                         return new EntityNotFoundException("Conversation not found with ID: " + conversationId);
                     });
 
         if (!conversation.getUser1Id().equals(userId) && !conversation.getUser2Id().equals(userId)) {
-            log.warn("Security violation: User {} attempted to access conversation {} without permission.", userId, conversationId);
+            log.debug("[communication-service] [MessageService.getMessagesForConversation] Security violation: User {} attempted to access conversation {} without permission.", userId, conversationId);
             throw new AccessDeniedException("User does not have access to this conversation."); 
         }        
         
@@ -56,7 +56,7 @@ public class MessageService implements IMessageService{
         // 1. Find or create conversation
         Conversation conversation = conversationService
                     .findOrCreateConversation(senderId, payload.getRecipientId());
-        log.info("Send message: {}", payload.getContent());
+        log.debug("[communication-service] [MessageService.processAndSaveMessage] Send message: {}", payload.getContent());
         
         // 2. Create and save message with SENT status
         Message message = new Message();
@@ -68,7 +68,7 @@ public class MessageService implements IMessageService{
         message.setSentAt(java.time.LocalDateTime.now()); // Explicitly set sentAt timestamp
 
         Message savedMessage = messageRepository.save(message);
-        log.info("✅ Message saved to database with status SENT. MessageId: {}", savedMessage.getId());
+        log.debug("[communication-service] [MessageService.processAndSaveMessage] Message saved to database with status SENT. MessageId: {}", savedMessage.getId());
 
         // 3. Publish message to Kafka for guaranteed delivery
         // Use conversationId as partition key for ordering
@@ -77,9 +77,9 @@ public class MessageService implements IMessageService{
                 conversation.getId().toString(), 
                 payload
             );
-            log.info("📤 Message published to Kafka for guaranteed delivery");
+            log.debug("[communication-service] [MessageService.processAndSaveMessage] Message published to Kafka for guaranteed delivery");
         } catch (Exception e) {
-            log.error("❌ Failed to publish message to Kafka: {}", e.getMessage(), e);
+            log.error("[communication-service] [MessageService.processAndSaveMessage] Failed to publish message to Kafka", e);
             // Message is still saved in DB, can be reprocessed later
         }
 
@@ -104,7 +104,7 @@ public class MessageService implements IMessageService{
         }
         
         messageRepository.save(message);
-        log.info("✅ Message status updated: messageId={}, status={}", messageId, status);
+        log.debug("[communication-service] [MessageService.updateMessageStatus] Message status updated: messageId={}, status={}", messageId, status);
     }
 
     private MessageResponse toDto(Message message) {        

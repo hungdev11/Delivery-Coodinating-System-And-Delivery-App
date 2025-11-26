@@ -25,7 +25,7 @@ public class UserServiceReadyPublisher {
 
     @EventListener(ApplicationReadyEvent.class)
     public void publishUserServiceReady() {
-        log.info("🚀 UserService startup completed. Publishing USER_SERVICE_READY event...");
+        log.debug("[user-service] [UserServiceReadyPublisher.publishUserServiceReady] UserService startup completed. Publishing USER_SERVICE_READY event...");
         
         UserEventDto event = UserEventDto.builder()
                 .eventType(UserEventDto.EventType.USER_SERVICE_READY)
@@ -40,9 +40,9 @@ public class UserServiceReadyPublisher {
         
         future.whenComplete((result, ex) -> {
             if (ex == null) {
-                log.info("✅ USER_SERVICE_READY event published successfully");
+                log.debug("[user-service] [UserServiceReadyPublisher.publishUserServiceReady] USER_SERVICE_READY event published successfully");
             } else {
-                log.error("❌ Failed to publish USER_SERVICE_READY event: {}", ex.getMessage());
+                log.error("[user-service] [UserServiceReadyPublisher.publishUserServiceReady] Failed to publish USER_SERVICE_READY event", ex);
             }
         });
     }

@@ -46,8 +46,8 @@ public class UserAddressService implements IUserAddressService {
                 .build();
 
         UserAddress saved = userAddressRepository.save(userAddress);
-        log.info("Created user address {} for user {}", saved.getId(), userId);
-        
+        log.debug("Created user address {} for user {}", saved.getId(), userId);
+
         return toDto(saved);
     }
 
@@ -76,8 +76,8 @@ public class UserAddressService implements IUserAddressService {
         }
 
         UserAddress updated = userAddressRepository.save(userAddress);
-        log.info("Updated user address {} for user {}", updated.getId(), userId);
-        
+        log.debug("Updated user address {} for user {}", updated.getId(), userId);
+
         return toDto(updated);
     }
 
@@ -88,14 +88,14 @@ public class UserAddressService implements IUserAddressService {
                 .orElseThrow(() -> new ResourceNotFoundException("User address not found: " + addressId));
 
         userAddressRepository.delete(userAddress);
-        log.info("Deleted user address {} for user {}", addressId, userId);
+        log.debug("Deleted user address {} for user {}", addressId, userId);
     }
 
     @Override
     public UserAddressDto getUserAddress(String userId, String addressId) {
         UserAddress userAddress = userAddressRepository.findByIdAndUserId(addressId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User address not found: " + addressId));
-        
+
         return toDto(userAddress);
     }
 
@@ -111,7 +111,7 @@ public class UserAddressService implements IUserAddressService {
     public UserAddressDto getPrimaryUserAddress(String userId) {
         UserAddress primaryAddress = userAddressRepository.findByUserIdAndIsPrimaryTrue(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("No primary address found for user: " + userId));
-        
+
         return toDto(primaryAddress);
     }
 
@@ -123,12 +123,12 @@ public class UserAddressService implements IUserAddressService {
 
         // Set all other addresses as non-primary
         userAddressRepository.setAllNonPrimaryByUserId(userId);
-        
+
         // Set this address as primary
         userAddress.setIsPrimary(true);
         UserAddress updated = userAddressRepository.save(userAddress);
-        log.info("Set user address {} as primary for user {}", addressId, userId);
-        
+        log.debug("Set user address {} as primary for user {}", addressId, userId);
+
         return toDto(updated);
     }
 
@@ -141,7 +141,8 @@ public class UserAddressService implements IUserAddressService {
 
     @Override
     @Transactional
-    public UserAddressDto updateUserAddressForUser(String targetUserId, String addressId, UpdateUserAddressRequest request) {
+    public UserAddressDto updateUserAddressForUser(String targetUserId, String addressId,
+            UpdateUserAddressRequest request) {
         return updateUserAddress(targetUserId, addressId, request);
     }
 

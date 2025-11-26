@@ -23,32 +23,31 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Autowired
     private WebSocketAuthInterceptor authInterceptor;
 
-    @Bean(name = "webSocketTaskScheduler") 
+    @Bean(name = "webSocketTaskScheduler")
     public TaskScheduler webSocketTaskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(1);
         scheduler.setThreadNamePrefix("ws-heartbeat-scheduler-");
         scheduler.setDaemon(true);
         scheduler.initialize();
-        log.info("WebSocket TaskScheduler initialized for heartbeat");
         return scheduler;
     }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        
-        // Configure heartbeat: [serverSendInterval, serverReceiveInterval] in milliseconds
-        // Server sends heartbeat every 10 seconds, expects client heartbeat every 10 seconds
-        long[] heartbeat = new long[]{10000, 10000};
-        
+
+        // Configure heartbeat: [serverSendInterval, serverReceiveInterval] in
+        // milliseconds
+        // Server sends heartbeat every 10 seconds, expects client heartbeat every 10
+        // seconds
+        long[] heartbeat = new long[] { 10000, 10000 };
+
         config.enableSimpleBroker("/queue", "/topic")
-            .setTaskScheduler(webSocketTaskScheduler())
-            .setHeartbeatValue(heartbeat); 
+                .setTaskScheduler(webSocketTaskScheduler())
+                .setHeartbeatValue(heartbeat);
 
         config.setApplicationDestinationPrefixes("/app");
         config.setUserDestinationPrefix("/user");
-        
-        log.info("WebSocket message broker configured: heartbeat={}ms, userDestinationPrefix=/user", heartbeat[0]);
     }
 
     @Override

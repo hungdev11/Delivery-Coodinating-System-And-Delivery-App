@@ -54,14 +54,14 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             // This might be a heartbeat frame
             log.debug("WebSocket frame received (possibly heartbeat)");
         } else {
-            log.info("🔔 WebSocket command: {} from session: {}", command, accessor.getSessionId());
+            log.debug("[communication-service] [WebSocketAuthInterceptor.preSend] WebSocket command: {} from session: {}", command, accessor.getSessionId());
         }
 
         // 2. Chúng ta CHỈ quan tâm đến lệnh "CONNECT" và "SUBSCRIBE"
         if (StompCommand.CONNECT.equals(command)) {
 
             // DEBUG: Log ALL headers from CONNECT frame
-            log.info("🔍 STOMP CONNECT received. All native headers: {}", accessor.toNativeHeaderMap());
+            log.debug("[communication-service] [WebSocketAuthInterceptor.preSend] STOMP CONNECT received. All native headers: {}", accessor.toNativeHeaderMap());
 
             // 3. Đọc header "Authorization" mà client gửi
             // (Client đang gửi: "Bearer <USER_ID>")
@@ -78,7 +78,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                 try {
                     clientType = UpdateNotificationDTO.ClientType.valueOf(clientTypeHeader.toUpperCase());
                 } catch (IllegalArgumentException e) {
-                    log.warn("WebSocket CONNECT: Invalid Client-Type header: {}. Using default: ALL", clientTypeHeader);
+                    log.debug("[communication-service] [WebSocketAuthInterceptor.preSend] WebSocket CONNECT: Invalid Client-Type header: {}. Using default: ALL", clientTypeHeader);
                     clientType = UpdateNotificationDTO.ClientType.ALL;
                 }
             }
@@ -94,10 +94,10 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             if (userId != null && !userId.isBlank()) {
                 // Log headers for debugging
                 if (userRolesHeader != null && !userRolesHeader.isBlank()) {
-                    log.info("WebSocket CONNECT: User {} with roles: {}, ClientType={}", 
+                    log.debug("[communication-service] [WebSocketAuthInterceptor.preSend] WebSocket CONNECT: User {} with roles: {}, ClientType={}", 
                         userId, userRolesHeader, clientType);
                 } else {
-                    log.info("WebSocket CONNECT: User {} authenticated, ClientType={}", 
+                    log.debug("[communication-service] [WebSocketAuthInterceptor.preSend] WebSocket CONNECT: User {} authenticated, ClientType={}", 
                         userId, clientType);
                 }
                 
@@ -119,17 +119,17 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                 }
                 eventLogger.logConnect(userId, accessor.getSessionId(), userRolesHeader, clientType.name());
             } else {
-                log.warn("WebSocket CONNECT: Missing or invalid Authorization/X-User-Id header");
+                log.debug("[communication-service] [WebSocketAuthInterceptor.preSend] WebSocket CONNECT: Missing or invalid Authorization/X-User-Id header");
             }
         } else if (StompCommand.SUBSCRIBE.equals(command)) {
             // Log subscription attempts
             String destination = accessor.getDestination();
             Principal user = accessor.getUser();
             if (user != null) {
-                log.info("WebSocket SUBSCRIBE: User {} subscribing to {}", user.getName(), destination);
+                log.debug("[communication-service] [WebSocketAuthInterceptor.preSend] WebSocket SUBSCRIBE: User {} subscribing to {}", user.getName(), destination);
                 eventLogger.logSubscribe(user.getName(), destination);
             } else {
-                log.warn("WebSocket SUBSCRIBE: No Principal found for subscription to {}", destination);
+                log.debug("[communication-service] [WebSocketAuthInterceptor.preSend] WebSocket SUBSCRIBE: No Principal found for subscription to {}", destination);
                 eventLogger.logSubscribe(null, destination);
             }
         }
@@ -147,7 +147,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
         if (accessor != null) {
             String destination = accessor.getDestination();
             if (destination != null && destination.contains("/queue/messages")) {
-                log.info("📤 WebSocket message sent: destination={}, sent={}", destination, sent);
+                log.debug("[communication-service] [WebSocketAuthInterceptor.postSend] WebSocket message sent: destination={}, sent={}", destination, sent);
                 Principal user = accessor.getUser();
                 String userId = user != null ? user.getName() : null;
                 eventLogger.logSend(userId, destination, sent);

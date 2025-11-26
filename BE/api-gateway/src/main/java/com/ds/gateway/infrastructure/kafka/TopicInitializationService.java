@@ -55,14 +55,14 @@ public class TopicInitializationService {
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 createTopicsIfNotExist();
-                log.info("✅ Kafka topics initialized successfully on attempt {}", attempt);
+                log.debug("[api-gateway] [TopicInitializationService.initializeTopicsOnStartup] Kafka topics initialized successfully on attempt {}", attempt);
                 
                 // Wait a bit more to ensure metadata is propagated
                 Thread.sleep(2000);
                 return; // Success, exit
             } catch (Exception e) {
                 if (attempt < maxRetries) {
-                    log.warn("⚠️ Attempt {}/{} failed to create topics, retrying in {}ms: {}", 
+                    log.debug("[api-gateway] [TopicInitializationService.initializeTopicsOnStartup] Attempt {}/{} failed to create topics, retrying in {}ms: {}", 
                         attempt, maxRetries, retryDelay, e.getMessage());
                     try {
                         Thread.sleep(retryDelay);
@@ -73,7 +73,7 @@ public class TopicInitializationService {
                     // Exponential backoff, but cap at 10 seconds
                     retryDelay = Math.min(retryDelay * 2, 10000);
                 } else {
-                    log.error("❌ Failed to create topics after {} attempts. Topics may need to be created manually or will be auto-created by Kafka broker when first message is sent", 
+                    log.error("[api-gateway] [TopicInitializationService.initializeTopicsOnStartup] Failed to create topics after {} attempts. Topics may need to be created manually or will be auto-created by Kafka broker when first message is sent", 
                         maxRetries);
                 }
             }
@@ -105,9 +105,9 @@ public class TopicInitializationService {
                     "retention.ms", "2592000000", // 30 days
                     "cleanup.policy", "delete"
                 )));
-                log.info("📋 Will create topic: {}", KafkaConfig.TOPIC_AUDIT_EVENTS);
+                log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Will create topic: {}", KafkaConfig.TOPIC_AUDIT_EVENTS);
             } else {
-                log.debug("✅ Topic already exists: {}", KafkaConfig.TOPIC_AUDIT_EVENTS);
+                log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Topic already exists: {}", KafkaConfig.TOPIC_AUDIT_EVENTS);
             }
             
             if (!existingTopics.contains(KafkaConfig.TOPIC_AUDIT_EVENTS_DLQ)) {
@@ -119,59 +119,59 @@ public class TopicInitializationService {
                     "retention.ms", "7776000000", // 90 days
                     "cleanup.policy", "delete"
                 )));
-                log.info("📋 Will create topic: {}", KafkaConfig.TOPIC_AUDIT_EVENTS_DLQ);
+                log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Will create topic: {}", KafkaConfig.TOPIC_AUDIT_EVENTS_DLQ);
             } else {
-                log.debug("✅ Topic already exists: {}", KafkaConfig.TOPIC_AUDIT_EVENTS_DLQ);
+                log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Topic already exists: {}", KafkaConfig.TOPIC_AUDIT_EVENTS_DLQ);
             }
 
             if (!topicsToCreate.isEmpty()) {
-                log.info("🔄 Creating {} Kafka topics...", topicsToCreate.size());
+                log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Creating {} Kafka topics...", topicsToCreate.size());
                 CreateTopicsResult result = adminClient.createTopics(topicsToCreate);
                 result.all().get(30, TimeUnit.SECONDS); // Wait up to 30s for creation
-                log.info("✅ Successfully created {} Kafka topics", topicsToCreate.size());
+                log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Successfully created {} Kafka topics", topicsToCreate.size());
                 
                 // Verify topics were created by listing again
                 Set<String> topicsAfterCreation = adminClient.listTopics().names().get(30, TimeUnit.SECONDS);
                 for (NewTopic topic : topicsToCreate) {
                     if (topicsAfterCreation.contains(topic.name())) {
-                        log.info("✅ Verified topic exists: {}", topic.name());
+                        log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Verified topic exists: {}", topic.name());
                     } else {
-                        log.warn("⚠️ Topic creation reported success but topic not found: {}", topic.name());
+                        log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Topic creation reported success but topic not found: {}", topic.name());
                     }
                 }
                 
                 // Force refresh producer metadata by accessing partition info
                 // This ensures producer knows about the new topics
                 try {
-                    log.info("🔄 Forcing producer metadata refresh for new topics...");
+                    log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Forcing producer metadata refresh for new topics...");
                     for (NewTopic topic : topicsToCreate) {
                         try {
                             // Access partitions to force metadata refresh
                             kafkaTemplate.partitionsFor(topic.name());
-                            log.debug("✅ Metadata refreshed for topic: {}", topic.name());
+                            log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Metadata refreshed for topic: {}", topic.name());
                         } catch (Exception e) {
-                            log.warn("⚠️ Could not refresh metadata for topic {} (will be refreshed automatically): {}", 
+                            log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Could not refresh metadata for topic {} (will be refreshed automatically): {}", 
                                 topic.name(), e.getMessage());
                         }
                     }
                     // Wait a bit for metadata to propagate
                     Thread.sleep(1000);
                 } catch (Exception e) {
-                    log.warn("⚠️ Error refreshing metadata (will be refreshed automatically): {}", e.getMessage());
+                    log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Error refreshing metadata (will be refreshed automatically): {}", e.getMessage());
                 }
             } else {
-                log.info("✅ All Kafka topics already exist");
+                log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] All Kafka topics already exist");
             }
             
         } catch (ExecutionException e) {
             if (e.getCause() instanceof org.apache.kafka.common.errors.TopicExistsException) {
-                log.info("✅ Topics already exist (created by another instance)");
+                log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Topics already exist (created by another instance)");
                 return; // Success - topics exist
             }
-            log.error("❌ Error creating topics: {}", e.getMessage(), e);
+            log.error("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Error creating topics", e);
             throw e; // Re-throw to trigger retry
         } catch (Exception e) {
-            log.error("❌ Unexpected error creating topics: {}", e.getMessage(), e);
+            log.error("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Unexpected error creating topics", e);
             throw e; // Re-throw to trigger retry
         }
     }

@@ -32,35 +32,35 @@ public class SessionServiceClient implements ISessionServiceClient {
     @Override
     public ResponseEntity<?> acceptParcelToSession(String deliveryManId, Object scanParcelRequest) {
         String uri = String.format("/api/v1/sessions/drivers/%s/accept-parcel", deliveryManId);
-        log.info("WebClient: POST -> {}", uri);
+        log.debug("[api-gateway] [SessionServiceClient.acceptParcelToSession] WebClient: POST -> {}", uri);
         return callPost(uri, scanParcelRequest);
     }
 
     @Override
     public ResponseEntity<?> getSessionById(UUID sessionId) {
         String uri = String.format("/api/v1/sessions/%s", sessionId);
-        log.info("WebClient: GET -> {}", uri);
+        log.debug("[api-gateway] [SessionServiceClient.getSessionById] WebClient: GET -> {}", uri);
         return callGet(uri);
     }
 
     @Override
     public ResponseEntity<?> completeSession(UUID sessionId) {
         String uri = String.format("/api/v1/sessions/%s/complete", sessionId);
-        log.info("WebClient: POST -> {}", uri);
+        log.debug("[api-gateway] [SessionServiceClient.completeSession] WebClient: POST -> {}", uri);
         return callPost(uri, null);
     }
 
     @Override
     public ResponseEntity<?> failSession(UUID sessionId, Object sessionFailRequest) {
         String uri = String.format("/api/v1/sessions/%s/fail", sessionId);
-        log.warn("WebClient: POST -> {}", uri);
+        log.debug("[api-gateway] [SessionServiceClient.failSession] WebClient: POST -> {}", uri);
         return callPost(uri, sessionFailRequest);
     }
 
     @Override
     public ResponseEntity<?> createSessionBatch(Object createSessionRequest) {
         String uri = "/api/v1/sessions";
-        log.info("WebClient: POST -> {}", uri);
+        log.debug("[api-gateway] [SessionServiceClient.createSessionBatch] WebClient: POST -> {}", uri);
         return callPost(uri, createSessionRequest);
     }
 
@@ -108,7 +108,7 @@ public class SessionServiceClient implements ISessionServiceClient {
         // .headers(headers)
         // .body(response.getBody());
 
-        log.info("WebClient: GET -> {}", uri);
+        log.debug("[api-gateway] [SessionServiceClient.getDailyTasks] WebClient: GET -> {}", uri);
         return callGet(uri);
     }
 
@@ -121,7 +121,7 @@ public class SessionServiceClient implements ISessionServiceClient {
                 .build(sessionId)
                 .toString();
 
-        log.info("WebClient: GET -> {}", uri);
+        log.debug("[api-gateway] [SessionServiceClient.getTasksBySessionId] WebClient: GET -> {}", uri);
         return callGet(uri);
     }
 
@@ -148,7 +148,7 @@ public class SessionServiceClient implements ISessionServiceClient {
 
         String uri = builder.buildAndExpand(deliveryManId).toUriString();
 
-        log.info("WebClient: GET -> {}", uri);
+        log.debug("[api-gateway] [SessionServiceClient.getTasksHistory] WebClient: GET -> {}", uri);
         return callGet(uri);
     }
 
@@ -185,7 +185,7 @@ public class SessionServiceClient implements ISessionServiceClient {
     @Override
     public ResponseEntity<?> updateAssignmentStatus(UUID sessionId, UUID assignmentId, Object statusUpdateRequest) {
         String uri = String.format("/api/v1/sessions/%s/assignments/%s/status", sessionId, assignmentId);
-        log.info("WebClient: PUT -> {}", uri);
+        log.debug("[api-gateway] [SessionServiceClient.updateAssignmentStatus] WebClient: PUT -> {}", uri);
         return callPut(uri, statusUpdateRequest);
     }
 
@@ -205,13 +205,13 @@ public class SessionServiceClient implements ISessionServiceClient {
             return ResponseEntity.ok(body);
 
         } catch (WebClientResponseException e) {
-            log.error("GET {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
+            log.error("[api-gateway] [SessionServiceClient.callGet] GET {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
         } catch (WebClientException e) {
-            log.error("GET {} request failed (timeout/connection error): {}", uri, e.getMessage());
+            log.error("[api-gateway] [SessionServiceClient.callGet] GET {} request failed (timeout/connection error)", uri, e);
             return ResponseEntity.status(504).body("{\"error\":\"Gateway timeout: Service did not respond in time\"}");
         } catch (Exception e) {
-            log.error("GET {} unexpected error: {}", uri, e.getMessage(), e);
+            log.error("[api-gateway] [SessionServiceClient.callGet] GET {} unexpected error", uri, e);
             return ResponseEntity.status(500).body("{\"error\":\"Internal server error: " + e.getMessage() + "\"}");
         }
     }
@@ -238,13 +238,13 @@ public class SessionServiceClient implements ISessionServiceClient {
             return ResponseEntity.ok(responseBody);
 
         } catch (WebClientResponseException e) {
-            log.error("POST {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
+            log.error("[api-gateway] [SessionServiceClient.callPost] POST {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
         } catch (WebClientException e) {
-            log.error("POST {} request failed (timeout/connection error): {}", uri, e.getMessage());
+            log.error("[api-gateway] [SessionServiceClient.callPost] POST {} request failed (timeout/connection error)", uri, e);
             return ResponseEntity.status(504).body("{\"error\":\"Gateway timeout: Service did not respond in time\"}");
         } catch (Exception e) {
-            log.error("POST {} unexpected error: {}", uri, e.getMessage(), e);
+            log.error("[api-gateway] [SessionServiceClient.callPost] POST {} unexpected error", uri, e);
             return ResponseEntity.status(500).body("{\"error\":\"Internal server error: " + e.getMessage() + "\"}");
         }
     }
@@ -262,13 +262,13 @@ public class SessionServiceClient implements ISessionServiceClient {
             return ResponseEntity.ok(responseBody);
 
         } catch (WebClientResponseException e) {
-            log.error("PUT {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
+            log.error("[api-gateway] [SessionServiceClient.callPut] PUT {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
         } catch (WebClientException e) {
-            log.error("PUT {} request failed (timeout/connection error): {}", uri, e.getMessage());
+            log.error("[api-gateway] [SessionServiceClient.callPut] PUT {} request failed (timeout/connection error)", uri, e);
             return ResponseEntity.status(504).body("{\"error\":\"Gateway timeout: Service did not respond in time\"}");
         } catch (Exception e) {
-            log.error("PUT {} unexpected error: {}", uri, e.getMessage(), e);
+            log.error("[api-gateway] [SessionServiceClient.callPut] PUT {} unexpected error", uri, e);
             return ResponseEntity.status(500).body("{\"error\":\"Internal server error: " + e.getMessage() + "\"}");
         }
     }
@@ -280,7 +280,7 @@ public class SessionServiceClient implements ISessionServiceClient {
                 .queryParam("data", data)
                 .build()
                 .toUriString();
-        log.info("WebClient: GET -> {}", uri);
+        log.debug("[api-gateway] [SessionServiceClient.generateQR] WebClient: GET -> {}", uri);
         try {
             byte[] qrImage = webClient.get()
                     .uri(uri)
@@ -292,7 +292,7 @@ public class SessionServiceClient implements ISessionServiceClient {
                     .contentType(MediaType.IMAGE_PNG)
                     .body(qrImage);
         } catch (WebClientResponseException e) {
-            log.error("GET {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
+            log.error("[api-gateway] [SessionServiceClient.generateQR] GET {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
         }
     }
@@ -300,21 +300,21 @@ public class SessionServiceClient implements ISessionServiceClient {
     @Override
     public ResponseEntity<?> createSessionPrepared(String deliveryManId) {
         String uri = String.format("/api/v1/sessions/drivers/%s/prepare", deliveryManId);
-        log.info("WebClient: POST -> {}", uri);
+        log.debug("[api-gateway] [SessionServiceClient.createSessionPrepared] WebClient: POST -> {}", uri);
         return callPost(uri, null);
     }
 
     @Override
     public ResponseEntity<?> startSession(UUID sessionId) {
         String uri = String.format("/api/v1/sessions/%s/start", sessionId);
-        log.info("WebClient: POST -> {}", uri);
+        log.debug("[api-gateway] [SessionServiceClient.startSession] WebClient: POST -> {}", uri);
         return callPost(uri, null);
     }
 
     @Override
     public ResponseEntity<?> getActiveSession(String deliveryManId) {
         String uri = String.format("/api/v1/sessions/drivers/%s/active", deliveryManId);
-        log.info("WebClient: GET -> {}", uri);
+        log.debug("[api-gateway] [SessionServiceClient.getActiveSession] WebClient: GET -> {}", uri);
         try {
             Object body = webClient.get()
                     .uri(uri)
@@ -334,7 +334,7 @@ public class SessionServiceClient implements ISessionServiceClient {
             if (e.getStatusCode().value() == 204) {
                 return ResponseEntity.noContent().build();
             }
-            log.error("GET {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
+            log.error("[api-gateway] [SessionServiceClient.getActiveSession] GET {} failed: {} {}", uri, e.getStatusCode(), e.getResponseBodyAsString());
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
         }
     }

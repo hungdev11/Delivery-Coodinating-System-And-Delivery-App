@@ -38,13 +38,13 @@ public class EventConsumer {
             Acknowledgment acknowledgment) {
 
         try {
-            log.info("Received parcel status request from Kafka. topic={}, partition={}, offset={}", topic, partition, offset);
+            log.debug("[parcel-service] [EventConsumer.consumeParcelStatusRequest] Received parcel status request from Kafka. topic={}, partition={}, offset={}", topic, partition, offset);
 
             // typed payload -> direct access to fields
             log.debug("payload={}", payload);
 
             if (payload == null || payload.getParcelId() == null || payload.getEventType() == null) {
-                log.warn("Invalid parcel status event payload, missing parcelId or eventType. Payload={}", payload);
+                log.debug("[parcel-service] [EventConsumer.consumeParcelStatusRequest] Invalid parcel status event payload, missing parcelId or eventType. Payload={}", payload);
                 // acknowledge to avoid poison looping, or you may choose to send to DLQ
                 if (acknowledgment != null) acknowledgment.acknowledge();
                 return;
@@ -53,19 +53,64 @@ public class EventConsumer {
             try {
                 UUID parcelId = payload.getParcelId();
                 com.ds.parcel_service.common.enums.ParcelEvent pe = com.ds.parcel_service.common.enums.ParcelEvent.valueOf(payload.getEventType());
+                
+                // Check current parcel status before applying event to handle duplicate events gracefully
+                try {
+                    com.ds.parcel_service.common.entities.dto.response.ParcelResponse currentParcel = parcelService.getParcelById(parcelId);
+                    if (currentParcel != null && currentParcel.getStatus() != null) {
+                        com.ds.parcel_service.common.enums.ParcelStatus currentStatus = currentParcel.getStatus();
+                        
+                        // Handle duplicate DELIVERY_SUCCESSFUL event: if parcel is already DELIVERED or beyond, acknowledge and skip
+                        if (pe == com.ds.parcel_service.common.enums.ParcelEvent.DELIVERY_SUCCESSFUL) {
+                            if (currentStatus == com.ds.parcel_service.common.enums.ParcelStatus.DELIVERED || 
+                                currentStatus == com.ds.parcel_service.common.enums.ParcelStatus.SUCCEEDED ||
+                                currentStatus == com.ds.parcel_service.common.enums.ParcelStatus.FAILED ||
+                                currentStatus == com.ds.parcel_service.common.enums.ParcelStatus.DISPUTE) {
+                                log.debug("[parcel-service] [EventConsumer.consumeParcelStatusRequest] Parcel {} is already in state {} (DELIVERED or beyond). Skipping duplicate DELIVERY_SUCCESSFUL event.", 
+                                        parcelId, currentStatus);
+                                // Acknowledge to prevent infinite retries
+                                if (acknowledgment != null) {
+                                    acknowledgment.acknowledge();
+                                }
+                                return;
+                            }
+                        }
+                    }
+                } catch (Exception statusCheckEx) {
+                    log.debug("[parcel-service] [EventConsumer.consumeParcelStatusRequest] Failed to check current parcel status for parcelId={}: {}. Proceeding with event application.", 
+                            parcelId, statusCheckEx.getMessage());
+                    // Continue with event application even if status check fails
+                }
+                
                 parcelService.changeParcelStatus(parcelId, pe);
 
                 // After successful processing (business logic applied), acknowledge the offset
                 if (acknowledgment != null) {
                     acknowledgment.acknowledge();
                 }
+            } catch (IllegalStateException ex) {
+                // Handle invalid state transitions gracefully
+                String errorMsg = ex.getMessage();
+                if (errorMsg != null && errorMsg.contains("Invalid event")) {
+                    log.debug("[parcel-service] [EventConsumer.consumeParcelStatusRequest] Invalid state transition for parcelId={} event={}: {}. Acknowledging to prevent infinite retries.", 
+                            payload.getParcelId(), payload.getEventType(), errorMsg);
+                    // Acknowledge invalid transitions to prevent infinite retries
+                    if (acknowledgment != null) {
+                        acknowledgment.acknowledge();
+                    }
+                } else {
+                    log.error("[parcel-service] [EventConsumer.consumeParcelStatusRequest] Failed to apply parcel event for parcelId={} event={}", 
+                            payload.getParcelId(), payload.getEventType(), ex);
+                    // don't ack so message can be retried according to container retry policy
+                }
             } catch (Exception ex) {
-                log.error("Failed to apply parcel event for parcelId={} event={}: {}", payload.getParcelId(), payload.getEventType(), ex.getMessage(), ex);
+                log.error("[parcel-service] [EventConsumer.consumeParcelStatusRequest] Failed to apply parcel event for parcelId={} event={}", 
+                        payload.getParcelId(), payload.getEventType(), ex);
                 // don't ack so message can be retried according to container retry policy
             }
 
         } catch (Exception ex) {
-            log.error("Error processing parcel status request: {}", ex.getMessage(), ex);
+            log.error("[parcel-service] [EventConsumer.consumeParcelStatusRequest] Error processing parcel status request", ex);
             // don't ack so message can be retried according to container retry policy
         }
     }

@@ -38,7 +38,7 @@ public class UserEventConsumer {
             Acknowledgment acknowledgment) {
         
         try {
-            log.info("📥 Received user event: {} for user: {}", event.getEventType(), userId);
+            log.debug("[parcel-service] [UserEventConsumer.handleUserEvent] Received user event: {} for user: {}", event.getEventType(), userId);
 
             switch (event.getEventType()) {
                 case USER_CREATED:
@@ -52,16 +52,16 @@ public class UserEventConsumer {
                     handleUserServiceReady();
                     break;
                 default:
-                    log.warn("Unknown event type: {}", event.getEventType());
+                    log.debug("[parcel-service] [UserEventConsumer.handleUserEvent] Unknown event type: {}", event.getEventType());
             }
 
             // Acknowledge message after successful processing
             acknowledgment.acknowledge();
-            log.debug("✅ User event processed successfully: {} for user: {}", event.getEventType(), userId);
+            log.debug("[parcel-service] [UserEventConsumer.handleUserEvent] User event processed successfully: {} for user: {}", event.getEventType(), userId);
 
         } catch (Exception e) {
-            log.error("❌ Error processing user event: {} for user: {}: {}", 
-                event.getEventType(), userId, e.getMessage(), e);
+            log.error("[parcel-service] [UserEventConsumer.handleUserEvent] Error processing user event: {} for user: {}", 
+                event.getEventType(), userId, e);
             // Don't acknowledge on error - message will be retried
             throw e;
         }
@@ -83,27 +83,27 @@ public class UserEventConsumer {
         snapshot.setStatus(event.getStatus());
 
         userSnapshotRepository.save(snapshot);
-        log.debug("✅ User snapshot updated: {}", event.getUserId());
+        log.debug("[parcel-service] [UserEventConsumer.handleUserCreatedOrUpdated] User snapshot updated: {}", event.getUserId());
     }
 
     private void handleUserDeleted(String userId) {
         userSnapshotRepository.deleteById(userId);
-        log.debug("✅ User snapshot deleted: {}", userId);
+        log.debug("[parcel-service] [UserEventConsumer.handleUserDeleted] User snapshot deleted: {}", userId);
     }
 
     private void handleUserServiceReady() {
-        log.info("🚀 Received USER_SERVICE_READY event. Triggering snapshot synchronization...");
+        log.debug("[parcel-service] [UserEventConsumer.handleUserServiceReady] Received USER_SERVICE_READY event. Triggering snapshot synchronization...");
         try {
             // Trigger snapshot initialization if table is empty
             long snapshotCount = userSnapshotRepository.count();
             if (snapshotCount == 0) {
-                log.info("📥 Snapshot table is empty. Starting sync from UserService...");
+                log.debug("[parcel-service] [UserEventConsumer.handleUserServiceReady] Snapshot table is empty. Starting sync from UserService...");
                 snapshotInitializationService.doInitializeSnapshot();
             } else {
-                log.info("✅ Snapshot table already has {} records. Skipping sync.", snapshotCount);
+                log.debug("[parcel-service] [UserEventConsumer.handleUserServiceReady] Snapshot table already has {} records. Skipping sync.", snapshotCount);
             }
         } catch (Exception e) {
-            log.error("❌ Error during snapshot sync after USER_SERVICE_READY: {}", e.getMessage(), e);
+            log.error("[parcel-service] [UserEventConsumer.handleUserServiceReady] Error during snapshot sync after USER_SERVICE_READY", e);
         }
     }
 }

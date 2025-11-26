@@ -45,80 +45,80 @@ public class UserAddressProxyController {
     // Client endpoints (current user)
     @PostMapping("/me/addresses")
     public ResponseEntity<?> createMyAddress(@RequestBody Object requestBody) {
-        log.info("POST /api/v1/users/me/addresses - proxy to User Service");
+        log.debug("[api-gateway] [UserAddressProxyController.createMyAddress] POST /api/v1/users/me/addresses - proxy to User Service");
         return proxyCurrentUser(HttpMethod.POST, "/me/addresses", requestBody);
     }
 
     @GetMapping("/me/addresses")
     public ResponseEntity<?> getMyAddresses() {
-        log.info("GET /api/v1/users/me/addresses - proxy to User Service");
+        log.debug("[api-gateway] [UserAddressProxyController.getMyAddresses] GET /api/v1/users/me/addresses - proxy to User Service");
         return proxyCurrentUser(HttpMethod.GET, "/me/addresses", null);
     }
 
     @GetMapping("/me/addresses/primary")
     public ResponseEntity<?> getMyPrimaryAddress() {
-        log.info("GET /api/v1/users/me/addresses/primary - proxy to User Service");
+        log.debug("[api-gateway] [UserAddressProxyController.getMyPrimaryAddress] GET /api/v1/users/me/addresses/primary - proxy to User Service");
         return proxyCurrentUser(HttpMethod.GET, "/me/addresses/primary", null);
     }
 
     @GetMapping("/me/addresses/{addressId}")
     public ResponseEntity<?> getMyAddress(@PathVariable String addressId) {
-        log.info("GET /api/v1/users/me/addresses/{} - proxy to User Service", addressId);
+        log.debug("[api-gateway] [UserAddressProxyController.getMyAddress] GET /api/v1/users/me/addresses/{} - proxy to User Service", addressId);
         return proxyCurrentUser(HttpMethod.GET, "/me/addresses/" + addressId, null);
     }
 
     @PutMapping("/me/addresses/{addressId}")
     public ResponseEntity<?> updateMyAddress(@PathVariable String addressId, @RequestBody Object requestBody) {
-        log.info("PUT /api/v1/users/me/addresses/{} - proxy to User Service", addressId);
+        log.debug("[api-gateway] [UserAddressProxyController.updateMyAddress] PUT /api/v1/users/me/addresses/{} - proxy to User Service", addressId);
         return proxyCurrentUser(HttpMethod.PUT, "/me/addresses/" + addressId, requestBody);
     }
 
     @DeleteMapping("/me/addresses/{addressId}")
     public ResponseEntity<?> deleteMyAddress(@PathVariable String addressId) {
-        log.info("DELETE /api/v1/users/me/addresses/{} - proxy to User Service", addressId);
+        log.debug("[api-gateway] [UserAddressProxyController.deleteMyAddress] DELETE /api/v1/users/me/addresses/{} - proxy to User Service", addressId);
         return proxyCurrentUser(HttpMethod.DELETE, "/me/addresses/" + addressId, null);
     }
 
     @PutMapping("/me/addresses/{addressId}/set-primary")
     public ResponseEntity<?> setMyPrimaryAddress(@PathVariable String addressId) {
-        log.info("PUT /api/v1/users/me/addresses/{}/set-primary - proxy to User Service", addressId);
+        log.debug("[api-gateway] [UserAddressProxyController.setMyPrimaryAddress] PUT /api/v1/users/me/addresses/{}/set-primary - proxy to User Service", addressId);
         return proxyCurrentUser(HttpMethod.PUT, "/me/addresses/" + addressId + "/set-primary", null);
     }
 
     // Admin endpoints (any user)
     @PostMapping("/{userId}/addresses")
     public ResponseEntity<?> createUserAddress(@PathVariable String userId, @RequestBody Object requestBody) {
-        log.info("POST /api/v1/users/{}/addresses - proxy to User Service (Admin)", userId);
+        log.debug("[api-gateway] [UserAddressProxyController.createUserAddress] POST /api/v1/users/{}/addresses - proxy to User Service (Admin)", userId);
         return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.POST, userAddressUrl + "/" + userId + "/addresses", requestBody);
     }
 
     @GetMapping("/{userId}/addresses")
     public ResponseEntity<?> getUserAddresses(@PathVariable String userId) {
-        log.info("GET /api/v1/users/{}/addresses - proxy to User Service (Admin)", userId);
+        log.debug("[api-gateway] [UserAddressProxyController.getUserAddresses] GET /api/v1/users/{}/addresses - proxy to User Service (Admin)", userId);
         return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.GET, userAddressUrl + "/" + userId + "/addresses", null);
     }
 
     @GetMapping("/{userId}/addresses/primary")
     public ResponseEntity<?> getUserPrimaryAddress(@PathVariable String userId) {
-        log.info("GET /api/v1/users/{}/addresses/primary - proxy to User Service (Admin)", userId);
+        log.debug("[api-gateway] [UserAddressProxyController.getUserPrimaryAddress] GET /api/v1/users/{}/addresses/primary - proxy to User Service (Admin)", userId);
         return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.GET, userAddressUrl + "/" + userId + "/addresses/primary", null);
     }
 
     @GetMapping("/{userId}/addresses/{addressId}")
     public ResponseEntity<?> getUserAddress(@PathVariable String userId, @PathVariable String addressId) {
-        log.info("GET /api/v1/users/{}/addresses/{} - proxy to User Service (Admin)", userId, addressId);
+        log.debug("[api-gateway] [UserAddressProxyController.getUserAddress] GET /api/v1/users/{}/addresses/{} - proxy to User Service (Admin)", userId, addressId);
         return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.GET, userAddressUrl + "/" + userId + "/addresses/" + addressId, null);
     }
 
     @PutMapping("/{userId}/addresses/{addressId}")
     public ResponseEntity<?> updateUserAddress(@PathVariable String userId, @PathVariable String addressId, @RequestBody Object requestBody) {
-        log.info("PUT /api/v1/users/{}/addresses/{} - proxy to User Service (Admin)", userId, addressId);
+        log.debug("[api-gateway] [UserAddressProxyController.updateUserAddress] PUT /api/v1/users/{}/addresses/{} - proxy to User Service (Admin)", userId, addressId);
         return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.PUT, userAddressUrl + "/" + userId + "/addresses/" + addressId, requestBody);
     }
 
     @DeleteMapping("/{userId}/addresses/{addressId}")
     public ResponseEntity<?> deleteUserAddress(@PathVariable String userId, @PathVariable String addressId) {
-        log.info("DELETE /api/v1/users/{}/addresses/{} - proxy to User Service (Admin)", userId, addressId);
+        log.debug("[api-gateway] [UserAddressProxyController.deleteUserAddress] DELETE /api/v1/users/{}/addresses/{} - proxy to User Service (Admin)", userId, addressId);
         return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.DELETE, userAddressUrl + "/" + userId + "/addresses/" + addressId, null);
     }
 

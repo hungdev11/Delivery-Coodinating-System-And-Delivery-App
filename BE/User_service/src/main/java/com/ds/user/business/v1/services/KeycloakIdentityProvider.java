@@ -59,7 +59,7 @@ public class KeycloakIdentityProvider implements IIdentityProvider {
     
     @PostConstruct
     public void logConfiguration() {
-        log.info("[KeycloakIdentity] KeycloakIdentityProvider initialized - Realm: '{}', Client: '{}'", realm, clientId);
+        log.debug("[user-service] [KeycloakIdentityProvider.logConfiguration] KeycloakIdentityProvider initialized - Realm: '{}', Client: '{}'", realm, clientId);
     }
     
     /**
@@ -124,22 +124,22 @@ public class KeycloakIdentityProvider implements IIdentityProvider {
                     // Send email verification
                     try {
                         sendEmailVerification(userId);
-                        log.info("[KeycloakIdentity] Verification email sent to user: {}", userId);
+                        log.debug("[user-service] [KeycloakIdentityProvider.createUser] Verification email sent to user: {}", userId);
                     } catch (Exception e) {
-                        log.warn("[KeycloakIdentity] Failed to send verification email: {}", e.getMessage());
+                        log.debug("[user-service] [KeycloakIdentityProvider.createUser] Failed to send verification email: {}", e.getMessage());
                     }
                     
-                    log.info("[KeycloakIdentity] User created successfully: {}", userId);
+                    log.debug("[user-service] [KeycloakIdentityProvider.createUser] User created successfully: {}", userId);
                     return userId;
                 }
             }
             
             String errorMessage = response.readEntity(String.class);
-            log.error("[KeycloakIdentity] Error creating user: {} - {}", response.getStatus(), errorMessage);
+            log.error("[user-service] [KeycloakIdentityProvider.createUser] Error creating user: {} - {}", response.getStatus(), errorMessage);
             throw new RuntimeException("Error creating user: " + response.getStatus());
             
         } catch (Exception e) {
-            log.error("[KeycloakIdentity] Exception while creating user: {}", e.getMessage(), e);
+            log.error("[user-service] [KeycloakIdentityProvider.createUser] Exception while creating user", e);
             throw new RuntimeException("Exception while creating user: " + e.getMessage(), e);
         }
     }
@@ -175,7 +175,7 @@ public class KeycloakIdentityProvider implements IIdentityProvider {
                 .build();
                 
         } catch (Exception e) {
-            log.error("[KeycloakIdentity] Error getting user by ID: {}", e.getMessage(), e);
+            log.error("[user-service] [KeycloakIdentityProvider.getUserById] Error getting user by ID", e);
             throw new RuntimeException("Error getting user: " + e.getMessage(), e);
         }
     }
@@ -197,10 +197,10 @@ public class KeycloakIdentityProvider implements IIdentityProvider {
             if (lastName != null) user.setLastName(lastName);
             
             userResource.update(user);
-            log.info("[KeycloakIdentity] User updated successfully: {}", externalId);
+            log.debug("[user-service] [KeycloakIdentityProvider.updateUser] User updated successfully: {}", externalId);
             
         } catch (Exception e) {
-            log.error("[KeycloakIdentity] Error updating user: {}", e.getMessage(), e);
+            log.error("[user-service] [KeycloakIdentityProvider.updateUser] Error updating user", e);
             throw new RuntimeException("Error updating user: " + e.getMessage(), e);
         }
     }
@@ -215,10 +215,10 @@ public class KeycloakIdentityProvider implements IIdentityProvider {
         
         try {
             getUsersResource().delete(externalId);
-            log.info("[KeycloakIdentity] User deleted successfully: {}", externalId);
+            log.debug("[user-service] [KeycloakIdentityProvider.deleteUser] User deleted successfully: {}", externalId);
             
         } catch (Exception e) {
-            log.error("[KeycloakIdentity] Error deleting user: {}", e.getMessage(), e);
+            log.error("[user-service] [KeycloakIdentityProvider.deleteUser] Error deleting user", e);
             throw new RuntimeException("Error deleting user: " + e.getMessage(), e);
         }
     }
@@ -240,10 +240,10 @@ public class KeycloakIdentityProvider implements IIdentityProvider {
             credential.setTemporary(false);
             
             userResource.resetPassword(credential);
-            log.info("[KeycloakIdentity] Password updated successfully: {}", externalId);
+            log.debug("[user-service] [KeycloakIdentityProvider.updatePassword] Password updated successfully: {}", externalId);
             
         } catch (Exception e) {
-            log.error("[KeycloakIdentity] Error updating password: {}", e.getMessage(), e);
+            log.error("[user-service] [KeycloakIdentityProvider.updatePassword] Error updating password", e);
             throw new RuntimeException("Error updating password: " + e.getMessage(), e);
         }
     }

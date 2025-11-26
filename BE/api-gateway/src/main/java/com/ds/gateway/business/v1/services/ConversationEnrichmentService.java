@@ -6,7 +6,6 @@ import com.ds.gateway.common.interfaces.IUserServiceClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -24,7 +23,9 @@ public class ConversationEnrichmentService {
 
     private final IUserServiceClient userServiceClient;
     private final WebClient communicationServiceWebClient;
+    @SuppressWarnings("unused")
     private final WebClient sessionServiceWebClient;
+    @SuppressWarnings("unused")
     private final WebClient parcelServiceWebClient;
 
     public ConversationEnrichmentService(
@@ -45,7 +46,7 @@ public class ConversationEnrichmentService {
      * @return List of enriched conversations
      */
     public CompletableFuture<List<EnrichedConversationResponse>> getEnrichedConversations(String currentUserId) {
-        log.info("🔄 Enriching conversations for user: {}", currentUserId);
+        log.debug("[api-gateway] [ConversationEnrichmentService.getEnrichedConversations] Enriching conversations for user: {}", currentUserId);
         
         // Step 1: Get basic conversations from Communication Service
         return communicationServiceWebClient.get()
@@ -56,8 +57,13 @@ public class ConversationEnrichmentService {
                 .thenCompose(conversationsJson -> {
                     List<EnrichedConversationResponse> enrichedList = new ArrayList<>();
                     
-                    if (conversationsJson == null || !conversationsJson.isArray()) {
-                        log.warn("⚠️ No conversations found or invalid response");
+                    JsonNode conversationArray = conversationsJson;
+                    if (conversationArray != null && conversationArray.has("result")) {
+                        conversationArray = conversationArray.get("result");
+                    }
+                    
+                    if (conversationArray == null || !conversationArray.isArray()) {
+                        log.debug("[api-gateway] [ConversationEnrichmentService.getEnrichedConversations] No conversations found or invalid response");
                         return CompletableFuture.completedFuture(enrichedList);
                     }
                     
@@ -65,7 +71,7 @@ public class ConversationEnrichmentService {
                     List<String> partnerIds = new ArrayList<>();
                     List<JsonNode> conversationNodes = new ArrayList<>();
                     
-                    for (JsonNode convNode : conversationsJson) {
+                    for (JsonNode convNode : conversationArray) {
                         if (convNode.has("partnerId")) {
                             String partnerId = convNode.get("partnerId").asText();
                             partnerIds.add(partnerId);
@@ -91,7 +97,7 @@ public class ConversationEnrichmentService {
                                             userMap.put(partnerIds.get(i), userDto);
                                         }
                                     } catch (Exception e) {
-                                        log.warn("⚠️ Failed to fetch user {}: {}", partnerIds.get(i), e.getMessage());
+                                        log.debug("[api-gateway] [ConversationEnrichmentService.getEnrichedConversations] Failed to fetch user {}: {}", partnerIds.get(i), e.getMessage());
                                     }
                                 }
                                 
@@ -105,7 +111,7 @@ public class ConversationEnrichmentService {
                                         );
                                         enrichedList.add(enriched);
                                     } catch (Exception e) {
-                                        log.error("❌ Failed to enrich conversation: {}", e.getMessage());
+                                        log.error("[api-gateway] [ConversationEnrichmentService.getEnrichedConversations] Failed to enrich conversation", e);
                                     }
                                 }
                                 
@@ -113,7 +119,7 @@ public class ConversationEnrichmentService {
                             });
                 })
                 .exceptionally(ex -> {
-                    log.error("❌ Failed to get conversations: {}", ex.getMessage(), ex);
+                    log.error("[api-gateway] [ConversationEnrichmentService.getEnrichedConversations] Failed to get conversations", ex);
                     return new ArrayList<>();
                 });
     }
@@ -128,7 +134,7 @@ public class ConversationEnrichmentService {
             UserDto userDto = userServiceClient.getUserById(partnerId).get();
             return buildEnrichedConversation(convNode, currentUserId, userDto);
         } catch (Exception e) {
-            log.error("Error enriching conversation synchronously: {}", e.getMessage(), e);
+            log.error("[api-gateway] [ConversationEnrichmentService.enrichSingleConversationSync] Error enriching conversation synchronously", e);
             // Return basic conversation without enrichment
             return EnrichedConversationResponse.builder()
                     .conversationId(convNode.has("conversationId") ? convNode.get("conversationId").asText() : "unknown")
@@ -141,6 +147,7 @@ public class ConversationEnrichmentService {
     /**
      * Enrich một conversation với thông tin bổ sung (async version)
      */
+    @SuppressWarnings("unused")
     private CompletableFuture<EnrichedConversationResponse> enrichSingleConversation(
             JsonNode convNode, String currentUserId) {
         
@@ -194,7 +201,7 @@ public class ConversationEnrichmentService {
                                 });
                     })
                     .exceptionally(ex -> {
-                        log.warn("⚠️ Failed to fully enrich conversation {}: {}", conversationId, ex.getMessage());
+                        log.debug("[api-gateway] [ConversationEnrichmentService.enrichSingleConversation] Failed to fully enrich conversation {}: {}", conversationId, ex.getMessage());
                         // Return basic conversation without enrichment
                         return EnrichedConversationResponse.builder()
                                 .conversationId(conversationId)
@@ -206,7 +213,7 @@ public class ConversationEnrichmentService {
                     });
                     
         } catch (Exception e) {
-            log.error("❌ Error parsing conversation node: {}", e.getMessage());
+            log.error("[api-gateway] [ConversationEnrichmentService.enrichSingleConversation] Error parsing conversation node", e);
             return CompletableFuture.completedFuture(
                     EnrichedConversationResponse.builder()
                             .conversationId("unknown")
@@ -227,7 +234,7 @@ public class ConversationEnrichmentService {
         // 2. If currentUser is shipper -> check if they have active delivery for partner
         // This requires querying Session Service for active assignments
         
-        log.debug("🔍 Checking parcel info between {} and {}", partnerId, currentUserId);
+        log.debug("[api-gateway] [ConversationEnrichmentService.checkShipperParcelInfo] Checking parcel info between {} and {}", partnerId, currentUserId);
         
         // For now, return null (no active parcel)
         // Will implement in next iteration
@@ -278,7 +285,7 @@ public class ConversationEnrichmentService {
             return builder.build();
                     
         } catch (Exception e) {
-            log.error("❌ Error building enriched conversation: {}", e.getMessage());
+            log.error("[api-gateway] [ConversationEnrichmentService.buildEnrichedConversation] Error building enriched conversation", e);
             return EnrichedConversationResponse.builder()
                     .conversationId("unknown")
                     .partnerId("unknown")

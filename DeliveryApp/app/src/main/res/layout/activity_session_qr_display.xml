@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F8F8F8"
+    android:padding="24dp">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:background="@android:color/white"
+        android:padding="24dp"
+        android:elevation="4dp">
+
+        <TextView
+            android:id="@+id/tvTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerHorizontal="true"
+            android:text="Mã QR Chuyển Đơn"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#333333"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/tvSessionId"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/tvTitle"
+            android:layout_centerHorizontal="true"
+            android:text="Mã phiên: ..."
+            android:textSize="14sp"
+            android:textColor="#666666"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="24dp" />
+
+        <ImageView
+            android:id="@+id/ivQRCode"
+            android:layout_width="300dp"
+            android:layout_height="300dp"
+            android:layout_below="@id/tvSessionId"
+            android:layout_centerHorizontal="true"
+            android:scaleType="fitCenter"
+            android:contentDescription="QR Code" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/ivQRCode"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="24dp"
+            android:text="Shipper khác quét mã này để nhận đơn chuyển giao"
+            android:textSize="12sp"
+            android:textColor="#999999"
+            android:gravity="center" />
+
+    </RelativeLayout>
+
+</RelativeLayout>

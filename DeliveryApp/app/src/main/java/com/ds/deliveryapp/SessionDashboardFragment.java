@@ -104,23 +104,29 @@ public class SessionDashboardFragment extends Fragment {
         btnStartSession.setText("Đang tạo phiên...");
 
         SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
-        Call<DeliverySession> call = service.createSessionPrepared(driverId);
+        Call<com.ds.deliveryapp.clients.res.BaseResponse<DeliverySession>> call = service.createSessionPrepared(driverId);
 
-        call.enqueue(new Callback<DeliverySession>() {
+        call.enqueue(new Callback<com.ds.deliveryapp.clients.res.BaseResponse<DeliverySession>>() {
             @Override
-            public void onResponse(Call<DeliverySession> call, Response<DeliverySession> response) {
+            public void onResponse(Call<com.ds.deliveryapp.clients.res.BaseResponse<DeliverySession>> call, Response<com.ds.deliveryapp.clients.res.BaseResponse<DeliverySession>> response) {
                 btnStartSession.setEnabled(true);
                 btnStartSession.setText("Bắt đầu phiên");
 
                 if (response.isSuccessful() && response.body() != null) {
-                    DeliverySession session = response.body();
-                    Log.d(TAG, "Session created: " + session.getId() + ", Status: " + session.getStatus());
-                    Toast.makeText(getContext(), "Đã tạo phiên thành công!", Toast.LENGTH_SHORT).show();
-                    
-                    // Navigate to TaskFragment to show the session
-                    if (getActivity() instanceof MainActivity) {
-                        MainActivity mainActivity = (MainActivity) getActivity();
-                        mainActivity.navigateToTasks();
+                    com.ds.deliveryapp.clients.res.BaseResponse<DeliverySession> baseResponse = response.body();
+                    if (baseResponse.getResult() != null) {
+                        DeliverySession session = baseResponse.getResult();
+                        Log.d(TAG, "Session created: " + session.getId() + ", Status: " + session.getStatus());
+                        Toast.makeText(getContext(), "Đã tạo phiên thành công!", Toast.LENGTH_SHORT).show();
+                        
+                        // Navigate to TaskFragment to show the session
+                        if (getActivity() instanceof MainActivity) {
+                            MainActivity mainActivity = (MainActivity) getActivity();
+                            mainActivity.navigateToTasks();
+                        }
+                    } else {
+                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể tạo phiên";
+                        Toast.makeText(getContext(), errorMsg, Toast.LENGTH_SHORT).show();
                     }
                 } else {
                     String errorMsg = "Lỗi tạo phiên: " + response.code();
@@ -133,7 +139,7 @@ public class SessionDashboardFragment extends Fragment {
             }
 
             @Override
-            public void onFailure(Call<DeliverySession> call, Throwable t) {
+            public void onFailure(Call<com.ds.deliveryapp.clients.res.BaseResponse<DeliverySession>> call, Throwable t) {
                 btnStartSession.setEnabled(true);
                 btnStartSession.setText("Bắt đầu phiên");
                 Log.e(TAG, "Network error creating session: " + t.getMessage());

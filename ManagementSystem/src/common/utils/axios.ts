@@ -64,6 +64,8 @@ export class AxiosHttpClient {
     // Response interceptor
     this.client.interceptors.response.use(
       (response: AxiosResponse) => {
+        // Return the response data directly
+        // The BaseResponse handling is done by the useErrorHandler composable
         return response.data
       },
       (error) => {
@@ -71,17 +73,43 @@ export class AxiosHttpClient {
         if (error.response?.status === 401) {
           console.warn('Received 401 Unauthorized, token may be expired')
           removeToken()
+          toast.add({
+            title: 'Phiên đăng nhập hết hạn',
+            description: 'Vui lòng đăng nhập lại',
+            color: 'error',
+          })
           return Promise.reject(new Error('Authentication failed'))
         }
 
-        const apiError: IApiResponse<null> = {
-          message: error.response?.data?.message || error.message,
+        // Extract error message from response (supports both old and new format)
+        let errorMessage = 'Đã xảy ra lỗi'
+
+        if (error.response?.data) {
+          // New BaseResponse format
+          if (error.response.data.message) {
+            errorMessage = error.response.data.message
+          }
+          // Old format fallback
+          else if (error.response.data.error) {
+            errorMessage = error.response.data.error
+          }
+        } else if (error.message) {
+          errorMessage = error.message
         }
+
+        // Show error toast
         toast.add({
-          title: apiError.message,
+          title: 'Lỗi',
+          description: errorMessage,
           color: 'error',
+          timeout: 5000,
         })
-        return Promise.reject(apiError)
+
+        // Return error in consistent format
+        return Promise.reject({
+          message: errorMessage,
+          status: error.response?.status,
+        })
       },
     )
   }

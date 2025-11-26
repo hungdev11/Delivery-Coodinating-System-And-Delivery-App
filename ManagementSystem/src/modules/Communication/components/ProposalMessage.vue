@@ -144,6 +144,7 @@ const getBorderColor = computed(() => {
 
     <!-- Proposal Response Buttons -->
     <div v-if="canRespond" class="flex space-x-2 mt-3">
+      <!-- ACCEPT_DECLINE action type -->
       <UButton
         v-if="proposal.actionType === 'ACCEPT_DECLINE'"
         size="xs"
@@ -160,6 +161,16 @@ const getBorderColor = computed(() => {
         @click="handleResponse('REJECTED')"
       >
         Decline
+      </UButton>
+
+      <!-- TEXT_INPUT action type (e.g., "Xác nhận đã nhận đơn") -->
+      <UButton
+        v-if="proposal.actionType === 'TEXT_INPUT'"
+        size="xs"
+        color="success"
+        @click="handleResponse('CONFIRMED')"
+      >
+        Xác nhận đã nhận đơn
       </UButton>
     </div>
 

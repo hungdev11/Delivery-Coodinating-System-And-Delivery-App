@@ -1,38 +1,56 @@
 package com.ds.communication_service.common.dto;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Generic response wrapper
+ * Base response wrapper for all API responses
+ * Follows the standard defined in RESTFUL.md
+ * 
+ * @param <T> The type of the result data
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class BaseResponse<T> {
-    private boolean success;
+    /**
+     * Optional data result
+     */
+    private T result;
+
+    /**
+     * Optional message (for success messages or error descriptions)
+     */
     private String message;
-    private T data;
 
     /**
-     * Create a success response
+     * Create a success response with result data only
      */
-    public static <T> BaseResponse<T> success(String message, T data) {
-        return new BaseResponse<>(true, message, data);
+    public static <T> BaseResponse<T> success(T result) {
+        return BaseResponse.<T>builder()
+                .result(result)
+                .build();
     }
 
     /**
-     * Create a success response without data
+     * Create a success response with result data and message
      */
-    public static <T> BaseResponse<T> success(String message) {
-        return new BaseResponse<>(true, message, null);
+    public static <T> BaseResponse<T> success(T result, String message) {
+        return BaseResponse.<T>builder()
+                .result(result)
+                .message(message)
+                .build();
     }
 
     /**
-     * Create an error response
+     * Create an error response with message only
      */
     public static <T> BaseResponse<T> error(String message) {
-        return new BaseResponse<>(false, message, null);
+        return BaseResponse.<T>builder()
+                .message(message)
+                .build();
     }
 }

@@ -96,31 +96,25 @@ public class UserContext {
     }
 
     public static Set<String> extractRoles(Jwt jwt) {
-        log.debug("🔍 EXTRACTING ROLES from JWT token");
-        log.debug("🔍 JWT claims: {}", jwt.getClaims());
-        
         Set<String> allRoles = Collections.emptySet();
         
         try {
             // Try to extract from realm_access.roles
             Object realmAccess = jwt.getClaim("realm_access");
-            log.debug("🔍 Realm access claim: {}", realmAccess);
             
             if (realmAccess instanceof java.util.Map) {
                 @SuppressWarnings("unchecked")
                 java.util.Map<String, Object> realmMap = (java.util.Map<String, Object>) realmAccess;
                 Object roles = realmMap.get("roles");
-                log.debug("🔍 Realm roles: {}", roles);
                 
                 if (roles instanceof Collection) {
                     allRoles = ((Collection<?>) roles).stream()
                         .map(Object::toString)
                         .collect(Collectors.toSet());
-                    log.debug("✅ EXTRACTED ROLES from realm_access: {}", allRoles);
                 }
             }
         } catch (Exception e) {
-            log.debug("🔍 Failed to extract from realm_access: {}", e.getMessage());
+            log.error("[api-gateway] [UserContext.extractRoles] Failed to extract from realm_access", e);
         }
 
         // If no roles from realm_access, try resource_access
@@ -128,7 +122,6 @@ public class UserContext {
             try {
                 // Try to extract from resource_access
                 Object resourceAccess = jwt.getClaim("resource_access");
-                log.debug("🔍 Resource access claim: {}", resourceAccess);
                 
                 if (resourceAccess instanceof java.util.Map) {
                     @SuppressWarnings("unchecked")
@@ -137,38 +130,29 @@ public class UserContext {
                     // Try multiple client IDs that might have roles
                     String[] clientIds = {"backend-client", "frontend-client", "api-gateway"};
                     for (String clientId : clientIds) {
-                        log.debug("🔍 Checking client: {}", clientId);
                         Object clientRoles = resourceMap.get(clientId);
-                        log.debug("🔍 Client {} roles: {}", clientId, clientRoles);
                         
                         if (clientRoles instanceof java.util.Map) {
                             @SuppressWarnings("unchecked")
                             java.util.Map<String, Object> clientMap = (java.util.Map<String, Object>) clientRoles;
                             Object roles = clientMap.get("roles");
-                            log.debug("🔍 Client {} roles object: {}", clientId, roles);
                             
                             if (roles instanceof Collection) {
                                 allRoles = ((Collection<?>) roles).stream()
                                     .map(Object::toString)
                                     .collect(Collectors.toSet());
-                                log.debug("✅ EXTRACTED ROLES from resource_access[{}]: {}", clientId, allRoles);
                                 break; // Found roles, exit loop
                             }
                         }
                     }
                 }
             } catch (Exception e) {
-                log.debug("🔍 Failed to extract from resource_access: {}", e.getMessage());
+                log.error("[api-gateway] [UserContext.extractRoles] Failed to extract from resource_access", e);
             }
         }
 
         // Filter out Keycloak default roles
         Set<String> filteredRoles = filterKeycloakDefaultRoles(allRoles);
-        log.debug("✅ FILTERED ROLES (removed Keycloak defaults): {}", filteredRoles);
-        
-        if (filteredRoles.isEmpty() && !allRoles.isEmpty()) {
-            log.debug("⚠️ All roles were filtered out as Keycloak defaults");
-        }
         
         return filteredRoles;
     }

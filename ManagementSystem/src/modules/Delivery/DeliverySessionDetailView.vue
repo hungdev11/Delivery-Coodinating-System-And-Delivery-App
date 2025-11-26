@@ -146,6 +146,7 @@ const loadOtherSessions = async () => {
   loadingOtherSessions.value = true
   try {
     // Query sessions by deliveryManId, excluding current session
+    // Note: session.value.deliveryManId is already userId (Keycloak ID), so we can use it directly
     const filterGroup: FilterGroup = {
       logic: 'AND',
       conditions: [

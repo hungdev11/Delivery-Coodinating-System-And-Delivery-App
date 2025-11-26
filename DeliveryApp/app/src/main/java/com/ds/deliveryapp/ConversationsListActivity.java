@@ -96,32 +96,39 @@ public class ConversationsListActivity extends AppCompatActivity {
     private void loadConversations() {
         Log.d(TAG, "📥 Loading conversations for user: " + mCurrentUserId);
 
-        Call<List<Conversation>> call = mChatClient.getConversations(mCurrentUserId);
-        call.enqueue(new Callback<List<Conversation>>() {
+        Call<com.ds.deliveryapp.clients.res.BaseResponse<List<Conversation>>> call = mChatClient.getConversations(mCurrentUserId);
+        call.enqueue(new Callback<com.ds.deliveryapp.clients.res.BaseResponse<List<Conversation>>>() {
             @Override
-            public void onResponse(@NonNull Call<List<Conversation>> call, @NonNull Response<List<Conversation>> response) {
+            public void onResponse(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<List<Conversation>>> call, @NonNull Response<com.ds.deliveryapp.clients.res.BaseResponse<List<Conversation>>> response) {
                 swipeRefreshLayout.setRefreshing(false);
 
                 if (response.isSuccessful() && response.body() != null) {
-                    List<Conversation> conversations = response.body();
-                    Log.d(TAG, "✅ Loaded " + conversations.size() + " conversations");
+                    com.ds.deliveryapp.clients.res.BaseResponse<List<Conversation>> baseResponse = response.body();
+                    if (baseResponse.getResult() != null) {
+                        List<Conversation> conversations = baseResponse.getResult();
+                        Log.d(TAG, "✅ Loaded " + conversations.size() + " conversations");
 
-                    mConversations.clear();
-                    mConversations.addAll(conversations);
-                    
-                    // Sync unread counts with GlobalChatService
-                    if (globalChatService != null) {
-                        java.util.Map<String, Integer> unreadCounts = new java.util.HashMap<>();
-                        for (Conversation conv : conversations) {
-                            if (conv.getConversationId() != null && conv.getUnreadCount() != null && conv.getUnreadCount() > 0) {
-                                unreadCounts.put(conv.getConversationId(), conv.getUnreadCount());
+                        mConversations.clear();
+                        mConversations.addAll(conversations);
+                        
+                        // Sync unread counts with GlobalChatService
+                        if (globalChatService != null) {
+                            java.util.Map<String, Integer> unreadCounts = new java.util.HashMap<>();
+                            for (Conversation conv : conversations) {
+                                if (conv.getConversationId() != null && conv.getUnreadCount() != null && conv.getUnreadCount() > 0) {
+                                    unreadCounts.put(conv.getConversationId(), conv.getUnreadCount());
+                                }
                             }
+                            globalChatService.syncUnreadCounts(unreadCounts);
+                            Log.d(TAG, "Synced " + unreadCounts.size() + " unread counts with GlobalChatService");
                         }
-                        globalChatService.syncUnreadCounts(unreadCounts);
-                        Log.d(TAG, "Synced " + unreadCounts.size() + " unread counts with GlobalChatService");
+                        
+                        mAdapter.notifyDataSetChanged();
+                    } else {
+                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể tải danh sách cuộc trò chuyện";
+                        Log.e(TAG, "❌ Error response: " + errorMsg);
+                        Toast.makeText(ConversationsListActivity.this, errorMsg, Toast.LENGTH_SHORT).show();
                     }
-                    
-                    mAdapter.notifyDataSetChanged();
                 } else {
                     Log.e(TAG, "❌ Failed to load conversations: " + response.code());
                     Toast.makeText(ConversationsListActivity.this, 
@@ -130,7 +137,7 @@ public class ConversationsListActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onFailure(@NonNull Call<List<Conversation>> call, @NonNull Throwable t) {
+            public void onFailure(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<List<Conversation>>> call, @NonNull Throwable t) {
                 swipeRefreshLayout.setRefreshing(false);
                 Log.e(TAG, "❌ Network error loading conversations", t);
                 Toast.makeText(ConversationsListActivity.this, 

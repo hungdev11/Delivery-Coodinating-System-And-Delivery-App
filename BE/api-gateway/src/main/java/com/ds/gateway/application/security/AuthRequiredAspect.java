@@ -23,25 +23,25 @@ public class AuthRequiredAspect {
 
     @Around("@annotation(authRequired)")
     public Object checkAuthRequired(ProceedingJoinPoint joinPoint, AuthRequired authRequired) throws Throwable {
-        log.debug("🔐 AUTH REQUIRED CHECK - Method: {}", joinPoint.getSignature().getName());
+        log.debug("[api-gateway] [AuthRequiredAspect.checkAuthRequired] AUTH REQUIRED CHECK - Method: {}", joinPoint.getSignature().getName());
         
         // Check if method is marked as public route (overrides auth requirement)
         if (hasPublicRouteAnnotation(joinPoint)) {
-            log.debug("✅ AUTH REQUIRED CHECK - Method marked as public route, skipping authentication");
+            log.debug("[api-gateway] [AuthRequiredAspect.checkAuthRequired] AUTH REQUIRED CHECK - Method marked as public route, skipping authentication");
             return joinPoint.proceed();
         }
         
         // Check authentication
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
-            log.warn("❌ AUTH REQUIRED CHECK - No authentication found");
+            log.debug("[api-gateway] [AuthRequiredAspect.checkAuthRequired] AUTH REQUIRED CHECK - No authentication found");
             throw new org.springframework.security.authentication.AuthenticationCredentialsNotFoundException("Authentication required");
         }
         
         // If no roles specified, just check authentication
         String[] requiredRoles = authRequired.value();
         if (requiredRoles.length == 0) {
-            log.debug("✅ AUTH REQUIRED CHECK - Authentication only, proceeding");
+            log.debug("[api-gateway] [AuthRequiredAspect.checkAuthRequired] AUTH REQUIRED CHECK - Authentication only, proceeding");
             return joinPoint.proceed();
         }
         
@@ -50,21 +50,21 @@ public class AuthRequiredAspect {
             Jwt jwt = (Jwt) authentication.getPrincipal();
             Set<String> userRoles = UserContext.extractRoles(jwt);
             
-            log.debug("🔐 AUTH REQUIRED CHECK - User roles: {}, Required roles: {}", userRoles, Set.of(requiredRoles));
+            log.debug("[api-gateway] [AuthRequiredAspect.checkAuthRequired] AUTH REQUIRED CHECK - User roles: {}, Required roles: {}", userRoles, Set.of(requiredRoles));
             
             // Check if user has any of the required roles
             for (String requiredRole : requiredRoles) {
                 if (userRoles.contains(requiredRole)) {
-                    log.debug("✅ AUTH REQUIRED CHECK - Role {} found, proceeding", requiredRole);
+                    log.debug("[api-gateway] [AuthRequiredAspect.checkAuthRequired] AUTH REQUIRED CHECK - Role {} found, proceeding", requiredRole);
                     return joinPoint.proceed();
                 }
             }
             
-            log.warn("❌ AUTH REQUIRED CHECK - User lacks required roles. User roles: {}, Required: {}", userRoles, Set.of(requiredRoles));
+            log.debug("[api-gateway] [AuthRequiredAspect.checkAuthRequired] AUTH REQUIRED CHECK - User lacks required roles. User roles: {}, Required: {}", userRoles, Set.of(requiredRoles));
             throw new org.springframework.security.access.AccessDeniedException("Access denied: Required role not found");
         }
         
-        log.warn("❌ AUTH REQUIRED CHECK - Invalid authentication principal type");
+        log.debug("[api-gateway] [AuthRequiredAspect.checkAuthRequired] AUTH REQUIRED CHECK - Invalid authentication principal type");
         throw new org.springframework.security.access.AccessDeniedException("Access denied: Invalid authentication");
     }
     
@@ -85,7 +85,7 @@ public class AuthRequiredAspect {
             }
             return false;
         } catch (Exception e) {
-            log.debug("Error checking for PublicRoute annotation: {}", e.getMessage());
+            log.debug("[api-gateway] [AuthRequiredAspect.hasPublicRouteAnnotation] Error checking for PublicRoute annotation: {}", e.getMessage());
             return false;
         }
     }

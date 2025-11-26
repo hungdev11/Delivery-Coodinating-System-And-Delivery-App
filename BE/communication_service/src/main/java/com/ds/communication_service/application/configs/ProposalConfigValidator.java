@@ -19,13 +19,9 @@ public class ProposalConfigValidator {
     public ApplicationRunner validateAndSeedProposalConfigs(ProposalTypeConfigRepository configRepo) {
         return args -> {
             try {
-                log.info("Validating and seeding proposal configurations...");
-                
                 for (ProposalType type : ProposalType.values()) {
                     
                     if (!configRepo.existsByType(type)) {
-                        
-                        log.warn("!!! CẢNH BÁO: Thiếu cấu hình cho ProposalType: {}. Đang tự động tạo...", type);
                         
                         ProposalTypeConfig newConfig = new ProposalTypeConfig();
                         newConfig.setType(type);
@@ -62,7 +58,7 @@ public class ProposalConfigValidator {
                                 break;
                                 
                             default:
-                                log.error("Không có cấu hình mặc định cho {}, vui lòng cập nhật ProposalConfigValidator!", type);
+                                log.error("[communication-service] [ProposalConfigValidator.validateAndSeedProposalConfigs] Không có cấu hình mặc định cho {}, vui lòng cập nhật ProposalConfigValidator!", type);
                                 newConfig.setRequiredRole("ADMIN"); 
                                 newConfig.setDescription("Cấu hình mặc định - CẦN CẬP NHẬT");
                                 newConfig.setDefaultTimeoutMinutes(5L);
@@ -71,14 +67,12 @@ public class ProposalConfigValidator {
                         }
                         
                         configRepo.save(newConfig);
-                        log.info("Đã tự động tạo cấu hình mặc định cho {}.", type);
                         
                     } 
                 }
                 
-                log.info("Proposal configurations validation/seeding successful.");
             } catch (Exception e) {
-                log.error("❌ Error during proposal config validation/seeding: {}", e.getMessage(), e);
+                log.error("[communication-service] [ProposalConfigValidator.validateAndSeedProposalConfigs] Error during proposal config validation/seeding", e);
                 // Don't throw - allow application to start even if seeding fails
             }
         };

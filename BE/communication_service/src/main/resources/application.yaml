@@ -1,91 +1,96 @@
 server:
-  port: 21511
+    port: 21511
 
 spring:
-  application:
-    name: communication_service
-  datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${COMMUNICATION_DB_NAME:ds_communication_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:root}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    # HikariCP Connection Pool Configuration
-    hikari:
-      maximum-pool-size: 20
-      minimum-idle: 5
-      connection-timeout: 30000
-      idle-timeout: 600000
-      max-lifetime: 1800000
-      leak-detection-threshold: 60000
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
-        format_sql: true
-        jdbc:
-          time_zone: Asia/Ho_Chi_Minh
-  
-  # Kafka Configuration
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    consumer:
-      group-id: communication-service-group
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-      properties:
-        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
-        spring.json.trusted.packages: "com.ds.communication_service.common.dto,com.ds.communication_service.common.dto.*"
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      acks: all
-      retries: 3
-      properties:
-        enable.idempotence: true
-        max.in.flight.requests.per.connection: 5
-        compression.type: gzip  # Use gzip instead of snappy (which requires native libraries)
+    application:
+        name: communication_service
+    datasource:
+        url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${COMMUNICATION_DB_NAME:ds_communication_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+        username: ${DB_USERNAME:root}
+        password: ${DB_PASSWORD:root}
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        # HikariCP Connection Pool Configuration
+        hikari:
+            maximum-pool-size: 20
+            minimum-idle: 5
+            connection-timeout: 30000
+            idle-timeout: 600000
+            max-lifetime: 1800000
+            leak-detection-threshold: 60000
+    jpa:
+        hibernate:
+            ddl-auto: update
+        show-sql: false
+        properties:
+            hibernate:
+                dialect: org.hibernate.dialect.MySQLDialect
+                format_sql: true
+                jdbc:
+                    time_zone: Asia/Ho_Chi_Minh
+
+    # Kafka Configuration
+    kafka:
+        bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+        consumer:
+            group-id: communication-service-group
+            auto-offset-reset: earliest
+            enable-auto-commit: false
+            key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+            value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+            properties:
+                spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+                spring.json.trusted.packages: 'com.ds.communication_service.common.dto,com.ds.communication_service.common.dto.*'
+        producer:
+            key-serializer: org.apache.kafka.common.serialization.StringSerializer
+            value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+            acks: all
+            retries: 3
+            properties:
+                enable.idempotence: true
+                max.in.flight.requests.per.connection: 5
+                compression.type: gzip # Use gzip instead of snappy (which requires native libraries)
 
 # Snapshot Initialization Configuration
 snapshot:
-  initialization:
-    enabled: ${SNAPSHOT_INIT_ENABLED:true}
+    initialization:
+        enabled: ${SNAPSHOT_INIT_ENABLED:true}
 
 # User Service Configuration (for snapshot initialization)
 user:
-  service:
-    url: ${USER_SERVICE_URL:http://localhost:21501}
-    properties:
-      session.timeout.ms: 30000
-      heartbeat.interval.ms: 10000
+    service:
+        url: ${USER_SERVICE_URL:http://localhost:21501}
+        properties:
+            session.timeout.ms: 30000
+            heartbeat.interval.ms: 10000
 
 logging:
-  level:
-    root: ERROR
-    com.ds.communication_service: INFO
-    org.springframework.messaging: DEBUG
-    org.springframework.web.socket: DEBUG
-    org.springframework: ERROR
-    org.springframework.web: ERROR
-    org.springframework.boot: ERROR
-    org.hibernate: ERROR
-    com.zaxxer.hikari: ERROR
+    pattern:
+        console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n'
+    level:
+        root: ERROR
+        com.ds.communication_service: DEBUG
+        org.springframework: ERROR
+        org.springframework.web: ERROR
+        org.springframework.boot: ERROR
+        org.springframework.security: ERROR
+        org.springframework.messaging: ERROR
+        org.springframework.web.socket: ERROR
+        org.hibernate: ERROR
+        org.hibernate.SQL: ERROR
+        com.zaxxer.hikari: ERROR
+        org.apache.kafka: ERROR
 
 # Actuator Configuration
 management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-      base-path: /actuator
-  endpoint:
-    health:
-      show-details: always
+    endpoints:
+        web:
+            exposure:
+                include: health,info
+            base-path: /actuator
+    endpoint:
+        health:
+            show-details: always
 
 services:
     session:
-      base-url: ${SESSION_SERVICE_URL:http://localhost:21505}
+        base-url: ${SESSION_SERVICE_URL:http://localhost:21505}

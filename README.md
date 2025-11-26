@@ -35,13 +35,24 @@ cd ../.. # Back to root directory
 docker-compose up -d
 ```
 
+**Note:** In normal mode, only the Nginx port (`8080`) is exposed. All service ports are only accessible via Docker network or through Nginx reverse proxy.
+
 ### Debug Mode
 
-To enable remote debugging for Spring Boot services:
+To enable remote debugging and expose service ports:
 
 ```bash
 docker-compose -f docker-compose.yml -f docker-compose.debug.yml up -d
 ```
+
+**Service Ports (exposed in debug mode):**
+- Settings Service: `21502`
+- User Service: `21501`
+- Zone Service: `21503`
+- Parcel Service: `21506`
+- Session Service: `21505`
+- Communication Service: `21511`
+- API Gateway: `21500`
 
 **Debug Ports:**
 - Settings Service: `5005`
