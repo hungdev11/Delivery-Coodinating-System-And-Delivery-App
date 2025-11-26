@@ -2,10 +2,11 @@
 # This Dockerfile only builds the application and outputs dist files
 # The built files are served by nginx-proxy in docker-compose.yml
 
+FROM node:20-alpine AS builder
+
+# Label for GitHub Container Registry auto-linking
 ARG GITHUB_REPOSITORY
 LABEL org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}
-
-FROM node:20-alpine AS builder
 
 WORKDIR /app
 
