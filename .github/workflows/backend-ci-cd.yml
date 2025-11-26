@@ -25,10 +25,10 @@ jobs:
       - name: Check DEPLOY_TOKEN
         run: |
           if [ -z "${{ secrets.DEPLOY_TOKEN }}" ]; then
-            echo "❌ DEPLOY_TOKEN not configured"
+            echo "ERROR: DEPLOY_TOKEN not configured"
             exit 1
           fi
-          echo "✅ DEPLOY_TOKEN configured"
+          echo "DEPLOY_TOKEN: configured"
 
   # Job 1: Detect changed services
   detect-changes:
@@ -56,9 +56,10 @@ jobs:
         run: |
           COMMIT_MSG="${{ github.event.head_commit.message }}"
           if echo "$COMMIT_MSG" | grep -qi '\[force-build\]'; then
-            echo "🔨 Force build detected in commit message"
+            echo "force-build: true"
             echo "force-build=true" >> $GITHUB_OUTPUT
           else
+            echo "force-build: false"
             echo "force-build=false" >> $GITHUB_OUTPUT
           fi
 
@@ -87,17 +88,16 @@ jobs:
         id: final
         run: |
           FORCE="${{ steps.check-force.outputs.force-build }}"
+          
           if [ "$FORCE" = "true" ]; then
-            echo "🔨 Force build: marking all services as changed"
-            echo "api-gateway=true" >> $GITHUB_OUTPUT
-            echo "user-service=true" >> $GITHUB_OUTPUT
-            echo "settings-service=true" >> $GITHUB_OUTPUT
-            echo "zone-service=true" >> $GITHUB_OUTPUT
-            echo "parcel-service=true" >> $GITHUB_OUTPUT
-            echo "session-service=true" >> $GITHUB_OUTPUT
-            echo "communication-service=true" >> $GITHUB_OUTPUT
-            echo "any-service=true" >> $GITHUB_OUTPUT
+            echo "mode: force-build (all services marked as changed)"
+            echo ""
+            for svc in api-gateway user-service settings-service zone-service parcel-service session-service communication-service any-service; do
+              echo "${svc}=true" >> $GITHUB_OUTPUT
+            done
           else
+            echo "mode: change-detection"
+            echo ""
             echo "api-gateway=${{ steps.changes.outputs.api-gateway }}" >> $GITHUB_OUTPUT
             echo "user-service=${{ steps.changes.outputs.user-service }}" >> $GITHUB_OUTPUT
             echo "settings-service=${{ steps.changes.outputs.settings-service }}" >> $GITHUB_OUTPUT
@@ -111,7 +111,6 @@ jobs:
       - name: Generate service matrix payload
         id: service-matrix
         env:
-          FORCE_BUILD: ${{ steps.check-force.outputs.force-build }}
           API_GATEWAY_CHANGED: ${{ steps.final.outputs.api-gateway }}
           USER_SERVICE_CHANGED: ${{ steps.final.outputs.user-service }}
           SETTINGS_SERVICE_CHANGED: ${{ steps.final.outputs.settings-service }}
@@ -121,8 +120,7 @@ jobs:
           COMMUNICATION_SERVICE_CHANGED: ${{ steps.final.outputs.communication-service }}
         run: |
           python - <<'PY'
-          import json
-          import os
+          import json, os
 
           mapping = [
               ("api-gateway", "BE/api-gateway", "API_GATEWAY_CHANGED"),
@@ -141,9 +139,11 @@ jobs:
                   services.append({"name": name, "path": path})
                   service_names.append(name)
 
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
               fh.write(f"services={json.dumps(services)}\n")
               fh.write(f"service-names={' '.join(service_names)}\n")
+          
+          print(f"Changed services: {', '.join(service_names) if service_names else 'none'}")
           PY
 
   # Job 2: Test API Gateway
@@ -162,11 +162,11 @@ jobs:
           cache: maven
           cache-dependency-path: BE/api-gateway/pom.xml
 
-      - name: Run API Gateway Tests
+      - name: Run tests
         working-directory: BE/api-gateway
         run: |
           chmod +x mvnw
-          ./mvnw -B -ntp clean test
+          ./mvnw -B -ntp -q clean test
 
   # Job 3: Test User Service
   test-user-service:
@@ -184,11 +184,11 @@ jobs:
           cache: maven
           cache-dependency-path: BE/User_service/pom.xml
 
-      - name: Run User Service Tests
+      - name: Run tests
         working-directory: BE/User_service
         run: |
           chmod +x mvnw
-          ./mvnw -B -ntp clean test
+          ./mvnw -B -ntp -q clean test
 
   # Job 4: Test Settings Service
   test-settings-service:
@@ -206,11 +206,11 @@ jobs:
           cache: maven
           cache-dependency-path: BE/Settings_service/pom.xml
 
-      - name: Run Settings Service Tests
+      - name: Run tests
         working-directory: BE/Settings_service
         run: |
           chmod +x mvnw
-          ./mvnw -B -ntp clean test
+          ./mvnw -B -ntp -q clean test
 
   # Job 5: Test Zone Service
   test-zone-service:
@@ -227,14 +227,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: BE/zone_service/package-lock.json
 
-      - name: Install dependencies
-        working-directory: BE/zone_service
-        run: npm ci
-
-      - name: Run Zone Service Tests
+      - name: Install and build
         working-directory: BE/zone_service
         run: |
-          npm run build
+          npm ci --silent
+          npm run build --silent
 
   # Job 6: Test Parcel Service
   test-parcel-service:
@@ -252,11 +249,11 @@ jobs:
           cache: maven
           cache-dependency-path: BE/parcel-service/pom.xml
 
-      - name: Run Parcel Service Tests
+      - name: Run tests
         working-directory: BE/parcel-service
         run: |
-          chmod +x mvnw || echo "mvnw not found, using system mvn"
-          ./mvnw -B -ntp clean test || mvn -B -ntp clean test
+          chmod +x mvnw 2>/dev/null || true
+          ./mvnw -B -ntp -q clean test 2>/dev/null || mvn -B -ntp -q clean test
 
   # Job 7: Test Session Service
   test-session-service:
@@ -274,11 +271,11 @@ jobs:
           cache: maven
           cache-dependency-path: BE/session-service/pom.xml
 
-      - name: Run Session Service Tests
+      - name: Run tests
         working-directory: BE/session-service
         run: |
-          chmod +x mvnw || echo "mvnw not found, using system mvn"
-          ./mvnw -B -ntp clean test || mvn -B -ntp clean test
+          chmod +x mvnw 2>/dev/null || true
+          ./mvnw -B -ntp -q clean test 2>/dev/null || mvn -B -ntp -q clean test
 
   # Job 8: Test Communication Service
   test-communication-service:
@@ -296,11 +293,11 @@ jobs:
           cache: maven
           cache-dependency-path: BE/communication_service/pom.xml
 
-      - name: Run Communication Service Tests
+      - name: Run tests
         working-directory: BE/communication_service
         run: |
-          chmod +x mvnw || echo "mvnw not found, using system mvn"
-          ./mvnw -B -ntp clean test || mvn -B -ntp clean test
+          chmod +x mvnw 2>/dev/null || true
+          ./mvnw -B -ntp -q clean test 2>/dev/null || mvn -B -ntp -q clean test
 
   # Job 9: Integration Tests (Non-blocking)
   integration-tests:
@@ -317,27 +314,23 @@ jobs:
       - name: Start services with Docker Compose
         run: |
           docker-compose -f docker-compose.test.yml up -d --build
-          echo "Waiting for services to be healthy..."
-          sleep 60  # Wait for services to start
+          sleep 60
 
       - name: Check service health
         run: |
-          echo "Checking service health..."
-          # Check API Gateway
-          curl -f http://localhost:21500/actuator/health || echo "⚠️ API Gateway health check failed"
-          # Check User Service
-          curl -f http://localhost:21501/actuator/health || echo "⚠️ User Service health check failed"
-          # Check Settings Service
-          curl -f http://localhost:21502/actuator/health || echo "⚠️ Settings Service health check failed"
-          echo "✅ Health checks completed (warnings are non-blocking)"
+          echo "Health checks:"
+          echo ""
+          curl -sf http://localhost:21500/actuator/health && echo "  api-gateway: ok" || echo "  api-gateway: failed"
+          curl -sf http://localhost:21501/actuator/health && echo "  user-service: ok" || echo "  user-service: failed"
+          curl -sf http://localhost:21502/actuator/health && echo "  settings-service: ok" || echo "  settings-service: failed"
 
       - name: Run Integration Tests
         continue-on-error: true
         run: |
-          echo "Running integration tests..."
-          # Add your integration test commands here
-          # Example: npm test, mvn test, curl endpoints, etc.
-          echo "ℹ️ Integration tests completed (non-blocking)"
+          echo "Integration tests: running"
+          echo ""
+          # Add integration test commands here
+          echo "Integration tests: completed (non-blocking)"
 
       - name: Show service logs on failure
         if: failure()
@@ -399,30 +392,36 @@ jobs:
         working-directory: ${{ matrix.service.path }}
         run: |
           if [ -f "pom.xml" ]; then
-            # Extract Maven package info
             GROUP_ID=$(grep -oP '<groupId>\K[^<]+' pom.xml | head -1 || echo "unknown")
             ARTIFACT_ID=$(grep -oP '<artifactId>\K[^<]+' pom.xml | head -1 || echo "unknown")
             VERSION=$(grep -oP '<version>\K[^<]+' pom.xml | head -1 || echo "unknown")
             DESCRIPTION=$(grep -oP '<description>\K[^<]+' pom.xml | head -1 || echo "Delivery System Service")
-            echo "package-type=maven" >> $GITHUB_OUTPUT
-            echo "package-group-id=$GROUP_ID" >> $GITHUB_OUTPUT
-            echo "package-artifact-id=$ARTIFACT_ID" >> $GITHUB_OUTPUT
-            echo "package-version=$VERSION" >> $GITHUB_OUTPUT
-            echo "package-description=$DESCRIPTION" >> $GITHUB_OUTPUT
+            {
+              echo "package-type=maven"
+              echo "package-group-id=$GROUP_ID"
+              echo "package-artifact-id=$ARTIFACT_ID"
+              echo "package-version=$VERSION"
+              echo "package-description=$DESCRIPTION"
+            } >> $GITHUB_OUTPUT
           elif [ -f "package.json" ]; then
-            # Extract npm package info
             NAME=$(node -p "require('./package.json').name || 'unknown'")
             VERSION=$(node -p "require('./package.json').version || 'unknown'")
             DESCRIPTION=$(node -p "require('./package.json').description || 'Delivery System Service'")
-            echo "package-type=npm" >> $GITHUB_OUTPUT
-            echo "package-name=$NAME" >> $GITHUB_OUTPUT
-            echo "package-version=$VERSION" >> $GITHUB_OUTPUT
-            echo "package-description=$DESCRIPTION" >> $GITHUB_OUTPUT
+            {
+              echo "package-type=npm"
+              echo "package-name=$NAME"
+              echo "package-version=$VERSION"
+              echo "package-description=$DESCRIPTION"
+            } >> $GITHUB_OUTPUT
           else
-            echo "package-type=unknown" >> $GITHUB_OUTPUT
-            echo "package-version=unknown" >> $GITHUB_OUTPUT
-            echo "package-description=Delivery System Service" >> $GITHUB_OUTPUT
+            {
+              echo "package-type=unknown"
+              echo "package-version=unknown"
+              echo "package-description=Delivery System Service"
+            } >> $GITHUB_OUTPUT
           fi
+          
+          echo "Package info extracted"
 
       - name: Extract metadata
         id: meta
@@ -434,11 +433,15 @@ jobs:
             type=ref,event=pr
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
+          annotations: |
+            org.opencontainers.image.title=${{ matrix.service.name }}
+            org.opencontainers.image.description=${{ steps.package-info.outputs.package-description }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
           labels: |
             org.opencontainers.image.title=${{ matrix.service.name }}
             org.opencontainers.image.description=${{ steps.package-info.outputs.package-description }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.url=${{ github.repositoryUrl }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
             org.opencontainers.image.vendor=${{ env.REPOSITORY_OWNER }}
@@ -466,47 +469,43 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           build-args: |
             GITHUB_REPOSITORY=${{ github.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Link package to repository and set visibility
+      - name: Link package to repository
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
           PACKAGE_NAME: ${{ env.IMAGE_NAME_PREFIX }}-${{ matrix.service.name }}
           OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
         run: |
-          # Package names in ghcr.io are lowercase
           PACKAGE_NAME_LOWER=$(echo "$PACKAGE_NAME" | tr '[:upper:]' '[:lower:]')
           OWNER_LOWER=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
           
-          echo "🔗 Linking package $PACKAGE_NAME_LOWER to repository..."
+          echo "Package: ghcr.io/${OWNER_LOWER}/${PACKAGE_NAME_LOWER}"
           
-          # Get repository ID
           REPO_ID=$(gh api "/repos/${OWNER}/${REPO_NAME}" --jq '.id')
-          echo "Repository ID: $REPO_ID"
+          sleep 5
           
-          # Wait for package to be available (ghcr.io may need time to propagate)
-          echo "⏳ Waiting for package to be available..."
-          sleep 10
-          
-          # Try to find package and link to repository
-          # Use /users/{owner}/packages for private packages (requires PAT with read:packages, write:packages)
-          if gh api "/users/${OWNER_LOWER}/packages/container/${PACKAGE_NAME_LOWER}" > /dev/null 2>&1; then
-            echo "📦 Package found"
-            gh api \
-              --method PUT \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "/users/${OWNER_LOWER}/packages/container/${PACKAGE_NAME_LOWER}/repository" \
-              -F repository_id="${REPO_ID}" \
-              && echo "✅ Package linked to repository" \
-              || echo "⚠️ Could not link package (may already be linked or need manual setup)"
+          # Try user endpoint first, then users endpoint for private packages
+          if gh api --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/user/packages/container/${PACKAGE_NAME_LOWER}/repository" \
+            -f repository_id="${REPO_ID}" 2>/dev/null; then
+            echo "Status: linked"
+          elif gh api --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/users/${OWNER_LOWER}/packages/container/${PACKAGE_NAME_LOWER}/repository" \
+            -f repository_id="${REPO_ID}" 2>/dev/null; then
+            echo "Status: linked"
           else
-            echo "📦 Package not found via API, checking if already linked via LABEL..."
-            echo "ℹ️ The package should auto-link via org.opencontainers.image.source label"
+            echo "Status: already linked or manual setup needed"
           fi
 
       - name: Generate artifact attestation
@@ -526,32 +525,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Summarize services scheduled for deployment
+      - name: Validate deployment
         env:
           CHANGED_SERVICES: ${{ needs.detect-changes.outputs.changed-service-names }}
-        run: |
-          if [ -z "$CHANGED_SERVICES" ]; then
-            echo "No services selected for deployment."
-          else
-            echo "Services selected for deployment: $CHANGED_SERVICES"
-          fi
-
-      - name: Validate deployment secrets
-        env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
+          echo "Services to deploy: ${CHANGED_SERVICES:-none}"
+          echo ""
+          
           missing=0
           for var in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
             if [ -z "${!var}" ]; then
-              echo "::error::Missing required secret $var"
+              echo "ERROR: Missing secret $var"
               missing=1
             fi
           done
+          
           if [ $missing -eq 1 ]; then
             exit 1
           fi
+          echo "Deployment secrets: configured"
 
       - name: Deploy updated services via aaPanel host
         uses: appleboy/ssh-action@v1.0.3
@@ -566,24 +561,27 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
+            
             if [ -z "$CHANGED_SERVICES" ]; then
-              echo "No services changed; skipping remote deploy."
+              echo "No services changed, skipping deploy"
               exit 0
             fi
+            
             STACK_PATH="${AAPANEL_STACK_PATH:-/www/server/panel/vhost/docker/dss}"
             if [ ! -d "$STACK_PATH" ]; then
-              echo "Stack path $STACK_PATH does not exist on remote host."
+              echo "ERROR: Stack path not found: $STACK_PATH"
               exit 1
             fi
             cd "$STACK_PATH"
             
-            echo "🔄 Pulling all images (using :latest tags)..."
-            docker compose pull
+            echo "Pulling images..."
+            docker compose pull --quiet
             
-            echo "🚀 Restarting changed services: $CHANGED_SERVICES"
+            echo "Restarting: $CHANGED_SERVICES"
             docker compose up -d --no-deps $CHANGED_SERVICES
             
-            echo "🧹 Cleaning up old images..."
-            docker image prune -f
+            echo "Cleaning up old images..."
+            docker image prune -f > /dev/null
             
-            echo "✅ Deployment completed successfully."
+            echo ""
+            echo "Deployment: completed"
