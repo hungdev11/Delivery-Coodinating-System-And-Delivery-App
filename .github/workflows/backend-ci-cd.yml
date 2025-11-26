@@ -25,10 +25,10 @@ jobs:
       - name: Check DEPLOY_TOKEN
         run: |
           if [ -z "${{ secrets.DEPLOY_TOKEN }}" ]; then
-            echo "❌ DEPLOY_TOKEN not configured"
+            echo "DEPLOY_TOKEN not configured"
             exit 1
           fi
-          echo "✅ DEPLOY_TOKEN configured"
+          echo "DEPLOY_TOKEN configured"
 
   # Job 1: Detect changed services
   detect-changes:
