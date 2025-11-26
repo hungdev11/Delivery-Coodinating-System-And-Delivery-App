@@ -1,9 +1,10 @@
 package com.ds.deliveryapp.clients;
 
-import com.ds.deliveryapp.clients.req.CreateProposalDTO; // <-- IMPORT MỚI
+import com.ds.deliveryapp.clients.req.CreateProposalDTO;
 import com.ds.deliveryapp.clients.req.ProposalResponseRequest;
+import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.Conversation;
-import com.ds.deliveryapp.clients.res.InteractiveProposal; // <-- IMPORT MỚI
+import com.ds.deliveryapp.clients.res.InteractiveProposal;
 import com.ds.deliveryapp.clients.res.Message;
 import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.clients.res.ProposalTypeConfig;
@@ -21,7 +22,7 @@ import retrofit2.http.Query;
 public interface ChatClient {
 
     @GET("conversations/{conversationId}/messages")
-    Call<PageResponse<Message>> getChatHistory(
+    Call<BaseResponse<PageResponse<Message>>> getChatHistory(
             @Path("conversationId") String conversationId,
             @Query("userId") String userId,
             @Query("page") int page,
@@ -29,7 +30,7 @@ public interface ChatClient {
     );
 
     @GET("conversations/find-by-users")
-    Call<Conversation> getConversationBy2Users(
+    Call<BaseResponse<Conversation>> getConversationBy2Users(
             @Query("user1") String user1,
             @Query("user2") String user2
     );
@@ -38,16 +39,16 @@ public interface ChatClient {
      * Gửi yêu cầu tạo một proposal mới
      * (POST /api/v1/proposals)
      */
-    @POST("proposals") // Giả sử Retrofit Base URL đã có /api/v1
-    Call<InteractiveProposal> createProposal(
+    @POST("proposals")
+    Call<BaseResponse<InteractiveProposal>> createProposal(
             @Body CreateProposalDTO payload
     );
 
     @POST("proposals/{proposalId}/respond")
-    Call<InteractiveProposal> respondToProposal(
+    Call<BaseResponse<InteractiveProposal>> respondToProposal(
             @Path("proposalId") UUID proposalId,
             @Query("userId") String userId,
-            @Body ProposalResponseRequest payload // Gửi { "resultData": "..." }
+            @Body ProposalResponseRequest payload
     );
 
     /**
@@ -56,7 +57,16 @@ public interface ChatClient {
      * (GET /api/v1/proposals/available-configs)
      */
     @GET("proposals/available-configs")
-    Call<List<ProposalTypeConfig>> getAvailableConfigs(
+    Call<BaseResponse<List<ProposalTypeConfig>>> getAvailableConfigs(
             @Query("roles") List<String> roles
+    );
+
+    /**
+     * Lấy danh sách conversations của user
+     * (GET /api/v1/conversations)
+     */
+    @GET("conversations")
+    Call<BaseResponse<List<Conversation>>> getConversations(
+            @Query("userId") String userId
     );
 }

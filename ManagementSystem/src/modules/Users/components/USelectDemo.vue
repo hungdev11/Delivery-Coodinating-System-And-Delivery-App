@@ -1,12 +1,12 @@
 <template>
   <div class="p-4 space-y-4">
     <h2 class="text-xl font-bold">USelect Demo</h2>
-    
+
     <div>
       <label class="block text-sm font-medium mb-2">Simple Select:</label>
-      <USelect 
-        v-model="selectedValue" 
-        :options="options" 
+      <USelect
+        v-model="selectedValue"
+        :items="options"
         placeholder="Select an option"
       />
       <p class="text-sm text-gray-600 mt-2">Selected: {{ selectedValue }}</p>

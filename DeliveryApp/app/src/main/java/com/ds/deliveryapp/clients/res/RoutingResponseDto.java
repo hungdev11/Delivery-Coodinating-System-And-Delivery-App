@@ -1,7 +1,6 @@
 package com.ds.deliveryapp.clients.res;
 
 import com.ds.deliveryapp.clients.req.RoutingRequestDto;
-
 import lombok.*;
 import java.util.List;
 import java.util.Map;
@@ -10,7 +9,11 @@ import java.util.Map;
  * Routing Response Models
  * DTOs for routing module outputs
  */
+@Data
 public class RoutingResponseDto {
+
+    // JSON gốc có dạng { "result": { ... } }
+    private RouteResponseDto result;
 
     @Data
     @NoArgsConstructor
@@ -74,7 +77,7 @@ public class RoutingResponseDto {
     public static class RouteDto {
         private double distance;
         private double duration;
-        private String geometry;
+        private String geometry; // JSON string
         private List<RouteLegDto> legs;
         private TrafficSummaryDto trafficSummary;
     }

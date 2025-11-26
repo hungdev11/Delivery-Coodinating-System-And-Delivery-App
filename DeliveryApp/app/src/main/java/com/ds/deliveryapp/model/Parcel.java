@@ -21,7 +21,9 @@ public class Parcel implements Serializable {
     private String id;
     private String code;
     private String senderId;
+    private String senderName; // Added: sender name from UserSnapshot
     private String receiverId;
+    private String receiverName; // Added: receiver name from UserSnapshot
     private String receiverPhoneNumber;
     private DeliveryType deliveryType;
     private String receiveFrom;

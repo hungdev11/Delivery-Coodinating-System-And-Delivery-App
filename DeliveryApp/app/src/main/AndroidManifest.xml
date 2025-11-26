@@ -18,6 +18,7 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
     <application
+        android:name=".DeliveryApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -37,8 +38,13 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".ConversationsListActivity"
+            android:exported="false"
+            android:label="Messages" />
+        <activity
             android:name=".ChatActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".customer.MainActivity"
             android:exported="false" />
@@ -53,6 +59,12 @@
             android:exported="false" />
         <activity
             android:name=".ParcelDetailActivity"
+            android:exported="false" />
+        <activity
+            android:name=".SessionQRDisplayActivity"
+            android:exported="false" />
+        <activity
+            android:name=".SessionQRScanActivity"
             android:exported="false" />
         <provider
             android:name="androidx.core.content.FileProvider"

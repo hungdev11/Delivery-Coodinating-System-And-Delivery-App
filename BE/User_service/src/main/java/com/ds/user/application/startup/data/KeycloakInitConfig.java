@@ -152,6 +152,8 @@ public class KeycloakInitConfig {
         private boolean emailVerified = true;
         private List<String> realmRoles = List.of();
         private Map<String, List<String>> clientRoles = Map.of();
+        private DeliveryManConfig deliveryMan;
+        private AddressConfig address;
         
         public void setUsername(String username) {
             this.username = username;
@@ -187,6 +189,57 @@ public class KeycloakInitConfig {
         
         public void setClientRoles(Map<String, List<String>> clientRoles) {
             this.clientRoles = clientRoles;
+        }
+        
+        public void setDeliveryMan(DeliveryManConfig deliveryMan) {
+            this.deliveryMan = deliveryMan;
+        }
+        
+        public void setAddress(AddressConfig address) {
+            this.address = address;
+        }
+    }
+    
+    @Getter
+    public static class AddressConfig {
+        private String name;
+        private String addressText;
+        private Double lat;
+        private Double lon;
+        
+        public void setName(String name) {
+            this.name = name;
+        }
+        
+        public void setAddressText(String addressText) {
+            this.addressText = addressText;
+        }
+        
+        public void setLat(Double lat) {
+            this.lat = lat;
+        }
+        
+        public void setLon(Double lon) {
+            this.lon = lon;
+        }
+    }
+    
+    @Getter
+    public static class DeliveryManConfig {
+        private boolean enabled = true;
+        private String vehicleType = "MOTORBIKE";
+        private Double capacityKg = 120.0;
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public void setVehicleType(String vehicleType) {
+            this.vehicleType = vehicleType;
+        }
+
+        public void setCapacityKg(Double capacityKg) {
+            this.capacityKg = capacityKg;
         }
     }
     

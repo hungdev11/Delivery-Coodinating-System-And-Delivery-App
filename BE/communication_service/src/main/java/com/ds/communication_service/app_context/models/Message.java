@@ -4,10 +4,10 @@ import java.sql.Types;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 
 import com.ds.communication_service.common.enums.ContentType;
+import com.ds.communication_service.common.enums.MessageStatus;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 
 import jakarta.persistence.Column;
@@ -46,15 +46,24 @@ public class Message {
     private String senderId;
 
     @Enumerated(EnumType.STRING) 
-    @Column(name = "content_type", nullable = false)
+    @Column(name = "content_type", nullable = false, length = 50)
     private ContentType type;
 
     @Column(name = "content", columnDefinition = "TEXT") 
     private String content;
 
-    @CreationTimestamp
     @Column(name = "sent_at", nullable = false, updatable = false)
     private LocalDateTime sentAt;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private MessageStatus status = MessageStatus.SENT;
+    
+    @Column(name = "delivered_at")
+    private LocalDateTime deliveredAt;
+    
+    @Column(name = "read_at")
+    private LocalDateTime readAt;
     
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "proposal_id", nullable = true, unique = true) 

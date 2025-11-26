@@ -35,8 +35,28 @@ export class AddressService {
    * - Auto-finds nearest road segment if not provided
    * - Projects address onto segment curve
    * - No PostGIS required
+   * - Checks for existing address with same (lat, lon, name) to avoid unique constraint violation
    */
   async createAddress(dto: CreateAddressDto): Promise<AddressDto> {
+    // Check if address with same (lat, lon, name) already exists
+    // This prevents unique constraint violations
+    const existing = await this.prisma.addresses.findFirst({
+      where: {
+        lat: dto.lat,
+        lon: dto.lon,
+        name: dto.name
+      },
+      include: {
+        road_segment: true,
+        zones: true
+      }
+    })
+
+    if (existing) {
+      // Address with same (lat, lon, name) already exists, return it
+      return this.toDto(existing)
+    }
+
     // Calculate geohash for fast proximity searches (precision 7 = ~76m)
     const addressGeohash = geohash.encode(dto.lat, dto.lon, 7)
 
@@ -93,31 +113,57 @@ export class AddressService {
     } catch {}
 
     // Create address using Prisma
-    const created = await this.prisma.addresses.create({
-      data: {
-        name: dto.name,
-        name_en: dto.nameEn || null,
-        address_text: enrichedAddressText || dto.addressText || null,
-        lat: dto.lat,
-        lon: dto.lon,
-        geohash: addressGeohash,
-        segment_id: segmentId || null,
-        segment_position: segmentPosition || null,
-        distance_to_segment: distanceToSegment || null,
-        projected_lat: projectedLat || null,
-        projected_lon: projectedLon || null,
-        zone_id: dto.zoneId || null,
-        ward_name: enrichedWard || dto.wardName || null,
-        district_name: enrichedDistrict || dto.districtName || null,
-        address_type: dto.addressType || 'GENERAL'
-      },
-      include: {
-        road_segment: true,
-        zones: true
-      }
-    })
+    // Handle unique constraint errors gracefully (race condition)
+    try {
+      const created = await this.prisma.addresses.create({
+        data: {
+          name: dto.name,
+          name_en: dto.nameEn || null,
+          address_text: enrichedAddressText || dto.addressText || null,
+          lat: dto.lat,
+          lon: dto.lon,
+          geohash: addressGeohash,
+          segment_id: segmentId || null,
+          segment_position: segmentPosition || null,
+          distance_to_segment: distanceToSegment || null,
+          projected_lat: projectedLat || null,
+          projected_lon: projectedLon || null,
+          zone_id: dto.zoneId || null,
+          ward_name: enrichedWard || dto.wardName || null,
+          district_name: enrichedDistrict || dto.districtName || null,
+          address_type: dto.addressType || 'GENERAL'
+        },
+        include: {
+          road_segment: true,
+          zones: true
+        }
+      })
 
-    return this.toDto(created)
+      return this.toDto(created)
+    } catch (error: any) {
+      // Handle unique constraint violation (race condition: another request created it between check and create)
+      if (error.code === 'P2002' || error.message?.includes('Unique constraint')) {
+        // Retry: find existing address
+        const retryExisting = await this.prisma.addresses.findFirst({
+          where: {
+            lat: dto.lat,
+            lon: dto.lon,
+            name: dto.name
+          },
+          include: {
+            road_segment: true,
+            zones: true
+          }
+        })
+
+        if (retryExisting) {
+          return this.toDto(retryExisting)
+        }
+      }
+
+      // Re-throw if it's not a unique constraint error
+      throw error
+    }
   }
 
   /**
@@ -419,6 +465,58 @@ export class AddressService {
 
     const bearing = Math.atan2(y, x) * 180 / Math.PI
     return (bearing + 360) % 360 // Normalize to 0-360
+  }
+
+  /**
+   * Get or create address by coordinates
+   * - First checks for exact match on (lat, lon, name) to respect unique constraint
+   * - If no exact match, finds nearest address within threshold (default 50m)
+   * - If found within threshold, returns existing address
+   * - If not found, creates new address
+   */
+  async getOrCreateAddress(dto: CreateAddressDto, thresholdMeters: number = 50): Promise<AddressDto> {
+    // First, check for exact match on (lat, lon, name) to respect unique constraint
+    const exactMatch = await this.prisma.addresses.findFirst({
+      where: {
+        lat: dto.lat,
+        lon: dto.lon,
+        name: dto.name
+      },
+      include: {
+        road_segment: true,
+        zones: true
+      }
+    })
+
+    if (exactMatch) {
+      // Exact match found, return it
+      return this.toDto(exactMatch)
+    }
+
+    // No exact match, try to find nearest address within threshold
+    const nearest = await this.findNearestAddresses({
+      lat: dto.lat,
+      lon: dto.lon,
+      limit: 1,
+      maxDistance: thresholdMeters,
+    })
+
+    // If found within threshold, return existing (but only if name matches or no name provided)
+    // Note: We prefer exact matches, so we only return nearest if it's very close and name is similar
+    if (nearest.length > 0 && nearest[0] && nearest[0].distance <= thresholdMeters) {
+      const existing = await this.getAddress(nearest[0].id)
+      if (existing) {
+        // If names are similar (case-insensitive), return existing
+        // Otherwise, create new address with the new name (respecting unique constraint)
+        if (!dto.name || existing.name.toLowerCase() === dto.name.toLowerCase()) {
+          return existing
+        }
+      }
+    }
+
+    // Not found within threshold or name doesn't match, create new
+    // createAddress will handle unique constraint check internally
+    return await this.createAddress(dto)
   }
 
   /**

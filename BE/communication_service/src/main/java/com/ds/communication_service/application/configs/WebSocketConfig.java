@@ -12,44 +12,58 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import lombok.extern.slf4j.Slf4j;
+
 @Configuration
 @EnableWebSocketMessageBroker
 @EnableScheduling
+@Slf4j
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Autowired
     private WebSocketAuthInterceptor authInterceptor;
 
-    @Bean(name = "webSocketTaskScheduler") 
+    @Bean(name = "webSocketTaskScheduler")
     public TaskScheduler webSocketTaskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(1);
         scheduler.setThreadNamePrefix("ws-heartbeat-scheduler-");
         scheduler.setDaemon(true);
+        scheduler.initialize();
         return scheduler;
     }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        
+
+        // Configure heartbeat: [serverSendInterval, serverReceiveInterval] in
+        // milliseconds
+        // Server sends heartbeat every 10 seconds, expects client heartbeat every 10
+        // seconds
+        long[] heartbeat = new long[] { 10000, 10000 };
+
         config.enableSimpleBroker("/queue", "/topic")
-            
-            .setTaskScheduler(webSocketTaskScheduler())
-            .setHeartbeatValue(new long[]{10000, 10000}); 
+                .setTaskScheduler(webSocketTaskScheduler())
+                .setHeartbeatValue(heartbeat);
 
         config.setApplicationDestinationPrefixes("/app");
-        config.setUserDestinationPrefix("/user"); 
+        config.setUserDestinationPrefix("/user");
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*");
-                //.withSockJS();
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
     }
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(authInterceptor);
+    }
+
+    @Override
+    public void configureClientOutboundChannel(ChannelRegistration registration) {
         registration.interceptors(authInterceptor);
     }
 }

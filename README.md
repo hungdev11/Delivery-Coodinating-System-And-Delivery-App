@@ -35,6 +35,39 @@ cd ../.. # Back to root directory
 docker-compose up -d
 ```
 
+**Note:** In normal mode, only the Nginx port (`8080`) is exposed. All service ports are only accessible via Docker network or through Nginx reverse proxy.
+
+### Debug Mode
+
+To enable remote debugging and expose service ports:
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.debug.yml up -d
+```
+
+**Service Ports (exposed in debug mode):**
+- Settings Service: `21502`
+- User Service: `21501`
+- Zone Service: `21503`
+- Parcel Service: `21506`
+- Session Service: `21505`
+- Communication Service: `21511`
+- API Gateway: `21500`
+
+**Debug Ports:**
+- Settings Service: `5005`
+- User Service: `5006`
+- Zone Service (Node.js): `9229`
+- Parcel Service: `5007`
+- Session Service: `5008`
+- Communication Service: `5009`
+- API Gateway: `5010`
+
+**IDE Configuration:**
+- Connect your IDE debugger to `localhost:<debug-port>`
+- Use "Remote JVM Debug" configuration in IntelliJ IDEA or VS Code
+- Ensure `suspend=n` in JAVA_TOOL_OPTIONS (services start without waiting for debugger)
+
 ### Documentation Map
 
 - **Backend overview**: [BE/README.md](BE/README.md)

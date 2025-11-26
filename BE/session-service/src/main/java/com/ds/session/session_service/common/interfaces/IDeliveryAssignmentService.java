@@ -9,6 +9,7 @@ import com.ds.session.session_service.common.entities.dto.request.PagingRequestV
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.PageResponse;
+import com.ds.session.session_service.common.entities.dto.response.LatestAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.ShipperInfo;
 
 /**
@@ -25,12 +26,46 @@ public interface IDeliveryAssignmentService {
     DeliveryAssignmentResponse postponeByCustomer(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
     
     /**
+     * Postpone assignment directly by assignmentId.
+     * This is used when we already have the assignmentId (e.g., from proposal response).
+     * 
+     * @param assignmentId Assignment ID to postpone
+     * @param request Postpone request with reason, route info, postpone datetime, and moveToEnd flag
+     * @return Updated assignment response
+     */
+    DeliveryAssignmentResponse postponeByAssignmentId(UUID assignmentId, 
+        com.ds.session.session_service.common.entities.dto.request.PostponeAssignmentRequest request);
+    
+    /**
+     * Get active assignment ID for a parcel and delivery man.
+     * Returns the assignmentId of the active assignment (in CREATED or IN_PROGRESS session).
+     * This is used by Communication Service to find assignmentId before calling postpone endpoint.
+     */
+    Optional<UUID> getActiveAssignmentId(String parcelId, String deliveryManId);
+    
+    /**
+     * Update assignment status by sessionId and assignmentId
+     * This is used by API gateway for nested queries
+     */
+    DeliveryAssignmentResponse updateAssignmentStatus(UUID sessionId, UUID assignmentId, 
+                                                      com.ds.session.session_service.common.entities.dto.request.UpdateAssignmentStatusRequest request);
+    
+    /**
      * Lấy các task trong phiên ĐANG HOẠT ĐỘNG (phân trang và lọc) - V1
      */
     PageResponse<DeliveryAssignmentResponse> getDailyTasks(
         UUID deliveryManId, 
         List<String> status, 
         int page, 
+        int size
+    );
+    
+    /**
+     * Lấy các task của một session cụ thể theo sessionId (phân trang).
+     */
+    PageResponse<DeliveryAssignmentResponse> getTasksBySessionId(
+        UUID sessionId,
+        int page,
         int size
     );
     
@@ -56,5 +91,6 @@ public interface IDeliveryAssignmentService {
     );
 
     Optional<ShipperInfo> getLatestDriverIdForParcel(String parcelId);
-}
 
+    Optional<LatestAssignmentResponse> getLatestAssignmentForParcel(String parcelId);
+}

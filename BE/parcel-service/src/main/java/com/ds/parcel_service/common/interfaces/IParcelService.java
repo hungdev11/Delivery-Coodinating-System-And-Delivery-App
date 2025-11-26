@@ -1,12 +1,15 @@
 package com.ds.parcel_service.common.interfaces;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.ds.parcel_service.common.entities.dto.common.PagedData;
 import com.ds.parcel_service.common.entities.dto.request.ParcelCreateRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelFilterRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelUpdateRequest;
+import com.ds.parcel_service.common.entities.dto.request.ParcelConfirmRequest;
 import com.ds.parcel_service.common.entities.dto.request.PagingRequestV0;
 import com.ds.parcel_service.common.entities.dto.request.PagingRequestV2;
 import com.ds.parcel_service.common.entities.dto.response.PageResponse;
@@ -35,10 +38,19 @@ public interface IParcelService {
     
     // V2 API - Enhanced filtering
     PageResponse<ParcelResponse> getParcelsV2(PagingRequestV2 request);
+    PagedData<ParcelResponse> getParcelsV2Restful(PagingRequestV2 request);
+    PagedData<ParcelResponse> getParcelsForReceiver(String receiverId, PagingRequestV2 request);
     
     Map<String, ParcelResponse> fetchParcelsBulk(List<UUID> parcelIds);
+
+    ParcelResponse confirmParcelByClient(UUID parcelId, String userId, ParcelConfirmRequest request);
 
     PageResponse<ParcelResponse> getParcelsSentByCustomer(String customerId, int page, int size);
 
     PageResponse<ParcelResponse> getParcelsReceivedByCustomer(String customerId, int page, int size);
+    
+    // Priority and delay management
+    ParcelResponse updateParcelPriority(UUID parcelId, Integer priority);
+    ParcelResponse delayParcel(UUID parcelId, LocalDateTime delayedUntil);
+    ParcelResponse undelayParcel(UUID parcelId);
 }

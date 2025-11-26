@@ -1,6 +1,8 @@
 package com.ds.parcel_service.common.entities.dto.filter.v2;
 
 import com.ds.parcel_service.common.entities.dto.filter.FilterOperator;
+import com.ds.parcel_service.common.entities.dto.filter.FilterOperatorDeserializer;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -24,6 +26,7 @@ public class FilterConditionItemV2 extends FilterItemV2 {
     /**
      * Filter operator
      */
+    @JsonDeserialize(using = FilterOperatorDeserializer.class)
     private FilterOperator operator;
     
     /**

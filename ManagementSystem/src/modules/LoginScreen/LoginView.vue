@@ -79,12 +79,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { setToken, setUser, setUserRoles } from '@/common/guards/roleGuard.guard'
+import { useAuthStore } from '@/common/store/auth.store'
 import { login as loginAPI } from './api'
 import { LoginForm } from './model.type'
 import { Info, Warn, ErrorLog, DebugContexts } from '@/common/utils/debug'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const error = ref('')
 const isLoading = ref(false)
 
@@ -137,17 +138,27 @@ const login = async () => {
     // Call API
     const response = await loginAPI(loginFormData)
 
-    // Store token and user information
-    setToken(response.result?.accessToken ?? '')
-
-    if (response.result?.user) {
-      setUser(response.result.user)
-
-      // Set default roles based on user status or extract from token
-      // For now, we'll set a default role based on user status
-      const defaultRoles = response.result.user.status === 'ACTIVE' ? ['USER'] : []
-      setUserRoles(defaultRoles)
+    // Validate response
+    if (!response.result) {
+      throw new Error('Invalid login response')
     }
+
+    if (!response.result.accessToken) {
+      throw new Error('No access token received')
+    }
+
+    if (!response.result.user) {
+      throw new Error('No user data received')
+    }
+
+    // Store token and user information using Pinia store
+    // Use roles from response.user.roles if available, otherwise empty array
+    const userRoles = response.result.user.roles || []
+    authStore.setAuth(
+      response.result.accessToken,
+      response.result.user,
+      userRoles,
+    )
 
     console.log(
       Info(
@@ -180,8 +191,6 @@ const useFakeToken = () => {
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwicm9sZSI6WyJhZG1pbiJdLCJpYXQiOjE1MTYyMzkwMjJ9.CIvtAWDAOgORXRVZR8Ja-yJytoIwLpGRYSm-b7qxO8w'
 
   try {
-    setToken(sampleToken)
-
     // Create fake user data for development
     const fakeUser = {
       id: '1234567890',
@@ -198,7 +207,7 @@ const useFakeToken = () => {
       updatedAt: new Date().toISOString(),
     }
 
-    setUser(fakeUser, ['ADMIN'])
+    authStore.setAuth(sampleToken, fakeUser, ['ADMIN'])
 
     console.log(
       Info(

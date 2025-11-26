@@ -86,41 +86,41 @@ const handleCancel = () => {
     <template #body>
       <form @submit.prevent="handleSubmit" class="space-y-4">
         <UFormField v-if="!isEditMode" label="Username" name="username" required>
-          <UInput v-model="form.username" placeholder="Enter username" />
+          <UInput class="w-full" v-model="form.username" placeholder="Enter username" />
         </UFormField>
 
         <UFormField label="Email" name="email" required>
-          <UInput v-model="form.email" type="email" placeholder="Enter email" />
+          <UInput class="w-full" v-model="form.email" type="email" placeholder="Enter email" />
         </UFormField>
 
         <div class="grid grid-cols-2 gap-4">
           <UFormField label="First Name" name="firstName" required>
-            <UInput v-model="form.firstName" placeholder="Enter first name" />
+            <UInput class="w-full" v-model="form.firstName" placeholder="Enter first name" />
           </UFormField>
 
           <UFormField label="Last Name" name="lastName" required>
-            <UInput v-model="form.lastName" placeholder="Enter last name" />
+            <UInput class="w-full" v-model="form.lastName" placeholder="Enter last name" />
           </UFormField>
         </div>
 
         <UFormField label="Phone" name="phone">
-          <UInput v-model="form.phone" placeholder="Enter phone number" />
+          <UInput class="w-full" v-model="form.phone" placeholder="Enter phone number" />
         </UFormField>
 
         <UFormField label="Address" name="address">
-          <UTextarea v-model="form.address" placeholder="Enter address" />
+          <UTextarea class="w-full" v-model="form.address" placeholder="Enter address" />
         </UFormField>
 
         <UFormField label="Identity Number" name="identityNumber">
-          <UInput v-model="form.identityNumber" placeholder="Enter identity number" />
+          <UInput class="w-full" v-model="form.identityNumber" placeholder="Enter identity number" />
         </UFormField>
 
         <UFormField v-if="!isEditMode" label="Password" name="password">
-          <UInput v-model="form.password" type="password" placeholder="Enter password" />
+          <UInput class="w-full" v-model="form.password" type="password" placeholder="Enter password" />
         </UFormField>
 
         <UFormField v-if="isEditMode" label="Status" name="status" required>
-          <USelect v-model="form.status" :options="statusOptions" />
+          <USelect class="w-full" v-model="form.status" :items="statusOptions" />
         </UFormField>
       </form>
     </template>

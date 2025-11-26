@@ -22,7 +22,7 @@ import type { UserDto, UserStatus } from './model.type'
 import { useTemplateRef } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 import AdvancedFilterDrawer from '../../common/components/filters/AdvancedFilterDrawer.vue'
-import type { SortingState } from '@tanstack/table-core'
+import type { SortingState, Column } from '@tanstack/table-core'
 import type { FilterCondition, FilterGroup } from '../../common/types/filter'
 import { createSortConfig } from '../../common/utils/query-builder'
 import TableHeaderCell from '../../common/components/TableHeaderCell.vue'
@@ -60,9 +60,16 @@ const {
   updateSorts,
   clearFilters,
   getFilterableColumns,
+  handlePageChange,
 } = useUsers()
 
 const { exportUsers } = useUserExport()
+
+// Handle page change from UPagination (1-indexed) to API (0-indexed)
+const handlePaginationChange = (newPage: number) => {
+  // UPagination uses 1-indexed pages, convert to 0-indexed for API
+  handlePageChange(Math.max(newPage - 1, 0))
+}
 
 // Table state
 const selected = ref<UserDto[]>([])
@@ -82,19 +89,23 @@ const filterableColumns = computed(() => getFilterableColumns())
 /**
  * Setup header component for table columns
  */
+type HeaderConfig = {
+  variant: 'link' | 'solid' | 'outline' | 'soft' | 'ghost'
+  label: string
+  class: string
+  activeColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+  inactiveColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+  filterable?: boolean
+}
+
+type HeaderColumn = Column<UserDto, unknown>
+
 const setupHeader = ({
   column,
   config,
 }: {
-  column: any
-  config: {
-    variant?: string
-    label: string
-    class?: string
-    activeColor?: string
-    inactiveColor?: string
-    filterable?: boolean
-  }
+  column: HeaderColumn
+  config: HeaderConfig
 }) =>
   h(TableHeaderCell<UserDto>, {
     column,
@@ -246,6 +257,37 @@ const columns: TableColumn<UserDto>[] = [
       }),
   },
   {
+    accessorKey: 'actions',
+    header: 'Actions',
+    cell: ({ row }) => {
+      const user = row.original
+      return h('div', { class: 'flex space-x-2' }, [
+        h(UButton, {
+          icon: 'i-heroicons-eye',
+          size: 'sm',
+          variant: 'ghost',
+          title: 'View user details',
+          onClick: () => viewUserDetail(user),
+        }),
+        h(UButton, {
+          icon: 'i-heroicons-pencil',
+          size: 'sm',
+          variant: 'ghost',
+          title: 'Edit user',
+          onClick: () => openEditModal(user),
+        }),
+        h(UButton, {
+          icon: 'i-heroicons-trash',
+          size: 'sm',
+          variant: 'ghost',
+          color: 'error',
+          title: 'Delete user',
+          onClick: () => openDeleteModal(user),
+        }),
+      ])
+    },
+  },
+  {
     accessorKey: 'username',
     header: ({ column }) =>
       setupHeader({
@@ -324,6 +366,34 @@ const columns: TableColumn<UserDto>[] = [
       const color = getStatusColor(status)
       const displayStatus = getDisplayStatus(status)
       return h(UBadge, { class: 'capitalize', variant: 'soft', color }, () => displayStatus)
+    },
+  },
+  {
+    accessorKey: 'roles',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost',
+          label: 'Roles',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: false,
+        },
+      }),
+    cell: ({ row }) => {
+      const roles = row.getValue('roles') as string[]
+      if (!roles || roles.length === 0) {
+        return h('span', { class: 'text-gray-400' }, 'No roles')
+      }
+      return h(
+        'div',
+        { class: 'flex flex-wrap gap-1' },
+        roles.map((role) =>
+          h(UBadge, { variant: 'soft', color: 'primary', size: 'sm' }, () => role),
+        ),
+      )
     },
   },
   {
@@ -732,7 +802,12 @@ watch(
         Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
         {{ total }} results
       </div>
-      <UPagination v-model="page" :items-per-page="pageSize" :total="total" />
+      <UPagination
+        :model-value="page + 1"
+        :page-count="pageSize"
+        :total="total"
+        @update:page="handlePaginationChange"
+      />
     </div>
 
     <!-- Advanced Filter Drawer -->

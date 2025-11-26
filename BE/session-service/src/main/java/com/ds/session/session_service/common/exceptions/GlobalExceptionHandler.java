@@ -1,9 +1,5 @@
 package com.ds.session.session_service.common.exceptions;
 
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -11,7 +7,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import feign.FeignException; // Cần import này
+import com.ds.session.session_service.common.entities.dto.common.BaseResponse;
+
+import feign.FeignException;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -19,100 +17,61 @@ import lombok.extern.slf4j.Slf4j;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFound.class)
-    public ResponseEntity<ErrorResponse> handleSettingNotFound(ResourceNotFound ex) {
-        log.error("Resource not found: {}", ex.getMessage());
-        ErrorResponse error = ErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .status(HttpStatus.NOT_FOUND.value())
-                .error("Not Found")
-                .message(ex.getMessage())
-                .build();
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    public ResponseEntity<BaseResponse<Object>> handleResourceNotFound(ResourceNotFound ex) {
+        log.debug("[session-service] [GlobalExceptionHandler.handleResourceNotFound] Resource not found: {}",
+                ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(BaseResponse.error("Không tìm thấy tài nguyên"));
     }
-    
+
     @ExceptionHandler(FeignException.class)
-    public ResponseEntity<ErrorResponse> handleFeignExceptions(FeignException ex) {
-        // Lấy mã trạng thái HTTP từ Feign Exception (ví dụ: 404, 500)
+    public ResponseEntity<BaseResponse<Object>> handleFeignExceptions(FeignException ex) {
         HttpStatus status = HttpStatus.resolve(ex.status());
-        
+
         if (status == null) {
             status = HttpStatus.INTERNAL_SERVER_ERROR;
         }
 
-        log.error("Feign communication error (Status: {}): {}", ex.status(), ex.getMessage());
+        log.error(
+                "[session-service] [GlobalExceptionHandler.handleFeignExceptions] Feign communication error (Status: {})",
+                ex.status(), ex);
 
-        // Xử lý đặc biệt cho lỗi 404 (Not Found) từ Service khác
         if (status == HttpStatus.NOT_FOUND) {
-             ErrorResponse error = ErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .status(HttpStatus.NOT_FOUND.value())
-                .error("Dependent Resource Not Found") 
-                .message("Resource required from external service was not found. Details: " + ex.getMessage()) 
-                .build();
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(BaseResponse.error("Không tìm thấy dữ liệu từ dịch vụ liên quan"));
         }
-        
-        // Xử lý các lỗi Feign khác (ví dụ: 400 Bad Request, 500 Internal Server Error)
-        ErrorResponse error = ErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .status(status.value())
-                .error(status.getReasonPhrase())
-                .message("Error communicating with external service: " + ex.getMessage())
-                .build();
-        return ResponseEntity.status(status).body(error);
+
+        return ResponseEntity.status(status)
+                .body(BaseResponse.error("Lỗi kết nối với dịch vụ khác"));
     }
-    // --- Kết thúc Bổ sung ---
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
-        log.error("Illegal argument: {}", ex.getMessage());
-        ErrorResponse error = ErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .status(HttpStatus.BAD_REQUEST.value())
-                .error("Bad Request")
-                .message(ex.getMessage())
-                .build();
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    public ResponseEntity<BaseResponse<Object>> handleIllegalArgument(IllegalArgumentException ex) {
+        log.debug("[session-service] [GlobalExceptionHandler.handleIllegalArgument] Illegal argument: {}",
+                ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(BaseResponse.error(ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationErrors(MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new HashMap<>();
+    public ResponseEntity<BaseResponse<Object>> handleValidationErrors(MethodArgumentNotValidException ex) {
+        StringBuilder errorMessage = new StringBuilder("Dữ liệu không hợp lệ: ");
         ex.getBindingResult().getAllErrors().forEach(error -> {
             String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
+            String message = error.getDefaultMessage();
+            errorMessage.append(fieldName).append(" - ").append(message).append("; ");
         });
 
-        ErrorResponse error = ErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .status(HttpStatus.BAD_REQUEST.value())
-                .error("Validation Failed")
-                .message("Invalid request parameters")
-                .validationErrors(errors)
-                .build();
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        log.debug("[session-service] [GlobalExceptionHandler.handleValidationErrors] Validation failed: {}",
+                errorMessage);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(BaseResponse.error(errorMessage.toString()));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
-        log.error("Unexpected error: ", ex);
-        ErrorResponse error = ErrorResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                .error("Internal Server Error")
-                .message("An unexpected error occurred")
-                .build();
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
-    }
-
-    @lombok.Data
-    @lombok.Builder
-    public static class ErrorResponse {
-        private LocalDateTime timestamp;
-        private int status;
-        private String error;
-        private String message;
-        private Map<String, String> validationErrors;
+    public ResponseEntity<BaseResponse<Object>> handleGlobalException(Exception ex) {
+        log.error("[session-service] [GlobalExceptionHandler.handleGlobalException] Unexpected error", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(BaseResponse.error("System have a technical issues!"));
     }
 }

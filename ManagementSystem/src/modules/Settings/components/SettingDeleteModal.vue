@@ -41,40 +41,32 @@ const handleCancel = () => {
 </script>
 
 <template>
-  <UModal>
-    <UCard>
-      <template #header>
-        <h3 class="text-lg font-semibold text-red-600">
-          {{ isBulkDelete ? 'Delete Settings' : 'Delete Setting' }}
-        </h3>
-      </template>
-
+  <UModal
+    :title="isBulkDelete ? 'Delete Settings' : 'Delete Setting'"
+    :description="isBulkDelete ? 'Delete multiple settings at once' : 'Confirm deletion of this setting'"
+    :close="{ onClick: handleCancel }"
+    :ui="{ footer: 'justify-end space-x-2' }"
+  >
+    <template #body>
       <div class="space-y-4">
         <div class="flex items-center space-x-3">
           <div class="flex-shrink-0">
-            <UIcon
-              name="i-heroicons-exclamation-triangle"
-              class="h-6 w-6 text-red-600"
-            />
+            <UIcon name="i-heroicons-exclamation-triangle" class="h-6 w-6 text-red-600" />
           </div>
-          <div>
-            <p class="text-sm text-gray-700 dark:text-gray-300">
-              {{ message }}
-            </p>
-          </div>
+          <p class="text-sm text-gray-700 dark:text-gray-300">
+            {{ message }}
+          </p>
         </div>
       </div>
+    </template>
 
-      <template #footer>
-        <div class="flex justify-end space-x-2">
-          <UButton variant="ghost" @click="handleCancel">
-            Cancel
-          </UButton>
-          <UButton color="red" @click="handleConfirm">
-            {{ isBulkDelete ? 'Delete All' : 'Delete' }}
-          </UButton>
-        </div>
-      </template>
-    </UCard>
+    <template #footer>
+      <UButton variant="outline" color="neutral" @click="handleCancel">
+        Cancel
+      </UButton>
+      <UButton color="red" @click="handleConfirm">
+        {{ isBulkDelete ? 'Delete All' : 'Delete' }}
+      </UButton>
+    </template>
   </UModal>
 </template>

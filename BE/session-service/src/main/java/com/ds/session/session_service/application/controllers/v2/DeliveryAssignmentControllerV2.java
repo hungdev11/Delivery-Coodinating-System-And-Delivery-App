@@ -33,7 +33,7 @@ public class DeliveryAssignmentControllerV2 {
     public ResponseEntity<PageResponse<DeliveryAssignmentResponse>> getAssignments(
         @Valid @RequestBody PagingRequestV2 request
     ) {
-        log.info("POST /api/v2/assignments - Get assignments with enhanced filtering (V2)");
+        log.debug("[session-service] [DeliveryAssignmentControllerV2.getAssignments] POST /api/v2/assignments - Get assignments with enhanced filtering (V2)");
         PageResponse<DeliveryAssignmentResponse> response = assignmentService.getDailyTasksV2(request);
         return ResponseEntity.ok(response);
     }

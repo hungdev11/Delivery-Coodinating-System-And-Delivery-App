@@ -19,10 +19,19 @@ public class ProfileFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_profile, container, false);
 
         Button btnLogout = view.findViewById(R.id.btnLogout);
+        Button btnMessages = view.findViewById(R.id.btnMessages);
 
         btnLogout.setOnClickListener(v -> handleLogout());
+        btnMessages.setOnClickListener(v -> openMessagesActivity());
 
         return view;
+    }
+
+    private void openMessagesActivity() {
+        if (getContext() == null) return;
+        
+        Intent intent = new Intent(getContext(), ConversationsListActivity.class);
+        startActivity(intent);
     }
 
     private void handleLogout() {

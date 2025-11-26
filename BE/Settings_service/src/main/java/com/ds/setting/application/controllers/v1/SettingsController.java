@@ -32,7 +32,7 @@ public class SettingsController {
     @PostMapping
     @Operation(summary = "List settings with filtering/sorting/paging (POST)")
     public ResponseEntity<BaseResponse<PagedData<SystemSettingDto>>> getSettings(@RequestBody PagingRequest query) {
-        log.info("POST /api/v1/settings - List settings with query: {}", query);
+        log.debug("List settings with query: {}", query);
         PagedData<SystemSettingDto> page = settingsService.getSettings(query);
         return ResponseEntity.ok(BaseResponse.success(page));
     }
@@ -40,7 +40,7 @@ public class SettingsController {
     @GetMapping("/{group}")
     @Operation(summary = "Get all settings by group (service identifier)")
     public ResponseEntity<BaseResponse<List<SystemSettingDto>>> getSettingsByGroup(@PathVariable String group) {
-        log.info("GET /api/v1/settings/{} - Get settings by group", group);
+        log.debug("Get settings by group: {}", group);
         List<SystemSettingDto> settings = settingsService.getByGroup(group);
         return ResponseEntity.ok(BaseResponse.success(settings));
     }
@@ -50,7 +50,7 @@ public class SettingsController {
     public ResponseEntity<BaseResponse<SystemSettingDto>> getSetting(
             @PathVariable String group,
             @PathVariable String key) {
-        log.info("GET /api/v1/settings/{}/{} - Get setting by group/key", group, key);
+        log.debug("Get setting by group/key: {}/{}", group, key);
         SystemSettingDto setting = settingsService.getByKeyAndGroup(key, group);
         return ResponseEntity.ok(BaseResponse.success(setting));
     }
@@ -60,7 +60,7 @@ public class SettingsController {
     public ResponseEntity<BaseResponse<String>> getSettingValue(
             @PathVariable String group,
             @PathVariable String key) {
-        log.info("GET /api/v1/settings/{}/{}/value - Get setting value", group, key);
+        log.debug("Get setting value: {}/{}", group, key);
         String value = settingsService.getValueByKeyAndGroup(key, group);
         return ResponseEntity.ok(BaseResponse.success(value));
     }
@@ -72,9 +72,9 @@ public class SettingsController {
             @PathVariable String key,
             @Valid @RequestBody CreateSettingRequest request,
             @RequestHeader(value = "X-User-Id", required = false, defaultValue = "system") String userId) {
-        log.info("PUT /api/v1/settings/{}/{} - Upsert setting by: {}", group, key, userId);
+        log.debug("Upsert setting {}/{} by: {}", group, key, userId);
         SystemSettingDto result = settingsService.upsertByKeyAndGroup(key, group, request, userId);
-        return ResponseEntity.ok(BaseResponse.success(result, "Setting saved successfully"));
+        return ResponseEntity.ok(BaseResponse.success(result));
     }
 
     @DeleteMapping("/{group}/{key}")
@@ -82,8 +82,19 @@ public class SettingsController {
     public ResponseEntity<BaseResponse<Void>> deleteSetting(
             @PathVariable String group,
             @PathVariable String key) {
-        log.info("DELETE /api/v1/settings/{}/{} - Delete setting", group, key);
+        log.debug("Delete setting: {}/{}", group, key);
         settingsService.deleteByKeyAndGroup(key, group);
-        return ResponseEntity.ok(BaseResponse.success(null, "Setting deleted successfully"));
+        return ResponseEntity.ok(BaseResponse.success(null));
+    }
+
+    @PutMapping("/{group}/bulk")
+    @Operation(summary = "Bulk upsert (create or update) multiple settings in a group")
+    public ResponseEntity<BaseResponse<List<SystemSettingDto>>> bulkUpsertSettings(
+            @PathVariable String group,
+            @Valid @RequestBody com.ds.setting.common.entities.dto.BulkUpsertSettingsRequest request,
+            @RequestHeader(value = "X-User-Id", required = false, defaultValue = "system") String userId) {
+        log.debug("Bulk upsert {} settings in group {} by: {}", request.getSettings().size(), group, userId);
+        List<SystemSettingDto> results = settingsService.bulkUpsertByGroup(group, request.getSettings(), userId);
+        return ResponseEntity.ok(BaseResponse.success(results));
     }
 }

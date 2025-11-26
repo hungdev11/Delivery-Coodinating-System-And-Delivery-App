@@ -9,7 +9,7 @@
         {
             "name": "Launch Edge",
             "request": "launch",
-            "type": "chrome",
+            "type": "msedge",
             "url": "http://localhost:5173",
             "webRoot": "${workspaceFolder}/ManagementSystem"
         },
@@ -43,6 +43,16 @@
         },
         {
             "type": "java",
+            "name": "Spring Boot-ParcelServiceApplication<parcel_service>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.ds.parcel_service.ParcelServiceApplication",
+            "projectName": "parcel_service",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "java",
             "name": "Spring Boot-SettingsServiceApplication<setting>",
             "request": "launch",
             "cwd": "${workspaceFolder}",
@@ -50,6 +60,81 @@
             "projectName": "setting",
             "args": "",
             "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "java",
+            "name": "Spring Boot-CommunicationServiceApplication<communication>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.ds.communication_service.CommunicationServiceApplication",
+            "projectName": "communication_service",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        // ============================================
+        // DOCKER REMOTE DEBUG CONFIGURATIONS
+        // Attach to services running in Docker containers
+        // Usage: Start services with: docker-compose -f docker-compose.yml -f docker-compose.debug.yml up -d
+        // ============================================
+        {
+            "type": "java",
+            "name": "🐳 Docker: Attach to Settings Service",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5005,
+            "projectName": "setting"
+        },
+        {
+            "type": "java",
+            "name": "🐳 Docker: Attach to User Service",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5006,
+            "projectName": "user_service"
+        },
+        {
+            "type": "java",
+            "name": "🐳 Docker: Attach to Parcel Service",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5007,
+            "projectName": "parcel_service"
+        },
+        {
+            "type": "java",
+            "name": "🐳 Docker: Attach to Session Service",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5008,
+            "projectName": "session_service"
+        },
+        {
+            "type": "java",
+            "name": "🐳 Docker: Attach to Communication Service",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5009,
+            "projectName": "communication_service"
+        },
+        {
+            "type": "java",
+            "name": "🐳 Docker: Attach to API Gateway",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5010,
+            "projectName": "api-gateway"
+        },
+        {
+            "type": "node",
+            "name": "🐳 Docker: Attach to Zone Service (Node.js)",
+            "request": "attach",
+            "port": 9229,
+            "address": "localhost",
+            "localRoot": "${workspaceFolder}/BE/zone_service",
+            "remoteRoot": "/app",
+            "protocol": "inspector",
+            "restart": true,
+            "sourceMaps": true
         }
     ],
     "compounds": [
@@ -62,6 +147,51 @@
             ],
             "stopAll": true,
             // "preLaunchTask": "BE: build all (parallel)"
+        },
+        // ============================================
+        // DOCKER DEBUG COMPOUND CONFIGURATIONS
+        // Attach to multiple services simultaneously
+        // ============================================
+        {
+            "name": "🐳 Docker: Debug All Services",
+            "configurations": [
+                "🐳 Docker: Attach to Settings Service",
+                "🐳 Docker: Attach to User Service",
+                "🐳 Docker: Attach to Zone Service (Node.js)",
+                "🐳 Docker: Attach to Parcel Service",
+                "🐳 Docker: Attach to Session Service",
+                "🐳 Docker: Attach to Communication Service",
+                "🐳 Docker: Attach to API Gateway"
+            ],
+            "stopAll": true,
+            "preLaunchTask": null
+        },
+        {
+            "name": "🐳 Docker: Debug Core Services",
+            "configurations": [
+                "🐳 Docker: Attach to Settings Service",
+                "🐳 Docker: Attach to User Service",
+                "🐳 Docker: Attach to API Gateway"
+            ],
+            "stopAll": true
+        },
+        {
+            "name": "🐳 Docker: Debug Business Services",
+            "configurations": [
+                "🐳 Docker: Attach to Parcel Service",
+                "🐳 Docker: Attach to Session Service",
+                "🐳 Docker: Attach to Communication Service"
+            ],
+            "stopAll": true
+        },
+        {
+            "name": "🐳 Docker: Debug Zone & Routing",
+            "configurations": [
+                "🐳 Docker: Attach to Zone Service (Node.js)",
+                "🐳 Docker: Attach to Parcel Service",
+                "🐳 Docker: Attach to Session Service"
+            ],
+            "stopAll": true
         }
     ]
 }

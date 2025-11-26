@@ -17,6 +17,7 @@ public class ParcelInfo {
     private String code;
     private String senderId;     
     private String receiverId;
+    private String receiverName;
     private String receiverPhoneNumber;
     private String deliveryType;
     private String receiveFrom;

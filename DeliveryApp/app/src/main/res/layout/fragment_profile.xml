@@ -23,11 +23,26 @@
         android:layout_height="wrap_content"
         android:layout_width="wrap_content"/>
 
+    <!-- Messages Button -->
+    <Button
+        android:id="@+id/btnMessages"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:layout_marginTop="40dp"
+        android:backgroundTint="#3498DB"
+        android:text="💬 Messages"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:drawableStart="@android:drawable/ic_dialog_email"
+        android:drawablePadding="8dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp" />
+
     <Button
         android:id="@+id/btnLogout"
         android:layout_width="match_parent"
         android:layout_height="50dp"
-        android:layout_marginTop="40dp"
+        android:layout_marginTop="16dp"
         android:backgroundTint="#E74C3C"
         android:text="Đăng xuất"
         android:textColor="#FFFFFF"

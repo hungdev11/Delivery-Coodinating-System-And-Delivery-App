@@ -32,7 +32,7 @@ public class ProposalConfigService implements IProposalConfigService{
     @Cacheable(value = "proposal-configs-all")
     @Override
     public List<ProposalTypeConfig> getAllConfigs() {
-        log.info("Lấy tất cả proposal configs từ DB");
+        log.debug("[communication-service] [ProposalConfigService.getAllConfigs] Lấy tất cả proposal configs từ DB");
         return configRepo.findAll();
     }
 
@@ -68,7 +68,7 @@ public class ProposalConfigService implements IProposalConfigService{
         config.setDescription(dto.getDescription());
         config.setDefaultTimeoutMinutes(dto.getDefaultTimeoutMinutes());
         
-        log.info("Tạo mới proposal config cho: {}", dto.getType());
+        log.debug("[communication-service] [ProposalConfigService.createConfig] Tạo mới proposal config cho: {}", dto.getType());
         return configRepo.save(config);
     }
 
@@ -97,7 +97,7 @@ public class ProposalConfigService implements IProposalConfigService{
         config.setDescription(dto.getDescription());
         config.setDefaultTimeoutMinutes(dto.getDefaultTimeoutMinutes());
         
-        log.info("Cập nhật proposal config cho: {}", dto.getType());
+        log.debug("[communication-service] [ProposalConfigService.updateConfig] Cập nhật proposal config cho: {}", dto.getType());
         return configRepo.save(config);
     }
 
@@ -116,7 +116,7 @@ public class ProposalConfigService implements IProposalConfigService{
         if (!configRepo.existsById(configId)) {
              throw new EntityNotFoundException("Không tìm thấy Config ID: " + configId);
         }
-        log.info("Xóa proposal config ID: {}", configId);
+        log.debug("[communication-service] [ProposalConfigService.deleteConfig] Xóa proposal config ID: {}", configId);
         configRepo.deleteById(configId);
     }
 }

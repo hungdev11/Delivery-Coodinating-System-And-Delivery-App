@@ -15,7 +15,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ds.communication_service.app_context.models.ProposalTypeConfig;
-import com.ds.communication_service.common.dto.ProposalConfigDTO; 
+import com.ds.communication_service.common.dto.BaseResponse;
+import com.ds.communication_service.common.dto.ProposalConfigDTO;
 import com.ds.communication_service.common.interfaces.IProposalConfigService;
 
 import lombok.RequiredArgsConstructor;
@@ -32,34 +33,31 @@ public class ProposalConfigController {
      * Lấy tất cả các cấu hình proposal đang có.
      */
     @GetMapping
-    public ResponseEntity<List<ProposalTypeConfig>> getAllConfigs() {
-        return ResponseEntity.ok(configService.getAllConfigs());
+    public ResponseEntity<BaseResponse<List<ProposalTypeConfig>>> getAllConfigs() {
+        return ResponseEntity.ok(BaseResponse.success(configService.getAllConfigs()));
     }
 
     /**
      * Tạo một loại proposal config mới.
      */
     @PostMapping
-    public ResponseEntity<ProposalTypeConfig> createConfig(
-            @RequestBody ProposalConfigDTO dto
-    ) {
+    public ResponseEntity<BaseResponse<ProposalTypeConfig>> createConfig(
+            @RequestBody ProposalConfigDTO dto) {
         ProposalTypeConfig createdConfig = configService.createConfig(dto);
-        // Trả về 201 Created và link đến tài nguyên mới
         return ResponseEntity
-            .created(URI.create("/api/v1/admin/proposals/configs/" + createdConfig.getId()))
-            .body(createdConfig);
+                .created(URI.create("/api/v1/admin/proposals/configs/" + createdConfig.getId()))
+                .body(BaseResponse.success(createdConfig));
     }
 
     /**
      * Cập nhật một proposal config đã có.
      */
     @PutMapping("/{configId}")
-    public ResponseEntity<ProposalTypeConfig> updateConfig(
+    public ResponseEntity<BaseResponse<ProposalTypeConfig>> updateConfig(
             @PathVariable UUID configId,
-            @RequestBody ProposalConfigDTO dto
-    ) {
+            @RequestBody ProposalConfigDTO dto) {
         ProposalTypeConfig updatedConfig = configService.updateConfig(configId, dto);
-        return ResponseEntity.ok(updatedConfig);
+        return ResponseEntity.ok(BaseResponse.success(updatedConfig));
     }
 
     /**

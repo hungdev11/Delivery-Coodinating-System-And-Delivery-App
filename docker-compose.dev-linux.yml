@@ -64,7 +64,11 @@ services:
       KEYCLOAK_CLIENT_ID: dss-client
       KEYCLOAK_CLIENT_SECRET: dss-secret
       SETTINGS_SERVICE_URL: http://localhost:21502  # All services on localhost
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}
       SERVER_PORT: 21501
+    depends_on:
+      settings-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21501/actuator/health"]
       interval: 10s
@@ -89,7 +93,12 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       PARCEL_DB_NAME: ${PARCEL_DB_NAME:-ds_parcel_service}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://localhost:21501}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}
       SERVER_PORT: 21506
+    depends_on:
+      user-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21506/actuator/health"]
       interval: 10s
@@ -115,9 +124,13 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       SESSION_DB_NAME: ${SESSION_DB_NAME:-ds_session_service}
       PARCEL_SERVICE_URL: http://localhost:21506  # All services on localhost
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://localhost:21501}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}
       SERVER_PORT: 21505
     depends_on:
       parcel-service:
+        condition: service_healthy
+      user-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21505/actuator/health"]
@@ -177,9 +190,54 @@ services:
       ZONE_SERVICE_URL: http://localhost:21503
       SESSION_SERVICE_URL: http://localhost:21505
       PARCEL_SERVICE_URL: http://localhost:21506
+      COMMUNICATION_SERVICE_URL: ${COMMUNICATION_SERVICE_URL:-http://localhost:21511}
       SERVER_PORT: 21500
+    depends_on:
+      user-service:
+        condition: service_healthy
+      settings-service:
+        condition: service_healthy
+      session-service:
+        condition: service_healthy
+      parcel-service:
+        condition: service_healthy
+      communication-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21500/actuator/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+      start_period: 30s
+
+  # Communication Service
+  communication-service:
+    restart: on-failure
+    env_file:
+      - .env
+    build:
+      context: ./BE/communication_service
+      dockerfile: Dockerfile
+    container_name: dss-communication-service
+    network_mode: host
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: ${DB_HOST:-localhost}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      COMMUNICATION_DB_NAME: ${COMMUNICATION_DB_NAME:-ds_communication_service}
+      SESSION_SERVICE_URL: http://localhost:21505
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://localhost:21501}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}
+      SERVER_PORT: 21511
+    depends_on:
+      session-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:21511/actuator/health"]
       interval: 10s
       timeout: 10s
       retries: 120

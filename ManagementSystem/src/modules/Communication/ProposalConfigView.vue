@@ -126,52 +126,53 @@ const handleCancel = () => {
 
     <!-- Form Modal -->
     <UModal v-model="showForm">
-      <UCard>
         <template #header>
           <h3 class="text-lg font-semibold">
             {{ editingConfig ? 'Edit Proposal Config' : 'Create Proposal Config' }}
           </h3>
         </template>
 
-        <div class="space-y-4">
-          <UFormGroup label="Type" required>
-            <USelect
-              :model-value="editingConfig?.type || ''"
-              :options="['CONFIRM_REFUSAL', 'RESCHEDULE', 'CANCEL_ORDER', 'OTHER']"
-              placeholder="Select type"
-            />
-          </UFormGroup>
+        <template #body>
+          <div class="space-y-4">
+            <UFormGroup label="Type" required>
+              <USelect
+                :model-value="editingConfig?.type || ''"
+                :items="['CONFIRM_REFUSAL', 'POSTPONE_REQUEST', 'DELAY_ORDER_RECEIVE']"
+                placeholder="Select type"
+              />
+            </UFormGroup>
 
-          <UFormGroup label="Required Role" required>
-            <UInput
-              :model-value="editingConfig?.requiredRole || ''"
-              placeholder="e.g., ADMIN, CLIENT, SHIPPER"
-            />
-          </UFormGroup>
+            <UFormGroup label="Required Role" required>
+              <UInput
+                :model-value="editingConfig?.requiredRole || ''"
+                placeholder="e.g., ADMIN, CLIENT, SHIPPER"
+              />
+            </UFormGroup>
 
-          <UFormGroup label="Action Type" required>
-            <USelect
-              :model-value="editingConfig?.actionType || ''"
-              :options="['ACCEPT_DECLINE', 'DATE_PICKER', 'TEXT_INPUT', 'CHOICE']"
-              placeholder="Select action type"
-            />
-          </UFormGroup>
+            <UFormGroup label="Action Type" required>
+              <USelect
+                :model-value="editingConfig?.actionType || ''"
+                :items="['ACCEPT_DECLINE', 'DATE_PICKER', 'TEXT_INPUT', 'CHOICE']"
+                placeholder="Select action type"
+              />
+            </UFormGroup>
 
-          <UFormGroup label="Template (JSON)" required>
-            <UTextarea
-              :model-value="editingConfig?.template || ''"
-              placeholder='{"title": "Confirm Refusal", "message": "Are you sure?"}'
-              rows="5"
-            />
-          </UFormGroup>
+            <UFormGroup label="Template (JSON)" required>
+              <UTextarea
+                :model-value="editingConfig?.template || ''"
+                placeholder='{"title": "Confirm Refusal", "message": "Are you sure?"}'
+                rows="5"
+              />
+            </UFormGroup>
 
-          <UFormGroup label="Description">
-            <UInput
-              :model-value="editingConfig?.description || ''"
-              placeholder="Optional description"
-            />
-          </UFormGroup>
-        </div>
+            <UFormGroup label="Description">
+              <UInput
+                :model-value="editingConfig?.description || ''"
+                placeholder="Optional description"
+              />
+            </UFormGroup>
+          </div>
+        </template>
 
         <template #footer>
           <div class="flex justify-end space-x-2">
@@ -179,7 +180,6 @@ const handleCancel = () => {
             <UButton @click="handleSave"> Save </UButton>
           </div>
         </template>
-      </UCard>
     </UModal>
   </div>
 </template>

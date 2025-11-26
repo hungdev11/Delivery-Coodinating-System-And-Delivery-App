@@ -79,6 +79,24 @@ public class Parcel {
     private LocalDateTime updatedAt;
 
     private LocalDateTime deliveredAt;
+    private LocalDateTime confirmedAt;
+    private String confirmedBy;
+    @Column(length = 512)
+    private String confirmationNote;
     private LocalTime windowStart;
     private LocalTime windowEnd;
+    
+    // Priority for delivery routing (higher = more urgent)
+    // Maps to DeliveryType priorities: URGENT=10, EXPRESS=4, FAST=3, NORMAL=2, ECONOMY=1
+    @Column(name = "priority")
+    private Integer priority;
+    
+    // Delay/postpone flag - when true, parcel is temporarily hidden from routing
+    @Column(name = "is_delayed", nullable = false)
+    @Builder.Default
+    private Boolean isDelayed = false;
+    
+    // When parcel should be available for routing again
+    @Column(name = "delayed_until")
+    private LocalDateTime delayedUntil;
 }

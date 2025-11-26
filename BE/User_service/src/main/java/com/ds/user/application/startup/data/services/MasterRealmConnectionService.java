@@ -31,12 +31,15 @@ public class MasterRealmConnectionService {
      */
     public Keycloak connectToMasterRealm() {
         try {
-            log.info("Connecting to Keycloak master realm...");
-            
+            log.debug("Connecting to Keycloak master realm...");
+            log.debug("   Server URL: {}", serverUrl);
+            log.debug("   Realm: {}", initConfig.getMaster().getRealm());
+            log.debug("   Username: {}", initConfig.getMaster().getUsername());
+
             // Configure ObjectMapper to ignore unknown properties for compatibility
             ObjectMapper objectMapper = new ObjectMapper()
                     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-            
+
             ResteasyClientBuilder clientBuilder = (ResteasyClientBuilder) ResteasyClientBuilder.newBuilder()
                     .register(new ContextResolver<ObjectMapper>() {
                         @Override
@@ -44,7 +47,7 @@ public class MasterRealmConnectionService {
                             return objectMapper;
                         }
                     });
-            
+
             Keycloak keycloak = KeycloakBuilder.builder()
                     .serverUrl(serverUrl)
                     .realm(initConfig.getMaster().getRealm())
@@ -55,11 +58,23 @@ public class MasterRealmConnectionService {
                     .resteasyClient(clientBuilder.build())
                     .build();
 
-            // Test connection (skip serverInfo check to avoid compatibility issues)
-            log.info("Successfully connected to master realm");
+            // Test connection by trying to get server info
+            try {
+                keycloak.serverInfo().getInfo();
+                log.debug("Successfully connected to Keycloak master realm");
+            } catch (Exception e) {
+                log.debug("[user-service] [MasterRealmConnectionService.connect] Connected but server info check failed (may be version mismatch): {}", e.getMessage());
+                // Continue anyway - connection might still work
+            }
+
             return keycloak;
         } catch (Exception e) {
-            log.error("Failed to connect to master realm: {}", e.getMessage());
+            log.error("[user-service] [MasterRealmConnectionService.connect] Failed to connect to master realm", e);
+            log.error("[user-service] [MasterRealmConnectionService.connect] Connection details:");
+            log.error("[user-service] [MasterRealmConnectionService.connect]    Server URL: {}", serverUrl);
+            log.error("[user-service] [MasterRealmConnectionService.connect]    Realm: {}", initConfig.getMaster().getRealm());
+            log.error("[user-service] [MasterRealmConnectionService.connect]    Username: {}", initConfig.getMaster().getUsername());
+            log.error("[user-service] [MasterRealmConnectionService.connect]    Password: {} (hidden)", initConfig.getMaster().getPassword() != null ? "***" : "NULL");
             return null;
         }
     }

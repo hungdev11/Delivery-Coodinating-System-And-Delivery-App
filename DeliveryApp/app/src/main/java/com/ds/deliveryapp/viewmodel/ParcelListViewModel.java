@@ -8,6 +8,7 @@ import androidx.lifecycle.MutableLiveData;
 
 import com.ds.deliveryapp.auth.AuthManager;
 import com.ds.deliveryapp.clients.ParcelClient;
+import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.Parcel;
@@ -65,19 +66,25 @@ public class ParcelListViewModel extends AndroidViewModel {
 
         // 2. Gọi API với thông tin đã điền (trang 0, 20 mục)
         parcelClient.getParcelReceive(customerId, 0, 20)
-                .enqueue(new Callback<PageResponse<Parcel>>() {
+                .enqueue(new Callback<BaseResponse<PageResponse<Parcel>>>() {
                     @Override
-                    public void onResponse(@NonNull Call<PageResponse<Parcel>> call, @NonNull Response<PageResponse<Parcel>> response) {
+                    public void onResponse(@NonNull Call<BaseResponse<PageResponse<Parcel>>> call, @NonNull Response<BaseResponse<PageResponse<Parcel>>> response) {
                         isLoading.setValue(false);
                         if (response.isSuccessful() && response.body() != null) {
-                            // 3. Cập nhật LiveData với kết quả
-                            parcelList.setValue(response.body().content());
+                            BaseResponse<PageResponse<Parcel>> baseResponse = response.body();
+                            if (baseResponse.getResult() != null) {
+                                // 3. Cập nhật LiveData với kết quả
+                                parcelList.setValue(baseResponse.getResult().content());
+                            } else {
+                                String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể tải danh sách";
+                                errorMessage.setValue(errorMsg);
+                            }
                         } else {
                             errorMessage.setValue("Lỗi khi tải danh sách: " + response.code());
                         }
                     }
                     @Override
-                    public void onFailure(@NonNull Call<PageResponse<Parcel>> call, @NonNull Throwable t) {
+                    public void onFailure(@NonNull Call<BaseResponse<PageResponse<Parcel>>> call, @NonNull Throwable t) {
                         isLoading.setValue(false);
                         errorMessage.setValue("Lỗi mạng: " + t.getMessage());
                     }
@@ -98,19 +105,25 @@ public class ParcelListViewModel extends AndroidViewModel {
 
         // 2. Gọi API với thông tin đã điền (trang 0, 20 mục)
         parcelClient.getParcelSent(customerId, 0, 20)
-                .enqueue(new Callback<PageResponse<Parcel>>() {
+                .enqueue(new Callback<BaseResponse<PageResponse<Parcel>>>() {
                     @Override
-                    public void onResponse(@NonNull Call<PageResponse<Parcel>> call, @NonNull Response<PageResponse<Parcel>> response) {
+                    public void onResponse(@NonNull Call<BaseResponse<PageResponse<Parcel>>> call, @NonNull Response<BaseResponse<PageResponse<Parcel>>> response) {
                         isLoading.setValue(false);
                         if (response.isSuccessful() && response.body() != null) {
-                            // 3. Cập nhật LiveData với kết quả
-                            parcelList.setValue(response.body().content());
+                            BaseResponse<PageResponse<Parcel>> baseResponse = response.body();
+                            if (baseResponse.getResult() != null) {
+                                // 3. Cập nhật LiveData với kết quả
+                                parcelList.setValue(baseResponse.getResult().content());
+                            } else {
+                                String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể tải danh sách";
+                                errorMessage.setValue(errorMsg);
+                            }
                         } else {
                             errorMessage.setValue("Lỗi khi tải danh sách: " + response.code());
                         }
                     }
                     @Override
-                    public void onFailure(@NonNull Call<PageResponse<Parcel>> call, @NonNull Throwable t) {
+                    public void onFailure(@NonNull Call<BaseResponse<PageResponse<Parcel>>> call, @NonNull Throwable t) {
                         isLoading.setValue(false);
                         errorMessage.setValue("Lỗi mạng: " + t.getMessage());
                     }

@@ -12,7 +12,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
 
 import com.ds.session.session_service.app_context.models.DeliveryAssignment;
-import com.ds.session.session_service.app_context.models.DeliverySession; 
+import com.ds.session.session_service.app_context.models.DeliverySession;
 import com.ds.session.session_service.common.enums.AssignmentStatus; 
 import com.ds.session.session_service.common.enums.SessionStatus;
 
@@ -61,6 +61,16 @@ public class AssignmentSpecification {
     }
 
     /**
+     * Lọc các task dựa trên sessionId cụ thể.
+     */
+    public static Specification<DeliveryAssignment> bySessionId(UUID sessionId) {
+        return (root, query, criteriaBuilder) -> {
+            Join<DeliveryAssignment, DeliverySession> sessionJoin = root.join("session", JoinType.INNER);
+            return criteriaBuilder.equal(sessionJoin.get("id"), sessionId);
+        };
+    }
+
+    /**
      * Lọc các task (Assignment) dựa trên danh sách trạng thái (của chính task đó).
      */
     public static Specification<DeliveryAssignment> hasAssignmentStatusIn(List<String> status) {
@@ -81,7 +91,7 @@ public class AssignmentSpecification {
             } catch (IllegalArgumentException e) {
                 // Xử lý nếu client gửi "status" bậy (ví dụ: "DELIVEREDD")
                 // Trả về 0 kết quả
-                log.warn("Invalid status value provided: {}", status, e);
+                log.debug("[session-service] [AssignmentSpecification.build] Invalid status value provided: {}", status);
                 return criteriaBuilder.disjunction(); 
             }
         };
@@ -158,4 +168,3 @@ public class AssignmentSpecification {
         };
     }
 }
-

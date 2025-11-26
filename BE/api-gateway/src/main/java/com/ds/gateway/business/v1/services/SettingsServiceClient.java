@@ -62,7 +62,7 @@ public class SettingsServiceClient implements ISettingsServiceClient {
             .bodyToMono(new ParameterizedTypeReference<BaseResponse<String>>() {})
             .map(BaseResponse::getResult)
             .onErrorResume(ex -> {
-                log.warn("Setting {} not found, using default value", key);
+                log.debug("[api-gateway] [SettingsServiceClient.getSettingValue] Setting {} not found, using default value", key);
                 return Mono.just(defaultValue);
             })
             .toFuture();

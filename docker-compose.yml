@@ -1,29 +1,9 @@
 services:
-  # Keycloak
-  # keycloak:
-  #   image: quay.io/keycloak/keycloak:24.0.2
-  #   container_name: dss-keycloak
-  #   restart: on-failure
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     KEYCLOAK_ADMIN: dev
-  #     KEYCLOAK_ADMIN_PASSWORD: dev
-  #     KC_DB: mysql
-  #     KC_DB_URL: ${KEYCLOAK_DB_URL}
-  #     KC_DB_USERNAME: dev
-  #     KC_DB_PASSWORD: dev
-  #   ports:
-  #     - "8080:8080"
-  #   command: start-dev
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080;echo -e 'GET /health/ready HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;"] 
-  #     interval: 10s
-  #     timeout: 10s
-  #     retries: 120
-  #     start_period: 30s
+  # ============================================
+  # CORE INFRASTRUCTURE SERVICES (Start First)
+  # ============================================
 
-  # Settings Service
+  # Settings Service - Priority service, starts first
   settings-service:
     restart: on-failure
     env_file:
@@ -40,9 +20,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       SETTINGS_DB_NAME: ${SETTINGS_DB_NAME}
       SERVER_PORT: 21502
-    ports:
-      - "21502:21502"
-    depends_on: {}
+    # Ports removed - only accessible via nginx or docker network
+    # Use docker-compose.debug.yml to expose ports for debugging
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21502/actuator/health"]
       interval: 10s
@@ -50,7 +29,7 @@ services:
       retries: 120
       start_period: 30s
 
-  # User Service
+  # User Service - Priority service, starts after settings-service
   user-service:
     restart: on-failure
     env_file:
@@ -67,17 +46,18 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       USER_DB_NAME: ${USER_DB_NAME:-ds_user_service}
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
-      KEYCLOAK_REALM: master
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-delivery-system}
       KEYCLOAK_CLIENT_ID: dss-client
       KEYCLOAK_CLIENT_SECRET: dss-secret
       SETTINGS_SERVICE_URL: http://settings-service:21502
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21501
-    ports:
-      - "21501:21501"
+    # Ports removed - only accessible via nginx or docker network
+    # Use docker-compose.debug.yml to expose ports for debugging
     depends_on:
-      # keycloak:
-      #   condition: service_healthy
       settings-service:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21501/actuator/health"]
@@ -85,6 +65,60 @@ services:
       timeout: 10s
       retries: 120
       start_period: 30s
+
+  # ============================================
+  # MESSAGE BROKER SERVICES (Start Early)
+  # ============================================
+
+  # Zookeeper - Required for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: dss-zookeeper
+    restart: on-failure
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Kafka - Depends on Zookeeper
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: dss-kafka
+    restart: on-failure
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  # ============================================
+  # BUSINESS SERVICES (Depend on Settings & Kafka)
+  # ============================================
 
   # Zone Service
   zone-service:
@@ -109,17 +143,17 @@ services:
       OSRM_V2_BLOCKING_URL: http://osrm-v2-blocking-only:5000
       OSRM_V2_BASE_URL: http://osrm-v2-base:5000
       PORT: 21503
-    ports:
-      - "21503:21503"
+    # Ports removed - only accessible via nginx or docker network
+    # Use docker-compose.debug.yml to expose ports for debugging
     depends_on:
       settings-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "http://127.0.0.1:21503/health"]
-      interval: 10s
-      timeout: 10s
-      retries: 120
-      start_period: 30s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:21503/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
 
   # Parcel Service
   parcel-service:
@@ -137,10 +171,19 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       PARCEL_DB_NAME: ${PARCEL_DB_NAME:-ds_parcel_service}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
+      ZONE_SERVICE_URL: ${ZONE_SERVICE_URL:-http://zone-service:21503}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21506
-    ports:
-      - "21506:21506"
-    depends_on: {}
+    # Ports removed - only accessible via nginx or docker network
+    # Use docker-compose.debug.yml to expose ports for debugging
+    depends_on:
+      settings-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21506/actuator/health"]
       interval: 10s
@@ -165,11 +208,22 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       SESSION_DB_NAME: ${SESSION_DB_NAME:-ds_session_service}
       PARCEL_SERVICE_URL: ${PARCEL_SERVICE_URL:-http://parcel-service:21506}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
+      ZONE_SERVICE_URL: ${ZONE_SERVICE_URL:-http://zone-service:21503}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21505
-    ports:
-      - "21505:21505"
+    # Ports removed - only accessible via nginx or docker network
+    # Use docker-compose.debug.yml to expose ports for debugging
     depends_on:
+      settings-service:
+        condition: service_healthy
       parcel-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      zone-service:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21505/actuator/health"]
@@ -177,6 +231,21 @@ services:
       timeout: 10s
       retries: 120
       start_period: 30s
+
+  # Kafka UI (Optional - for monitoring)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: dss-kafka-ui
+    restart: on-failure
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: dss-kafka
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
 
   # Communication Service
   communication-service:
@@ -195,11 +264,19 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       COMMUNICATION_DB_NAME: ${COMMUNICATION_DB_NAME:-ds_communication_service}
       SESSION_SERVICE_URL: ${SESSION_SERVICE_URL:-http://session-service:21505}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21511
-    ports:
-      - "21511:21511"
+    # Ports removed - only accessible via nginx or docker network
+    # Use docker-compose.debug.yml to expose ports for debugging
     depends_on:
+      settings-service:
+        condition: service_healthy
       session-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21511/actuator/health"]
@@ -207,6 +284,10 @@ services:
       timeout: 10s
       retries: 120
       start_period: 30s
+
+  # ============================================
+  # GATEWAY & FRONTEND SERVICES (Start Last)
+  # ============================================
 
   # API Gateway
   api-gateway:
@@ -220,7 +301,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
-      KEYCLOAK_REALM: master
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-delivery-system}
       KEYCLOAK_CLIENT_ID: dss-client
       USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
       SETTINGS_SERVICE_URL: ${SETTINGS_SERVICE_URL:-http://settings-service:21502}
@@ -228,9 +309,10 @@ services:
       SESSION_SERVICE_URL: ${SESSION_SERVICE_URL:-http://session-service:21505}
       PARCEL_SERVICE_URL: ${PARCEL_SERVICE_URL:-http://parcel-service:21506}
       COMMUNICATION_SERVICE_URL: ${COMMUNICATION_SERVICE_URL:-http://communication-service:21511}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21500
-    ports:
-      - "21500:21500"
+    # Ports removed - only accessible via nginx or docker network
+    # Use docker-compose.debug.yml to expose ports for debugging
     depends_on:
       user-service:
         condition: service_healthy
@@ -243,6 +325,8 @@ services:
       parcel-service:
         condition: service_healthy
       communication-service:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:21500/api/v1/health || exit 1"]
@@ -263,8 +347,7 @@ services:
     volumes:
       - ./BE/zone_service/osrm_data/osrm-full:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
-    ports:
-      - "25920:5000"
+    # Ports removed - only accessible via docker network
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
@@ -280,8 +363,7 @@ services:
     volumes:
       - ./BE/zone_service/osrm_data/osrm-rating-only:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
-    ports:
-      - "25921:5000"
+    # Ports removed - only accessible via docker network
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
@@ -297,8 +379,7 @@ services:
     volumes:
       - ./BE/zone_service/osrm_data/osrm-blocking-only:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
-    ports:
-      - "25922:5000"
+    # Ports removed - only accessible via docker network
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
@@ -314,8 +395,7 @@ services:
     volumes:
       - ./BE/zone_service/osrm_data/osrm-base:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
-    ports:
-      - "25923:5000"
+    # Ports removed - only accessible via docker network
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
@@ -323,8 +403,7 @@ services:
       retries: 3
       start_period: 10s
 
-  # ManagementSystem Frontend (build only - files shared with nginx)
-  # This service builds the frontend and copies files to shared volume, then exits
+  # ManagementSystem Frontend Builder - Builds frontend and copies to shared volume
   management-system-builder:
     build:
       context: ./ManagementSystem
@@ -346,9 +425,7 @@ services:
       - management-system-dist:/shared
     restart: "no"
 
-  # Nginx Reverse Proxy (serves ManagementSystem + proxies API)
-  # Nginx sẽ "flatten" response từ API Gateway để loại bỏ double chunked encoding
-  # API Gateway đã được fix để không gửi duplicate Transfer-Encoding headers
+  # Nginx Reverse Proxy - Serves frontend and proxies API requests
   nginx-proxy:
     image: nginx:alpine
     container_name: dss-nginx-proxy
@@ -372,16 +449,8 @@ services:
       retries: 3
       start_period: 5s
 
-  # Cloudflare Tunnel
-  # Expose API Gateway qua Nginx Proxy để tránh double chunked encoding
-  # Prerequisites:
-  #   1. Thư mục ./cloudflared/ đã có config.yml và credentials file (.json)
-  #   2. Config.yml đã được cấu hình đúng với service: http://nginx-proxy:8080
-  # 
-  # File structure:
-  #   ./cloudflared/
-  #     ├── config.yml
-  #     └── <tunnel-id>.json
+  # Cloudflare Tunnel - Exposes nginx-proxy to internet
+  # Requires ./cloudflared/config.yml and credentials file
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: dss-cloudflared
@@ -392,9 +461,6 @@ services:
     depends_on:
       nginx-proxy:
         condition: service_healthy
-    # Cloudflared kết nối với Nginx Proxy (không phải API Gateway trực tiếp)
-    # Nginx sẽ "flatten" response và loại bỏ chunked encoding
-    # Lưu ý: Trong config.yml, sử dụng http://nginx-proxy:8080 (container name)
 
 volumes:
   management-system-dist:

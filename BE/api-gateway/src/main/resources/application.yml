@@ -1,93 +1,99 @@
 server:
-  port: 21500
-  # Fix for Cloudflare double chunked encoding issue
-  http2:
-    enabled: false
-  # Disable chunked encoding when Content-Length is known
-  compression:
-    enabled: false
-  tomcat:
-    # Force Tomcat to use Content-Length instead of chunked encoding
-    # This helps prevent double chunked encoding issues with Cloudflare
-    max-http-form-post-size: 2097152
-    connection-timeout: 20000
-    max-connections: 8192
-    threads:
-      max: 200
-      min-spare: 10
+    port: 21500
+    # Fix for Cloudflare double chunked encoding issue
+    http2:
+        enabled: false
+    # Disable chunked encoding when Content-Length is known
+    compression:
+        enabled: false
+    tomcat:
+        # Force Tomcat to use Content-Length instead of chunked encoding
+        # This helps prevent double chunked encoding issues with Cloudflare
+        max-http-form-post-size: 2097152
+        connection-timeout: 20000
+        max-connections: 8192
+        threads:
+            max: 200
+            min-spare: 10
 
 spring:
-  application:
-    name: api-gateway
-  main:
-    allow-bean-definition-overriding: true
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${keycloak.backend.issuer-uri:${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}}
-          jwk-set-uri: ${keycloak.backend.jwk-set-uri:${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}/protocol/openid-connect/certs}
+    application:
+        name: api-gateway
+    main:
+        allow-bean-definition-overriding: true
+    security:
+        oauth2:
+            resourceserver:
+                jwt:
+                    issuer-uri: ${keycloak.backend.issuer-uri:${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}}
+                    jwk-set-uri: ${keycloak.backend.jwk-set-uri:${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}/protocol/openid-connect/certs}
+    kafka:
+        bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 # Keycloak Configuration (reusing admin credentials from User Service)
 keycloak:
-  auth-server-url: ${KEYCLOAK_URL:http://localhost:8080}
-  realm: ${KEYCLOAK_REALM:delivery-system}
-  resource: ${KEYCLOAK_CLIENT_ID:frontend-client}
-  credentials:
-    username: ${KEYCLOAK_ADMIN_USERNAME:dev}
-    password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
-    secret: ${KEYCLOAK_CLIENT_SECRET:}
-  
-  # Multi-realm configuration for different login types
-  backend:
+    auth-server-url: ${KEYCLOAK_URL:http://localhost:8080}
     realm: ${KEYCLOAK_REALM:delivery-system}
-    issuer-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}
-    jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}/protocol/openid-connect/certs
-    client-id: backend-client
-  client:
-    realm: ${KEYCLOAK_CLIENT_REALM:delivery-system}
-    issuer-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_CLIENT_REALM:delivery-system}
-    jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_CLIENT_REALM:delivery-system}/protocol/openid-connect/certs
-    client-id: frontend-client
-  
-  # Default login configuration (from Settings Service)
-  default:
-    realm: ${KEYCLOAK_DEFAULT_REALM:delivery-system}
-    client-id: ${KEYCLOAK_DEFAULT_CLIENT_ID:frontend-client}
+    resource: ${KEYCLOAK_CLIENT_ID:frontend-client}
+    credentials:
+        username: ${KEYCLOAK_ADMIN_USERNAME:dev}
+        password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
+        secret: ${KEYCLOAK_CLIENT_SECRET:}
 
+    # Multi-realm configuration for different login types
+    backend:
+        realm: ${KEYCLOAK_REALM:delivery-system}
+        issuer-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}
+        jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:delivery-system}/protocol/openid-connect/certs
+        client-id: backend-client
+    client:
+        realm: ${KEYCLOAK_CLIENT_REALM:delivery-system}
+        issuer-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_CLIENT_REALM:delivery-system}
+        jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_CLIENT_REALM:delivery-system}/protocol/openid-connect/certs
+        client-id: frontend-client
+
+    # Default login configuration (from Settings Service)
+    default:
+        realm: ${KEYCLOAK_DEFAULT_REALM:delivery-system}
+        client-id: ${KEYCLOAK_DEFAULT_CLIENT_ID:frontend-client}
 
 # External Services Configuration
 # Default to localhost for local development, override via env for Docker
 services:
-  user:
-    base-url: ${USER_SERVICE_URL:http://localhost:21501}
-  settings:
-    base-url: ${SETTINGS_SERVICE_URL:http://localhost:21502}
-  zone:
-    base-url: ${ZONE_SERVICE_URL:http://localhost:21503}
-  session:
-    base-url: ${SESSION_SERVICE_URL:http://localhost:21505}
-  parcel:
-    base-url: ${PARCEL_SERVICE_URL:http://localhost:21506}
-  communication:
-    base-url: ${COMMUNICATION_SERVICE_URL:http://localhost:21511}
-  # Uncomment and add other services as needed
-  # order:
-  #   base-url: ${ORDER_SERVICE_URL:http://order-service:8080}
-  # delivery:
-  #   base-url: ${DELIVERY_SERVICE_URL:http://delivery-service:8080}
+    user:
+        base-url: ${USER_SERVICE_URL:http://localhost:21501}
+    settings:
+        base-url: ${SETTINGS_SERVICE_URL:http://localhost:21502}
+    zone:
+        base-url: ${ZONE_SERVICE_URL:http://localhost:21503}
+    session:
+        base-url: ${SESSION_SERVICE_URL:http://localhost:21505}
+    parcel:
+        base-url: ${PARCEL_SERVICE_URL:http://localhost:21506}
+    communication:
+        base-url: ${COMMUNICATION_SERVICE_URL:http://localhost:21511}
 
 # Logging Configuration
-# Only log errors from frameworks/libraries, keep developer logs at INFO
 logging:
-  level:
-    root: ERROR                          # All libraries default to ERROR
-    com.ds.gateway: INFO                 # Developer logs at INFO level
-    org.springframework: ERROR           # Spring framework errors only
-    org.springframework.web: ERROR       # Spring web errors only
-    org.springframework.boot: ERROR      # Spring Boot errors only
-    org.springframework.security: ERROR  # Spring Security errors only
-    org.keycloak: ERROR                  # Keycloak errors only
-
-      
-      
+    pattern:
+        console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n'
+    level:
+        root: ERROR
+        com.ds.gateway.application.controllers: INFO
+        com.ds.gateway.application.security.UserContext: ERROR
+        com.ds.gateway.application.security.AuthRequiredAspect: ERROR
+        com.ds.gateway: DEBUG
+        com.ds: DEBUG
+        org.springframework: ERROR
+        org.springframework.web: ERROR
+        org.springframework.boot: ERROR
+        org.springframework.security: ERROR
+        org.springframework.security.web: ERROR
+        org.springframework.security.oauth2: ERROR
+        org.springframework.cloud: ERROR
+        org.springframework.cloud.gateway: ERROR
+        org.keycloak: ERROR
+        org.apache.kafka: ERROR
+        org.apache.tomcat: ERROR
+        org.apache.catalina: ERROR
+        org.apache.coyote: ERROR

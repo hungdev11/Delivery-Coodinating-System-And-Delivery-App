@@ -39,19 +39,43 @@ public class DeliveryAssignmentResponse {
     private BigDecimal lon;
     
     public static DeliveryAssignmentResponse from(DeliveryAssignment assignment, ParcelInfo parcel, DeliverySession session, String deliveryManPhone, String receiverName) {
+        if (parcel == null) {
+            // Return response with minimal information when parcel is not available
+            return DeliveryAssignmentResponse.builder()
+                    .parcelId(assignment.getParcelId())
+                    .parcelCode(null)
+                    .deliveryType(null)
+                    .status(assignment.getStatus().name())
+                    .deliveryManAssignedId(session != null ? session.getDeliveryManId() : null)
+                    .deliveryManPhone(deliveryManPhone) 
+                    .receiverName(receiverName)
+                    .receiverId(null)
+                    .receiverPhone(null)
+                    .deliveryLocation(null)
+                    .value(null)
+                    .sessionId(session != null ? session.getId().toString() : null)
+                    .weight(0.0)
+                    .createdAt(assignment.getScanedAt())
+                    .completedAt(assignment.getUpdatedAt())
+                    .failReason(assignment.getFailReason())
+                    .lat(null)
+                    .lon(null)
+                    .build();
+        }
+        
         return DeliveryAssignmentResponse.builder()
                 .parcelId(assignment.getParcelId())
                 .parcelCode(parcel.getCode()) 
                 .deliveryType(parcel.getDeliveryType())
                 .status(assignment.getStatus().name())
-                .deliveryManAssignedId(session.getDeliveryManId())
+                .deliveryManAssignedId(session != null ? session.getDeliveryManId() : null)
                 .deliveryManPhone(deliveryManPhone) 
                 .receiverName(receiverName)
                 .receiverId(parcel.getReceiverId())
                 .receiverPhone(parcel.getReceiverPhoneNumber())
                 .deliveryLocation(parcel.getTargetDestination()) // Mapping targetDestination as deliveryLocation
                 .value(parcel.getValue())
-                .sessionId(session.getId().toString())
+                .sessionId(session != null ? session.getId().toString() : null)
                 .weight(parcel.getWeight())
                 .createdAt(assignment.getScanedAt())
                 .completedAt(assignment.getUpdatedAt()) // Assuming completedAt is the last updated time

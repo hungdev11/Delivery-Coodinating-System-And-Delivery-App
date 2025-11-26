@@ -96,70 +96,92 @@ public class UserContext {
     }
 
     public static Set<String> extractRoles(Jwt jwt) {
-        log.debug("🔍 EXTRACTING ROLES from JWT token");
-        log.debug("🔍 JWT claims: {}", jwt.getClaims());
+        Set<String> allRoles = Collections.emptySet();
         
         try {
             // Try to extract from realm_access.roles
             Object realmAccess = jwt.getClaim("realm_access");
-            log.debug("🔍 Realm access claim: {}", realmAccess);
             
             if (realmAccess instanceof java.util.Map) {
                 @SuppressWarnings("unchecked")
                 java.util.Map<String, Object> realmMap = (java.util.Map<String, Object>) realmAccess;
                 Object roles = realmMap.get("roles");
-                log.debug("🔍 Realm roles: {}", roles);
                 
                 if (roles instanceof Collection) {
-                    Set<String> roleSet = ((Collection<?>) roles).stream()
+                    allRoles = ((Collection<?>) roles).stream()
                         .map(Object::toString)
                         .collect(Collectors.toSet());
-                    log.debug("✅ EXTRACTED ROLES from realm_access: {}", roleSet);
-                    return roleSet;
                 }
             }
         } catch (Exception e) {
-            log.debug("🔍 Failed to extract from realm_access: {}", e.getMessage());
+            log.error("[api-gateway] [UserContext.extractRoles] Failed to extract from realm_access", e);
         }
 
-        try {
-            // Try to extract from resource_access
-            Object resourceAccess = jwt.getClaim("resource_access");
-            log.debug("🔍 Resource access claim: {}", resourceAccess);
-            
-            if (resourceAccess instanceof java.util.Map) {
-                @SuppressWarnings("unchecked")
-                java.util.Map<String, Object> resourceMap = (java.util.Map<String, Object>) resourceAccess;
+        // If no roles from realm_access, try resource_access
+        if (allRoles.isEmpty()) {
+            try {
+                // Try to extract from resource_access
+                Object resourceAccess = jwt.getClaim("resource_access");
                 
-                // Try multiple client IDs that might have roles
-                String[] clientIds = {"backend-client", "frontend-client", "api-gateway"};
-                for (String clientId : clientIds) {
-                    log.debug("🔍 Checking client: {}", clientId);
-                    Object clientRoles = resourceMap.get(clientId);
-                    log.debug("🔍 Client {} roles: {}", clientId, clientRoles);
+                if (resourceAccess instanceof java.util.Map) {
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, Object> resourceMap = (java.util.Map<String, Object>) resourceAccess;
                     
-                    if (clientRoles instanceof java.util.Map) {
-                        @SuppressWarnings("unchecked")
-                        java.util.Map<String, Object> clientMap = (java.util.Map<String, Object>) clientRoles;
-                        Object roles = clientMap.get("roles");
-                        log.debug("🔍 Client {} roles object: {}", clientId, roles);
+                    // Try multiple client IDs that might have roles
+                    String[] clientIds = {"backend-client", "frontend-client", "api-gateway"};
+                    for (String clientId : clientIds) {
+                        Object clientRoles = resourceMap.get(clientId);
                         
-                        if (roles instanceof Collection) {
-                            Set<String> roleSet = ((Collection<?>) roles).stream()
-                                .map(Object::toString)
-                                .collect(Collectors.toSet());
-                            log.debug("✅ EXTRACTED ROLES from resource_access[{}]: {}", clientId, roleSet);
-                            return roleSet;
+                        if (clientRoles instanceof java.util.Map) {
+                            @SuppressWarnings("unchecked")
+                            java.util.Map<String, Object> clientMap = (java.util.Map<String, Object>) clientRoles;
+                            Object roles = clientMap.get("roles");
+                            
+                            if (roles instanceof Collection) {
+                                allRoles = ((Collection<?>) roles).stream()
+                                    .map(Object::toString)
+                                    .collect(Collectors.toSet());
+                                break; // Found roles, exit loop
+                            }
                         }
                     }
                 }
+            } catch (Exception e) {
+                log.error("[api-gateway] [UserContext.extractRoles] Failed to extract from resource_access", e);
             }
-        } catch (Exception e) {
-            log.debug("🔍 Failed to extract from resource_access: {}", e.getMessage());
         }
 
-        log.debug("❌ NO ROLES FOUND in JWT token");
-        return Collections.emptySet();
+        // Filter out Keycloak default roles
+        Set<String> filteredRoles = filterKeycloakDefaultRoles(allRoles);
+        
+        return filteredRoles;
+    }
+
+    /**
+     * Filter out Keycloak default roles
+     * Removes:
+     * - Roles starting with "default-roles-" (e.g., "default-roles-delivery-system")
+     * - "offline_access"
+     * - "uma_authorization"
+     */
+    private static Set<String> filterKeycloakDefaultRoles(Set<String> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return Collections.emptySet();
+        }
+        
+        return roles.stream()
+            .filter(role -> {
+                // Filter out default-roles-* pattern
+                if (role.startsWith("default-roles-")) {
+                    return false;
+                }
+                // Filter out Keycloak system roles
+                if ("offline_access".equals(role) || "uma_authorization".equals(role)) {
+                    return false;
+                }
+                return true;
+            })
+            .collect(Collectors.toSet());
     }
 
     private static Set<String> extractPermissions(Jwt jwt) {

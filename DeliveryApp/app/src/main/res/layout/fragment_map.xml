@@ -50,15 +50,57 @@
         android:contentDescription="Hiển thị danh sách nhiệm vụ"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_next_task"
+        android:id="@+id/fab_reload_task"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
-        android:src="@android:drawable/ic_media_next"
+        android:src="@android:drawable/ic_menu_rotate"
         app:fabSize="normal"
         app:backgroundTint="@color/design_default_color_primary"
-        android:contentDescription="Nhiệm vụ tiếp theo"/>
+        android:contentDescription="Tải lại tuyến đường"/>
+
+    <!-- Navigation buttons for leg-by-leg -->
+    <LinearLayout
+        android:id="@+id/leg_navigation_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="80dp"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        android:background="@android:drawable/dialog_holo_light_frame"
+        android:padding="8dp">
+
+        <ImageButton
+            android:id="@+id/btn_prev_leg"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_media_previous"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Chặng trước"
+            android:layout_marginEnd="8dp"/>
+
+        <TextView
+            android:id="@+id/tv_leg_info"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="1 / 5"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:minWidth="60dp"
+            android:layout_gravity="center_vertical"/>
+
+        <ImageButton
+            android:id="@+id/btn_next_leg"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_media_next"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Chặng tiếp theo"
+            android:layout_marginStart="8dp"/>
+    </LinearLayout>
 
     <ProgressBar
         android:id="@+id/progress_bar"

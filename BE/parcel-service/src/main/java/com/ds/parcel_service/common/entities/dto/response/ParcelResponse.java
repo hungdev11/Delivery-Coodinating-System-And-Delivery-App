@@ -19,8 +19,10 @@ import lombok.NoArgsConstructor;
 public class ParcelResponse {
     private String id;
     private String code;
-    private String senderId;     
+    private String senderId;
+    private String senderName; // Full name from UserSnapshot
     private String receiverId;
+    private String receiverName; // Full name from UserSnapshot
     private String receiverPhoneNumber;
     private DeliveryType deliveryType;
     private String receiveFrom;
@@ -33,7 +35,15 @@ public class ParcelResponse {
     private LocalTime windowStart;
     private LocalTime windowEnd;
     private LocalDateTime deliveredAt;
+    private LocalDateTime confirmedAt;
+    private String confirmedBy;
+    private String confirmationNote;
 
     private BigDecimal lat;
     private BigDecimal lon;
+    
+    // Priority and delay fields
+    private Integer priority;
+    private Boolean isDelayed;
+    private LocalDateTime delayedUntil;
 }

@@ -301,6 +301,37 @@ const columns: TableColumn<ZoneDto>[] = [
       }),
   },
   {
+    accessorKey: 'actions',
+    header: 'Actions',
+    cell: ({ row }) => {
+      const zone = row.original
+      return h('div', { class: 'flex space-x-2' }, [
+        h(UButton, {
+          icon: 'i-heroicons-eye',
+          size: 'sm',
+          variant: 'ghost',
+          title: 'View zone details',
+          onClick: () => viewZoneDetail(zone),
+        }),
+        h(UButton, {
+          icon: 'i-heroicons-pencil',
+          size: 'sm',
+          variant: 'ghost',
+          title: 'Edit zone',
+          onClick: () => openEditModal(zone),
+        }),
+        h(UButton, {
+          icon: 'i-heroicons-trash',
+          size: 'sm',
+          variant: 'ghost',
+          color: 'error',
+          title: 'Delete zone',
+          onClick: () => openDeleteModal(zone),
+        }),
+      ])
+    },
+  },
+  {
     accessorKey: 'code',
     header: ({ column }) =>
       setupHeader({
@@ -370,37 +401,6 @@ const columns: TableColumn<ZoneDto>[] = [
   {
     accessorKey: 'id',
     header: 'ID',
-  },
-  {
-    accessorKey: 'actions',
-    header: 'Actions',
-    cell: ({ row }) => {
-      const zone = row.original
-      return h('div', { class: 'flex space-x-2' }, [
-        h(UButton, {
-          icon: 'i-heroicons-eye',
-          size: 'sm',
-          variant: 'ghost',
-          title: 'View zone details',
-          onClick: () => viewZoneDetail(zone),
-        }),
-        h(UButton, {
-          icon: 'i-heroicons-pencil',
-          size: 'sm',
-          variant: 'ghost',
-          title: 'Edit zone',
-          onClick: () => openEditModal(zone),
-        }),
-        h(UButton, {
-          icon: 'i-heroicons-trash',
-          size: 'sm',
-          variant: 'ghost',
-          color: 'error',
-          title: 'Delete zone',
-          onClick: () => openDeleteModal(zone),
-        }),
-      ])
-    },
   },
 ]
 
@@ -720,7 +720,12 @@ watch(
         Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
         {{ total }} results
       </div>
-      <UPagination v-model="page" :items-per-page="pageSize" :total="total" />
+      <UPagination
+        :model-value="page + 1"
+        :items-per-page="pageSize"
+        :total="total"
+        @update:model-value="(newPage: number) => setPage(newPage - 1)"
+      />
     </div>
 
     <!-- Advanced Filter Drawer -->

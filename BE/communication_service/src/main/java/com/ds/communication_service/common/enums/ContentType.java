@@ -10,5 +10,11 @@ public enum ContentType {
      * Client phải đọc trường 'proposal_id' của Message
      * để lấy thông tin và render card tương tác.
      */
-    INTERACTIVE_PROPOSAL
+    INTERACTIVE_PROPOSAL,
+    
+    /**
+     * Tin nhắn thông báo đơn hàng đã hoàn thành giao hàng.
+     * Content chứa JSON với thông tin parcel (parcelId, parcelCode, completedAt, etc.)
+     */
+    DELIVERY_COMPLETED
 }

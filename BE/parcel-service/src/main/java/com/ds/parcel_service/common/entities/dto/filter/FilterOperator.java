@@ -1,5 +1,8 @@
 package com.ds.parcel_service.common.entities.dto.filter;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
+
 /**
  * Enumeration of supported filter operators
  */
@@ -58,17 +61,27 @@ public enum FilterOperator {
      * @param value String value
      * @return FilterOperator or null if not found
      */
+    @JsonCreator
     public static FilterOperator fromValue(String value) {
-        if (value == null) {
+        if (value == null || value.trim().isEmpty()) {
             return null;
         }
         
-        for (FilterOperator operator : values()) {
-            if (operator.getValue().equals(value)) {
-                return operator;
+        String normalized = value.trim().toUpperCase();
+        
+        // Try to match by enum name first (case-insensitive)
+        try {
+            return FilterOperator.valueOf(normalized);
+        } catch (IllegalArgumentException e) {
+            // If not found by name, try to match by value
+            for (FilterOperator operator : values()) {
+                if (operator.getValue().equalsIgnoreCase(value) || 
+                    operator.name().equalsIgnoreCase(value)) {
+                    return operator;
+                }
             }
         }
-        return null;
+        throw new IllegalArgumentException("Unknown FilterOperator value: " + value);
     }
 
     /**

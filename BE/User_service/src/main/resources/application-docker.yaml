@@ -9,6 +9,14 @@ spring:
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    # HikariCP Connection Pool Configuration
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
   jpa:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:update}  # Options: create, create-drop, update, validate, none
@@ -43,6 +51,13 @@ keycloak:
     password: ${KEYCLOAK_ADMIN_PASSWORD:dev}
     secret: ${KEYCLOAK_CLIENT_SECRET:46sGOyba6nyt8UhLkKAQgzmbedF9L042}
   
+  admin-client:
+    # Connection pool settings (if needed by the HTTP client)
+    connection-pool-size: 20
+    # Timeout settings (in milliseconds)
+    connection-timeout: 10000
+    socket-timeout: 30000
+  
   init:
     enabled: ${KEYCLOAK_INIT_ENABLED:true}
     master:
@@ -66,6 +81,8 @@ keycloak:
             description: "Staff member with operational access"
           - name: SHIPPER
             description: "Delivery driver/shipper"
+          - name: SHOP
+            description: "Shop/seller who creates delivery orders"
           - name: CLIENT
             description: "End customer/client"
 
@@ -96,6 +113,21 @@ keycloak:
               - "http://localhost:5173"
               - "http://localhost:3000"
             roles:
+              - user-service
+              - delivery-service
+
+          - clientId: dss-client
+            name: "DSS Client"
+            secret: ""  # Will be auto-generated
+            publicClient: false
+            serviceAccountsEnabled: true
+            standardFlowEnabled: true
+            directAccessGrantsEnabled: true
+            redirectUris: ["*"]
+            webOrigins: ["*"]
+            roles:
+              - admin-service
+              - management-service
               - user-service
               - delivery-service
 
@@ -143,6 +175,161 @@ keycloak:
             realmRoles: [SHIPPER]
             clientRoles:
               frontend-client: [delivery-service]
+            deliveryMan:
+              enabled: true
+              vehicleType: MOTORBIKE
+              capacityKg: 120
+
+          - username: shipper02
+            email: shipper02@delivery-system.com
+            firstName: Minh
+            lastName: Tran
+            password: shipper123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHIPPER]
+            clientRoles:
+              frontend-client: [delivery-service]
+            deliveryMan:
+              enabled: true
+              vehicleType: MOTORBIKE
+              capacityKg: 150
+
+          - username: shipper03
+            email: shipper03@delivery-system.com
+            firstName: Hung
+            lastName: Nguyen
+            password: shipper123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHIPPER]
+            clientRoles:
+              frontend-client: [delivery-service]
+            deliveryMan:
+              enabled: true
+              vehicleType: BIKE
+              capacityKg: 80
+
+          - username: shipper04
+            email: shipper04@delivery-system.com
+            firstName: Lan
+            lastName: Le
+            password: shipper123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHIPPER]
+            clientRoles:
+              frontend-client: [delivery-service]
+            deliveryMan:
+              enabled: true
+              vehicleType: MOTORBIKE
+              capacityKg: 120
+
+          - username: shipper05
+            email: shipper05@delivery-system.com
+            firstName: Duc
+            lastName: Pham
+            password: shipper123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHIPPER]
+            clientRoles:
+              frontend-client: [delivery-service]
+            deliveryMan:
+              enabled: true
+              vehicleType: MOTORBIKE
+              capacityKg: 200
+
+          - username: shop01
+            email: shop01@delivery-system.com
+            firstName: My
+            lastName: Shop
+            password: shop123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHOP]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: My Shop - Primary Address
+              addressText: 123 Nguyen Hue Street, District 1, Ho Chi Minh City
+              lat: 10.762622
+              lon: 106.660172
+
+          - username: shop02
+            email: shop02@delivery-system.com
+            firstName: Fast
+            lastName: Mart
+            password: shop123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHOP]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Fast Mart - Primary Address
+              addressText: 456 Le Loi Street, District 1, Ho Chi Minh City
+              lat: 10.770000
+              lon: 106.670000
+
+          - username: shop03
+            email: shop03@delivery-system.com
+            firstName: Quick
+            lastName: Store
+            password: shop123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHOP]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Quick Store - Primary Address
+              addressText: 789 Dong Khoi Street, District 1, Ho Chi Minh City
+              lat: 10.775000
+              lon: 106.675000
+
+          - username: shop04
+            email: shop04@delivery-system.com
+            firstName: Best
+            lastName: Shop
+            password: shop123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHOP]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Best Shop - Primary Address
+              addressText: 321 Pasteur Street, District 3, Ho Chi Minh City
+              lat: 10.785000
+              lon: 106.685000
+
+          - username: shop05
+            email: shop05@delivery-system.com
+            firstName: Mega
+            lastName: Market
+            password: shop123
+            enabled: true
+            emailVerified: true
+            realmRoles: [SHOP]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Mega Market - Primary Address
+              addressText: 654 Vo Van Tan Street, District 3, Ho Chi Minh City
+              lat: 10.790000
+              lon: 106.690000
+
+          - username: staff02
+            email: staff02@delivery-system.com
+            firstName: Staff
+            lastName: Two
+            password: staff123
+            enabled: true
+            emailVerified: true
+            realmRoles: [STAFF]
+            clientRoles:
+              backend-client: [management-service]
 
           - username: client01
             email: client01@delivery-system.com
@@ -154,11 +341,122 @@ keycloak:
             realmRoles: [CLIENT]
             clientRoles:
               frontend-client: [user-service]
+            address:
+              name: Jane Customer - Primary Address
+              addressText: Đại học Sư phạm Kỹ thuật TP.HCM, Võ Văn Ngân, Linh Chiểu, Thủ Đức, TP.HCM
+              lat: 10.860000
+              lon: 106.770000
+
+          - username: client02
+            email: client02@delivery-system.com
+            firstName: Minh
+            lastName: Le
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Minh Le - Primary Address
+              addressText: 123 Lê Văn Việt, Bình Thọ, Thủ Đức, TP.HCM
+              lat: 10.850000
+              lon: 106.760000
+
+          - username: client03
+            email: client03@delivery-system.com
+            firstName: Lan
+            lastName: Tran
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Lan Tran - Primary Address
+              addressText: 456 Võ Văn Ngân, Bình Thọ, Thủ Đức, TP.HCM
+              lat: 10.862000
+              lon: 106.772000
+
+          - username: client04
+            email: client04@delivery-system.com
+            firstName: Duc
+            lastName: Nguyen
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Duc Nguyen - Primary Address
+              addressText: Đường Huy Cận, Phường Phước Long, Thủ Đức, TP.HCM
+              lat: 10.830000
+              lon: 106.750000
+
+          - username: client05
+            email: client05@delivery-system.com
+            firstName: An
+            lastName: Pham
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: An Pham - Primary Address
+              addressText: 789 Lê Văn Việt, Hiệp Phú, Thủ Đức, TP.HCM
+              lat: 10.848000
+              lon: 106.758000
+
+          - username: client06
+            email: client06@delivery-system.com
+            firstName: Hoa
+            lastName: Vo
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Hoa Vo - Primary Address
+              addressText: 321 Võ Văn Ngân, Linh Chiểu, Thủ Đức, TP.HCM
+              lat: 10.864000
+              lon: 106.774000
+
+          - username: client07
+            email: client07@delivery-system.com
+            firstName: Hung
+            lastName: Hoang
+            password: client123
+            enabled: true
+            emailVerified: true
+            realmRoles: [CLIENT]
+            clientRoles:
+              frontend-client: [user-service]
+            address:
+              name: Hung Hoang - Primary Address
+              addressText: 654 Lê Văn Việt, Tăng Nhơn Phú A, Thủ Đức, TP.HCM
+              lat: 10.852000
+              lon: 106.762000
 
 # External Services
 services:
   settings:
     base-url: ${SETTINGS_SERVICE_URL:http://settings-service:21502}
+  zone:
+    base-url: ${ZONE_SERVICE_URL:http://zone-service:21503}
+  parcel:
+    base-url: ${PARCEL_SERVICE_URL:http://parcel-service:21506}
+
+# Parcel Seed Configuration
+parcel:
+  seed:
+    enabled: ${PARCEL_SEED_ENABLED:true}
+    count: ${PARCEL_SEED_COUNT:20}
 
 # Actuator Configuration
 management:
@@ -180,14 +478,38 @@ user:
 
 # Logging Configuration
 # Only log errors from frameworks/libraries, keep developer logs at INFO
+# Suppress verbose output from Java/Spring libraries to reduce log noise
 logging:
   level:
     root: ERROR                          # All libraries default to ERROR
     com.ds: INFO                         # Developer logs at INFO level
+    # Spring Framework - suppress verbose startup/component scanning
     org.springframework: ERROR           # Spring framework errors only
     org.springframework.web: ERROR       # Spring web errors only
     org.springframework.boot: ERROR      # Spring Boot errors only
-    org.hibernate: ERROR                 # Hibernate errors only (no SQL logging)
+    org.springframework.context: ERROR   # Component scanning noise
+    org.springframework.beans: ERROR      # Bean creation noise
+    org.springframework.core: ERROR       # Core framework noise
+    # Database/JPA - suppress SQL and connection pool noise
+    org.hibernate: ERROR                  # Hibernate errors only (no SQL logging)
+    org.hibernate.SQL: OFF                # Explicitly disable SQL logging
+    org.hibernate.type.descriptor.sql: OFF # Disable SQL parameter logging
     org.flywaydb: ERROR                  # Flyway errors only
     com.zaxxer.hikari: ERROR             # HikariCP errors only
-    org.keycloak: ERROR                  # Keycloak admin client errors only 
+    # Keycloak - suppress verbose admin client logs
+    org.keycloak: ERROR                  # Keycloak admin client errors only
+    org.jboss.resteasy: ERROR            # RESTEasy (Keycloak client) errors only
+    # HTTP/Network - suppress connection pool and HTTP client noise
+    org.apache.http: ERROR               # Apache HTTP client errors only
+    org.apache.catalina: ERROR           # Tomcat errors only
+    org.apache.tomcat: ERROR             # Tomcat errors only
+    # JAX-RS/Jersey - suppress REST client verbose logs
+    org.jboss.resteasy.client: ERROR     # RESTEasy client errors only
+    # Jackson/JSON - suppress serialization noise
+    com.fasterxml.jackson: ERROR         # Jackson errors only
+    # Other common noisy libraries
+    org.reflections: ERROR                # Reflections library errors only
+    io.netty: ERROR                      # Netty (used by HTTP clients) errors only
+    reactor.netty: ERROR                 # Reactor Netty errors only
+    # Logback configuration
+    ch.qos.logback: ERROR                # Logback errors only 

@@ -14,9 +14,13 @@ import lombok.Setter;
 @Setter
 public class Message {
     private String id;
+    private String conversationId;
     private String senderId;
     private String content;
     private String sentAt;
     private ContentType type;
+    private String status; // Message status: SENT, DELIVERED, READ
+    private String deliveredAt; // When message was delivered
+    private String readAt; // When message was read
     private InteractiveProposal proposal;
 }

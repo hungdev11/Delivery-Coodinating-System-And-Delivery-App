@@ -1,25 +1,48 @@
 package com.ds.parcel_service.business.v1.services;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import com.ds.parcel_service.app_context.models.Parcel;
+import com.ds.parcel_service.app_context.models.ParcelDestination;
+import com.ds.parcel_service.app_context.models.AssignmentSnapshot;
 import com.ds.parcel_service.app_context.repositories.ParcelDestinationRepository;
 import com.ds.parcel_service.app_context.repositories.ParcelRepository;
+import com.ds.parcel_service.app_context.repositories.UserSnapshotRepository;
+import com.ds.parcel_service.application.client.CreateDestinationRequest;
+import com.ds.parcel_service.application.client.DesDetail;
+import com.ds.parcel_service.application.client.DestinationResponse;
+import com.ds.parcel_service.application.client.ListAddressResponse;
+import com.ds.parcel_service.application.client.ZoneClient;
+import com.ds.parcel_service.application.client.SessionServiceClient;
+import com.ds.parcel_service.application.services.AssignmentSnapshotService;
+import com.ds.parcel_service.common.entities.dto.common.PagedData;
 import com.ds.parcel_service.common.entities.dto.request.ParcelCreateRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelFilterRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelUpdateRequest;
+import com.ds.parcel_service.common.entities.dto.request.ParcelConfirmRequest;
+import com.ds.parcel_service.common.entities.dto.request.PagingRequestV2;
 import com.ds.parcel_service.common.entities.dto.response.PageResponse;
 import com.ds.parcel_service.common.entities.dto.response.ParcelResponse;
+import com.ds.parcel_service.common.entities.dto.sort.SortConfig;
 import com.ds.parcel_service.common.enums.DeliveryType;
+import com.ds.parcel_service.common.enums.DestinationType;
 import com.ds.parcel_service.common.enums.ParcelEvent;
 import com.ds.parcel_service.common.enums.ParcelStatus;
 import com.ds.parcel_service.common.exceptions.ResourceNotFound;
@@ -33,6 +56,7 @@ import com.ds.parcel_service.common.parcelstates.InWarehouseState;
 import com.ds.parcel_service.common.parcelstates.LostState;
 import com.ds.parcel_service.common.parcelstates.OnRouteState;
 import com.ds.parcel_service.common.parcelstates.SuccededState;
+import com.ds.parcel_service.common.utils.EnhancedQueryParserV2;
 import com.ds.parcel_service.common.utils.PageUtil;
 import com.ds.parcel_service.common.utils.ParcelSpecification;
 
@@ -47,6 +71,10 @@ public class ParcelService implements IParcelService{
 
     private final ParcelRepository parcelRepository;
     private final ParcelDestinationRepository parcelDestinationRepository;
+    private final ZoneClient zoneClient;
+    private final UserSnapshotRepository userSnapshotRepository;
+    private final AssignmentSnapshotService assignmentSnapshotService;
+    private final SessionServiceClient sessionServiceClient;
 
     private final Map<ParcelStatus, IParcelState> stateMap = Map.of(
         ParcelStatus.IN_WAREHOUSE, new InWarehouseState(),
@@ -81,14 +109,14 @@ public class ParcelService implements IParcelService{
                 
         IParcelState currentStateObject = stateMap.get(currentStatus);
         if (currentStateObject == null) {
-            log.error("Missing state handler for status: {}", currentStatus);
+            log.error("[parcel-service] [ParcelService.processTransition] Missing state handler for status: {}", currentStatus);
             throw new IllegalStateException("Missing state handler for current status.");
         }
         
         ParcelStatus nextStatus = currentStateObject.handleTransition(event);
 
         if (currentStatus.equals(nextStatus)) {
-            log.info("Parcel {} state remains {}. Event processed: {}", parcelId, currentStatus, event);
+            log.debug("[parcel-service] [ParcelService.processTransition] Parcel {} state remains {}. Event processed: {}", parcelId, currentStatus, event);
             return parcel; 
         }
 
@@ -112,8 +140,54 @@ public class ParcelService implements IParcelService{
     }
 
     @Override
+    @Transactional
+    public ParcelResponse confirmParcelByClient(UUID parcelId, String userId, ParcelConfirmRequest request) {
+        Parcel parcel = getParcel(parcelId);
+
+        if (!parcel.getReceiverId().equals(userId)) {
+            throw new IllegalStateException("User is not the receiver of this parcel");
+        }
+
+        if (parcel.getStatus() != ParcelStatus.DELIVERED) {
+            throw new IllegalStateException("Parcel must be in DELIVERED state before confirmation");
+        }
+
+        AssignmentSnapshot snapshot = assignmentSnapshotService.getOrFetch(parcelId);
+        if (snapshot == null || snapshot.getAssignmentId() == null || snapshot.getSessionId() == null) {
+            snapshot = assignmentSnapshotService.refreshFromRemote(parcelId);
+        }
+
+        Parcel confirmed = processTransition(parcelId, ParcelEvent.CUSTOMER_RECEIVED);
+        confirmed.setConfirmedAt(java.time.LocalDateTime.now());
+        confirmed.setConfirmedBy(userId);
+        confirmed.setConfirmationNote(request.getNote());
+        Parcel saved = parcelRepository.save(confirmed);
+
+        try {
+            if (snapshot != null && snapshot.getAssignmentId() != null && snapshot.getSessionId() != null) {
+                sessionServiceClient.markAssignmentSuccess(snapshot.getSessionId(), snapshot.getAssignmentId(), request.getNote());
+                assignmentSnapshotService.updateStatus(snapshot.getAssignmentId(), "SUCCESS");
+            }
+        } catch (Exception ex) {
+            log.error("[parcel-service] [ParcelService.confirmParcelByClient] Failed to update assignment status for parcel {}", parcelId, ex);
+        }
+
+        return toDto(saved);
+    }
+
+    @Override
+    @Transactional
     public ParcelResponse createParcel(ParcelCreateRequest request) {
         validateUniqueCode(request.getCode());
+        
+        // Validate destination IDs are provided
+        if (request.getSenderDestinationId() == null || request.getSenderDestinationId().isBlank()) {
+            throw new IllegalArgumentException("Sender destination ID is required");
+        }
+        if (request.getReceiverDestinationId() == null || request.getReceiverDestinationId().isBlank()) {
+            throw new IllegalArgumentException("Receiver destination ID is required");
+        }
+        
         Parcel parcel = Parcel.builder()
                             .code(request.getCode())
                             .deliveryType(DeliveryType.valueOf(request.getDeliveryType()))
@@ -127,25 +201,36 @@ public class ParcelService implements IParcelService{
                             .windowStart(request.getWindowStart())
                             .windowEnd(request.getWindowEnd())
                             .build();
-
-        // [Logic: Call zone service, create destination, get receiver info...]
-        // find exiting destination from address text, if not found create new one
-        // map relationship between parcel and destination
-        // call to user service to get receiver/sender info
-        //
-        // Destination des = destinationClient.createOrGetDestination(request.getLat(), request.getLon(), request.getSendTo());
         
         Parcel savedParcel = parcelRepository.save(parcel);
 
-        // ParcelDestination pd = ParcelDestination.builder()
-        //     .destinationId(des.getId())
-        //     .destinationType(DestinationType.PRIMARY)
-        //     .isCurrent(true)
-        //     .isOriginal(true)
-        //     .parcel(savedParcel)
-        //     .build();
+        // Link parcel to receiver destination (PRIMARY) - this is the current destination
+        ParcelDestination receiverPd = ParcelDestination.builder()
+            .destinationId(request.getReceiverDestinationId())
+            .destinationType(DestinationType.PRIMARY)
+            .isCurrent(true)
+            .isOriginal(true)
+            .parcel(savedParcel)
+            .build();
 
-        // parcelDestinationRepository.save(pd);
+        parcelDestinationRepository.save(receiverPd);
+        log.debug("[parcel-service] [ParcelService.createParcel] Linked parcel {} to receiver destination {} (PRIMARY, current)", savedParcel.getId(), request.getReceiverDestinationId());
+
+        // Link parcel to sender destination (SECONDARY) - not current
+        ParcelDestination senderPd = ParcelDestination.builder()
+            .destinationId(request.getSenderDestinationId())
+            .destinationType(DestinationType.SECONDARY)
+            .isCurrent(false)
+            .isOriginal(true)
+            .parcel(savedParcel)
+            .build();
+
+        parcelDestinationRepository.save(senderPd);
+        log.debug("[parcel-service] [ParcelService.createParcel] Linked parcel {} to sender destination {} (SECONDARY)", savedParcel.getId(), request.getSenderDestinationId());
+        
+        // Validate: Ensure only one destination is current
+        validateSingleCurrentDestination(savedParcel);
+        
         return toDto(savedParcel);
     }
 
@@ -172,16 +257,20 @@ public class ParcelService implements IParcelService{
 
     @Override
     public ParcelResponse getParcelById(UUID parcelId) {
-        // Destination des = destinationClient.createOrGetDestination(request.getLat(), request.getLon(), request.getSendTo());
-        // return toDtoWithLocation(getParcel(parcelId), des);
-        return toDto(getParcel(parcelId));    
+        Parcel parcel = getParcel(parcelId);
+        ParcelDestination des = parcelDestinationRepository.findByParcelAndIsCurrentTrue(parcel).orElseThrow(()-> new ResourceNotFound("Not found any current destination by parcel"));
+        
+        DestinationResponse<DesDetail> call = zoneClient.getDestination(des.getDestinationId());
+        return toDtoWithLocation(parcel, call);
     }
 
     @Override
     public ParcelResponse getParcelByCode(String code) {
-        // Destination des = destinationClient.createOrGetDestination(request.getLat(), request.getLon(), request.getSendTo());
-        // return toDtoWithLocation(parcelRepository.findByCode(code).orElseThrow(() -> new ResourceNotFound("Parcel with code not found")), des);
-        return toDto(parcelRepository.findByCode(code).orElseThrow(() -> new ResourceNotFound("Parcel with code not found")));
+        Parcel parcel = parcelRepository.findByCode(code).orElseThrow(()-> new ResourceNotFound("Not found parcel with code " + code));
+        ParcelDestination des = parcelDestinationRepository.findByParcelAndIsCurrentTrue(parcel).orElseThrow(()-> new ResourceNotFound("Not found any current destination by parcel"));
+        
+        DestinationResponse<DesDetail> call = zoneClient.getDestination(des.getDestinationId());
+        return toDtoWithLocation(parcel, call);
     }
 
     @Override
@@ -214,7 +303,7 @@ public class ParcelService implements IParcelService{
     }
 
     @Override
-    public PageResponse<ParcelResponse> getParcelsV2(com.ds.parcel_service.common.entities.dto.request.PagingRequestV2 request) {
+    public PageResponse<ParcelResponse> getParcelsV2(PagingRequestV2 request) {
         // V2: Enhanced filtering with operations between each pair
         Specification<Parcel> spec = Specification.where(null);
         
@@ -236,15 +325,124 @@ public class ParcelService implements IParcelService{
         Page<Parcel> parcels = parcelRepository.findAll(spec, pageable);
         return PageResponse.from(parcels.map(this::toDto));
     }
+    
+    /**
+     * Get parcels V2 with RESTFUL.md compliant response format
+     */
+    @Override
+    public PagedData<ParcelResponse> getParcelsV2Restful(PagingRequestV2 request) {
+        PageResponse<ParcelResponse> pageResponse = getParcelsV2(request);
+        return convertToPagedData(pageResponse, request);
+    }
+    
+    @Override
+    public PagedData<ParcelResponse> getParcelsForReceiver(String receiverId, PagingRequestV2 request) {
+        if (!StringUtils.hasText(receiverId)) {
+            throw new IllegalArgumentException("receiverId is required");
+        }
+
+        Specification<Parcel> spec = (root, query, cb) -> cb.equal(root.get("receiverId"), receiverId);
+
+        if (request.getFiltersOrNull() != null) {
+            Specification<Parcel> additionalFilters = EnhancedQueryParserV2.parseFilterGroup(
+                request.getFiltersOrNull(),
+                Parcel.class
+            );
+            spec = spec.and(additionalFilters);
+        }
+
+        Sort sort = buildSort(request.getSortsOrEmpty());
+        Pageable pageable = PageRequest.of(
+            Math.max(request.getPage(), 0),
+            Math.max(request.getSize(), 1),
+            sort
+        );
+
+        Page<Parcel> parcels = parcelRepository.findAll(spec, pageable);
+        PageResponse<ParcelResponse> pageResponse = PageResponse.from(parcels.map(this::toDto));
+        return convertToPagedData(pageResponse, request);
+    }
+    
+    /**
+     * Convert PageResponse to PagedData following RESTFUL.md specification
+     */
+    private PagedData<ParcelResponse> convertToPagedData(
+            PageResponse<ParcelResponse> pageResponse,
+            PagingRequestV2 request) {
+        PagedData.Paging<String> paging = PagedData.Paging.<String>builder()
+                .page(pageResponse.page())
+                .size(pageResponse.size())
+                .totalElements(pageResponse.totalElements())
+                .totalPages(pageResponse.totalPages())
+                .filters(request.getFiltersOrNull())
+                .sorts(request.getSortsOrEmpty())
+                .selected(request.getSelectedOrEmpty())
+                .build();
+        
+        return PagedData.<ParcelResponse>builder()
+                .data(pageResponse.content())
+                .page(paging)
+                .build();
+    }
+
+    private Sort buildSort(List<SortConfig> sortConfigs) {
+        if (sortConfigs == null || sortConfigs.isEmpty()) {
+            return Sort.by(Sort.Direction.DESC, "createdAt");
+        }
+
+        List<Sort.Order> orders = new ArrayList<>();
+        for (SortConfig config : sortConfigs) {
+            if (config == null || !PageUtil.isValidSortFieldDeep(Parcel.class, config.getField())) {
+                continue;
+            }
+            Sort.Direction direction = "DESC".equalsIgnoreCase(config.getDirection())
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+            orders.add(new Sort.Order(direction, config.getField()));
+        }
+
+        if (orders.isEmpty()) {
+            return Sort.by(Sort.Direction.DESC, "createdAt");
+        }
+
+        return Sort.by(orders);
+    }
 
     private ParcelResponse toDto(Parcel parcel) {
-        // [Logic: get phone number here]
+        // Get sender and receiver info from UserSnapshot
+        final String[] senderName = {null};
+        final String[] receiverName = {null};
+        final String[] receiverPhoneNumber = {null};
+        
+        try {
+            if (parcel.getSenderId() != null) {
+                userSnapshotRepository.findByUserId(parcel.getSenderId())
+                    .ifPresent(snapshot -> senderName[0] = snapshot.getFullName());
+            }
+            if (parcel.getReceiverId() != null) {
+                userSnapshotRepository.findByUserId(parcel.getReceiverId())
+                    .ifPresent(snapshot -> {
+                        receiverName[0] = snapshot.getFullName();
+                        receiverPhoneNumber[0] = snapshot.getPhone();
+                    });
+            }
+        } catch (Exception e) {
+            log.debug("Could not fetch user info for parcel {}: {}", parcel.getId(), e.getMessage());
+        }
+        
+        final String finalSenderName = senderName[0];
+        final String finalReceiverName = receiverName[0];
+        final String finalReceiverPhoneNumber = receiverPhoneNumber[0];
+        
         return ParcelResponse.builder()
                             .id(parcel.getId().toString())
                             .code(parcel.getCode())
                             .deliveryType(parcel.getDeliveryType())
                             .senderId(parcel.getSenderId())
+                            .senderName(finalSenderName)
                             .receiverId(parcel.getReceiverId())
+                            .receiverName(finalReceiverName)
+                            .receiverPhoneNumber(finalReceiverPhoneNumber)
                             .receiveFrom(parcel.getReceiveFrom())
                             .targetDestination(parcel.getSendTo())
                             .weight(parcel.getWeight())
@@ -253,21 +451,48 @@ public class ParcelService implements IParcelService{
                             .createdAt(parcel.getCreatedAt())
                             .updatedAt(parcel.getUpdatedAt())
                             .deliveredAt(parcel.getDeliveredAt())
+                            .confirmedAt(parcel.getConfirmedAt())
+                            .confirmedBy(parcel.getConfirmedBy())
+                            .confirmationNote(parcel.getConfirmationNote())
                             .windowStart(parcel.getWindowStart())
                             .windowEnd(parcel.getWindowEnd())
+                            .priority(parcel.getPriority())
+                            .isDelayed(parcel.getIsDelayed())
+                            .delayedUntil(parcel.getDelayedUntil())
                             .build();
     }
 
-    // private ParcelResponse toDtoWithLocation(Parcel parcel, Destination des) {
-    //     ParcelResponse response = toDto(parcel);
-    //     response.setLat(des.getLat());
-    //     response.setLon(des.getLon());
-    //     return response;
-    // }
+    private ParcelResponse toDtoWithLocation(Parcel parcel, DestinationResponse<DesDetail> des) {
+        ParcelResponse response = toDto(parcel);
+        log.debug("[parcel-service] [ParcelService.toDtoWithLocation] before {} {}", des.getResult().getLat(), des.getResult().getLon());
+        response.setLat(des.getResult().getLat());
+        response.setLon(des.getResult().getLon());
+        log.debug("[parcel-service] [ParcelService.toDtoWithLocation] after {} {}", response.getLat(), response.getLon());
+        return response;
+    }
 
     private void validateUniqueCode(String code) {
         if (parcelRepository.existsByCode(code)) {
             throw new IllegalStateException("Parcel with code already exists");
+        }
+    }
+    
+    /**
+     * Validate that only one destination is marked as current for a parcel.
+     * This ensures data integrity for destination management.
+     */
+    private void validateSingleCurrentDestination(Parcel parcel) {
+        List<ParcelDestination> currentDestinations = parcelDestinationRepository.findAllByParcelAndIsCurrentTrue(parcel);
+        if (currentDestinations.size() > 1) {
+            log.error("[parcel-service] [ParcelService.validateSingleCurrentDestination] Data integrity issue: Parcel {} has {} current destinations. Expected 0 or 1.", 
+                parcel.getId(), currentDestinations.size());
+            // Fix: Set all but the first one to false
+            for (int i = 1; i < currentDestinations.size(); i++) {
+                currentDestinations.get(i).setCurrent(false);
+                parcelDestinationRepository.save(currentDestinations.get(i));
+                log.debug("[parcel-service] [ParcelService.validateSingleCurrentDestination] Fixed: Set destination {} to not current for parcel {}", 
+                    currentDestinations.get(i).getId(), parcel.getId());
+            }
         }
     }
 
@@ -279,18 +504,141 @@ public class ParcelService implements IParcelService{
 
     @Override
     public Map<String, ParcelResponse> fetchParcelsBulk(List<UUID> parcelIds) {
-        return parcelIds.stream()
-            .collect(Collectors.toMap(
-                UUID::toString,
-                parcelId -> {
+        long startTime = System.currentTimeMillis();
+        log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Starting optimized fetchParcelsBulk for {} parcels", parcelIds.size());
+        
+        if (parcelIds == null || parcelIds.isEmpty()) {
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] No parcel IDs provided");
+            return new HashMap<>();
+        }
+        
+        Map<String, ParcelResponse> result = new HashMap<>();
+        
+        try {
+            // Step 1: Fetch all parcels in batch (1 query instead of N)
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Step 1: Fetching {} parcels from database...", parcelIds.size());
+            List<Parcel> parcels = parcelRepository.findAllById(parcelIds);
+            long dbQueryTime = System.currentTimeMillis() - startTime;
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Fetched {} parcels from database in {}ms", parcels.size(), dbQueryTime);
+            
+            if (parcels.isEmpty()) {
+                log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] No parcels found for provided IDs");
+                return result;
+            }
+            
+            // Step 2: Fetch all destinations in batch (1 query instead of N)
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Step 2: Fetching destinations for {} parcels...", parcels.size());
+            List<ParcelDestination> destinations = parcelDestinationRepository.findByParcelInAndIsCurrentTrue(parcels);
+            long destinationsTime = System.currentTimeMillis() - startTime - dbQueryTime;
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Fetched {} destinations in {}ms", destinations.size(), destinationsTime);
+            
+            // Step 3: Create map of parcel -> destination for quick lookup
+            Map<String, ParcelDestination> parcelToDestination = destinations.stream()
+                .collect(Collectors.toMap(
+                    dest -> dest.getParcel().getId().toString(),
+                    dest -> dest,
+                    (existing, replacement) -> existing // Keep first if duplicate
+                ));
+            
+            // Step 4: Fetch zone destinations in parallel (N parallel calls instead of sequential)
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Step 3: Fetching zone destinations for {} addresses...", destinations.size());
+            List<String> destinationIds = destinations.stream()
+                .map(ParcelDestination::getDestinationId)
+                .distinct()
+                .collect(Collectors.toList());
+            
+            long zoneStartTime = System.currentTimeMillis();
+            
+            // Create parallel futures for zone service calls
+            ExecutorService executor = Executors.newFixedThreadPool(Math.min(10, destinationIds.size()));
+            Map<String, CompletableFuture<DestinationResponse<DesDetail>>> zoneFutures = new HashMap<>();
+            
+            for (String destinationId : destinationIds) {
+                CompletableFuture<DestinationResponse<DesDetail>> future = CompletableFuture.supplyAsync(() -> {
                     try {
-                        return getParcelById(parcelId);
+                        return zoneClient.getDestination(destinationId);
                     } catch (Exception e) {
-                        log.error("Failed to fetch parcel info for {}: {}", parcelId, e.getMessage());
-                        return null; // Bỏ qua parcel lỗi
+                        log.error("[parcel-service] [ParcelService.fetchParcelsBulk] Failed to fetch zone destination {}", destinationId, e);
+                        return null;
                     }
+                }, executor);
+                zoneFutures.put(destinationId, future);
+            }
+            
+            // Wait for all zone calls to complete
+            CompletableFuture.allOf(zoneFutures.values().toArray(new CompletableFuture[0])).join();
+            
+            // Create map of destinationId -> DestinationResponse
+            Map<String, DestinationResponse<DesDetail>> destinationMap = new HashMap<>();
+            for (Map.Entry<String, CompletableFuture<DestinationResponse<DesDetail>>> entry : zoneFutures.entrySet()) {
+                try {
+                    DestinationResponse<DesDetail> response = entry.getValue().get();
+                    if (response != null && response.getResult() != null) {
+                        destinationMap.put(entry.getKey(), response);
+                    }
+                } catch (Exception e) {
+                    log.error("[parcel-service] [ParcelService.fetchParcelsBulk] Error getting zone destination {}", entry.getKey(), e);
                 }
-            ));
+            }
+            
+            // Cleanup executor
+            executor.shutdown();
+            
+            long zoneTime = System.currentTimeMillis() - zoneStartTime;
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Fetched {} zone destinations in {}ms (parallel)", destinationMap.size(), zoneTime);
+            
+            // Step 5: Build result map by combining parcel, destination, and zone data
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Step 4: Building response for {} parcels...", parcels.size());
+            for (Parcel parcel : parcels) {
+                try {
+                    String parcelIdStr = parcel.getId().toString();
+                    ParcelDestination destination = parcelToDestination.get(parcelIdStr);
+                    
+                    if (destination == null) {
+                        log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] No destination found for parcel {}", parcelIdStr);
+                        // Return parcel without location
+                        result.put(parcelIdStr, toDto(parcel));
+                        continue;
+                    }
+                    
+                    DestinationResponse<DesDetail> zoneResponse = destinationMap.get(destination.getDestinationId());
+                    
+                    if (zoneResponse == null || zoneResponse.getResult() == null) {
+                        log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] No zone data found for destination {} (parcel {})", 
+                                destination.getDestinationId(), parcelIdStr);
+                        // Return parcel without location
+                        result.put(parcelIdStr, toDto(parcel));
+                        continue;
+                    }
+                    
+                    // Build response with location
+                    ParcelResponse parcelResponse = toDtoWithLocation(parcel, zoneResponse);
+                    result.put(parcelIdStr, parcelResponse);
+                } catch (Exception e) {
+                    log.error("[parcel-service] [ParcelService.fetchParcelsBulk] Error building response for parcel {}", parcel.getId(), e);
+                    // Return parcel without location as fallback
+                    result.put(parcel.getId().toString(), toDto(parcel));
+                }
+            }
+            
+            long totalTime = System.currentTimeMillis() - startTime;
+            log.debug("[parcel-service] [ParcelService.fetchParcelsBulk] Completed fetchParcelsBulk: {} parcels in {}ms (DB: {}ms, Destinations: {}ms, Zone: {}ms)", 
+                    result.size(), totalTime, dbQueryTime, destinationsTime, zoneTime);
+            
+        } catch (Exception e) {
+            log.error("[parcel-service] [ParcelService.fetchParcelsBulk] Critical error in fetchParcelsBulk", e);
+            // Fallback: return empty map or parcels without locations
+            try {
+                List<Parcel> parcels = parcelRepository.findAllById(parcelIds);
+                for (Parcel parcel : parcels) {
+                    result.put(parcel.getId().toString(), toDto(parcel));
+                }
+            } catch (Exception fallbackError) {
+                log.error("[parcel-service] [ParcelService.fetchParcelsBulk] Fallback also failed", fallbackError);
+            }
+        }
+        
+        return result;
     }
 
     @Override
@@ -309,6 +657,47 @@ public class ParcelService implements IParcelService{
         Page<Parcel> parcels = parcelRepository.findByReceiverId(customerId, pageable);
         
         return PageResponse.from(parcels.map(this::toDto));
+    }
+
+    @Override
+    @Transactional
+    public ParcelResponse updateParcelPriority(UUID parcelId, Integer priority) {
+        Parcel parcel = parcelRepository.findById(parcelId)
+            .orElseThrow(() -> new ResourceNotFound("Parcel not found with id: " + parcelId));
+        
+        log.debug("[parcel-service] [ParcelService.updatePriority] Updating priority for parcel {} from {} to {}", parcelId, parcel.getPriority(), priority);
+        parcel.setPriority(priority);
+        
+        Parcel updatedParcel = parcelRepository.save(parcel);
+        return toDto(updatedParcel);
+    }
+
+    @Override
+    @Transactional
+    public ParcelResponse delayParcel(UUID parcelId, LocalDateTime delayedUntil) {
+        Parcel parcel = parcelRepository.findById(parcelId)
+            .orElseThrow(() -> new ResourceNotFound("Parcel not found with id: " + parcelId));
+        
+        log.debug("[parcel-service] [ParcelService.delayParcel] Delaying parcel {} until {}", parcelId, delayedUntil);
+        parcel.setIsDelayed(true);
+        parcel.setDelayedUntil(delayedUntil);
+        
+        Parcel updatedParcel = parcelRepository.save(parcel);
+        return toDto(updatedParcel);
+    }
+
+    @Override
+    @Transactional
+    public ParcelResponse undelayParcel(UUID parcelId) {
+        Parcel parcel = parcelRepository.findById(parcelId)
+            .orElseThrow(() -> new ResourceNotFound("Parcel not found with id: " + parcelId));
+        
+        log.debug("[parcel-service] [ParcelService.undelayParcel] Undelaying parcel {}", parcelId);
+        parcel.setIsDelayed(false);
+        parcel.setDelayedUntil(null);
+        
+        Parcel updatedParcel = parcelRepository.save(parcel);
+        return toDto(updatedParcel);
     }
 
     //update address

@@ -1,0 +1,86 @@
+# ============================================
+# DOCKER COMPOSE DEBUG PROFILE
+# Enable remote debugging for Spring Boot services
+# 
+# This file OVERRIDES ports configuration from docker-compose.yml
+# When using this file, all debug ports are exposed along with service ports
+# 
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.debug.yml up
+# ============================================
+
+services:
+  # Settings Service - Debug enabled
+  settings-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,docker-debug
+      JAVA_TOOL_OPTIONS: >-
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    # Override ports: service port + debug port
+    ports:
+      - "21502:21502"  # Service port
+      - "5005:5005"    # Debug port
+
+  # User Service - Debug enabled
+  user-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,docker-debug
+      JAVA_TOOL_OPTIONS: >-
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006
+    # Override ports: service port + debug port
+    ports:
+      - "21501:21501"  # Service port
+      - "5006:5006"    # Debug port
+
+  # Zone Service - Node.js debug enabled
+  zone-service:
+    environment:
+      NODE_OPTIONS: >-
+        --inspect=0.0.0.0:9229
+    # Override ports: service port + debug port
+    ports:
+      - "21503:21503"  # Service port
+      - "9229:9229"    # Node.js debug port
+
+  # Parcel Service - Debug enabled
+  parcel-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,docker-debug
+      JAVA_TOOL_OPTIONS: >-
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007
+    # Override ports: service port + debug port
+    ports:
+      - "21506:21506"  # Service port
+      - "5007:5007"    # Debug port
+
+  # Session Service - Debug enabled
+  session-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,docker-debug
+      JAVA_TOOL_OPTIONS: >-
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5008
+    # Override ports: service port + debug port
+    ports:
+      - "21505:21505"  # Service port
+      - "5008:5008"    # Debug port
+
+  # Communication Service - Debug enabled
+  communication-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,docker-debug
+      JAVA_TOOL_OPTIONS: >-
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5009
+    # Override ports: service port + debug port
+    ports:
+      - "21511:21511"  # Service port
+      - "5009:5009"    # Debug port
+
+  # API Gateway - Debug enabled
+  api-gateway:
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,docker-debug
+      JAVA_TOOL_OPTIONS: >-
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5010
+    # Override ports: service port + debug port
+    ports:
+      - "21500:21500"  # Service port
+      - "5010:5010"    # Debug port

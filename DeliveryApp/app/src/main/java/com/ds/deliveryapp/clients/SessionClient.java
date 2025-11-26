@@ -4,6 +4,7 @@ import com.ds.deliveryapp.clients.req.ScanParcelRequest;
 import com.ds.deliveryapp.clients.req.SessionFailRequest;
 import com.ds.deliveryapp.clients.req.TaskFailRequest;
 import com.ds.deliveryapp.clients.req.RouteInfo;
+import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.DeliverySession;
 import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.clients.res.ShipperInfo;
@@ -24,7 +25,7 @@ public interface SessionClient {
      * Ánh xạ tới: SessionController.acceptParcelToSession
      */
     @POST("/api/v1/sessions/drivers/{deliveryManId}/accept-parcel")
-    Call<DeliveryAssignment> acceptParcelToSession(
+    Call<BaseResponse<DeliveryAssignment>> acceptParcelToSession(
             @Path("deliveryManId") String deliveryManId,
             @Body ScanParcelRequest request
     );
@@ -34,33 +35,46 @@ public interface SessionClient {
      * Ánh xạ tới: SessionController.getSessionById
      */
     @GET("/api/v1/sessions/{sessionId}")
-    Call<DeliverySession> getSessionById(@Path("sessionId") String sessionId);
+    Call<BaseResponse<DeliverySession>> getSessionById(@Path("sessionId") String sessionId);
 
     /**
      * Shipper chủ động hoàn thành phiên.
      * Ánh xạ tới: SessionController.completeSession
      */
     @POST("/api/v1/sessions/{sessionId}/complete")
-    Call<DeliverySession> completeSession(@Path("sessionId") String sessionId);
+    Call<BaseResponse<DeliverySession>> completeSession(@Path("sessionId") String sessionId);
 
     /**
      * Shipper báo cáo sự cố (hủy phiên).
      * Ánh xạ tới: SessionController.failSession
      */
     @POST("/api/v1/sessions/{sessionId}/fail")
-    Call<DeliverySession> failSession(
+    Call<BaseResponse<DeliverySession>> failSession(
             @Path("sessionId") String sessionId,
             @Body SessionFailRequest request
     );
 
     /**
-     * Lấy các task của phiên đang hoạt động (phân trang).
+     * Lấy các task của phiên đang hoạt động (CREATED hoặc IN_PROGRESS) (phân trang).
      * Ánh xạ tới: DeliveryAssignmentController.getDailyTasks
+     * @deprecated Use getTasksBySessionId instead
      */
+    @Deprecated
     @GET("/api/v1/assignments/session/delivery-man/{deliveryManId}/tasks/today")
-    Call<PageResponse<DeliveryAssignment>> getTasksToday(
+    Call<BaseResponse<PageResponse<DeliveryAssignment>>> getSessionTasks(
             @Path("deliveryManId") String driverId,
             @Query("status") List<String> status,
+            @Query("page") int page,
+            @Query("size") int size
+    );
+
+    /**
+     * Lấy các task của một session cụ thể theo sessionId (phân trang).
+     * Ánh xạ tới: DeliveryAssignmentController.getTasksBySessionId
+     */
+    @GET("/api/v1/assignments/session/{sessionId}/tasks")
+    Call<BaseResponse<PageResponse<DeliveryAssignment>>> getTasksBySessionId(
+            @Path("sessionId") String sessionId,
             @Query("page") int page,
             @Query("size") int size
     );
@@ -70,7 +84,7 @@ public interface SessionClient {
      * Ánh xạ tới: DeliveryAssignmentController.getTasksHistory
      */
     @GET("/api/v1/assignments/session/delivery-man/{deliveryManId}/tasks")
-    Call<PageResponse<DeliveryAssignment>> getTasks(
+    Call<BaseResponse<PageResponse<DeliveryAssignment>>> getTasks(
             @Path("deliveryManId") String driverId,
             @Query("status") List<String> status,
             @Query("createdAtStart") String createdAtStart,
@@ -86,7 +100,7 @@ public interface SessionClient {
      * Ánh xạ tới: DeliveryAssignmentController.completeTask
      */
     @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/complete")
-    Call<DeliveryAssignment> completeTask(
+    Call<BaseResponse<DeliveryAssignment>> completeTask(
             @Path("deliveryManId") String deliveryManId,
             @Path("parcelId") String parcelId,
             @Body RouteInfo routeInfo
@@ -97,7 +111,7 @@ public interface SessionClient {
      * Ánh xạ tới: DeliveryAssignmentController.failTask
      */
     @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/fail")
-    Call<DeliveryAssignment> failTask(
+    Call<BaseResponse<DeliveryAssignment>> failTask(
             @Path("deliveryManId") String deliveryManId,
             @Path("parcelId") String parcelId,
             @Body TaskFailRequest request // Body này chứa reason + routeInfo
@@ -108,14 +122,54 @@ public interface SessionClient {
      * Ánh xạ tới: DeliveryAssignmentController.refuseTask
      */
     @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/refuse")
-    Call<DeliveryAssignment> refuseTask(
+    Call<BaseResponse<DeliveryAssignment>> refuseTask(
             @Path("deliveryManId") String deliveryManId,
             @Path("parcelId") String parcelId,
             @Body TaskFailRequest request // Body này chứa reason + routeInfo
     );
 
     @GET("/api/v1/assignments/current-shipper/parcels/{parcelId}")
-    Call<ShipperInfo> getLastestShipperInfoForParcel( //if ok status but null -> not found
+    Call<BaseResponse<ShipperInfo>> getLastestShipperInfoForParcel(
             @Path("parcelId") String parcelId
+    );
+
+    /**
+     * Tạo phiên ở trạng thái CREATED (chuẩn bị nhận đơn).
+     * Ánh xạ tới: SessionController.createSessionPrepared
+     */
+    @POST("/api/v1/sessions/drivers/{deliveryManId}/prepare")
+    Call<BaseResponse<DeliverySession>> createSessionPrepared(@Path("deliveryManId") String deliveryManId);
+
+    /**
+     * Chuyển phiên từ CREATED sang IN_PROGRESS (bắt đầu giao hàng).
+     * Ánh xạ tới: SessionController.startSession
+     */
+    @POST("/api/v1/sessions/{sessionId}/start")
+    Call<BaseResponse<DeliverySession>> startSession(@Path("sessionId") String sessionId);
+
+    /**
+     * Lấy phiên đang hoạt động (CREATED hoặc IN_PROGRESS) của shipper.
+     * Ánh xạ tới: SessionController.getActiveSession
+     */
+    @GET("/api/v1/sessions/drivers/{deliveryManId}/active")
+    Call<BaseResponse<DeliverySession>> getActiveSession(@Path("deliveryManId") String deliveryManId);
+    
+    /**
+     * Transfer a parcel from current shipper to another shipper
+     * Only allows transferring ON_ROUTE parcels
+     */
+    @POST("/api/v1/sessions/drivers/{deliveryManId}/transfer-parcel")
+    Call<BaseResponse<DeliveryAssignment>> transferParcel(
+            @Path("deliveryManId") String deliveryManId,
+            @Body com.ds.deliveryapp.clients.req.TransferParcelRequest request
+    );
+    
+    /**
+     * Accept a transferred parcel by scanning source session QR
+     */
+    @POST("/api/v1/sessions/drivers/{deliveryManId}/accept-transferred-parcel")
+    Call<BaseResponse<DeliveryAssignment>> acceptTransferredParcel(
+            @Path("deliveryManId") String deliveryManId,
+            @Body com.ds.deliveryapp.clients.req.AcceptTransferredParcelRequest request
     );
 }

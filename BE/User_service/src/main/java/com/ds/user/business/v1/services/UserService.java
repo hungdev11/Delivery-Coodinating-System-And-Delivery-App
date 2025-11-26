@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import com.ds.user.common.utils.EnhancedQueryParser;
 import com.ds.user.common.utils.EnhancedQueryParserV2;
+import com.ds.user.infrastructure.kafka.UserEventPublisher;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -24,7 +25,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 public class UserService implements IUserService {
@@ -35,13 +35,21 @@ public class UserService implements IUserService {
     @Autowired
     private FilterableFieldRegistry fieldRegistry;
 
+    @Autowired(required = false)
+    private UserEventPublisher userEventPublisher;
+
     @Override
     public User createUser(User user) {
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        // Publish event for snapshot synchronization
+        if (userEventPublisher != null) {
+            userEventPublisher.publishUserCreated(saved);
+        }
+        return saved;
     }
 
     @Override
-    public User updateUser(UUID id, User user) {
+    public User updateUser(String id, User user) { // Changed from UUID to String
         User existingUser = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         existingUser.setFirstName(user.getFirstName());
@@ -49,16 +57,25 @@ public class UserService implements IUserService {
         existingUser.setEmail(user.getEmail());
         existingUser.setPhone(user.getPhone());
         existingUser.setAddress(user.getAddress());
-        return userRepository.save(existingUser);
+        User saved = userRepository.save(existingUser);
+        // Publish event for snapshot synchronization
+        if (userEventPublisher != null) {
+            userEventPublisher.publishUserUpdated(saved);
+        }
+        return saved;
     }
 
     @Override
-    public void deleteUser(UUID id) {
+    public void deleteUser(String id) { // Changed from UUID to String
+        // Publish event before deletion
+        if (userEventPublisher != null) {
+            userEventPublisher.publishUserDeleted(id);
+        }
         userRepository.deleteById(id);
     }
 
     @Override
-    public Optional<User> getUser(UUID id) {
+    public Optional<User> getUser(String id) { // Changed from UUID to String
         return userRepository.findById(id);
     }
 
@@ -157,25 +174,37 @@ public class UserService implements IUserService {
     @Override
     public User upsertByKeycloakId(String keycloakId, String username, String email, String firstName,
             String lastName) {
-        Optional<User> existingOpt = userRepository.findByKeycloakId(keycloakId);
+        // Since ID is now the Keycloak ID, we can use findById directly
+        Optional<User> existingOpt = userRepository.findById(keycloakId);
         if (existingOpt.isPresent()) {
             User existing = existingOpt.get();
             existing.setUsername(username != null ? username : existing.getUsername());
             existing.setEmail(email != null ? email : existing.getEmail());
             existing.setFirstName(firstName != null ? firstName : existing.getFirstName());
             existing.setLastName(lastName != null ? lastName : existing.getLastName());
-            return userRepository.save(existing);
+            User saved = userRepository.save(existing);
+            // Publish event for snapshot synchronization
+            if (userEventPublisher != null) {
+                userEventPublisher.publishUserUpdated(saved);
+            }
+            return saved;
         }
 
+        // Create new user with Keycloak ID as the primary key
         User user = User.builder()
-                .keycloakId(keycloakId)
+                .id(keycloakId) // Use Keycloak ID as the primary key
                 .username(username)
                 .email(email)
                 .firstName(firstName)
                 .lastName(lastName)
                 .status(User.UserStatus.ACTIVE)
                 .build();
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        // Publish event for snapshot synchronization
+        if (userEventPublisher != null) {
+            userEventPublisher.publishUserCreated(saved);
+        }
+        return saved;
     }
 
 }

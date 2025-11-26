@@ -1,18 +1,17 @@
 package com.ds.gateway.application.controllers.v2;
 
 import com.ds.gateway.annotations.AuthRequired;
+import com.ds.gateway.application.controllers.support.ProxyControllerSupport;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.RestTemplate;
 
 /**
  * Proxy controller for Session Service delivery assignments V2 endpoints
@@ -24,7 +23,9 @@ import org.springframework.web.client.RestTemplate;
 @AuthRequired
 public class DeliveryAssignmentControllerV2 {
 
-    private final RestTemplate restTemplate;
+    private static final String SESSION_SERVICE = "session-service";
+
+    private final ProxyControllerSupport proxyControllerSupport;
 
     @Value("${services.session.base-url}")
     private String sessionServiceUrl;
@@ -38,13 +39,7 @@ public class DeliveryAssignmentControllerV2 {
 
     @PostMapping
     public ResponseEntity<?> listAssignments(@RequestBody Object requestBody) {
-        log.info("POST /api/v2/assignments - proxy to Session Service");
-        try {
-            Object response = restTemplate.postForObject(assignmentsV2Url, requestBody, Object.class);
-            return ResponseEntity.ok(response);
-        } catch (HttpClientErrorException | HttpServerErrorException ex) {
-            log.error("Assignments V2 proxy failed: {}", ex.getMessage());
-            return ResponseEntity.status(ex.getStatusCode()).body(ex.getResponseBodyAsString());
-        }
+        log.debug("[api-gateway] [DeliveryAssignmentControllerV2.listAssignments] POST /api/v2/assignments - proxy to Session Service");
+        return proxyControllerSupport.forward(SESSION_SERVICE, HttpMethod.POST, assignmentsV2Url, requestBody);
     }
 }

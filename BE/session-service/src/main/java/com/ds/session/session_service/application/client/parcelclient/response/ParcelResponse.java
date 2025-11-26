@@ -15,8 +15,10 @@ import lombok.NoArgsConstructor;
 public class ParcelResponse {
     private String id;
     private String code;
-    private String senderId;     
+    private String senderId;
+    private String senderName; // Added: sender name from UserSnapshot
     private String receiverId;
+    private String receiverName;
     private String receiverPhoneNumber;
     private String deliveryType;
     private String receiveFrom;

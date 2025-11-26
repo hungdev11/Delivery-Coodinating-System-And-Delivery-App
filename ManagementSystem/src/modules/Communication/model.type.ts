@@ -9,17 +9,18 @@ import type { IApiResponse } from '@/common/types'
 /**
  * Content Type
  */
-export type ContentType = 'TEXT' | 'PROPOSAL'
+export type ContentType = 'TEXT' | 'PROPOSAL' | 'INTERACTIVE_PROPOSAL' | 'IMAGE' | 'FILE' | 'DELIVERY_COMPLETED'
 
 /**
  * Proposal Status
  */
-export type ProposalStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED'
+export type ProposalStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED'
 
 /**
  * Proposal Type
+ * Must match backend enum: CONFIRM_REFUSAL, POSTPONE_REQUEST, DELAY_ORDER_RECEIVE
  */
-export type ProposalType = 'CONFIRM_REFUSAL' | 'RESCHEDULE' | 'CANCEL_ORDER' | 'OTHER'
+export type ProposalType = 'CONFIRM_REFUSAL' | 'POSTPONE_REQUEST' | 'DELAY_ORDER_RECEIVE'
 
 /**
  * Proposal Action Type
@@ -34,6 +35,11 @@ export interface ConversationResponse {
   partnerId: string
   partnerName: string
   partnerAvatar?: string | null
+  partnerUsername?: string | null // Add username for display
+  isOnline?: boolean | null // Online status (null if unavailable)
+  lastMessageTime?: string | null // ISO date string of last message time
+  lastMessageContent?: string | null // Content of last message
+  unreadCount?: number // Number of unread messages
 }
 
 /**
@@ -41,10 +47,14 @@ export interface ConversationResponse {
  */
 export interface MessageResponse {
   id: string
+  conversationId?: string // Optional for backward compatibility
   senderId: string
   content: string
   sentAt: string
   type: ContentType
+  status?: 'SENT' | 'DELIVERED' | 'READ' // Message status
+  deliveredAt?: string // When message was delivered
+  readAt?: string // When message was read
   proposal?: InteractiveProposalResponseDTO
 }
 
@@ -60,15 +70,21 @@ export interface InteractiveProposalResponseDTO {
   data: string // JSON string
   actionType: string
   resultData?: string | null
+  sessionId?: string | null // ID of delivery session this proposal relates to
 }
 
 /**
  * Create Proposal Request
  */
 export interface CreateProposalRequest {
-  type: ProposalType
+  conversationId: string // UUID as string
   recipientId: string
+  type: ProposalType
   data: string // JSON string
+  fallbackContent?: string // Optional: text content to display in message
+  senderId: string
+  senderRoles: string[] // Array of role strings
+  sessionId?: string // Optional: ID of delivery session this proposal relates to
 }
 
 /**
@@ -79,15 +95,26 @@ export interface ProposalResponseRequest {
 }
 
 /**
+ * Proposal Update DTO (from WebSocket)
+ */
+export interface ProposalUpdateDTO {
+  proposalId: string
+  newStatus: ProposalStatus // "ACCEPTED", "REJECTED", "PENDING", "CANCELLED"
+  conversationId?: string
+  resultData?: string | null
+}
+
+/**
  * Proposal Type Config
  */
 export interface ProposalTypeConfig {
   id: string
   type: ProposalType
   requiredRole: string
-  actionType: ProposalActionType
-  template: string // JSON template
+  creationActionType: ProposalActionType // UI for sender when creating proposal
+  responseActionType: ProposalActionType // UI for receiver when responding to proposal
   description?: string
+  defaultTimeoutMinutes?: number
 }
 
 /**
@@ -120,6 +147,7 @@ export interface PageResponse<T> {
 export interface ChatMessagePayload {
   content: string
   recipientId: string
+  conversationId?: string // Optional conversation ID for tracking
 }
 
 /**

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ds.communication_service.app_context.models.InteractiveProposal;
 import com.ds.communication_service.app_context.models.ProposalTypeConfig;
 import com.ds.communication_service.app_context.repositories.ProposalTypeConfigRepository;
+import com.ds.communication_service.common.dto.BaseResponse;
 import com.ds.communication_service.common.dto.CreateProposalRequest;
 import com.ds.communication_service.common.dto.InteractiveProposalResponseDTO;
 import com.ds.communication_service.common.dto.ProposalResponseRequest;
@@ -32,38 +33,40 @@ public class ProposalController {
     // Inject Interface thay vì class cụ thể
     private final IProposalService proposalService;
     private final ProposalTypeConfigRepository configRepository;
+
     /**
      * Endpoint để tạo một proposal mới (ví dụ: Shipper yêu cầu hủy).
      */
     @PostMapping
-    public ResponseEntity<InteractiveProposalResponseDTO> createProposal(
-            @RequestBody CreateProposalRequest dto
-    ) {
+    public ResponseEntity<BaseResponse<InteractiveProposalResponseDTO>> createProposal(
+            @RequestBody CreateProposalRequest dto) {
         InteractiveProposal proposal = proposalService.createProposal(dto);
-        return ResponseEntity.ok(InteractiveProposalResponseDTO.from(proposal));
+        return ResponseEntity.ok(BaseResponse.success(InteractiveProposalResponseDTO.from(proposal)));
     }
 
     @PostMapping("/{proposalId}/respond")
-    public ResponseEntity<InteractiveProposalResponseDTO> respondToProposal(
+    public ResponseEntity<BaseResponse<InteractiveProposalResponseDTO>> respondToProposal(
             @PathVariable UUID proposalId,
             @RequestParam String userId,
             @RequestBody ProposalResponseRequest dto // DTO chứa { "resultData": "..." }
     ) {
         InteractiveProposal proposal = proposalService.respondToProposal(
-            proposalId, 
-            userId, 
-            dto.getResultData() 
-        );
-        return ResponseEntity.ok(InteractiveProposalResponseDTO.from(proposal));
+                proposalId,
+                userId,
+                dto.getResultData());
+        return ResponseEntity.ok(BaseResponse.success(InteractiveProposalResponseDTO.from(proposal)));
     }
 
     @GetMapping("/available-configs")
-    public ResponseEntity<List<ProposalTypeConfig>> getAvailableConfigs(@RequestParam List<String> roles
-    ) {
-        roles.forEach(r -> log.info(r));
-        List<ProposalTypeConfig> availableConfigs = 
-                configRepository.findByRequiredRoleIn(roles);
-                
-        return ResponseEntity.ok(availableConfigs);
+    public ResponseEntity<BaseResponse<List<ProposalTypeConfig>>> getAvailableConfigs(
+            @RequestParam List<String> roles) {
+        log.debug("GET /available-configs - Roles requested: {}", roles);
+        List<ProposalTypeConfig> availableConfigs = configRepository.findByRequiredRoleIn(roles);
+        log.debug("Found {} available configs for roles: {}", availableConfigs.size(), roles);
+        availableConfigs.forEach(config -> log.debug(
+                "   - Config: type={}, requiredRole={}, creationActionType={}, responseActionType={}",
+                config.getType(), config.getRequiredRole(),
+                config.getCreationActionType(), config.getResponseActionType()));
+        return ResponseEntity.ok(BaseResponse.success(availableConfigs));
     }
 }

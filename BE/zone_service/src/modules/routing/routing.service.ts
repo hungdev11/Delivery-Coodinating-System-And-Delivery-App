@@ -23,14 +23,39 @@ export class RoutingService {
 
   /**
    * Calculate route between waypoints
+   * Handles moveToEnd flag: waypoints with moveToEnd=true are moved to end of route
    */
   public static async calculateRoute(request: RouteRequestDto): Promise<RouteResponseDto> {
     try {
       logger.info(`Calculating route with ${request.waypoints.length} waypoints (vehicle: ${request.vehicle || 'car'})`);
 
-      // Query OSRM using dual-instance router
+      // Separate waypoints with moveToEnd flag
+      const normalWaypoints: WaypointDto[] = [];
+      const moveToEndWaypoints: WaypointDto[] = [];
+      
+      for (const waypoint of request.waypoints) {
+        if (waypoint.moveToEnd === true) {
+          moveToEndWaypoints.push(waypoint);
+          logger.debug(`Waypoint ${waypoint.parcelId || 'unknown'} has moveToEnd flag, will be moved to end`);
+        } else {
+          normalWaypoints.push(waypoint);
+        }
+      }
+      
+      // Reorder: normal waypoints first, then moveToEnd waypoints
+      const reorderedWaypoints = [...normalWaypoints, ...moveToEndWaypoints];
+      
+      if (reorderedWaypoints.length !== request.waypoints.length) {
+        logger.warn(`Waypoint count mismatch: original=${request.waypoints.length}, reordered=${reorderedWaypoints.length}`);
+      }
+      
+      if (moveToEndWaypoints.length > 0) {
+        logger.info(`Reordered ${moveToEndWaypoints.length} waypoints to end of route due to moveToEnd flag`);
+      }
+
+      // Query OSRM using dual-instance router with reordered waypoints
       const osrmResponse = await this.osrmRouter.getRoute(
-        request.waypoints,
+        reorderedWaypoints,
         {
           steps: request.steps !== false,
           annotations: true,  // Always enable for traffic data
@@ -46,8 +71,11 @@ export class RoutingService {
         throw createError(`OSRM error: ${osrmResponse.message || osrmResponse.code}`, 503);
       }
 
-      // Enrich with our custom data
-      const enrichedResponse = await this.enrichRouteData(osrmResponse, request);
+      // Enrich with our custom data (use original request to preserve waypoint order info)
+      const enrichedResponse = await this.enrichRouteData(osrmResponse, {
+        ...request,
+        waypoints: reorderedWaypoints, // Use reordered waypoints
+      });
 
       return enrichedResponse;
     } catch (error) {

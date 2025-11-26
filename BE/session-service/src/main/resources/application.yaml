@@ -1,66 +1,122 @@
 server:
-  port: 21505
-  # Fix for Cloudflare double chunked encoding issue
-  http2:
-    enabled: false
-  # Disable chunked encoding when Content-Length is known
-  compression:
-    enabled: false
+    port: 21505
+    # Fix for Cloudflare double chunked encoding issue
+    http2:
+        enabled: false
+    # Disable chunked encoding when Content-Length is known
+    compression:
+        enabled: false
 
 spring:
-  application:
-    name: session-service
-  datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${SESSION_DB_NAME:ds_session_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:root}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: false
-    properties:
-      hibernate:
-        format_sql: true
+    application:
+        name: session-service
+    datasource:
+        url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${SESSION_DB_NAME:ds_session_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+        username: ${DB_USERNAME:root}
+        password: ${DB_PASSWORD:root}
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        # HikariCP Connection Pool Configuration
+        hikari:
+            maximum-pool-size: 20
+            minimum-idle: 5
+            connection-timeout: 30000
+            idle-timeout: 600000
+            max-lifetime: 1800000
+            leak-detection-threshold: 60000
+    jpa:
+        hibernate:
+            ddl-auto: update
+        show-sql: false
+        properties:
+            hibernate:
+                format_sql: true
+    kafka:
+        bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+        consumer:
+            group-id: ${KAFKA_CONSUMER_GROUP:session-service-group}
+            auto-offset-reset: earliest
+            key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+            value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+            properties:
+                spring.json.trusted.packages: com.ds
+            enable-auto-commit: false
+        producer:
+            key-serializer: org.apache.kafka.common.serialization.StringSerializer
+            value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+            properties:
+                # make producer idempotent and enable transaction support from the app side
+                'enable.idempotence': true
+            transaction-id-prefix: session-tx-
+        template:
+            default-topic: parcel-status-request
+        listener:
+            ack-mode: manual
+            missing-topics-fatal: false
+        properties:
+            'isolation.level': read_committed
+
+# Snapshot Initialization Configuration
+snapshot:
+    initialization:
+        enabled: ${SNAPSHOT_INIT_ENABLED:true}
+
+# User Service Configuration (for snapshot initialization)
+user:
+    service:
+        url: ${USER_SERVICE_URL:http://localhost:21501}
 
 logging:
-  level:
-    root: ERROR
-    com.ds.session.session_service: INFO
-    org.springframework: ERROR
-    org.springframework.web: ERROR
-    org.springframework.boot: ERROR
-    org.hibernate: ERROR
-    com.zaxxer.hikari: ERROR
-    feign: INFO
+    pattern:
+        console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n'
+    level:
+        root: ERROR
+        com.ds.session.session_service: DEBUG
+        org.springframework: ERROR
+        org.springframework.web: ERROR
+        org.springframework.boot: ERROR
+        org.springframework.security: ERROR
+        org.hibernate: ERROR
+        org.hibernate.SQL: ERROR
+        com.zaxxer.hikari: ERROR
+        org.apache.kafka: ERROR
+        feign: ERROR
 
 # Actuator Configuration
 management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-      base-path: /actuator
-  endpoint:
-    health:
-      show-details: always
+    endpoints:
+        web:
+            exposure:
+                include: health,info
+            base-path: /actuator
+    endpoint:
+        health:
+            show-details: always
 
 # External Services Configuration
 services:
-  parcel:
-    base-url: ${PARCEL_SERVICE_URL:http://localhost:21506}
+    parcel:
+        base-url: ${PARCEL_SERVICE_URL:http://localhost:21506}
+    user:
+        base-url: ${USER_SERVICE_URL:http://localhost:21501}
+    zone:
+        base-url: ${ZONE_SERVICE_URL:http://localhost:21510}
 
 # Feign Client Configuration
 feign:
-  client:
-    config:
-      default:
-        connectTimeout: 2000
-        readTimeout: 5000
-        loggerLevel: full
-      parcel-service:
-        connectTimeout: 2000
-        readTimeout: 5000
-  httpclient:
-    connection-timeout: 2000
-    time-to-live: 5000
+    client:
+        config:
+            default:
+                connectTimeout: 5000
+                readTimeout: 10000
+                loggerLevel: basic
+            parcel-service:
+                connectTimeout: 5000
+                readTimeout: 15000
+            zone-service:
+                connectTimeout: 5000
+                readTimeout: 10000
+    httpclient:
+        connection-timeout: 5000
+        time-to-live: 30000
+        max-connections: 200
+        max-connections-per-route: 50

@@ -104,7 +104,7 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         setupStatusSpinnerLogic();
 
         imgCreatedAtPicker.setOnClickListener(v -> showDatePickerDialog(true, true));
-        imgCompletedAtPicker.setOnClickListener(v -> showDatePickerDialog(false, true));
+//        imgCompletedAtPicker.setOnClickListener(v -> showDatePickerDialog(false, true));
         btnApplyFilters.setOnClickListener(v -> resetPaginationAndFetchTasks());
 
         fetchTasks(currentPage);
@@ -120,9 +120,9 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         tvCreatedAtStart = view.findViewById(R.id.tv_created_at_start);
         tvCreatedAtEnd = view.findViewById(R.id.tv_created_at_end);
         imgCreatedAtPicker = view.findViewById(R.id.img_created_at_picker);
-        tvCompletedAtStart = view.findViewById(R.id.tv_completed_at_start);
-        tvCompletedAtEnd = view.findViewById(R.id.tv_completed_at_end);
-        imgCompletedAtPicker = view.findViewById(R.id.img_completed_at_picker);
+//        tvCompletedAtStart = view.findViewById(R.id.tv_completed_at_start);
+//        tvCompletedAtEnd = view.findViewById(R.id.tv_completed_at_end);
+//        imgCompletedAtPicker = view.findViewById(R.id.img_completed_at_picker);
         spinnerStatus = view.findViewById(R.id.spinner_status);
         btnApplyFilters = view.findViewById(R.id.btn_apply_filters);
     }
@@ -160,7 +160,7 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         completedAtStart = null;
         completedAtEnd = null;
         updateDateDisplay(true);
-        updateDateDisplay(false);
+        //updateDateDisplay(false);
     }
 
     private void updateDateDisplay(boolean isCreatedAt) {
@@ -252,7 +252,7 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         String completedEndStr = completedAtEnd != null ? completedAtEnd.format(apiFormatter) : null;
         List<String> statuses = getSelectedStatuses();
 
-        Call<PageResponse<DeliveryAssignment>> call = service.getTasks(
+        Call<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<DeliveryAssignment>>> call = service.getTasks(
                 driverId,
                 statuses,
                 createdStartStr,
@@ -263,37 +263,43 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
                 pageSize
         );
 
-        call.enqueue(new Callback<PageResponse<DeliveryAssignment>>() {
+        call.enqueue(new Callback<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<DeliveryAssignment>>>() {
             @Override
-            public void onResponse(Call<PageResponse<DeliveryAssignment>> call, Response<PageResponse<DeliveryAssignment>> response) {
+            public void onResponse(Call<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<DeliveryAssignment>>> call, Response<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<DeliveryAssignment>>> response) {
                 isLoading = false;
                 if (response.isSuccessful() && response.body() != null) {
-                    PageResponse<DeliveryAssignment> pageResponse = response.body();
-                    List<DeliveryAssignment> newTasks = pageResponse.content();
+                    com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<DeliveryAssignment>> baseResponse = response.body();
+                    if (baseResponse.getResult() != null) {
+                        PageResponse<DeliveryAssignment> pageResponse = baseResponse.getResult();
+                        List<DeliveryAssignment> newTasks = pageResponse.content();
 
-                    isLastPage = pageResponse.last();
+                        isLastPage = pageResponse.last();
 
-                    if (page == 0) {
-                        allTasks.clear();
-                    }
+                        if (page == 0) {
+                            allTasks.clear();
+                        }
 
-                    allTasks.addAll(newTasks);
-                    adapter.notifyDataSetChanged();
+                        allTasks.addAll(newTasks);
+                        adapter.notifyDataSetChanged();
 
-                    if (allTasks.isEmpty()) {
-                        tvEmptyState.setVisibility(View.VISIBLE);
+                        if (allTasks.isEmpty()) {
+                            tvEmptyState.setVisibility(View.VISIBLE);
+                        } else {
+                            tvEmptyState.setVisibility(View.GONE);
+                        }
+
+                        currentPage++;
                     } else {
-                        tvEmptyState.setVisibility(View.GONE);
+                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể tải danh sách nhiệm vụ";
+                        Log.e(TAG, "Error response: " + errorMsg);
                     }
-
-                    currentPage++;
                 } else {
                     Log.e(TAG, "Response unsuccessful: " + response.code());
                 }
             }
 
             @Override
-            public void onFailure(Call<PageResponse<DeliveryAssignment>> call, Throwable t) {
+            public void onFailure(Call<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<DeliveryAssignment>>> call, Throwable t) {
                 isLoading = false;
                 Log.e(TAG, "Network error: " + t.getMessage());
             }

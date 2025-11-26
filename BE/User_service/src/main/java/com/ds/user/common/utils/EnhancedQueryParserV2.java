@@ -126,7 +126,7 @@ public class EnhancedQueryParserV2 {
             // Get field path
             Path<?> fieldPath = getFieldPath(root, field);
             if (fieldPath == null) {
-                log.warn("Field path not found: {}", field);
+                log.debug("[user-service] [EnhancedQueryParserV2.parseCondition] Field path not found: {}", field);
                 return null;
             }
 
@@ -134,8 +134,8 @@ public class EnhancedQueryParserV2 {
             return EnhancedQueryParser.buildPredicate(criteriaBuilder, fieldPath, operator, value, caseSensitive);
             
         } catch (Exception e) {
-            log.error("Error parsing filter condition: field={}, operator={}, value={}, error={}", 
-                    condition.getField(), condition.getOperator(), condition.getValue(), e.getMessage());
+            log.error("[user-service] [EnhancedQueryParserV2.parseCondition] Error parsing filter condition: field={}, operator={}, value={}", 
+                    condition.getField(), condition.getOperator(), condition.getValue(), e);
             return null;
         }
     }
@@ -152,7 +152,7 @@ public class EnhancedQueryParserV2 {
             }
             return path;
         } catch (Exception e) {
-            log.warn("Error getting field path for: {}, error: {}", field, e.getMessage());
+            log.debug("[user-service] [EnhancedQueryParserV2.getFieldPath] Error getting field path for: {}, error: {}", field, e.getMessage());
             return null;
         }
     }

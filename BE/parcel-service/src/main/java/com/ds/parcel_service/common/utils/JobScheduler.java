@@ -30,7 +30,7 @@ public class JobScheduler {
      */
     @Scheduled(cron = "0 0 * * * *") // Chạy vào phút 0, giờ 0 của mỗi giờ
     public void checkConfirmationTimeout() {
-        log.info("Starting timeout confirmation check...");
+        log.debug("[parcel-service] [JobScheduler.checkConfirmationTimeout] Starting timeout confirmation check...");
         
         LocalDateTime deadline = LocalDateTime.now().minusHours(TIMEOUT_HOURS);
         
@@ -42,10 +42,10 @@ public class JobScheduler {
         for (Parcel parcel : timedOutParcels) {
             try {
                 // 2. Kích hoạt chuyển trạng thái sang SUCCESSED bằng sự kiện TIMEOUT_CONFIRM
-                log.info("Parcel {} timed out. Transitioning to SUCCESSED.", parcel.getId());
+                log.debug("[parcel-service] [JobScheduler.checkConfirmationTimeout] Parcel {} timed out. Transitioning to SUCCESSED.", parcel.getId());
                 parcelService.changeParcelStatus(parcel.getId(), ParcelEvent.CONFIRM_TIMEOUT);
             } catch (Exception e) {
-                log.error("Failed to process timeout for parcel {}: {}", parcel.getId(), e.getMessage());
+                log.error("[parcel-service] [JobScheduler.checkConfirmationTimeout] Failed to process timeout for parcel {}", parcel.getId(), e);
                 // Xử lý lỗi: ghi log, hoặc thử lại
             }
         }
@@ -57,7 +57,7 @@ public class JobScheduler {
      */
     @Scheduled(cron = "0 5 * * * *") // Chạy vào phút thứ 5 của mỗi giờ (tránh xung đột với Job 1)
     public void sendHourlyReminder() {
-        log.info("Starting hourly confirmation reminder job...");
+        log.debug("[parcel-service] [JobScheduler.sendHourlyReminder] Starting hourly confirmation reminder job...");
         
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime twentyFourHoursAgo = now.minusHours(TIMEOUT_HOURS);
@@ -77,7 +77,7 @@ public class JobScheduler {
                      parcelService.changeParcelStatus(parcel.getId(), ParcelEvent.CONFIRM_REMINDER);
                      log.debug("Sent reminder for parcel {}", parcel.getId());
                 } catch (Exception e) {
-                    log.error("Failed to send reminder event for parcel {}: {}", parcel.getId(), e.getMessage());
+                    log.error("[parcel-service] [JobScheduler.sendHourlyReminder] Failed to send reminder event for parcel {}", parcel.getId(), e);
                 }
             }
         }
