@@ -367,6 +367,11 @@ jobs:
       (needs.test-parcel-service.result == 'success' || needs.test-parcel-service.result == 'skipped') &&
       (needs.test-session-service.result == 'success' || needs.test-session-service.result == 'skipped') &&
       (needs.test-communication-service.result == 'success' || needs.test-communication-service.result == 'skipped')
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
