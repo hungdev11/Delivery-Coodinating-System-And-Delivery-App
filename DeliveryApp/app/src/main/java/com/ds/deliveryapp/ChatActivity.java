@@ -444,7 +444,7 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     }
 
     private void initRetrofitClients() {
-        mChatClient = RetrofitClient.getChatRetrofitInstance().create(ChatClient.class);
+        mChatClient = RetrofitClient.getChatRetrofitInstance(this).create(ChatClient.class);
     }
     /**
      * Lấy ID cuộc trò chuyện (gọi API /conversations/find-by-users).
