@@ -1,10 +1,11 @@
 <template>
-  <div class="flex h-screen bg-gray-50">
-    <!-- Sidebar -->
+  <div class="flex flex-col md:flex-row h-screen bg-gray-50">
+    <!-- Desktop Sidebar (hidden on mobile for client-only users) -->
     <div
       :class="[
-        'bg-white shadow-lg transition-all duration-300 ease-in-out flex flex-col',
+        'bg-white shadow-lg transition-all duration-300 ease-in-out flex-col',
         isCollapsed ? 'w-20' : 'w-80',
+        isClientOnly ? 'hidden md:flex' : 'hidden md:flex',
       ]"
     >
       <!-- Header -->
@@ -75,7 +76,7 @@
 
     <!-- Main Content -->
     <div class="flex-1 flex flex-col overflow-hidden">
-      <!-- Top Navbar with Toggle Button -->
+      <!-- Top Navbar with Toggle Button (Desktop) -->
       <header class="bg-white shadow-sm border-b border-gray-200">
         <div class="flex items-center justify-between px-4 py-3">
           <div class="flex items-center">
@@ -84,16 +85,23 @@
               variant="ghost"
               color="neutral"
               icon="i-heroicons-bars-3"
-              class="mr-3"
+              class="mr-3 hidden md:flex"
             />
-            <h1 class="text-lg font-semibold text-gray-900">{{ 'Dashboard' }}</h1>
+            <!-- Mobile: Show app name -->
+            <div class="md:hidden flex items-center">
+              <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center mr-2">
+                <UIcon name="i-heroicons-folder-open" class="w-5 h-5 text-white" />
+              </div>
+              <h1 class="text-lg font-semibold text-gray-900">CRM</h1>
+            </div>
+            <h1 class="text-lg font-semibold text-gray-900 hidden md:block">{{ 'Dashboard' }}</h1>
           </div>
-          <div class="flex items-center space-x-4">
+          <div class="flex items-center space-x-2 md:space-x-4">
             <div id="pageNavAction" class="flex justify-between items-center"></div>
             <!-- Placeholder for additional navbar items -->
-            <UButton variant="ghost" color="neutral" icon="i-heroicons-bell" />
+            <UButton variant="ghost" color="neutral" icon="i-heroicons-bell" size="sm" class="md:size-md" />
             <UPopover :content="{ side: 'bottom', align: 'end' }">
-              <UButton variant="ghost" color="neutral" icon="i-heroicons-cog-6-tooth" />
+              <UButton variant="ghost" color="neutral" icon="i-heroicons-cog-6-tooth" size="sm" class="md:size-md" />
               <template #content>
                 <div class="p-2 min-w-48">
                   <div class="space-y-1">
@@ -135,10 +143,93 @@
       </header>
 
       <!-- Page Content -->
-      <main class="flex-1 overflow-auto p-6">
+      <main :class="['flex-1 overflow-auto p-4 md:p-6', isClientOnly ? 'pb-20 md:pb-6' : '']">
         <slot />
       </main>
     </div>
+
+    <!-- Mobile Bottom Navigation (Only for client-only users) -->
+    <nav
+      v-if="isClientOnly"
+      class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50 safe-area-bottom"
+    >
+      <div class="flex items-center justify-around h-16">
+        <!-- Addresses -->
+        <router-link
+          to="/client/addresses"
+          class="flex flex-col items-center justify-center flex-1 h-full"
+          :class="[
+            isActiveRoute('/client/addresses')
+              ? 'text-orange-500'
+              : 'text-gray-500 hover:text-gray-700',
+          ]"
+        >
+          <UIcon name="i-heroicons-map-pin" class="w-6 h-6" />
+          <span class="text-xs mt-1">Địa chỉ</span>
+        </router-link>
+
+        <!-- Chat -->
+        <router-link
+          to="/communication"
+          class="flex flex-col items-center justify-center flex-1 h-full"
+          :class="[
+            isActiveRoute('/communication')
+              ? 'text-orange-500'
+              : 'text-gray-500 hover:text-gray-700',
+          ]"
+        >
+          <UIcon name="i-heroicons-chat-bubble-left-right" class="w-6 h-6" />
+          <span class="text-xs mt-1">Chat</span>
+        </router-link>
+
+        <!-- Parcel (Center - Primary) -->
+        <router-link
+          to="/client/parcels"
+          class="flex flex-col items-center justify-center flex-1 h-full relative"
+        >
+          <div
+            :class="[
+              'w-14 h-14 rounded-full flex items-center justify-center -mt-6 shadow-lg',
+              isActiveRoute('/client/parcels')
+                ? 'bg-orange-500'
+                : 'bg-orange-400 hover:bg-orange-500',
+            ]"
+          >
+            <UIcon name="i-heroicons-cube" class="w-7 h-7 text-white" />
+          </div>
+          <span
+            :class="[
+              'text-xs mt-1',
+              isActiveRoute('/client/parcels') ? 'text-orange-500 font-medium' : 'text-gray-500',
+            ]"
+          >
+            Đơn hàng
+          </span>
+        </router-link>
+
+        <!-- Profile -->
+        <router-link
+          to="/client/profile"
+          class="flex flex-col items-center justify-center flex-1 h-full"
+          :class="[
+            isActiveRoute('/client/profile')
+              ? 'text-orange-500'
+              : 'text-gray-500 hover:text-gray-700',
+          ]"
+        >
+          <UIcon name="i-heroicons-user" class="w-6 h-6" />
+          <span class="text-xs mt-1">Hồ sơ</span>
+        </router-link>
+
+        <!-- More (Disabled) -->
+        <div
+          class="flex flex-col items-center justify-center flex-1 h-full text-gray-300 cursor-not-allowed"
+        >
+          <UIcon name="i-heroicons-ellipsis-horizontal" class="w-6 h-6" />
+          <span class="text-xs mt-1">Thêm</span>
+        </div>
+      </div>
+    </nav>
   </div>
 </template>
 
@@ -148,12 +239,15 @@ import { getCurrentUser, getUserRoles, removeToken } from '@/common/guards/roleG
 import type { NavigationMenuItem } from '@nuxt/ui'
 import { storeToRefs } from 'pinia'
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { logout } from '@/modules/LoginScreen/api'
 
 const sidebarStore = useSidebarStore()
 const { isCollapsed } = storeToRefs(sidebarStore)
 const { toggleSidebar } = sidebarStore
+
+const router = useRouter()
+const route = useRoute()
 
 // Get current user roles
 const userRoles = computed(() => getUserRoles())
@@ -162,6 +256,13 @@ const isClient = computed(() => userRoles.value.includes('CLIENT'))
 const isShipper = computed(() => userRoles.value.includes('SHIPPER'))
 // Show admin menu if user has ADMIN or SHIPPER role (even if they also have CLIENT)
 const showAdminMenu = computed(() => isAdmin.value || isShipper.value)
+// Check if user is client-only (has CLIENT role but not ADMIN or SHIPPER)
+const isClientOnly = computed(() => isClient.value && !showAdminMenu.value)
+
+// Check if current route is active
+const isActiveRoute = (path: string) => {
+  return route.path === path || route.path.startsWith(path + '/')
+}
 
 // Navigation items
 const navigationItems = computed<NavigationMenuItem[][]>(() => {
@@ -302,7 +403,6 @@ const navigationItems = computed<NavigationMenuItem[][]>(() => {
   ]
 })
 
-const router = useRouter()
 const settingsPopoverOpen = ref(false)
 
 const currentUser = computed(() => {
@@ -367,5 +467,10 @@ const handleLogout = async () => {
   transition-property: all;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 300ms;
+}
+
+/* Safe area for bottom navigation on devices with notch/home indicator */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 </style>

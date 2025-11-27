@@ -283,56 +283,146 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="container mx-auto px-4 py-6 space-y-6">
+  <div class="container mx-auto px-2 md:px-4 py-4 md:py-6 space-y-4 md:space-y-6">
     <PageHeader
-      title="My Parcels"
-      description="View and manage your parcels"
+      title="Đơn hàng của tôi"
+      description="Xem và quản lý đơn hàng"
     >
       <template #actions>
-        <UButton color="primary" icon="i-heroicons-plus" @click="goToCreateParcel">
-          Create Parcel
+        <UButton color="primary" icon="i-heroicons-plus" size="sm" class="md:size-md" @click="goToCreateParcel">
+          <span class="hidden sm:inline">Tạo đơn hàng</span>
+          <span class="sm:hidden">Tạo</span>
         </UButton>
       </template>
     </PageHeader>
 
     <div class="space-y-4">
-      <UTable
-        :data="parcels"
-        :columns="columns"
-        :loading="loading"
-      >
-        <template #cell(code)="{ row }">
-          <span class="font-mono text-sm">{{ row.original.code }}</span>
+      <!-- Desktop Table View -->
+      <div class="hidden md:block">
+        <UTable
+          :data="parcels"
+          :columns="columns"
+          :loading="loading"
+        >
+          <template #cell(code)="{ row }">
+            <span class="font-mono text-sm">{{ row.original.code }}</span>
+          </template>
+        </UTable>
+      </div>
+
+      <!-- Mobile Card View -->
+      <div class="md:hidden space-y-3">
+        <template v-if="loading">
+          <USkeleton v-for="i in 3" :key="i" class="h-40 w-full rounded-lg" />
         </template>
-      </UTable>
+        <template v-else>
+          <UCard
+            v-for="parcel in parcels"
+            :key="parcel.id"
+            class="overflow-hidden"
+          >
+            <div class="space-y-3">
+              <!-- Header: Code and Status -->
+              <div class="flex items-center justify-between">
+                <span class="font-mono text-sm font-semibold text-gray-900">
+                  {{ parcel.code }}
+                </span>
+                <UBadge
+                  :color="getStatusColor(parcel.status)"
+                  variant="soft"
+                  size="sm"
+                >
+                  {{ parcel.displayStatus || parcel.status }}
+                </UBadge>
+              </div>
+
+              <!-- Info Grid -->
+              <div class="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span class="text-gray-500">Người gửi:</span>
+                  <p class="font-medium text-gray-900 truncate">{{ parcel.senderName || 'N/A' }}</p>
+                </div>
+                <div>
+                  <span class="text-gray-500">Loại:</span>
+                  <p class="font-medium text-gray-900">{{ parcel.deliveryType }}</p>
+                </div>
+              </div>
+
+              <!-- Destination -->
+              <div class="text-sm">
+                <span class="text-gray-500">Địa chỉ giao:</span>
+                <p class="font-medium text-gray-900 line-clamp-2">{{ parcel.targetDestination || 'N/A' }}</p>
+              </div>
+
+              <!-- Created Date -->
+              <div class="text-xs text-gray-500">
+                Tạo lúc: {{ new Date(parcel.createdAt).toLocaleString('vi-VN') }}
+              </div>
+
+              <!-- Actions -->
+              <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <UButton
+                  v-if="canChat(parcel)"
+                  icon="i-heroicons-chat-bubble-left-right"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  @click="openChat(parcel)"
+                >
+                  Chat
+                </UButton>
+                <UButton
+                  icon="i-heroicons-qr-code"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  @click="openQRModal(parcel)"
+                >
+                  QR
+                </UButton>
+                <UButton
+                  v-if="canConfirmParcel(parcel)"
+                  size="xs"
+                  variant="soft"
+                  color="primary"
+                  :loading="isConfirming(parcel.id)"
+                  @click="handleConfirmReceived(parcel)"
+                >
+                  {{ isConfirming(parcel.id) ? 'Đang xác nhận...' : 'Đã nhận' }}
+                </UButton>
+              </div>
+            </div>
+          </UCard>
+        </template>
+      </div>
 
       <div v-if="!loading && parcels.length === 0" class="text-center py-12">
         <UIcon name="i-heroicons-cube" class="w-16 h-16 text-gray-400 mx-auto mb-4" />
         <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-          No parcels yet
+          Chưa có đơn hàng
         </h3>
-        <p class="text-gray-500 mb-4">Create your first parcel to get started</p>
+        <p class="text-gray-500 mb-4">Tạo đơn hàng đầu tiên để bắt đầu</p>
         <UButton color="primary" icon="i-heroicons-plus" @click="goToCreateParcel">
-          Create Parcel
+          Tạo đơn hàng
         </UButton>
       </div>
 
       <div
-        v-else
+        v-else-if="parcels.length > 0"
         class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
       >
         <div class="text-sm text-gray-600 dark:text-gray-400">
-          Showing
+          Hiển thị
           <span class="font-semibold">
             {{ paginationSummary.start }}–{{ paginationSummary.end }}
           </span>
-          of {{ total }} parcels
+          trên {{ total }} đơn hàng
         </div>
         <UPagination
           :model-value="page"
           :page-count="pageSize"
           :total="total"
-          :max="7"
+          :max="5"
           @update:page="handlePageChange"
         />
       </div>
