@@ -80,7 +80,7 @@ public class ConversationsListActivity extends AppCompatActivity {
     }
 
     private void initRetrofitClients() {
-        mChatClient = RetrofitClient.getChatRetrofitInstance().create(ChatClient.class);
+        mChatClient = RetrofitClient.getChatRetrofitInstance(this).create(ChatClient.class);
     }
 
     private void initRecyclerView() {
