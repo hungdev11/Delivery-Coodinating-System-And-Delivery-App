@@ -43,25 +43,16 @@ jobs:
         working-directory: ManagementSystem
         run: npm ci --silent
 
-      - name: Create .env file for GitHub Pages build
-        working-directory: ManagementSystem
-        run: |
-          cat > .env.production << 'EOF'
-          VITE_API_URL=https://project.phuongy.works/api
-          VITE_API_BASE_URL=https://project.phuongy.works/api/v1
-          VITE_WS_URL=wss://project.phuongy.works/api/ws
-          VITE_ENV=production
-          VITE_MAPTILER_API_KEY=
-          EOF
-          echo "Created .env.production with project.phuongy.works endpoints"
-
       - name: Build for GitHub Pages
         working-directory: ManagementSystem
         env:
+          # Hardcoded API endpoints for GitHub Pages build (isolated from production)
           VITE_API_URL: https://project.phuongy.works/api
           VITE_API_BASE_URL: https://project.phuongy.works/api/v1
           VITE_WS_URL: wss://project.phuongy.works/api/ws
           VITE_ENV: production
+          # MapTiler API key intentionally empty - map features will use fallback
+          VITE_MAPTILER_API_KEY: ""
         run: |
           # Build with base path for GitHub Pages (repository name as subpath)
           npm run build-only -- --base=/${{ github.event.repository.name }}/
