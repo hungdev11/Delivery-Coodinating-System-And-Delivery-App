@@ -1,0 +1,87 @@
+name: Web Build and Deploy to GitHub Pages
+
+on:
+  push:
+    branches: ["main", "release/*"]
+    paths:
+      - 'ManagementSystem/**'
+      - '.github/workflows/web-build-pages.yml'
+  pull_request:
+    branches: ["main", "release/*"]
+    paths:
+      - 'ManagementSystem/**'
+      - '.github/workflows/web-build-pages.yml'
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ManagementSystem/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ManagementSystem
+        run: npm ci --silent
+
+      - name: Create .env file for GitHub Pages build
+        working-directory: ManagementSystem
+        run: |
+          cat > .env.production << 'EOF'
+          VITE_API_URL=https://project.phuongy.works/api
+          VITE_API_BASE_URL=https://project.phuongy.works/api/v1
+          VITE_WS_URL=wss://project.phuongy.works/api/ws
+          VITE_ENV=production
+          VITE_MAPTILER_API_KEY=
+          EOF
+          echo "Created .env.production with project.phuongy.works endpoints"
+
+      - name: Build for GitHub Pages
+        working-directory: ManagementSystem
+        env:
+          VITE_API_URL: https://project.phuongy.works/api
+          VITE_API_BASE_URL: https://project.phuongy.works/api/v1
+          VITE_WS_URL: wss://project.phuongy.works/api/ws
+          VITE_ENV: production
+        run: |
+          # Build with base path for GitHub Pages (repository name as subpath)
+          npm run build-only -- --base=/${{ github.event.repository.name }}/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ManagementSystem/dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    if: (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')) && github.event_name != 'pull_request'
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
