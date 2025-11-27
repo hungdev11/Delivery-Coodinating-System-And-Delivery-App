@@ -12,6 +12,28 @@ và đè lên các view khác.
     android:padding="24dp"
     tools:context=".LoginActivity">
 
+    <!-- Server Picker Section -->
+    <TextView
+        android:id="@+id/tvServerLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Server"
+        android:textSize="14sp"
+        android:textColor="@android:color/darker_gray"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:layout_marginTop="16dp" />
+
+    <Spinner
+        android:id="@+id/spinnerServer"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:background="@android:drawable/btn_dropdown"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvServerLabel"
+        android:layout_marginTop="4dp" />
+
     <!-- Tên đăng nhập -->
     <EditText
         android:id="@+id/edtUsername"
@@ -22,8 +44,8 @@ và đè lên các view khác.
         android:maxLines="1"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintBottom_toTopOf="@+id/edtPassword"
-        android:layout_marginBottom="16dp"
+        app:layout_constraintTop_toBottomOf="@id/spinnerServer"
+        android:layout_marginTop="24dp"
         android:autofillHints="username" />
 
     <!-- Mật khẩu -->
@@ -36,10 +58,65 @@ và đè lên các view khác.
         android:maxLines="1"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintVertical_bias="0.45"
+        app:layout_constraintTop_toBottomOf="@id/edtUsername"
+        android:layout_marginTop="16dp"
         android:autofillHints="password" />
+
+    <!-- Login Helper Section -->
+    <TextView
+        android:id="@+id/tvQuickLogin"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Quick Login (Shipper)"
+        android:textSize="12sp"
+        android:textColor="@android:color/darker_gray"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/edtPassword"
+        android:layout_marginTop="16dp" />
+
+    <LinearLayout
+        android:id="@+id/layoutQuickLogin"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvQuickLogin"
+        android:layout_marginTop="8dp">
+
+        <Button
+            android:id="@+id/btnShipper01"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="shipper01"
+            android:textSize="11sp"
+            android:textAllCaps="false"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_marginEnd="4dp" />
+
+        <Button
+            android:id="@+id/btnShipper02"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="shipper02"
+            android:textSize="11sp"
+            android:textAllCaps="false"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_marginHorizontal="4dp" />
+
+        <Button
+            android:id="@+id/btnShipper03"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="shipper03"
+            android:textSize="11sp"
+            android:textAllCaps="false"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
 
     <!-- Nút Đăng nhập -->
     <Button
@@ -49,7 +126,7 @@ và đè lên các view khác.
         android:text="Đăng nhập"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/edtPassword"
+        app:layout_constraintTop_toBottomOf="@+id/layoutQuickLogin"
         android:layout_marginTop="24dp" />
 
     <!--
