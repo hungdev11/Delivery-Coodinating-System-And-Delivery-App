@@ -18,6 +18,9 @@ import { useParcels } from '@/modules/Parcels/composables'
 import UserSelect from '@/common/components/UserSelect.vue'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { getOrCreateAddress, getAddressById } from './api'
+import { useConfigStore } from '@/common/store/config.store'
+const configStore = useConfigStore()
+const { mapTilerApiKey } = storeToRefs(configStore)
 import {
   getUserPrimaryAddress,
   getUserAddresses,
@@ -76,7 +79,7 @@ const nearbyResults = ref<Array<{
 const mapConfig = {
   center: [mapCenter.value[0], mapCenter.value[1]] as [number, number],
   zoom: 15,
-  style: `https://api.maptiler.com/maps/streets/style.json?key=${import.meta.env.VITE_MAPTILER_API_KEY || 'get_your_own_OpIi9ZULNHzrESv6T2vL'}`,
+  style: `https://api.maptiler.com/maps/streets/style.json?key=${mapTilerApiKey.value || 'get_your_own_OpIi9ZULNHzrESv6T2vL'}`,
 }
 
 // Fixed center marker (visual only). We don't render via MapView markers to keep it locked to center
@@ -723,7 +726,7 @@ const handleQuickCreateParcel = async () => {
       v-model:open="quickCreateParcelModalOpen"
       title="Quick Create Parcel"
       description="Create a parcel quickly using the selected address"
-      :ui="{ width: 'sm:max-w-md md:max-w-lg', footer: 'justify-end' }"
+      :ui="{ content: 'sm:max-w-md md:max-w-lg', footer: 'justify-end' }"
     >
       <template #body>
         <form @submit.prevent="handleQuickCreateParcel" class="space-y-4">

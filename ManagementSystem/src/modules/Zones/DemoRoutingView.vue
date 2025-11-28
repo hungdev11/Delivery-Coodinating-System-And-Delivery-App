@@ -22,6 +22,9 @@ import {
   parseRouteGeometry,
   getCongestionLabel,
 } from './utils/routingHelper'
+import { useConfigStore } from '@/common/store/config.store'
+const configStore = useConfigStore()
+const { mapTilerApiKey } = storeToRefs(configStore)
 
 const router = useRouter()
 
@@ -107,7 +110,7 @@ const strategyItems = ref<RadioGroupItem[]>([
 const mapConfig = {
   center: [106.660172, 10.762622] as [number, number], // Ho Chi Minh City
   zoom: 12,
-  style: `https://api.maptiler.com/maps/streets/style.json?key=${import.meta.env.VITE_MAPTILER_API_KEY || 'get_your_own_OpIi9ZULNHzrESv6T2vL'}`,
+  style: `https://api.maptiler.com/maps/streets/style.json?key=${mapTilerApiKey.value || 'get_your_own_OpIi9ZULNHzrESv6T2vL'}`,
 }
 
 // Convert waypoints to map markers
@@ -823,9 +826,7 @@ onUnmounted(() => {
                 <div class="flex items-center gap-2">
                   <h3 class="text-lg font-semibold">Route Steps</h3>
                   <UBadge color="primary">
-                    {{
-                      routeResult.route.legs.reduce((sum, leg) => sum + leg.steps.length, 0)
-                    }}
+                    {{ routeResult.route.legs.reduce((sum, leg) => sum + leg.steps.length, 0) }}
                     steps
                   </UBadge>
                 </div>

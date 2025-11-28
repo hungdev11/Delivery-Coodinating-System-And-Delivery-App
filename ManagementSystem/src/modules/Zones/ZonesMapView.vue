@@ -15,6 +15,9 @@ import type { ZoneDto, CreateZoneRequest, UpdateZoneRequest } from './model.type
 import type { ZonePolygon, MapMarker } from '@/common/types'
 import { storeToRefs } from 'pinia'
 import { useResponsiveStore } from '@/common/store/responsive.store'
+import { useConfigStore } from '@/common/store/config.store'
+const configStore = useConfigStore()
+const { mapTilerApiKey } = storeToRefs(configStore)
 
 const router = useRouter()
 
@@ -102,7 +105,7 @@ const zoneMarkers = computed((): MapMarker[] => {
 const mapConfig = {
   center: [106.660172, 10.762622] as [number, number], // Ho Chi Minh City
   zoom: 11,
-  style: `https://api.maptiler.com/maps/streets/style.json?key=${import.meta.env.VITE_MAPTILER_API_KEY || 'get_your_own_OpIi9ZULNHzrESv6T2vL'}`,
+  style: `https://api.maptiler.com/maps/streets/style.json?key=${mapTilerApiKey.value || 'get_your_own_OpIi9ZULNHzrESv6T2vL'}`,
 }
 
 /**

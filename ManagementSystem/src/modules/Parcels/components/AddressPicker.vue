@@ -11,6 +11,9 @@ import MapView from '@/common/components/MapView.vue'
 import { useAddresses } from '@/modules/Addresses/composables'
 import type { ByPointResult } from '@/modules/Addresses/api'
 import { storeToRefs } from 'pinia'
+import { useConfigStore } from '@/common/store/config.store'
+const configStore = useConfigStore()
+const { mapTilerApiKey } = storeToRefs(configStore)
 
 interface Props {
   modelValue?: {
@@ -85,7 +88,7 @@ watch(
 const mapConfig = computed(() => ({
   center: [mapCenter.value[0], mapCenter.value[1]] as [number, number],
   zoom: 15,
-  style: `https://api.maptiler.com/maps/streets/style.json?key=${import.meta.env.VITE_MAPTILER_API_KEY || 'get_your_own_OpIi9ZULNHzrESv6T2vL'}`,
+  style: `https://api.maptiler.com/maps/streets/style.json?key=${mapTilerApiKey.value || 'get_your_own_OpIi9ZULNHzrESv6T2vL'}`,
 }))
 
 const mapMarkers = computed(() => [])
