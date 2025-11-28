@@ -5,8 +5,8 @@
  * View for listing and selecting conversations
  */
 
-import { onMounted, ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
 import { useConversations } from './composables'
 import type { ConversationResponse } from './model.type'
@@ -14,14 +14,16 @@ import { getCurrentUser } from '@/common/guards/roleGuard.guard'
 import { defineAsyncComponent } from 'vue'
 
 const router = useRouter()
+const route = useRoute()
 const overlay = useOverlay()
 const { conversations, loading, loadConversations, findOrCreateConversation } = useConversations()
 
 const currentUser = getCurrentUser()
 const selectedConversationId = ref<string | null>(null)
+const isMobileView = ref(false)
+const showConversationList = ref(true)
 
 // Lazy load create chat modal
-// @ts-expect-error - Vue SFC import
 const LazyCreateChatModal = defineAsyncComponent(
   () => import('./components/CreateChatModal.vue'),
 )
@@ -29,11 +31,44 @@ const LazyCreateChatModal = defineAsyncComponent(
 /**
  * Load conversations on mount
  */
+const isChatActive = computed(() => route.name === 'communication-chat')
+
+const syncListVisibility = () => {
+  if (!isMobileView.value) {
+    showConversationList.value = true
+    return
+  }
+  showConversationList.value = !isChatActive.value
+}
+
+const updateResponsiveState = () => {
+  if (typeof window === 'undefined') return
+  isMobileView.value = window.innerWidth < 1024
+  syncListVisibility()
+}
+
+const handleRouteChange = () => {
+  selectedConversationId.value = (route.params.conversationId as string) || null
+  syncListVisibility()
+}
+
 onMounted(async () => {
   if (currentUser?.id) {
     await loadConversations(currentUser.id)
   }
+  updateResponsiveState()
+  window.addEventListener('resize', updateResponsiveState)
+  handleRouteChange()
 })
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateResponsiveState)
+})
+
+watch(
+  () => route.fullPath,
+  () => handleRouteChange(),
+)
 
 /**
  * Format last message time
@@ -77,6 +112,9 @@ const openChat = (conversation: ConversationResponse) => {
     params: { conversationId: conversation.conversationId },
     query: { partnerId: conversation.partnerId },
   })
+  if (isMobileView.value) {
+    showConversationList.value = false
+  }
 }
 
 /**
@@ -102,9 +140,12 @@ const openCreateChat = async () => {
 </script>
 
 <template>
-  <div class="flex h-screen">
+  <div class="flex h-full">
     <!-- Conversations List -->
-    <div class="w-1/3 border-r border-gray-200 flex flex-col">
+    <div
+      v-if="!isMobileView || showConversationList"
+      class="w-full lg:w-1/3 border-r border-gray-200 flex flex-col"
+    >
       <div class="p-4 border-b border-gray-200 flex items-center justify-between">
         <h1 class="text-xl font-semibold">Conversations</h1>
         <UButton
@@ -198,12 +239,26 @@ const openCreateChat = async () => {
       </div>
     </div>
 
-    <!-- Empty State -->
-    <div class="flex-1 flex items-center justify-center bg-gray-50">
-      <div class="text-center">
-        <UIcon name="i-heroicons-chat-bubble-left-right" class="text-6xl text-gray-300 mb-4" />
-        <p class="text-gray-500">Select a conversation to start chatting</p>
-      </div>
+    <!-- Chat Container -->
+    <div
+      v-if="!isMobileView || !showConversationList"
+      class="flex-1 flex flex-col bg-gray-50"
+    >
+      <RouterView v-slot="{ Component }">
+        <component
+          v-if="Component"
+          :is="Component"
+        />
+        <div
+          v-else
+          class="flex-1 flex items-center justify-center bg-gray-50"
+        >
+          <div class="text-center">
+            <UIcon name="i-heroicons-chat-bubble-left-right" class="text-6xl text-gray-300 mb-4" />
+            <p class="text-gray-500">Select a conversation to start chatting</p>
+          </div>
+        </div>
+      </RouterView>
     </div>
   </div>
 </template>

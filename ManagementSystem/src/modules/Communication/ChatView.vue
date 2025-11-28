@@ -887,7 +887,7 @@ const isMyMessage = (message: MessageResponse) => {
 </script>
 
 <template>
-  <div class="flex flex-col" style="height: 80vh">
+  <div class="flex flex-col h-full">
     <!-- Chat Header -->
     <div class="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
       <div class="flex items-center space-x-3">

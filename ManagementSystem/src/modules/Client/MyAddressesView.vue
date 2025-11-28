@@ -4,7 +4,7 @@
  * Client view for managing their own addresses
  */
 
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import {
@@ -94,91 +94,98 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="container mx-auto px-4 py-6 space-y-6">
+  <div class="container mx-auto px-2 md:px-4 py-4 md:py-6 space-y-4 md:space-y-6">
     <PageHeader
-      title="My Addresses"
-      description="Manage your delivery addresses"
+      title="Địa chỉ của tôi"
+      description="Quản lý địa chỉ giao hàng"
     >
       <template #actions>
-        <UButton color="primary" icon="i-heroicons-plus" @click="goToCreateAddress">
-          Add Address
+        <UButton color="primary" icon="i-heroicons-plus" size="sm" class="md:size-md" @click="goToCreateAddress">
+          <span class="hidden sm:inline">Thêm địa chỉ</span>
+          <span class="sm:hidden">Thêm</span>
         </UButton>
       </template>
     </PageHeader>
 
-    <USkeleton v-if="loading" class="h-64 w-full" />
+    <template v-if="loading">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+        <USkeleton v-for="i in 3" :key="i" class="h-40 w-full rounded-lg" />
+      </div>
+    </template>
 
     <div v-else-if="addresses.length === 0" class="text-center py-12">
       <UIcon name="i-heroicons-map-pin" class="w-16 h-16 text-gray-400 mx-auto mb-4" />
       <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-        No addresses yet
+        Chưa có địa chỉ
       </h3>
-      <p class="text-gray-500 mb-4">Create your first address to start receiving parcels</p>
+      <p class="text-gray-500 mb-4">Thêm địa chỉ đầu tiên để nhận đơn hàng</p>
       <UButton color="primary" icon="i-heroicons-plus" @click="goToCreateAddress">
-        Add Address
+        Thêm địa chỉ
       </UButton>
     </div>
 
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
       <UCard
         v-for="address in addresses"
         :key="address.id"
         :class="[
           'relative',
-          address.isPrimary ? 'ring-2 ring-primary-500' : '',
+          address.isPrimary ? 'ring-2 ring-orange-500' : '',
         ]"
       >
         <template #header>
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-2">
-              <h3 class="text-lg font-semibold">
-                {{ address.destinationDetails?.name || 'Unnamed Address' }}
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex-1 min-w-0">
+              <h3 class="text-base md:text-lg font-semibold truncate">
+                {{ address.destinationDetails?.name || 'Địa chỉ chưa đặt tên' }}
               </h3>
-              <UBadge v-if="address.isPrimary" color="primary" variant="soft" size="sm">
-                Primary
-              </UBadge>
             </div>
+            <UBadge v-if="address.isPrimary" color="primary" variant="soft" size="xs" class="flex-shrink-0">
+              Mặc định
+            </UBadge>
           </div>
         </template>
 
         <div class="space-y-2 text-sm">
-          <div v-if="address.destinationDetails?.addressText" class="text-gray-600 dark:text-gray-400">
-            <UIcon name="i-heroicons-map-pin" class="w-4 h-4 inline mr-1" />
+          <div v-if="address.destinationDetails?.addressText" class="text-gray-600 dark:text-gray-400 line-clamp-2">
+            <UIcon name="i-heroicons-map-pin" class="w-4 h-4 inline mr-1 flex-shrink-0" />
             {{ address.destinationDetails.addressText }}
           </div>
-          <div class="text-gray-500 text-xs">
-            Coordinates: {{ address.destinationDetails?.lat?.toFixed(6) }},
+          <div class="text-gray-500 text-xs hidden md:block">
+            Tọa độ: {{ address.destinationDetails?.lat?.toFixed(6) }},
             {{ address.destinationDetails?.lon?.toFixed(6) }}
           </div>
           <div v-if="address.tag" class="text-gray-500 text-xs">
-            Tag: {{ address.tag }}
+            Nhãn: {{ address.tag }}
           </div>
-          <div v-if="address.note" class="text-gray-500 text-xs">
-            Note: {{ address.note }}
+          <div v-if="address.note" class="text-gray-500 text-xs line-clamp-1">
+            Ghi chú: {{ address.note }}
           </div>
         </div>
 
         <template #footer>
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-2">
             <UButton
               v-if="!address.isPrimary"
               variant="ghost"
-              size="sm"
+              size="xs"
+              class="md:size-sm"
               @click="handleSetPrimary(address)"
             >
-              Set as Primary
+              Đặt mặc định
             </UButton>
-            <div v-else class="text-xs text-primary-600 dark:text-primary-400 font-medium">
-              Primary Address
+            <div v-else class="text-xs text-orange-600 dark:text-orange-400 font-medium">
+              Địa chỉ mặc định
             </div>
             <UButton
               variant="ghost"
               color="error"
-              size="sm"
+              size="xs"
+              class="md:size-sm"
               icon="i-heroicons-trash"
               @click="handleDelete(address)"
             >
-              Delete
+              <span class="hidden sm:inline">Xóa</span>
             </UButton>
           </div>
         </template>
