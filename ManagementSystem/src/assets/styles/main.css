@@ -1,2 +1,17 @@
 @import 'tailwindcss';
 @import "@nuxt/ui";
+
+@theme {
+  /* Primary Color - Orange */
+  /* Ensure Orange 500 is exactly #F97316 for primary color */
+  --color-orange-500: #f97316;
+
+  /* Secondary Color - Brown/Amber based on #78350F */
+  /* Extend amber colors to include brown tones for secondary elements */
+  --color-amber-900: #78350f; /* Main secondary brown color */
+  --color-amber-950: #5a2a0b;
+
+  /* Neutral colors remain as default slate (grayscale) */
+  /* Neutral is used for backgrounds, text, borders - should be neutral/grayscale */
+  /* Slate provides good contrast with orange primary while maintaining neutrality */
+}

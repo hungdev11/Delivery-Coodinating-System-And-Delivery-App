@@ -60,14 +60,31 @@ jobs:
           filters: |
             management-system:
               - 'ManagementSystem/**'
+            cicd-file:
+              - '.github/workflows/frontend-ci-cd.yml'
+
+      - name: Check if CI/CD file changed
+        id: check-cicd
+        run: |
+          if [ "${{ steps.changes.outputs.cicd-file }}" = "true" ]; then
+            echo "cicd-changed=true" >> $GITHUB_OUTPUT
+            echo "CI/CD file changed: forcing build"
+          else
+            echo "cicd-changed=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Determine final change status
         id: final
         run: |
           FORCE="${{ steps.check-force.outputs.force-build }}"
+          CICD_CHANGED="${{ steps.check-cicd.outputs.cicd-changed }}"
           
-          if [ "$FORCE" = "true" ]; then
-            echo "mode: force-build"
+          if [ "$FORCE" = "true" ] || [ "$CICD_CHANGED" = "true" ]; then
+            if [ "$CICD_CHANGED" = "true" ]; then
+              echo "mode: force-build (CI/CD file changed)"
+            else
+              echo "mode: force-build (flag detected)"
+            fi
             echo "management-system=true" >> $GITHUB_OUTPUT
           else
             echo "mode: change-detection"
@@ -138,6 +155,86 @@ jobs:
           } >> $GITHUB_OUTPUT
           echo "Package info extracted"
 
+      - name: Determine tag conditions
+        id: tag-conditions
+        run: |
+          EVENT_TYPE="${{ github.event_name }}"
+          REF="${{ github.ref }}"
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          ACTION="${{ github.event.action }}"
+          
+          PRE_RELEASE="false"
+          LATEST="false"
+          
+          # PR events: only build pre-release when PR is opened/synchronize (not when merged/closed)
+          if [ "$EVENT_TYPE" = "pull_request" ]; then
+            if [ "$BASE_REF" = "main" ] || [[ "$BASE_REF" =~ ^release/ ]]; then
+              # Only build for opened/synchronize actions, skip for closed/merged
+              if [ "$ACTION" != "closed" ]; then
+                PRE_RELEASE="true"
+              fi
+            fi
+          fi
+          
+          # Push events: build latest for main or release/* branches
+          if [ "$EVENT_TYPE" = "push" ]; then
+            if [ "$REF" = "refs/heads/main" ] || [[ "$REF" =~ ^refs/heads/release/ ]]; then
+              LATEST="true"
+            fi
+          fi
+          
+          echo "pre-release=$PRE_RELEASE" >> $GITHUB_OUTPUT
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          
+          echo "Event type: $EVENT_TYPE"
+          echo "Action: ${ACTION:-N/A}"
+          echo "Pre-release tag: $PRE_RELEASE"
+          echo "Latest tag: $LATEST"
+
+      - name: Check if image already exists (from PR build)
+        if: steps.tag-conditions.outputs.latest == 'true'
+        id: check-existing-image
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          OWNER: ${{ env.REPOSITORY_OWNER }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME_PREFIX }}-management-system
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          # Try different SHA tag formats that might exist from PR build
+          SHA_SHORT="${COMMIT_SHA:0:7}"
+          SHA_FULL="$COMMIT_SHA"
+          
+          # Check sha-<short> format
+          IMAGE_SHA_SHORT="${REGISTRY}/${OWNER}/${IMAGE_NAME}:sha-${SHA_SHORT}"
+          
+          # Check sha-<full> format  
+          IMAGE_SHA_FULL="${REGISTRY}/${OWNER}/${IMAGE_NAME}:sha-${SHA_FULL}"
+          
+          # Check pre-release tag
+          IMAGE_PRE_RELEASE="${REGISTRY}/${OWNER}/${IMAGE_NAME}:pre-release"
+          
+          EXISTING_IMAGE=""
+          
+          if docker manifest inspect "$IMAGE_SHA_SHORT" >/dev/null 2>&1; then
+            EXISTING_IMAGE="$IMAGE_SHA_SHORT"
+            echo "Found existing image: $IMAGE_SHA_SHORT"
+          elif docker manifest inspect "$IMAGE_SHA_FULL" >/dev/null 2>&1; then
+            EXISTING_IMAGE="$IMAGE_SHA_FULL"
+            echo "Found existing image: $IMAGE_SHA_FULL"
+          elif docker manifest inspect "$IMAGE_PRE_RELEASE" >/dev/null 2>&1; then
+            EXISTING_IMAGE="$IMAGE_PRE_RELEASE"
+            echo "Found existing image: $IMAGE_PRE_RELEASE"
+          fi
+          
+          if [ -n "$EXISTING_IMAGE" ]; then
+            echo "image-exists=true" >> $GITHUB_OUTPUT
+            echo "existing-image=$EXISTING_IMAGE" >> $GITHUB_OUTPUT
+            echo "Will retag existing image instead of rebuilding"
+          else
+            echo "image-exists=false" >> $GITHUB_OUTPUT
+            echo "No existing image found, will build new"
+          fi
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -147,7 +244,8 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=pre-release,enable=${{ steps.tag-conditions.outputs.pre-release == 'true' }}
+            type=raw,value=latest,enable=${{ steps.tag-conditions.outputs.latest == 'true' }}
           annotations: |
             org.opencontainers.image.title=management-system
             org.opencontainers.image.description=${{ steps.package-info.outputs.package-description }}
@@ -235,6 +333,9 @@ jobs:
 
       - name: Build and push Docker image
         id: push
+        if: |
+          steps.tag-conditions.outputs.latest != 'true' ||
+          steps.check-existing-image.outputs.image-exists != 'true'
         uses: docker/build-push-action@v5
         with:
           context: ManagementSystem
