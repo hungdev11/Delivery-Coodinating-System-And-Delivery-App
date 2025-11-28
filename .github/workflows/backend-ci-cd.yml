@@ -78,6 +78,17 @@ jobs:
             echo "force-build=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Debug context information
+        run: |
+          echo "=== Debug Information ==="
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "SHA: ${{ github.sha }}"
+          echo "Previous SHA: ${{ github.event.before }}"
+          echo "Current SHA: ${{ github.event.after }}"
+          echo "========================="
+
       - uses: dorny/paths-filter@v3
         id: changes
         with:
@@ -100,6 +111,21 @@ jobs:
               - 'BE/**'
             cicd-file:
               - '.github/workflows/backend-ci-cd.yml'
+          list-files: shell
+
+      - name: Debug paths-filter output
+        run: |
+          echo "=== Paths Filter Results ==="
+          echo "api-gateway: ${{ steps.changes.outputs.api-gateway }}"
+          echo "user-service: ${{ steps.changes.outputs.user-service }}"
+          echo "settings-service: ${{ steps.changes.outputs.settings-service }}"
+          echo "zone-service: ${{ steps.changes.outputs.zone-service }}"
+          echo "parcel-service: ${{ steps.changes.outputs.parcel-service }}"
+          echo "session-service: ${{ steps.changes.outputs.session-service }}"
+          echo "communication-service: ${{ steps.changes.outputs.communication-service }}"
+          echo "any-service: ${{ steps.changes.outputs.any-service }}"
+          echo "cicd-file: ${{ steps.changes.outputs.cicd-file }}"
+          echo "============================"
 
       - name: Check if CI/CD file changed
         id: check-cicd
@@ -116,7 +142,15 @@ jobs:
         run: |
           FORCE="${{ steps.check-force.outputs.force-build }}"
           CICD_CHANGED="${{ steps.check-cicd.outputs.cicd-changed }}"
+          EVENT_TYPE="${{ github.event_name }}"
           
+          echo "=== Change Detection Summary ==="
+          echo "Event type: $EVENT_TYPE"
+          echo "Force build flag: $FORCE"
+          echo "CI/CD file changed: $CICD_CHANGED"
+          echo "================================"
+          
+          # Priority 1: Force build flag or CI/CD file changed
           if [ "$FORCE" = "true" ] || [ "$CICD_CHANGED" = "true" ]; then
             if [ "$CICD_CHANGED" = "true" ]; then
               echo "mode: force-build (CI/CD file changed)"
@@ -127,9 +161,21 @@ jobs:
             for svc in api-gateway user-service settings-service zone-service parcel-service session-service communication-service any-service; do
               echo "${svc}=true" >> $GITHUB_OUTPUT
             done
+          # Priority 2: Paths filter results - primary detection method
           else
             echo "mode: change-detection"
             echo ""
+            # Use paths-filter results
+            PATH_FILTER_ANY="${{ steps.changes.outputs.any-service }}"
+            
+            if [ "$PATH_FILTER_ANY" = "true" ]; then
+              echo "Paths filter detected changes"
+            elif [ "$EVENT_TYPE" = "push" ] || [ "$EVENT_TYPE" = "pull_request" ]; then
+              echo "⚠️  Paths-filter didn't detect changes, but workflow was triggered."
+              echo "   Using fallback logic - assuming changes detected by workflow trigger."
+            fi
+            
+            # Set individual service outputs based on paths-filter
             echo "api-gateway=${{ steps.changes.outputs.api-gateway }}" >> $GITHUB_OUTPUT
             echo "user-service=${{ steps.changes.outputs.user-service }}" >> $GITHUB_OUTPUT
             echo "settings-service=${{ steps.changes.outputs.settings-service }}" >> $GITHUB_OUTPUT
@@ -137,7 +183,12 @@ jobs:
             echo "parcel-service=${{ steps.changes.outputs.parcel-service }}" >> $GITHUB_OUTPUT
             echo "session-service=${{ steps.changes.outputs.session-service }}" >> $GITHUB_OUTPUT
             echo "communication-service=${{ steps.changes.outputs.communication-service }}" >> $GITHUB_OUTPUT
-            echo "any-service=${{ steps.changes.outputs.any-service }}" >> $GITHUB_OUTPUT
+            # For any-service, use paths-filter result or true if push/PR event (fallback)
+            if [ "$PATH_FILTER_ANY" = "true" ] || [ "$EVENT_TYPE" = "push" ] || [ "$EVENT_TYPE" = "pull_request" ]; then
+              echo "any-service=true" >> $GITHUB_OUTPUT
+            else
+              echo "any-service=false" >> $GITHUB_OUTPUT
+            fi
           fi
 
       - name: Generate service matrix payload
@@ -445,8 +496,21 @@ jobs:
           echo "Pre-release tag: $PRE_RELEASE"
           echo "Latest tag: $LATEST"
 
+      - name: Check force rebuild flag
+        id: check-force-rebuild
+        run: |
+          FORCE_BUILD="${{ needs.detect-changes.outputs.force-build }}"
+          if [ "$FORCE_BUILD" = "true" ]; then
+            echo "force-rebuild=true" >> $GITHUB_OUTPUT
+            echo "Force rebuild flag detected - will rebuild even if image exists"
+          else
+            echo "force-rebuild=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Check if image already exists (from PR build)
-        if: steps.tag-conditions.outputs.latest == 'true'
+        if: |
+          steps.tag-conditions.outputs.latest == 'true' &&
+          steps.check-force-rebuild.outputs.force-rebuild != 'true'
         id: check-existing-image
         env:
           REGISTRY: ${{ env.REGISTRY }}
@@ -458,35 +522,38 @@ jobs:
           SHA_SHORT="${COMMIT_SHA:0:7}"
           SHA_FULL="$COMMIT_SHA"
           
-          # Check sha-<short> format
+          # Check sha-<short> format (exact match - preferred)
           IMAGE_SHA_SHORT="${REGISTRY}/${OWNER}/${IMAGE_NAME}:sha-${SHA_SHORT}"
           
-          # Check sha-<full> format  
+          # Check sha-<full> format (exact match - preferred)
           IMAGE_SHA_FULL="${REGISTRY}/${OWNER}/${IMAGE_NAME}:sha-${SHA_FULL}"
           
-          # Check pre-release tag
-          IMAGE_PRE_RELEASE="${REGISTRY}/${OWNER}/${IMAGE_NAME}:pre-release"
-          
           EXISTING_IMAGE=""
+          MATCH_TYPE=""
           
+          # Priority 1: Check for exact SHA match (short)
           if docker manifest inspect "$IMAGE_SHA_SHORT" >/dev/null 2>&1; then
             EXISTING_IMAGE="$IMAGE_SHA_SHORT"
-            echo "Found existing image: $IMAGE_SHA_SHORT"
+            MATCH_TYPE="sha-short-exact"
+            echo "Found existing image with exact SHA match: $IMAGE_SHA_SHORT"
+          # Priority 2: Check for exact SHA match (full)
           elif docker manifest inspect "$IMAGE_SHA_FULL" >/dev/null 2>&1; then
             EXISTING_IMAGE="$IMAGE_SHA_FULL"
-            echo "Found existing image: $IMAGE_SHA_FULL"
-          elif docker manifest inspect "$IMAGE_PRE_RELEASE" >/dev/null 2>&1; then
-            EXISTING_IMAGE="$IMAGE_PRE_RELEASE"
-            echo "Found existing image: $IMAGE_PRE_RELEASE"
+            MATCH_TYPE="sha-full-exact"
+            echo "Found existing image with exact SHA match: $IMAGE_SHA_FULL"
           fi
           
+          # Only retag if we found an exact SHA match
+          # Don't use pre-release tag as it might be from a different commit
           if [ -n "$EXISTING_IMAGE" ]; then
             echo "image-exists=true" >> $GITHUB_OUTPUT
             echo "existing-image=$EXISTING_IMAGE" >> $GITHUB_OUTPUT
-            echo "Will retag existing image instead of rebuilding"
+            echo "match-type=$MATCH_TYPE" >> $GITHUB_OUTPUT
+            echo "Will retag existing image (exact SHA match) instead of rebuilding"
           else
             echo "image-exists=false" >> $GITHUB_OUTPUT
-            echo "No existing image found, will build new"
+            echo "No existing image found for this commit SHA, will build new"
+            echo "Note: pre-release tag not used to avoid retagging wrong commit"
           fi
 
       - name: Extract metadata
@@ -532,7 +599,8 @@ jobs:
         id: retag
         if: |
           steps.tag-conditions.outputs.latest == 'true' &&
-          steps.check-existing-image.outputs.image-exists == 'true'
+          steps.check-existing-image.outputs.image-exists == 'true' &&
+          steps.check-force-rebuild.outputs.force-rebuild != 'true'
         env:
           REGISTRY: ${{ env.REGISTRY }}
           OWNER: ${{ env.REPOSITORY_OWNER }}
@@ -599,7 +667,8 @@ jobs:
         id: push
         if: |
           steps.tag-conditions.outputs.latest != 'true' ||
-          steps.check-existing-image.outputs.image-exists != 'true'
+          steps.check-existing-image.outputs.image-exists != 'true' ||
+          steps.check-force-rebuild.outputs.force-rebuild == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.service.path }}
