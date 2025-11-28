@@ -70,13 +70,13 @@ const isFilterable = computed(() => {
 // Get the filterable column config for current column
 const currentFilterableColumn = computed(() => {
   if (!props.filterableColumns) return undefined
-  return props.filterableColumns.find(col => col.field === props.column.id)
+  return props.filterableColumns.find((col) => col.field === props.column.id)
 })
 
 // Get filters for current column only
 const currentColumnFilters = computed(() => {
   if (!props.activeFilters) return undefined
-  return props.activeFilters.filter(filter => filter.field === props.column.id)
+  return props.activeFilters.filter((filter) => filter.field === props.column.id)
 })
 
 // Handle sort click

@@ -17,9 +17,19 @@ import {
 } from '../api'
 import { getParcelsV2 } from '@/modules/Parcels/api'
 import type { QueryPayload } from '@/common/types/filter'
-import type { FilterGroupItemV2, FilterConditionItemV2, FilterOperatorItemV2 } from '@/common/types/filter-v2'
+import type {
+  FilterGroupItemV2,
+  FilterConditionItemV2,
+  FilterOperatorItemV2,
+} from '@/common/types/filter-v2'
 import { FilterItemType } from '@/common/types/filter-v2'
-import type { CreateProposalRequest, InteractiveProposalResponseDTO, ProposalConfigDTO, ProposalResponseRequest, ProposalTypeConfig } from '../model.type'
+import type {
+  CreateProposalRequest,
+  InteractiveProposalResponseDTO,
+  ProposalConfigDTO,
+  ProposalResponseRequest,
+  ProposalTypeConfig,
+} from '../model.type'
 
 export function useProposals() {
   const toast = useToast()
@@ -61,11 +71,7 @@ export function useProposals() {
   /**
    * Respond to a proposal
    */
-  const respond = async (
-    proposalId: string,
-    userId: string,
-    data: ProposalResponseRequest,
-  ) => {
+  const respond = async (proposalId: string, userId: string, data: ProposalResponseRequest) => {
     loading.value = true
     try {
       const response = await respondToProposal(proposalId, userId, data)

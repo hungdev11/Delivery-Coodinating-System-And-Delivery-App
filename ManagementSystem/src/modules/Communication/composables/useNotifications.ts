@@ -1,6 +1,6 @@
 /**
  * useNotifications Composable
- * 
+ *
  * Manages in-app notifications with WebSocket real-time delivery
  */
 
@@ -10,7 +10,15 @@ import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 export interface Notification {
   id: string
   userId: string
-  type: 'NEW_MESSAGE' | 'NEW_PROPOSAL' | 'PROPOSAL_UPDATE' | 'DELIVERY_UPDATE' | 'SYSTEM' | 'INFO' | 'WARNING' | 'ERROR'
+  type:
+    | 'NEW_MESSAGE'
+    | 'NEW_PROPOSAL'
+    | 'PROPOSAL_UPDATE'
+    | 'DELIVERY_UPDATE'
+    | 'SYSTEM'
+    | 'INFO'
+    | 'WARNING'
+    | 'ERROR'
   title: string
   message: string
   data?: string
@@ -23,7 +31,7 @@ export interface Notification {
 export function useNotifications() {
   const toast = useToast()
   const notifications = ref<Notification[]>([])
-  const unreadCount = computed(() => notifications.value.filter(n => !n.read).length)
+  const unreadCount = computed(() => notifications.value.filter((n) => !n.read).length)
 
   /**
    * Handle notification from WebSocket
@@ -46,18 +54,20 @@ export function useNotifications() {
    */
   const showToastNotification = (notification: Notification) => {
     const color = getNotificationColor(notification.type)
-    
+
     toast.add({
       title: notification.title,
       description: notification.message,
       color: color as any,
       timeout: 5000,
-      callback: notification.actionUrl ? () => {
-        // Navigate to action URL if provided
-        if (notification.actionUrl) {
-          window.location.href = notification.actionUrl
-        }
-      } : undefined,
+      callback: notification.actionUrl
+        ? () => {
+            // Navigate to action URL if provided
+            if (notification.actionUrl) {
+              window.location.href = notification.actionUrl
+            }
+          }
+        : undefined,
     })
   }
 
@@ -87,7 +97,7 @@ export function useNotifications() {
    * Mark notification as read
    */
   const markAsRead = (notificationId: string) => {
-    const notification = notifications.value.find(n => n.id === notificationId)
+    const notification = notifications.value.find((n) => n.id === notificationId)
     if (notification && !notification.read) {
       notification.read = true
       notification.readAt = new Date().toISOString()
@@ -99,7 +109,7 @@ export function useNotifications() {
    */
   const markAllAsRead = () => {
     const now = new Date().toISOString()
-    notifications.value.forEach(n => {
+    notifications.value.forEach((n) => {
       if (!n.read) {
         n.read = true
         n.readAt = now
@@ -111,7 +121,7 @@ export function useNotifications() {
    * Remove notification
    */
   const removeNotification = (notificationId: string) => {
-    const index = notifications.value.findIndex(n => n.id === notificationId)
+    const index = notifications.value.findIndex((n) => n.id === notificationId)
     if (index !== -1) {
       notifications.value.splice(index, 1)
     }
@@ -128,7 +138,7 @@ export function useNotifications() {
    * Get unread notifications
    */
   const getUnreadNotifications = computed(() => {
-    return notifications.value.filter(n => !n.read)
+    return notifications.value.filter((n) => !n.read)
   })
 
   return {

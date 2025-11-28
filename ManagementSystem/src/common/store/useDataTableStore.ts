@@ -9,7 +9,14 @@ export interface SortConfig {
 export interface FilterConfig {
   key: string
   value: any
-  operator: 'equals' | 'contains' | 'startsWith' | 'endsWith' | 'greaterThan' | 'lessThan' | 'between'
+  operator:
+    | 'equals'
+    | 'contains'
+    | 'startsWith'
+    | 'endsWith'
+    | 'greaterThan'
+    | 'lessThan'
+    | 'between'
 }
 
 export interface ColumnConfig {
@@ -47,7 +54,7 @@ export const useDataTableStore = defineStore('dataTable', () => {
     sorts: [],
     filters: [],
     selectedIds: new Set(),
-    rowKey: 'id'
+    rowKey: 'id',
   })
 
   // Getters
@@ -55,13 +62,11 @@ export const useDataTableStore = defineStore('dataTable', () => {
   const hasSelection = computed(() => state.value.selectedIds.size > 0)
   const selectionCount = computed(() => state.value.selectedIds.size)
   const selectedRows = computed(() =>
-    state.value.data.filter(row => state.value.selectedIds.has(row[state.value.rowKey]))
+    state.value.data.filter((row) => state.value.selectedIds.has(row[state.value.rowKey])),
   )
   const selectedIds = computed(() => Array.from(state.value.selectedIds))
 
-  const totalPages = computed(() =>
-    Math.ceil(state.value.total / state.value.pageSize)
-  )
+  const totalPages = computed(() => Math.ceil(state.value.total / state.value.pageSize))
 
   const currentPageDisplay = computed(() => state.value.page + 1)
 
@@ -106,7 +111,7 @@ export const useDataTableStore = defineStore('dataTable', () => {
   // Sorting
   const addSort = (key: string, direction: 'asc' | 'desc' = 'asc') => {
     // Remove existing sort for this key
-    state.value.sorts = state.value.sorts.filter(sort => sort.key !== key)
+    state.value.sorts = state.value.sorts.filter((sort) => sort.key !== key)
 
     // Add new sort
     state.value.sorts.push({ key, direction })
@@ -116,12 +121,12 @@ export const useDataTableStore = defineStore('dataTable', () => {
   }
 
   const removeSort = (key: string) => {
-    state.value.sorts = state.value.sorts.filter(sort => sort.key !== key)
+    state.value.sorts = state.value.sorts.filter((sort) => sort.key !== key)
     state.value.page = 0
   }
 
   const toggleSort = (key: string) => {
-    const existingSort = state.value.sorts.find(sort => sort.key === key)
+    const existingSort = state.value.sorts.find((sort) => sort.key === key)
 
     if (!existingSort) {
       addSort(key, 'asc')
@@ -138,14 +143,14 @@ export const useDataTableStore = defineStore('dataTable', () => {
   }
 
   const getSortDirection = (key: string): 'asc' | 'desc' | null => {
-    const sort = state.value.sorts.find(s => s.key === key)
+    const sort = state.value.sorts.find((s) => s.key === key)
     return sort ? sort.direction : null
   }
 
   // Filtering
   const addFilter = (key: string, value: any, operator: FilterConfig['operator'] = 'contains') => {
     // Remove existing filter for this key
-    state.value.filters = state.value.filters.filter(filter => filter.key !== key)
+    state.value.filters = state.value.filters.filter((filter) => filter.key !== key)
 
     // Add new filter if value is not empty
     if (value !== null && value !== undefined && value !== '') {
@@ -156,7 +161,7 @@ export const useDataTableStore = defineStore('dataTable', () => {
   }
 
   const removeFilter = (key: string) => {
-    state.value.filters = state.value.filters.filter(filter => filter.key !== key)
+    state.value.filters = state.value.filters.filter((filter) => filter.key !== key)
     state.value.page = 0
   }
 
@@ -177,7 +182,7 @@ export const useDataTableStore = defineStore('dataTable', () => {
   }
 
   const getFilterValue = (key: string) => {
-    const filter = state.value.filters.find(f => f.key === key)
+    const filter = state.value.filters.find((f) => f.key === key)
     return filter ? filter.value : null
   }
 
@@ -199,7 +204,7 @@ export const useDataTableStore = defineStore('dataTable', () => {
   }
 
   const selectAll = () => {
-    state.value.data.forEach(row => {
+    state.value.data.forEach((row) => {
       state.value.selectedIds.add(row[state.value.rowKey])
     })
   }
@@ -239,17 +244,22 @@ export const useDataTableStore = defineStore('dataTable', () => {
       sorts: [],
       filters: [],
       selectedIds: new Set(),
-      rowKey: 'id'
+      rowKey: 'id',
     }
   }
 
   // Watch for data changes to clear selection if needed
-  watch(() => state.value.data, (newData) => {
-    // Remove selections for rows that no longer exist
-    const existingIds = new Set(newData.map(row => row[state.value.rowKey]))
-    const validSelections = new Set([...state.value.selectedIds].filter(id => existingIds.has(id)))
-    state.value.selectedIds = validSelections
-  })
+  watch(
+    () => state.value.data,
+    (newData) => {
+      // Remove selections for rows that no longer exist
+      const existingIds = new Set(newData.map((row) => row[state.value.rowKey]))
+      const validSelections = new Set(
+        [...state.value.selectedIds].filter((id) => existingIds.has(id)),
+      )
+      state.value.selectedIds = validSelections
+    },
+  )
 
   return {
     // State
@@ -309,6 +319,6 @@ export const useDataTableStore = defineStore('dataTable', () => {
     deleteSelected,
 
     // Utility
-    reset
+    reset,
   }
 })

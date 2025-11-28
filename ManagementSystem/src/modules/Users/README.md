@@ -27,7 +27,9 @@ Users/
 ## Types
 
 ### UserDto
+
 Represents a user entity with the following properties:
+
 - `id`: Unique identifier (UUID)
 - `keycloakId`: Keycloak user ID (optional)
 - `username`: User's username
@@ -42,11 +44,14 @@ Represents a user entity with the following properties:
 - `updatedAt`: Last update timestamp
 
 Methods:
+
 - `fullName`: Returns concatenated first and last name
 - `displayStatus`: Returns human-readable status
 
 ### CreateUserRequest
+
 Request payload for creating a new user:
+
 - `username`: Required
 - `email`: Required
 - `firstName`: Required
@@ -57,7 +62,9 @@ Request payload for creating a new user:
 - `password`: Optional
 
 ### UpdateUserRequest
+
 Request payload for updating a user (all fields optional):
+
 - `email`
 - `firstName`
 - `lastName`
@@ -69,9 +76,11 @@ Request payload for updating a user (all fields optional):
 ## API Functions
 
 ### getUsers(params?)
+
 Get paginated list of users.
 
 **Parameters:**
+
 - `params.page`: Page number (0-indexed)
 - `params.size`: Page size
 - `params.search`: Search query
@@ -79,47 +88,58 @@ Get paginated list of users.
 **Returns:** `Promise<GetUsersResponse>`
 
 ### getCurrentUser()
+
 Get the current authenticated user.
 
 **Returns:** `Promise<GetUserResponse>`
 
 ### getUserById(id)
+
 Get user by ID.
 
 **Parameters:**
+
 - `id`: User UUID
 
 **Returns:** `Promise<GetUserResponse>`
 
 ### getUserByUsername(username)
+
 Get user by username.
 
 **Parameters:**
+
 - `username`: Username string
 
 **Returns:** `Promise<GetUserResponse>`
 
 ### createUser(data)
+
 Create a new user.
 
 **Parameters:**
+
 - `data`: CreateUserRequest object
 
 **Returns:** `Promise<CreateUserResponse>`
 
 ### updateUser(id, data)
+
 Update an existing user.
 
 **Parameters:**
+
 - `id`: User UUID
 - `data`: UpdateUserRequest object
 
 **Returns:** `Promise<UpdateUserResponse>`
 
 ### deleteUser(id)
+
 Delete a user.
 
 **Parameters:**
+
 - `id`: User UUID
 
 **Returns:** `Promise<DeleteUserResponse>`
@@ -127,7 +147,9 @@ Delete a user.
 ## Components
 
 ### UsersView
+
 Main view component that provides:
+
 - Data table with sortable columns
 - Search functionality
 - Pagination
@@ -161,6 +183,7 @@ const router = createRouter({
 ### Bulk Actions
 
 The Users module supports bulk operations:
+
 - **Bulk Delete**: Select multiple users and delete them
 - **Bulk Export**: Export selected users to CSV
 
@@ -169,6 +192,7 @@ Selections persist across pages, allowing you to select items from multiple page
 ## Permissions
 
 Access to the Users module requires authentication and one of the following roles:
+
 - ADMIN
 - MANAGER
 

@@ -11,6 +11,7 @@ All WebSocket logs are **only visible in development mode** and automatically ta
 ```
 
 Example:
+
 ```
 [2025-11-12T14:57:54.456Z] INFO [WEBSOCKET]: 🔌 Connecting to WebSocket {"userId": "..."}
 ```
@@ -20,6 +21,7 @@ Example:
 ## 📤 SENDING Logs (What you send to server)
 
 ### 1. **Sending Message**
+
 ```javascript
 [INFO] [WEBSOCKET:SENDER]: 📤 SENDING MESSAGE
 {
@@ -41,6 +43,7 @@ Example:
 ```
 
 ### 2. **Sending Typing Indicator**
+
 ```javascript
 [INFO] [WEBSOCKET:SENDER]: 📤 SENDING TYPING INDICATOR
 {
@@ -53,6 +56,7 @@ Example:
 ```
 
 ### 3. **Marking Messages as Read**
+
 ```javascript
 [INFO] [WEBSOCKET:SENDER]: 📤 SENDING MARK AS READ
 {
@@ -67,6 +71,7 @@ Example:
 ```
 
 ### 4. **Sending Quick Action**
+
 ```javascript
 [INFO] [WEBSOCKET:SENDER]: 📤 SENDING QUICK ACTION
 {
@@ -85,6 +90,7 @@ Example:
 ## 📥 RECEIVING Logs (What you receive from server)
 
 ### 1. **Receiving Message**
+
 ```javascript
 [INFO] [WEBSOCKET:SUBSCRIPTION]: 📥 RECEIVED MESSAGE
 {
@@ -106,6 +112,7 @@ Example:
 ```
 
 ### 2. **Receiving Status Update**
+
 ```javascript
 [INFO] [WEBSOCKET:SUBSCRIPTION]: 📥 RECEIVED STATUS UPDATE
 {
@@ -122,6 +129,7 @@ Example:
 ```
 
 ### 3. **Receiving Typing Indicator**
+
 ```javascript
 [INFO] [WEBSOCKET:SUBSCRIPTION]: 📥 RECEIVED TYPING INDICATOR
 {
@@ -139,6 +147,7 @@ Example:
 ```
 
 ### 4. **Receiving Notification**
+
 ```javascript
 [INFO] [WEBSOCKET:SUBSCRIPTION]: 📥 RECEIVED NOTIFICATION
 {
@@ -161,6 +170,7 @@ Example:
 ## 🔌 Connection Logs
 
 ### Connection Process
+
 ```javascript
 [INFO] [WEBSOCKET]: 🔌 Connecting to WebSocket
 { userId: "659235bc-..." }
@@ -176,6 +186,7 @@ Example:
 ```
 
 ### Subscription Setup
+
 ```javascript
 [INFO] [WEBSOCKET:SUBSCRIPTION]: Setting up subscriptions
 {
@@ -192,6 +203,7 @@ Example:
 ```
 
 ### Connection Complete
+
 ```javascript
 [INFO] [WEBSOCKET]: ✅ WebSocket fully connected
 { subscriptions: 1 }
@@ -202,12 +214,14 @@ Example:
 ## 🐛 Error Logs
 
 ### Send Errors
+
 ```javascript
 [ERROR] [WEBSOCKET:SENDER]: ❌ Failed to send message
 ReferenceError: client is not connected
 ```
 
 ### Receive Errors
+
 ```javascript
 [ERROR] [WEBSOCKET:SUBSCRIPTION]: ❌ Failed to parse message
 SyntaxError: Unexpected token in JSON
@@ -217,6 +231,7 @@ SyntaxError: Unexpected token in JSON
 ```
 
 ### Connection Errors
+
 ```javascript
 [ERROR] [WEBSOCKET:CONNECTION]: ❌ Failed to create STOMP client
 ReferenceError: global is not defined
@@ -229,6 +244,7 @@ ReferenceError: global is not defined
 ## 🔍 How to Filter Logs in Browser Console
 
 ### Filter by Context
+
 ```javascript
 // Show only connection logs
 [WEBSOCKET:CONNECTION]
@@ -244,6 +260,7 @@ ReferenceError: global is not defined
 ```
 
 ### Filter by Action
+
 ```javascript
 // Show only sent messages
 📤 SENDING
@@ -256,6 +273,7 @@ ReferenceError: global is not defined
 ```
 
 ### Filter by Destination
+
 ```javascript
 // Show only chat messages
 /app/chat.send
@@ -341,12 +359,15 @@ When you send "hello" and receive a response:
 ## 🚨 Common Issues
 
 ### "sentAt is null"
+
 **Fixed!** The client now handles null `sentAt` by using current timestamp.
 
 ### "Message not added to pool"
+
 Check the `addMessage` function logs. If `sentAt` is null, it's now automatically set.
 
 ### "Duplicate messages"
+
 The `addMessage` function checks for duplicates and removes optimistic messages.
 
 ---

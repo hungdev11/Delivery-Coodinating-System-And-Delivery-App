@@ -34,7 +34,7 @@ const handleClose = () => {
     title="Parcel QR Code"
     description="Scan this code with DeliveryApp to view parcel details"
     :close="{ onClick: handleClose }"
-    :ui="{ footer: 'justify-end' }"
+    :ui="{ width: 'sm:max-w-sm md:max-w-md', footer: 'justify-end' }"
   >
     <template #body>
       <div class="flex flex-col items-center space-y-4 p-6">

@@ -128,9 +128,7 @@ onMounted(() => {
       show-back
     >
       <template #actions>
-        <UButton variant="outline" icon="i-heroicons-pencil" @click="openEditModal">
-          Edit
-        </UButton>
+        <UButton variant="outline" icon="i-heroicons-pencil" @click="openEditModal"> Edit </UButton>
         <UButton color="error" variant="soft" icon="i-heroicons-trash" @click="openDeleteModal">
           Delete
         </UButton>
@@ -205,7 +203,7 @@ onMounted(() => {
                 <div class="space-y-2">
                   <h4 class="font-semibold text-sm">Legend</h4>
                   <div class="flex items-center gap-2">
-                    <div class="w-4 h-4 bg-blue-500/25 border-2 border-blue-600 rounded" />
+                    <div class="w-4 h-4 bg-primary-500/25 border-2 border-primary-600 rounded" />
                     <span class="text-xs">{{ zone.displayName }}</span>
                   </div>
                 </div>

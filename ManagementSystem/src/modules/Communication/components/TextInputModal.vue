@@ -42,7 +42,7 @@ const handleCancel = () => {
 </script>
 
 <template>
-  <UModal :title="title">
+  <UModal :title="title" :ui="{ width: 'sm:max-w-sm md:max-w-md' }">
     <template #body>
       <div class="space-y-4 p-4">
         <p class="text-sm text-gray-600">Please enter the reason:</p>

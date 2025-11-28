@@ -5,12 +5,7 @@
  * Shows session summary, assignments, and map visualization for a delivery session
  */
 
-import {
-  defineAsyncComponent,
-  ref,
-  computed,
-  onMounted,
-} from 'vue'
+import { defineAsyncComponent, ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MapView from '@/common/components/MapView.vue'
 import type { RouteData, MapMarker } from '@/common/types/map.type'
@@ -205,9 +200,7 @@ const navigateToSession = (targetSessionId: string) => {
       description="Detailed view of shipper's delivery session"
     >
       <template #actions>
-        <UButton variant="ghost" icon="i-heroicons-arrow-left" @click="backToList">
-          Back
-        </UButton>
+        <UButton variant="ghost" icon="i-heroicons-arrow-left" @click="backToList"> Back </UButton>
       </template>
     </PageHeader>
 
@@ -237,19 +230,13 @@ const navigateToSession = (targetSessionId: string) => {
               <div>
                 <span class="font-medium text-gray-800 dark:text-gray-200">Started:</span>
                 <span class="ml-2">
-                  {{
-                    session.startTime
-                      ? new Date(session.startTime).toLocaleString()
-                      : 'Unknown'
-                  }}
+                  {{ session.startTime ? new Date(session.startTime).toLocaleString() : 'Unknown' }}
                 </span>
               </div>
               <div>
                 <span class="font-medium text-gray-800 dark:text-gray-200">Finished:</span>
                 <span class="ml-2">
-                  {{
-                    session.endTime ? new Date(session.endTime).toLocaleString() : 'In progress'
-                  }}
+                  {{ session.endTime ? new Date(session.endTime).toLocaleString() : 'In progress' }}
                 </span>
               </div>
             </div>
@@ -292,13 +279,9 @@ const navigateToSession = (targetSessionId: string) => {
               <span class="text-sm text-gray-500">Current Congestion</span>
             </template>
             <div class="space-y-2">
-              <div
-                class="text-3xl font-semibold text-gray-900 dark:text-gray-100 capitalize"
-              >
+              <div class="text-3xl font-semibold text-gray-900 dark:text-gray-100 capitalize">
                 {{
-                  routeData
-                    ? getCongestionLabel(routeData.trafficSummary?.congestionLevel)
-                    : '—'
+                  routeData ? getCongestionLabel(routeData.trafficSummary?.congestionLevel) : '—'
                 }}
               </div>
               <div class="text-xs text-gray-500">
@@ -373,6 +356,11 @@ const navigateToSession = (targetSessionId: string) => {
               { accessorKey: 'updatedAt', header: 'Updated At' },
               { accessorKey: 'failReason', header: 'Fail Reason' },
             ]"
+            :ui="{
+              empty: 'text-center py-12',
+              root: 'h-[50vh]',
+              thead: 'sticky top-0 bg-white dark:bg-gray-800',
+            }"
           >
             <template #cell(status)="{ row }">
               <UBadge
@@ -390,16 +378,10 @@ const navigateToSession = (targetSessionId: string) => {
               </UBadge>
             </template>
             <template #cell(scanedAt)="{ row }">
-              {{
-                row.original.scanedAt ? new Date(row.original.scanedAt).toLocaleString() : '—'
-              }}
+              {{ row.original.scanedAt ? new Date(row.original.scanedAt).toLocaleString() : '—' }}
             </template>
             <template #cell(updatedAt)="{ row }">
-              {{
-                row.original.updatedAt
-                  ? new Date(row.original.updatedAt).toLocaleString()
-                  : '—'
-              }}
+              {{ row.original.updatedAt ? new Date(row.original.updatedAt).toLocaleString() : '—' }}
             </template>
             <template #cell(failReason)="{ row }">
               {{ row.original.failReason || '—' }}
@@ -465,7 +447,9 @@ const navigateToSession = (targetSessionId: string) => {
                     View
                   </UButton>
                 </div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-600 dark:text-gray-400">
+                <div
+                  class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-600 dark:text-gray-400"
+                >
                   <div>
                     <span class="font-medium">Tasks:</span>
                     <span class="ml-1">{{ otherSession.totalTasks }}</span>

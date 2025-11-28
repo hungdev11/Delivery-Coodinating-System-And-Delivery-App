@@ -42,7 +42,7 @@ const handleCancel = () => {
     title="Delete Parcel"
     :description="message"
     :close="{ onClick: handleCancel }"
-    :ui="{ footer: 'justify-end' }"
+    :ui="{ width: 'sm:max-w-sm md:max-w-md', footer: 'justify-end' }"
   >
     <template #body>
       <p class="text-gray-600">{{ message }}</p>

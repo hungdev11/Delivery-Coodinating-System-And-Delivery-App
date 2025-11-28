@@ -23,7 +23,7 @@ export default defineConfig({
       },
     }),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['favicon.ico', 'pwa-192x192.png', 'pwa-512x512.png'],
       devOptions: {
         enabled: true,
@@ -59,8 +59,18 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Cache patterns: JS, CSS, images, fonts, but exclude HTML files
+        globPatterns: ['**/*.{js,css,ico,png,svg,woff2,woff,ttf,eot}'],
+        // Do not cache HTML files (index.html, assets/index.html)
+        globIgnores: ['**/index.html', '**/assets/index.html'],
+        // Remove old cache entries when updating
+        cleanupOutdatedCaches: true,
+        // Skip waiting and claim clients immediately on update
+        skipWaiting: false,
+        clientsClaim: false,
+        // Runtime caching rules
         runtimeCaching: [
+          // Cache API calls (NetworkFirst)
           {
             urlPattern: /^https:\/\/api\..*/i,
             handler: 'NetworkFirst',
@@ -69,6 +79,28 @@ export default defineConfig({
               expiration: {
                 maxEntries: 100,
                 maxAgeSeconds: 60 * 60 * 24, // 24 hours
+              },
+            },
+          },
+          // Do not cache upload files - always fetch from network
+          {
+            urlPattern: /\/upload\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          // Cache assets with versioning (stale while revalidate)
+          // This ensures /assets/* files are removed when updated
+          {
+            urlPattern: /\/assets\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'assets-cache',
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+              // Force update when version changes
+              cacheableResponse: {
+                statuses: [0, 200],
               },
             },
           },

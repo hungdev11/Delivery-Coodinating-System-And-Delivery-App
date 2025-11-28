@@ -78,9 +78,10 @@ export const useZonesStore = defineStore('zones', () => {
 
       const combinedFilters = mergeWithCenterFilter(filtersToUse)
 
-      const v2Filters = combinedFilters && combinedFilters.conditions.length > 0
-        ? convertV1ToV2Filter(combinedFilters)
-        : undefined
+      const v2Filters =
+        combinedFilters && combinedFilters.conditions.length > 0
+          ? convertV1ToV2Filter(combinedFilters)
+          : undefined
 
       const response = await getZonesV2({
         page: pageToUse,

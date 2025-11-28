@@ -62,7 +62,7 @@ const canSubmit = computed(() => {
     title="Start New Conversation"
     description="Enter a user ID to start chatting"
     :close="{ onClick: handleCancel }"
-    :ui="{ footer: 'justify-end' }"
+    :ui="{ width: 'sm:max-w-sm md:max-w-md', footer: 'justify-end' }"
   >
     <template #body>
       <div class="space-y-4">

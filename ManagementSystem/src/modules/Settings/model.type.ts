@@ -12,7 +12,15 @@ export type SettingType = 'STRING' | 'INTEGER' | 'BOOLEAN' | 'DOUBLE' | 'JSON'
 /**
  * Display Mode
  */
-export type DisplayMode = 'TEXT' | 'PASSWORD' | 'CODE' | 'NUMBER' | 'TOGGLE' | 'TEXTAREA' | 'URL' | 'EMAIL'
+export type DisplayMode =
+  | 'TEXT'
+  | 'PASSWORD'
+  | 'CODE'
+  | 'NUMBER'
+  | 'TOGGLE'
+  | 'TEXTAREA'
+  | 'URL'
+  | 'EMAIL'
 
 /**
  * System Setting DTO

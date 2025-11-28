@@ -48,7 +48,7 @@ export const searchAddresses = async (params: {
   if (params.limit !== undefined) query.limit = params.limit
 
   const queryString = new URLSearchParams(
-    Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)]))
+    Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)])),
   ).toString()
   return apiClient.get<IApiResponse<SearchAddressesResult>>(`/v1/addresses/search?${queryString}`)
 }
@@ -82,7 +82,7 @@ export const findByPoint = async (params: {
   if (params.limit !== undefined) query.limit = params.limit
 
   const queryString = new URLSearchParams(
-    Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)]))
+    Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)])),
   ).toString()
   return apiClient.get<IApiResponse<ByPointResult>>(`/v1/addresses/by-point?${queryString}`)
 }
@@ -104,7 +104,10 @@ export const updateAddress = async (
   id: string,
   data: UpdateAddressRequest,
 ): Promise<{ id: string } & AddressDto> => {
-  return apiClient.put<{ id: string } & AddressDto, UpdateAddressRequest>(`/v1/addresses/${id}`, data)
+  return apiClient.put<{ id: string } & AddressDto, UpdateAddressRequest>(
+    `/v1/addresses/${id}`,
+    data,
+  )
 }
 
 export const getAddressById = async (id: string): Promise<IApiResponse<AddressDto>> => {
@@ -123,13 +126,13 @@ export const getOrCreateAddress = async (
   if (threshold !== undefined) query.threshold = threshold
 
   const queryString = new URLSearchParams(
-    Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)]))
+    Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)])),
   ).toString()
-  
-  const url = queryString 
+
+  const url = queryString
     ? `/v1/addresses/get-or-create?${queryString}`
     : '/v1/addresses/get-or-create'
-    
+
   return apiClient.post<IApiResponse<AddressDto>, CreateAddressRequest>(url, data)
 }
 

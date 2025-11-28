@@ -12,11 +12,11 @@
       <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div class="flex items-center">
           <div class="flex-shrink-0">
-            <div class="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
+            <div class="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center cursor-pointer" @click="router.push('/')">
               <UIcon name="i-heroicons-folder-open" class="w-6 h-6 text-white" />
             </div>
           </div>
-          <div v-if="!isCollapsed" class="ml-4 flex-1">
+          <div v-if="!isCollapsed" class="ml-4 flex-1 cursor-pointer" @click="router.push('/')">
             <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">ERP</h2>
             <p class="text-sm text-gray-500 dark:text-gray-400">Quản lý đơn hàng</p>
           </div>
@@ -47,7 +47,9 @@
       <div class="flex-1"></div>
 
       <!-- User Section -->
-      <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex-shrink-0">
+      <div
+        class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex-shrink-0"
+      >
         <div class="flex items-center">
           <div class="flex-shrink-0">
             <div class="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
@@ -68,7 +70,9 @@
                   : currentUser?.username || 'Guest User'
               }}
             </p>
-            <p class="text-xs text-gray-500 dark:text-gray-400">{{ currentUser?.email || 'No email' }}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              {{ currentUser?.email || 'No email' }}
+            </p>
           </div>
         </div>
       </div>
@@ -77,7 +81,9 @@
     <!-- Main Content -->
     <div class="flex-1 flex flex-col overflow-hidden">
       <!-- Top Navbar with Toggle Button (Desktop) -->
-      <header class="bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <header
+        class="bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-700"
+      >
         <div class="flex items-center justify-between px-4 py-3">
           <div class="flex items-center">
             <UButton
@@ -88,13 +94,15 @@
               class="mr-3 hidden md:flex"
             />
             <!-- Mobile: Show app name -->
-            <div class="md:hidden flex items-center">
+            <div class="md:hidden flex items-center cursor-pointer" @click="router.push('/')">
               <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center mr-2">
                 <UIcon name="i-heroicons-folder-open" class="w-5 h-5 text-white" />
               </div>
               <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100">ERP</h1>
             </div>
-            <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100 hidden md:block">{{ 'Dashboard' }}</h1>
+            <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100 hidden md:block">
+              {{ 'Dashboard' }}
+            </h1>
           </div>
           <div class="flex items-center space-x-2 md:space-x-4">
             <div id="pageNavAction" class="flex justify-between items-center"></div>
@@ -107,9 +115,21 @@
               class="md:size-md"
               @click="mode = mode === 'dark' ? 'light' : 'dark'"
             />
-            <UButton variant="ghost" color="neutral" icon="i-heroicons-bell" size="sm" class="md:size-md" />
+            <UButton
+              variant="ghost"
+              color="neutral"
+              icon="i-heroicons-bell"
+              size="sm"
+              class="md:size-md"
+            />
             <UPopover :content="{ side: 'bottom', align: 'end' }">
-              <UButton variant="ghost" color="neutral" icon="i-heroicons-cog-6-tooth" size="sm" class="md:size-md" />
+              <UButton
+                variant="ghost"
+                color="neutral"
+                icon="i-heroicons-cog-6-tooth"
+                size="sm"
+                class="md:size-md"
+              />
               <template #content>
                 <div class="p-2 min-w-48">
                   <div class="space-y-1">
@@ -151,7 +171,12 @@
       </header>
 
       <!-- Page Content -->
-      <main :class="['flex-1 overflow-auto p-4 md:p-6', (isClientOnly || showAdminMenu) ? 'pb-20 md:pb-6' : '']">
+      <main
+        :class="[
+          'flex-1 overflow-auto p-4 md:p-6',
+          isClientOnly || showAdminMenu ? 'pb-20 md:pb-6' : '',
+        ]"
+      >
         <slot />
       </main>
     </div>
@@ -208,7 +233,9 @@
           <span
             :class="[
               'text-xs mt-1',
-              isActiveRoute('/client/parcels') ? 'text-orange-500 font-medium' : 'text-gray-500 dark:text-gray-400',
+              isActiveRoute('/client/parcels')
+                ? 'text-orange-500 font-medium'
+                : 'text-gray-500 dark:text-gray-400',
             ]"
           >
             Đơn hàng
@@ -281,9 +308,7 @@
           <div
             :class="[
               'w-14 h-14 rounded-full flex items-center justify-center -mt-6 shadow-lg',
-              isActiveRoute('/parcels')
-                ? 'bg-orange-500'
-                : 'bg-orange-400 hover:bg-orange-500',
+              isActiveRoute('/parcels') ? 'bg-orange-500' : 'bg-orange-400 hover:bg-orange-500',
             ]"
           >
             <UIcon name="i-heroicons-cube" class="w-7 h-7 text-white" />
@@ -291,7 +316,9 @@
           <span
             :class="[
               'text-xs mt-1',
-              isActiveRoute('/parcels') ? 'text-orange-500 font-medium' : 'text-gray-500 dark:text-gray-400',
+              isActiveRoute('/parcels')
+                ? 'text-orange-500 font-medium'
+                : 'text-gray-500 dark:text-gray-400',
             ]"
           >
             Đơn hàng
@@ -497,13 +524,7 @@ const navigationItems = computed<NavigationMenuItem[][]>(() => {
       ]
     : []
 
-  return [
-    [
-      ...baseMenuItems,
-      ...adminMenuItems,
-      ...clientMenuItems,
-    ],
-  ]
+  return [[...baseMenuItems, ...adminMenuItems, ...clientMenuItems]]
 })
 
 const settingsPopoverOpen = ref(false)
@@ -533,7 +554,8 @@ const handleLogout = async () => {
   settingsPopoverOpen.value = false
   try {
     // Try to get refresh token from localStorage (if it was stored during login)
-    const refreshToken = localStorage.getItem('refresh_token') || sessionStorage.getItem('refresh_token')
+    const refreshToken =
+      localStorage.getItem('refresh_token') || sessionStorage.getItem('refresh_token')
 
     // Call logout API if refresh token exists
     if (refreshToken) {
@@ -551,15 +573,37 @@ const handleLogout = async () => {
     localStorage.removeItem('refresh_token')
     sessionStorage.removeItem('refresh_token')
 
-    // Redirect to login
-    router.push({ name: 'login' })
+    // Clear any stored redirect path
+    localStorage.removeItem('auth_redirect')
+
+    // Redirect to login (force navigation)
+    router
+      .push({ name: 'login' })
+      .then(() => {
+        // Force reload to ensure clean state
+        window.location.href = '/login'
+      })
+      .catch(() => {
+        // Fallback if router push fails
+        window.location.href = '/login'
+      })
   } catch (error) {
     console.error('Logout error:', error)
     // Still clear local data and redirect even if API call fails
     removeToken()
     localStorage.removeItem('refresh_token')
     sessionStorage.removeItem('refresh_token')
-    router.push({ name: 'login' })
+    localStorage.removeItem('auth_redirect')
+
+    // Force redirect to login
+    router
+      .push({ name: 'login' })
+      .then(() => {
+        window.location.href = '/login'
+      })
+      .catch(() => {
+        window.location.href = '/login'
+      })
   }
 }
 </script>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import router from '@/router';
+import router from '@/router'
 
 /**
  * PageHeader Component
@@ -52,8 +52,8 @@ const handleBack = () => {
           aria-label="Go back"
         />
         <div>
-          <h1 class="text-3xl font-bold text-gray-900">{{ title }}</h1>
-          <p v-if="description" class="mt-1 text-sm text-gray-600">
+          <h1 class="text-3xl font-bold text-primary">{{ title }}</h1>
+          <p v-if="description" class="mt-1 text-sm text-secondary">
             {{ description }}
           </p>
         </div>

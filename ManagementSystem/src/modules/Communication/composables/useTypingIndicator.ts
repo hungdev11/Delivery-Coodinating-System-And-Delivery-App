@@ -1,6 +1,6 @@
 /**
  * useTypingIndicator Composable
- * 
+ *
  * Manages typing indicators for real-time feedback
  */
 
@@ -22,10 +22,10 @@ export function useTypingIndicator() {
    */
   const handleTypingIndicator = (indicator: TypingIndicator) => {
     const key = `${indicator.conversationId}-${indicator.userId}`
-    
+
     if (indicator.isTyping) {
       typingUsers.value.set(key, indicator)
-      
+
       // Auto-clear after timeout
       setTimeout(() => {
         const current = typingUsers.value.get(key)
@@ -80,7 +80,7 @@ export function useTypingIndicator() {
         keysToDelete.push(key)
       }
     })
-    keysToDelete.forEach(key => typingUsers.value.delete(key))
+    keysToDelete.forEach((key) => typingUsers.value.delete(key))
   }
 
   return {

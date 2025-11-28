@@ -1,6 +1,6 @@
 /**
  * V2 Filter System Types
- * 
+ *
  * Enhanced filter system that supports operations between each pair of conditions
  * Unlike V1, V2 uses a flat list of items with operators between pairs
  */
@@ -8,7 +8,7 @@
 export enum FilterItemType {
   CONDITION = 'condition',
   OPERATOR = 'operator',
-  GROUP = 'group'
+  GROUP = 'group',
 }
 
 /**
@@ -65,5 +65,3 @@ export function isFilterOperator(item: FilterItemV2): item is FilterOperatorItem
 export function isFilterGroup(item: FilterItemV2): item is FilterGroupItemV2 {
   return item.type === FilterItemType.GROUP
 }
-
-

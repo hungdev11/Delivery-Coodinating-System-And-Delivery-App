@@ -7,7 +7,9 @@
         <template #header>
           <div class="text-center">
             <div class="flex justify-center mb-4">
-              <div class="w-14 h-14 sm:w-16 sm:h-16 bg-primary-500 rounded-2xl flex items-center justify-center shadow-lg transition-transform hover:scale-105">
+              <div
+                class="w-14 h-14 sm:w-16 sm:h-16 bg-primary-500 rounded-2xl flex items-center justify-center shadow-lg transition-transform hover:scale-105"
+              >
                 <UIcon name="i-heroicons-folder-open" class="w-7 h-7 sm:w-8 sm:h-8 text-white" />
               </div>
             </div>
@@ -46,11 +48,7 @@
           </UFormField>
 
           <div class="flex items-center pt-1 pb-2">
-            <UCheckbox
-              id="rememberMe"
-              v-model="loginForm.rememberMe"
-              label="Ghi nhớ đăng nhập"
-            />
+            <UCheckbox id="rememberMe" v-model="loginForm.rememberMe" label="Ghi nhớ đăng nhập" />
           </div>
 
           <UButton
@@ -164,11 +162,7 @@ const login = async () => {
     // Store token and user information using Pinia store
     // Use roles from response.user.roles if available, otherwise empty array
     const userRoles = response.result.user.roles || []
-    authStore.setAuth(
-      response.result.accessToken,
-      response.result.user,
-      userRoles,
-    )
+    authStore.setAuth(response.result.accessToken, response.result.user, userRoles)
 
     console.log(
       Info(
@@ -184,7 +178,17 @@ const login = async () => {
       ),
     )
 
-    router.push('/')
+    // Get redirect path from query param or localStorage
+    const redirectPath =
+      (router.currentRoute.value.query.redirect as string) ||
+      localStorage.getItem('auth_redirect') ||
+      '/'
+
+    // Clear the stored redirect path
+    localStorage.removeItem('auth_redirect')
+
+    // Redirect to saved path or default to home
+    router.push(redirectPath as string)
   } catch (err) {
     console.log(ErrorLog('Login failed with exception', err, DebugContexts.AUTH))
     error.value = 'Đăng nhập thất bại: ' + (err as Error).message

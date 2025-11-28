@@ -9,7 +9,14 @@ export const useAddresses = defineStore('addressesStore', {
     creating: false as boolean,
     error: null as string | null,
     success: null as string | null,
-    selected: null as { id?: string; source: 'local' | 'track-asia'; name: string; lat: number; lon: number; addressText?: string } | null,
+    selected: null as {
+      id?: string
+      source: 'local' | 'track-asia'
+      name: string
+      lat: number
+      lon: number
+      addressText?: string
+    } | null,
   }),
   actions: {
     async search(limit: number = 10) {
@@ -51,7 +58,14 @@ export const useAddresses = defineStore('addressesStore', {
       return addressesApi.findByPoint(params)
     },
 
-    select(item: { id?: string; source: 'local' | 'track-asia'; name: string; lat: number; lon: number; addressText?: string }) {
+    select(item: {
+      id?: string
+      source: 'local' | 'track-asia'
+      name: string
+      lat: number
+      lon: number
+      addressText?: string
+    }) {
       this.selected = item
       this.searchTerm = item.name
     },
@@ -60,7 +74,10 @@ export const useAddresses = defineStore('addressesStore', {
       this.selected = null
     },
 
-    async update(id: string, payload: { name?: string; addressText?: string | null; lat?: number; lon?: number }) {
+    async update(
+      id: string,
+      payload: { name?: string; addressText?: string | null; lat?: number; lon?: number },
+    ) {
       this.creating = true
       this.error = null
       this.success = null
@@ -81,7 +98,14 @@ export const useAddresses = defineStore('addressesStore', {
       const res = await addressesApi.getAddressById(id)
       if (!res.result) throw new Error('Address not found')
       const a = res.result
-      this.select({ source: 'local', id: a.id, name: a.name, lat: a.lat, lon: a.lon, addressText: a.addressText || undefined })
+      this.select({
+        source: 'local',
+        id: a.id,
+        name: a.name,
+        lat: a.lat,
+        lon: a.lon,
+        addressText: a.addressText || undefined,
+      })
       return a
     },
 

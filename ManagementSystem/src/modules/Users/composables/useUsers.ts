@@ -57,9 +57,7 @@ export function useUsers() {
       }
 
       // Use V2 API if enabled, otherwise fall back to V1
-      const response = useV2Api.value
-        ? await getUsersV2(params)
-        : await getUsers(params)
+      const response = useV2Api.value ? await getUsersV2(params) : await getUsers(params)
 
       if (response.result) {
         users.value = response.result.data.map((u) => new UserDto(u))

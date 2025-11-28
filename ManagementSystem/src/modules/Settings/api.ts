@@ -37,10 +37,7 @@ export const listSettingsV2 = async (query: any): Promise<GetSettingsResponse> =
 /**
  * Get setting by group and key
  */
-export const getSettingByKey = async (
-  group: string,
-  key: string,
-): Promise<GetSettingResponse> => {
+export const getSettingByKey = async (group: string, key: string): Promise<GetSettingResponse> => {
   return apiClient.get<GetSettingResponse>(`/v1/settings/${group}/${key}`)
 }
 

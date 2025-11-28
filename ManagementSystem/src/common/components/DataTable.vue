@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="T extends Record<string, any>">
-import { useDebounceFn } from '@vueuse/core';
+import { useDebounceFn } from '@vueuse/core'
 import { computed, ref, watch, onMounted, nextTick, h } from 'vue'
 import { useDataTableStore } from '../store/useDataTableStore'
 
@@ -84,7 +84,7 @@ const props = withDefaults(defineProps<Props>(), {
   emptyMessage: 'No data available',
   rowKey: 'id',
   storeKey: 'default',
-  reloadable: true
+  reloadable: true,
 })
 
 const emit = defineEmits<{
@@ -106,25 +106,45 @@ const store = useDataTableStore()
 const localSearchQuery = ref('')
 
 // Sync props with store
-watch(() => props.rows, (newRows) => {
-  store.setData(newRows)
-}, { immediate: true })
+watch(
+  () => props.rows,
+  (newRows) => {
+    store.setData(newRows)
+  },
+  { immediate: true },
+)
 
-watch(() => props.loading, (loading) => {
-  store.setLoading(loading)
-}, { immediate: true })
+watch(
+  () => props.loading,
+  (loading) => {
+    store.setLoading(loading)
+  },
+  { immediate: true },
+)
 
-watch(() => props.total, (total) => {
-  store.setTotal(total)
-}, { immediate: true })
+watch(
+  () => props.total,
+  (total) => {
+    store.setTotal(total)
+  },
+  { immediate: true },
+)
 
-watch(() => props.pageSize, (pageSize) => {
-  store.setPageSize(pageSize)
-}, { immediate: true })
+watch(
+  () => props.pageSize,
+  (pageSize) => {
+    store.setPageSize(pageSize)
+  },
+  { immediate: true },
+)
 
-watch(() => props.rowKey, (rowKey) => {
-  store.setRowKey(rowKey)
-}, { immediate: true })
+watch(
+  () => props.rowKey,
+  (rowKey) => {
+    store.setRowKey(rowKey)
+  },
+  { immediate: true },
+)
 
 // Handle search with debouncing
 const handleSearch = useDebounceFn(() => {
@@ -154,7 +174,7 @@ const currentPage = computed({
   set: (value) => {
     store.setPage(value - 1) // Convert from 1-indexed to 0-indexed
     emit('update:page', store.state.page)
-  }
+  },
 })
 
 // Handle bulk operations
@@ -170,31 +190,41 @@ const handleReload = () => {
 }
 
 // Watch for selection changes
-watch(() => store.selectedRows, (selectedRows) => {
-  emit('selection-change', selectedRows)
-}, { deep: true })
+watch(
+  () => store.selectedRows,
+  (selectedRows) => {
+    emit('selection-change', selectedRows)
+  },
+  { deep: true },
+)
 
 // Computed columns with sorting indicators
 const columnsWithSorting = computed(() => {
-  return props.columns.map(col => ({
+  return props.columns.map((col) => ({
     ...col,
     header: () => {
       const sortDirection = store.getSortDirection(col.accessorKey)
-      const sortIcon = sortDirection ?
-        (sortDirection === 'asc' ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down') :
-        'i-heroicons-chevron-up-down'
+      const sortIcon = sortDirection
+        ? sortDirection === 'asc'
+          ? 'i-heroicons-chevron-up'
+          : 'i-heroicons-chevron-down'
+        : 'i-heroicons-chevron-up-down'
 
-      return h('div', {
-        class: 'flex items-center gap-2 cursor-pointer',
-        onClick: () => handleSort(col.accessorKey)
-      }, [
-        h('span', col.header),
-        h('UIcon', {
-          name: sortIcon,
-          class: 'w-4 h-4 text-gray-400'
-        })
-      ])
-    }
+      return h(
+        'div',
+        {
+          class: 'flex items-center gap-2 cursor-pointer',
+          onClick: () => handleSort(col.accessorKey),
+        },
+        [
+          h('span', col.header),
+          h('UIcon', {
+            name: sortIcon,
+            class: 'w-4 h-4 text-gray-400',
+          }),
+        ],
+      )
+    },
   }))
 })
 
@@ -208,12 +238,15 @@ onMounted(() => {
   }
 
   // Log column configuration for debugging
-  console.debug('DataTable mounted with columns:', props.columns.map(col => ({
-    accessorKey: col.accessorKey,
-    header: col.header,
-    sortable: col.sortable,
-    filterable: col.filterable
-  })))
+  console.debug(
+    'DataTable mounted with columns:',
+    props.columns.map((col) => ({
+      accessorKey: col.accessorKey,
+      header: col.header,
+      sortable: col.sortable,
+      filterable: col.filterable,
+    })),
+  )
 
   // Initialize store with current props
   store.setData(props.rows)
@@ -308,7 +341,8 @@ onMounted(() => {
     <div v-if="store.state.total > store.state.pageSize" class="flex justify-between items-center">
       <p class="text-sm text-gray-600">
         Showing {{ store.state.page * store.state.pageSize + 1 }} to
-        {{ Math.min((store.state.page + 1) * store.state.pageSize, store.state.total) }} of {{ store.state.total }} results
+        {{ Math.min((store.state.page + 1) * store.state.pageSize, store.state.total) }} of
+        {{ store.state.total }} results
       </p>
 
       <UPagination v-model="currentPage" :total="store.totalPages" :max="7" />

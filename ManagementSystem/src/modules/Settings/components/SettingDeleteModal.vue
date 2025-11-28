@@ -43,9 +43,11 @@ const handleCancel = () => {
 <template>
   <UModal
     :title="isBulkDelete ? 'Delete Settings' : 'Delete Setting'"
-    :description="isBulkDelete ? 'Delete multiple settings at once' : 'Confirm deletion of this setting'"
+    :description="
+      isBulkDelete ? 'Delete multiple settings at once' : 'Confirm deletion of this setting'
+    "
     :close="{ onClick: handleCancel }"
-    :ui="{ footer: 'justify-end space-x-2' }"
+    :ui="{ width: 'sm:max-w-sm md:max-w-md', footer: 'justify-end space-x-2' }"
   >
     <template #body>
       <div class="space-y-4">
@@ -61,9 +63,7 @@ const handleCancel = () => {
     </template>
 
     <template #footer>
-      <UButton variant="outline" color="neutral" @click="handleCancel">
-        Cancel
-      </UButton>
+      <UButton variant="outline" color="neutral" @click="handleCancel"> Cancel </UButton>
       <UButton color="red" @click="handleConfirm">
         {{ isBulkDelete ? 'Delete All' : 'Delete' }}
       </UButton>

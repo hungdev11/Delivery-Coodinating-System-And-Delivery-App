@@ -43,16 +43,19 @@ const selectedUser = ref<UserDto | null>(null)
 const selectedId = ref<string | undefined>(props.modelValue)
 
 // Watch for external modelValue changes
-watch(() => props.modelValue, (newValue) => {
-  if (newValue !== selectedId.value) {
-    selectedId.value = newValue
-    if (newValue) {
-      loadUserById(newValue)
-    } else {
-      selectedUser.value = null
+watch(
+  () => props.modelValue,
+  (newValue) => {
+    if (newValue !== selectedId.value) {
+      selectedId.value = newValue
+      if (newValue) {
+        loadUserById(newValue)
+      } else {
+        selectedUser.value = null
+      }
     }
-  }
-})
+  },
+)
 
 // Watch for selected user changes
 watch(selectedUser, (user) => {
@@ -67,7 +70,7 @@ watch(selectedUser, (user) => {
 
 // Computed options for USelectMenu
 const userOptions = computed(() => {
-  const options = users.value.map(user => ({
+  const options = users.value.map((user) => ({
     label: `${user.fullName} (${user.username})`,
     value: user.id,
     user: user as UserDto,
@@ -80,7 +83,11 @@ const userOptions = computed(() => {
   }))
 
   // If allowSeedId is true, add the current ID as an option if not in list
-  if (props.allowSeedId && selectedId.value && !users.value.find(u => u.id === selectedId.value)) {
+  if (
+    props.allowSeedId &&
+    selectedId.value &&
+    !users.value.find((u) => u.id === selectedId.value)
+  ) {
     options.unshift({
       label: `ID: ${selectedId.value}`,
       value: selectedId.value,
@@ -99,7 +106,7 @@ const userOptions = computed(() => {
 // Selected option for USelectMenu
 const selectedOption = computed(() => {
   if (!selectedId.value) return undefined
-  return userOptions.value.find(opt => opt.value === selectedId.value)
+  return userOptions.value.find((opt) => opt.value === selectedId.value)
 })
 
 /**
@@ -117,8 +124,9 @@ const loadUsers = async (query: string) => {
     const filters: FilterGroup = createEmptyFilterGroup()
 
     // Check if query is a UUID (full or partial)
-    const isIdQuery = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query) ||
-                      /^[0-9a-f-]+$/i.test(query)
+    const isIdQuery =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query) ||
+      /^[0-9a-f-]+$/i.test(query)
 
     if (isIdQuery && props.allowSeedId) {
       // Search by ID
@@ -182,7 +190,7 @@ const loadUserById = async (id: string) => {
       selectedUser.value = user
 
       // Add to users list if not already there
-      if (!users.value.find(u => u.id === user.id)) {
+      if (!users.value.find((u) => u.id === user.id)) {
         users.value.unshift(user)
       }
     }
@@ -220,7 +228,7 @@ const handleSelectionChange = (value: string | undefined) => {
   }
 
   // Find user in list
-  const user = users.value.find(u => u.id === value)
+  const user = users.value.find((u) => u.id === value)
   if (user) {
     selectedUser.value = user
   } else if (props.allowSeedId) {
@@ -268,14 +276,12 @@ onMounted(() => {
       </template>
       <template #option="{ option }">
         <div class="flex items-center gap-2">
-          <UAvatar
-            v-bind="option.avatar"
-            :size="'2xs'"
-            :alt="option.avatar?.alt || option.label"
-          />
+          <UAvatar v-bind="option.avatar" :size="'2xs'" :alt="option.avatar?.alt || option.label" />
           <div class="flex flex-col">
             <span class="text-sm font-medium">{{ option.label }}</span>
-            <span v-if="option.description" class="text-xs text-gray-500">{{ option.description }}</span>
+            <span v-if="option.description" class="text-xs text-gray-500">{{
+              option.description
+            }}</span>
           </div>
         </div>
       </template>

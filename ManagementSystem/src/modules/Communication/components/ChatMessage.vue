@@ -11,7 +11,11 @@ import type { MessageResponse } from '../model.type'
 import MessageStatusIndicator from './MessageStatusIndicator.vue'
 import DeliveryCompletedMessage from './DeliveryCompletedMessage.vue'
 import PostponeMessage from './PostponeMessage.vue'
-import { getActiveSessionForDeliveryMan, getAssignmentsBySessionId, getDeliverySessions } from '../../Delivery/api'
+import {
+  getActiveSessionForDeliveryMan,
+  getAssignmentsBySessionId,
+  getDeliverySessions,
+} from '../../Delivery/api'
 import type { DeliveryAssignmentTask } from '../../Delivery/model.type'
 import type { DeliverySessionDto } from '../../Delivery/model.type'
 import { getUserRoles } from '@/common/guards/roleGuard.guard'
@@ -184,9 +188,10 @@ const isPostponeMessage = computed(() => {
   try {
     const messageData = JSON.parse(props.message.content)
     // Check if content contains postpone-related fields
-    return messageData && (
-      messageData.postponeDateTime !== undefined ||
-      messageData.parcelId !== undefined && messageData.reason !== undefined
+    return (
+      messageData &&
+      (messageData.postponeDateTime !== undefined ||
+        (messageData.parcelId !== undefined && messageData.reason !== undefined))
     )
   } catch {
     return false
@@ -210,47 +215,29 @@ const postponeData = computed(() => {
 
 <template>
   <!-- Delivery Completed Message -->
-  <div
-    v-if="isDeliveryCompletedMessage && deliveryCompletedData"
-    class="max-w-xs lg:max-w-md"
-  >
-    <DeliveryCompletedMessage
-      :message-data="deliveryCompletedData"
-      :sent-at="message.sentAt"
-    />
+  <div v-if="isDeliveryCompletedMessage && deliveryCompletedData" class="max-w-xs lg:max-w-md">
+    <DeliveryCompletedMessage :message-data="deliveryCompletedData" :sent-at="message.sentAt" />
   </div>
 
   <!-- Postpone Message -->
-  <div
-    v-else-if="isPostponeMessage && postponeData"
-    class="max-w-xs lg:max-w-md"
-  >
-    <PostponeMessage
-      :message-data="postponeData"
-      :sent-at="message.sentAt"
-    />
+  <div v-else-if="isPostponeMessage && postponeData" class="max-w-xs lg:max-w-md">
+    <PostponeMessage :message-data="postponeData" :sent-at="message.sentAt" />
   </div>
 
   <!-- Regular Text Message -->
-  <div
-    v-else-if="message.type === 'TEXT'"
-    class="max-w-xs lg:max-w-md"
-  >
+  <div v-else-if="message.type === 'TEXT'" class="max-w-xs lg:max-w-md">
     <!-- Message Content -->
     <div
       class="px-4 py-2 rounded-lg"
       :class="
         isMyMessage
-          ? 'bg-blue-500 text-white'
-          : 'bg-white text-gray-900 border border-gray-200'
+          ? 'bg-primary-500 text-white'
+          : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700'
       "
     >
       <p class="text-sm whitespace-pre-wrap break-words">{{ message.content }}</p>
       <div class="flex items-center justify-between mt-1 space-x-2">
-        <p
-          class="text-xs"
-          :class="isMyMessage ? 'text-blue-100' : 'text-gray-500'"
-        >
+        <p class="text-xs" :class="isMyMessage ? 'text-blue-100' : 'text-gray-500'">
           {{ formatMessageTime(message.sentAt) }}
         </p>
         <!-- Status indicator for my messages -->
@@ -289,7 +276,9 @@ const postponeData = computed(() => {
                 :key="assignment.parcelId"
                 class="flex items-center justify-between"
               >
-                <span class="font-medium">{{ assignment.parcelCode || assignment.parcelId.substring(0, 8) }}</span>
+                <span class="font-medium">{{
+                  assignment.parcelCode || assignment.parcelId.substring(0, 8)
+                }}</span>
                 <UBadge
                   :color="
                     assignment.status === 'COMPLETED'
@@ -304,10 +293,7 @@ const postponeData = computed(() => {
                   {{ assignment.status }}
                 </UBadge>
               </div>
-              <p
-                v-if="sessionAssignments.length > 5"
-                class="text-gray-500 text-xs mt-1"
-              >
+              <p v-if="sessionAssignments.length > 5" class="text-gray-500 text-xs mt-1">
                 +{{ sessionAssignments.length - 5 }} more parcels
               </p>
             </div>
@@ -318,7 +304,7 @@ const postponeData = computed(() => {
       <!-- All Sessions (Admin Only) -->
       <div
         v-if="isAdmin && allSessions.length > 0"
-        class="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
+        class="px-3 py-2 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
       >
         <div class="flex items-center justify-between mb-2">
           <p class="text-xs font-semibold text-blue-700 dark:text-blue-300">
@@ -358,17 +344,14 @@ const postponeData = computed(() => {
                   {{ session.status }}
                 </UBadge>
               </div>
-              <span class="text-xs text-gray-500">
-                {{ session.totalTasks }} tasks
-              </span>
+              <span class="text-xs text-gray-500"> {{ session.totalTasks }} tasks </span>
             </div>
             <div class="text-xs text-gray-500 space-y-0.5">
               <p>
-                Started: {{ session.startTime ? new Date(session.startTime).toLocaleString() : 'N/A' }}
+                Started:
+                {{ session.startTime ? new Date(session.startTime).toLocaleString() : 'N/A' }}
               </p>
-              <p v-if="session.endTime">
-                Ended: {{ new Date(session.endTime).toLocaleString() }}
-              </p>
+              <p v-if="session.endTime">Ended: {{ new Date(session.endTime).toLocaleString() }}</p>
               <div class="flex items-center space-x-2 mt-1">
                 <span class="text-emerald-600 dark:text-emerald-400">
                   ✓ {{ session.completedTasks }} completed

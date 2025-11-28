@@ -23,8 +23,8 @@ export interface DemoRouteRequest {
   steps?: boolean
   annotations?: boolean
   mode?: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base'
-  strategy?: 'strict_urgent' | 'flexible'  // 🚨 Cách xử lý URGENT
-  vehicle?: 'car' | 'motorbike'  // Vehicle type (default: motorbike)
+  strategy?: 'strict_urgent' | 'flexible' // 🚨 Cách xử lý URGENT
+  vehicle?: 'car' | 'motorbike' // Vehicle type (default: motorbike)
 }
 
 export interface RouteRequest {
@@ -34,7 +34,7 @@ export interface RouteRequest {
   steps?: boolean
   annotations?: boolean
   mode?: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base'
-  vehicle?: 'car' | 'motorbike'  // Vehicle type (default: motorbike)
+  vehicle?: 'car' | 'motorbike' // Vehicle type (default: motorbike)
 }
 
 export interface Maneuver {
@@ -124,23 +124,23 @@ export type DemoRouteResponse = IApiResponse<DemoRouteResponseData>
 
 export const PriorityLevel = {
   // Legacy (0-4) - backward compatible
-  URGENT: 0,     // Legacy: auto-converts to 10
-  EXPRESS: 1,    // Legacy: auto-converts to 8
-  FAST: 2,       // Legacy: auto-converts to 6
-  NORMAL: 3,     // Legacy: auto-converts to 4
-  ECONOMY: 4,    // Legacy: auto-converts to 2
+  URGENT: 0, // Legacy: auto-converts to 10
+  EXPRESS: 1, // Legacy: auto-converts to 8
+  FAST: 2, // Legacy: auto-converts to 6
+  NORMAL: 3, // Legacy: auto-converts to 4
+  ECONOMY: 4, // Legacy: auto-converts to 2
 
   // New scale (1-10) - recommended
-  URGENT_10: 10,      // 🚨 Khẩn cấp tuyệt đối - giao ngay
-  EXPRESS_HIGH_9: 9,  // 🔥 Express cao nhất
-  EXPRESS_8: 8,       // 🔥 Express tiêu chuẩn
+  URGENT_10: 10, // 🚨 Khẩn cấp tuyệt đối - giao ngay
+  EXPRESS_HIGH_9: 9, // 🔥 Express cao nhất
+  EXPRESS_8: 8, // 🔥 Express tiêu chuẩn
   EXPRESS_STANDARD_7: 7, // 🔥 Express cơ bản
-  NORMAL_HIGH_6: 6,   // 📦 Normal cao
-  NORMAL_5: 5,        // 📦 Normal trung bình
+  NORMAL_HIGH_6: 6, // 📦 Normal cao
+  NORMAL_5: 5, // 📦 Normal trung bình
   NORMAL_STANDARD_4: 4, // 📦 Normal tiêu chuẩn
-  ECONOMY_HIGH_3: 3,  // 💰 Economy cao
-  ECONOMY_2: 2,       // 💰 Economy tiêu chuẩn
-  LOW_1: 1,           // 🐢 Thấp nhất
+  ECONOMY_HIGH_3: 3, // 💰 Economy cao
+  ECONOMY_2: 2, // 💰 Economy tiêu chuẩn
+  LOW_1: 1, // 🐢 Thấp nhất
 } as const
 
 export const PriorityLabel = {

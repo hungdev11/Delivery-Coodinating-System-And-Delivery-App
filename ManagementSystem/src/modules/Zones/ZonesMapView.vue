@@ -14,27 +14,23 @@ import { useZonesStore } from './composables'
 import type { ZoneDto, CreateZoneRequest, UpdateZoneRequest } from './model.type'
 import type { ZonePolygon, MapMarker } from '@/common/types'
 import { storeToRefs } from 'pinia'
+import { useResponsiveStore } from '@/common/store/responsive.store'
 
 const router = useRouter()
 
 // Composables
 const zoneStores = useZonesStore()
-const {
-  loadZones,
-  loadCenters,
-  create,
-  update,
-  remove,
-  selectedCenterId,
-  filterByCenter,
-} = zoneStores
+const { loadZones, loadCenters, create, update, remove, selectedCenterId, filterByCenter } =
+  zoneStores
 
-const {
-  zones,
-  centers,
-  loading,
-  error,
-} = storeToRefs(zoneStores);
+const { zones, centers, loading, error } = storeToRefs(zoneStores)
+
+const responsiveStore = useResponsiveStore()
+
+// Drawer direction: top for mobile/Android, bottom for desktop
+const drawerDirection = computed(() => {
+  return responsiveStore.isMobile || responsiveStore.isAndroid ? 'top' : 'bottom'
+})
 
 // Map state
 const mapLoaded = ref(false)
@@ -139,7 +135,12 @@ const handleMapLoaded = () => {
 /**
  * Handle view change
  */
-const handleViewChange = (state: { center: [number, number]; zoom: number; bearing: number; pitch: number }) => {
+const handleViewChange = (state: {
+  center: [number, number]
+  zoom: number
+  bearing: number
+  pitch: number
+}) => {
   console.log('View changed:', state)
 }
 
@@ -159,7 +160,6 @@ const openCreateZone = () => {
   isEditing.value = false
   drawerOpen.value = true
 }
-
 
 /**
  * Handle zone save
@@ -337,6 +337,7 @@ watch(selectedCenterId, (newValue) => {
     <!-- Zone Detail Drawer -->
     <UDrawer
       :open="drawerOpen"
+      :direction="drawerDirection"
       @update:open="drawerOpen = $event"
       :dismissible="false"
       :handle="false"
@@ -346,7 +347,12 @@ watch(selectedCenterId, (newValue) => {
         <h2 class="text-highlighted font-semibold">
           {{ isEditing ? 'Edit Zone' : selectedZone ? 'Zone Details' : 'Create Zone' }}
         </h2>
-        <UButton color="neutral" variant="ghost" icon="i-heroicons-x-mark" @click="drawerOpen = false" />
+        <UButton
+          color="neutral"
+          variant="ghost"
+          icon="i-heroicons-x-mark"
+          @click="drawerOpen = false"
+        />
       </template>
 
       <template #body>

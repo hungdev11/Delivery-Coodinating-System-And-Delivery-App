@@ -18,6 +18,7 @@ A comprehensive map component built with MapLibre GL (Track-Asia compatible) for
 ## Installation
 
 Dependencies are already installed:
+
 - `maplibre-gl`: Open-source map renderer
 - `@turf/turf`: Geospatial analysis library
 
@@ -62,12 +63,7 @@ const handleMapClick = (data: { lngLat: [number, number] }) => {
 </script>
 
 <template>
-  <MapView
-    :zones="zones"
-    :markers="markers"
-    height="600px"
-    @map-click="handleMapClick"
-  />
+  <MapView :zones="zones" :markers="markers" height="600px" @map-click="handleMapClick" />
 </template>
 ```
 
@@ -75,52 +71,52 @@ const handleMapClick = (data: { lngLat: [number, number] }) => {
 
 ### Map Configuration
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `config` | `Partial<MapConfig>` | - | Map configuration (center, zoom, etc.) |
-| `height` | `string` | `'600px'` | Map height |
-| `width` | `string` | `'100%'` | Map width |
+| Prop     | Type                 | Default   | Description                            |
+| -------- | -------------------- | --------- | -------------------------------------- |
+| `config` | `Partial<MapConfig>` | -         | Map configuration (center, zoom, etc.) |
+| `height` | `string`             | `'600px'` | Map height                             |
+| `width`  | `string`             | `'100%'`  | Map width                              |
 
 ### Layer Data
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `zones` | `ZonePolygon[]` | - | Zone polygons to display |
-| `routes` | `RouteData[]` | - | Route paths to display |
-| `traffic` | `TrafficData[]` | - | Traffic data points |
-| `markers` | `MapMarker[]` | - | Custom markers |
+| Prop      | Type            | Default | Description              |
+| --------- | --------------- | ------- | ------------------------ |
+| `zones`   | `ZonePolygon[]` | -       | Zone polygons to display |
+| `routes`  | `RouteData[]`   | -       | Route paths to display   |
+| `traffic` | `TrafficData[]` | -       | Traffic data points      |
+| `markers` | `MapMarker[]`   | -       | Custom markers           |
 
 ### Layer Options
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `zoneOptions` | `ZoneLayerOptions` | - | Zone layer styling |
-| `routingOptions` | `RoutingLayerOptions` | - | Routing layer styling |
-| `trafficOptions` | `TrafficLayerOptions` | - | Traffic layer styling |
+| Prop             | Type                  | Default | Description           |
+| ---------------- | --------------------- | ------- | --------------------- |
+| `zoneOptions`    | `ZoneLayerOptions`    | -       | Zone layer styling    |
+| `routingOptions` | `RoutingLayerOptions` | -       | Routing layer styling |
+| `trafficOptions` | `TrafficLayerOptions` | -       | Traffic layer styling |
 
 ### Layer Visibility
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `showZones` | `boolean` | `true` | Show/hide zones layer |
-| `showRouting` | `boolean` | `true` | Show/hide routing layer |
+| Prop          | Type      | Default | Description             |
+| ------------- | --------- | ------- | ----------------------- |
+| `showZones`   | `boolean` | `true`  | Show/hide zones layer   |
+| `showRouting` | `boolean` | `true`  | Show/hide routing layer |
 | `showTraffic` | `boolean` | `false` | Show/hide traffic layer |
 
 ### Other Options
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `autoFit` | `boolean` | `true` | Auto-fit bounds to data |
-| `fitPadding` | `number` | `50` | Padding for auto-fit |
-| `loading` | `boolean` | `false` | Show loading overlay |
+| Prop         | Type      | Default | Description             |
+| ------------ | --------- | ------- | ----------------------- |
+| `autoFit`    | `boolean` | `true`  | Auto-fit bounds to data |
+| `fitPadding` | `number`  | `50`    | Padding for auto-fit    |
+| `loading`    | `boolean` | `false` | Show loading overlay    |
 
 ## Events
 
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `map-loaded` | - | Emitted when map is ready |
-| `map-click` | `{ lngLat, point }` | Emitted on map click |
-| `view-change` | `MapViewState` | Emitted when view changes |
+| Event         | Payload             | Description               |
+| ------------- | ------------------- | ------------------------- |
+| `map-loaded`  | -                   | Emitted when map is ready |
+| `map-click`   | `{ lngLat, point }` | Emitted on map click      |
+| `view-change` | `MapViewState`      | Emitted when view changes |
 
 ## Slots
 
@@ -210,7 +206,7 @@ const routes = ref<RouteData[]>([
   {
     coordinates: [
       [106.695, 10.776],
-      [106.700, 10.780],
+      [106.7, 10.78],
       [106.707, 10.787],
     ],
     distance: 1500,
@@ -276,9 +272,7 @@ const handleMapClick = (data: { lngLat: [number, number] }) => {
   >
     <template #controls>
       <div class="space-y-2">
-        <UButton @click="showZones = !showZones">
-          {{ showZones ? 'Hide' : 'Show' }} Zones
-        </UButton>
+        <UButton @click="showZones = !showZones"> {{ showZones ? 'Hide' : 'Show' }} Zones </UButton>
         <UButton @click="showRouting = !showRouting">
           {{ showRouting ? 'Hide' : 'Show' }} Routes
         </UButton>
@@ -430,6 +424,7 @@ const {
 ## Styling
 
 The component includes default styles for:
+
 - Map container with border and rounded corners
 - Loading overlay
 - Control panel positioning

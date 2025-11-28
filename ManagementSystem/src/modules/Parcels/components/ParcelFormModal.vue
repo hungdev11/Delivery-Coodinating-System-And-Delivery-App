@@ -211,7 +211,7 @@ const handleCancel = () => {
     :title="isEditMode ? 'Edit Parcel' : 'Create Parcel'"
     :description="isEditMode ? 'Update parcel information' : 'Create a new parcel'"
     :close="{ onClick: handleCancel }"
-    :ui="{ footer: 'justify-end' }"
+    :ui="{ content: 'sm:max-w-md md:max-w-lg', footer: 'justify-end' }"
   >
     <template #body>
       <form @submit.prevent="handleSubmit" class="space-y-4">

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * QuickActionButtons Component
- * 
+ *
  * Quick action buttons for proposals (Accept/Reject/Postpone)
  * Enables 2-touch interaction for shippers
  */
@@ -29,7 +29,7 @@ const loading = ref(false)
  */
 const handleAccept = async () => {
   if (loading.value || props.disabled) return
-  
+
   loading.value = true
   try {
     emit('accept')
@@ -43,7 +43,7 @@ const handleAccept = async () => {
  */
 const handleReject = async () => {
   if (loading.value || props.disabled) return
-  
+
   loading.value = true
   try {
     emit('reject')
@@ -57,7 +57,7 @@ const handleReject = async () => {
  */
 const handlePostpone = async () => {
   if (loading.value || props.disabled) return
-  
+
   // TODO: Open modal for time selection
   // For now, emit with default values
   loading.value = true

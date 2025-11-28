@@ -76,10 +76,7 @@ export const deleteDeliveryMan = async (id: string) => {
 export const getDeliverySessions = async (
   params: QueryPayload,
 ): Promise<GetDeliverySessionsResponse> => {
-  return apiClient.post<GetDeliverySessionsResponse, QueryPayload>(
-    '/v2/delivery-sessions',
-    params,
-  )
+  return apiClient.post<GetDeliverySessionsResponse, QueryPayload>('/v2/delivery-sessions', params)
 }
 
 /**
@@ -108,7 +105,10 @@ export const updateAssignmentStatus = async (
   assignmentId: string,
   payload: UpdateAssignmentStatusRequestPayload,
 ) => {
-  return apiClient.put(`/v1/delivery-sessions/${sessionId}/assignments/${assignmentId}/status`, payload)
+  return apiClient.put(
+    `/v1/delivery-sessions/${sessionId}/assignments/${assignmentId}/status`,
+    payload,
+  )
 }
 
 export const getSessionDemoRoute = async (sessionId: string): Promise<DemoRouteResponse> => {
@@ -168,8 +168,12 @@ export const getAssignmentHistoryForDeliveryMan = async (
 /**
  * Get active session for a deliveryman
  */
-export const getActiveSessionForDeliveryMan = async (deliveryManId: string): Promise<GetDeliverySessionDetailResponse> => {
-  return apiClient.get<GetDeliverySessionDetailResponse>(`/v1/sessions/drivers/${deliveryManId}/active`)
+export const getActiveSessionForDeliveryMan = async (
+  deliveryManId: string,
+): Promise<GetDeliverySessionDetailResponse> => {
+  return apiClient.get<GetDeliverySessionDetailResponse>(
+    `/v1/sessions/drivers/${deliveryManId}/active`,
+  )
 }
 
 /**

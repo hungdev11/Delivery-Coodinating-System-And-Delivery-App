@@ -87,14 +87,18 @@ const handleCancel = () => {
 
 // Initialize with today's date when component mounts
 const today = new Date()
-const todayCalendarDate = new CalendarDate(today.getFullYear(), today.getMonth() + 1, today.getDate())
+const todayCalendarDate = new CalendarDate(
+  today.getFullYear(),
+  today.getMonth() + 1,
+  today.getDate(),
+)
 dateRange.value = {
   start: todayCalendarDate,
 }
 </script>
 
 <template>
-  <UModal title="Select Date and Time Range">
+  <UModal title="Select Date and Time Range" :ui="{ width: 'sm:max-w-sm md:max-w-md' }">
     <template #body>
       <div class="space-y-4 p-4">
         <div>

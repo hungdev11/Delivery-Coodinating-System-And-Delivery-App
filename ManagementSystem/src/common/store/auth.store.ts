@@ -122,7 +122,7 @@ export const useAuthStore = defineStore('auth', () => {
    * Check if user has any of the required roles
    */
   function hasAnyRole(requiredRoles: string[]): boolean {
-    return requiredRoles.some(role => roles.value.includes(role))
+    return requiredRoles.some((role) => roles.value.includes(role))
   }
 
   /**

@@ -23,6 +23,7 @@ import type { FilterCondition, FilterGroup, SortConfig } from '@/common/types/fi
 import { useShippers } from './composables'
 import TableHeaderCell from '@/common/components/TableHeaderCell.vue'
 import AdvancedFilterDrawer from '@/common/components/filters/AdvancedFilterDrawer.vue'
+import TableFilters from '@/common/components/table/TableFilters.vue'
 import type { DeliveryManDto } from './model.type'
 
 const PageHeader = defineAsyncComponent(() => import('@/common/components/PageHeader.vue'))
@@ -72,13 +73,7 @@ type HeaderConfig = {
 
 type HeaderColumn = Column<DeliveryManDto, unknown>
 
-const setupHeader = ({
-  column,
-  config,
-}: {
-  column: HeaderColumn
-  config: HeaderConfig
-}) =>
+const setupHeader = ({ column, config }: { column: HeaderColumn; config: HeaderConfig }) =>
   h(TableHeaderCell<DeliveryManDto>, {
     column,
     config,
@@ -102,7 +97,8 @@ const getFilterStructure = (): string => {
   if (!filters.value || !filters.value.conditions) return ''
   const formatItem = (item: FilterCondition | FilterGroup): string => {
     if ('field' in item) {
-      return `${item.field} ${item.operator} ${item.value}`
+      const condition = item as FilterCondition
+      return `${getColumnLabel(condition.field)} ${getOperatorLabel(condition.operator)} ${condition.value}`
     }
     const groupContent = item.conditions
       .map((subItem, index) => {
@@ -120,7 +116,13 @@ const getFilterStructure = (): string => {
     .join(' ')
 }
 
-const handleFiltersUpdate = ({ columnId, filters }: { columnId: string; filters: FilterCondition[] }) => {
+const handleFiltersUpdate = ({
+  columnId,
+  filters,
+}: {
+  columnId: string
+  filters: FilterCondition[]
+}) => {
   if (filters.length > 0) {
     columnFiltersState[columnId] = filters.map((filter) => ({ ...filter }))
   } else {
@@ -147,7 +149,8 @@ const handleFiltersUpdate = ({ columnId, filters }: { columnId: string; filters:
 }
 
 const handleAdvancedFilterApply = (filterGroup: FilterGroup) => {
-  advancedFiltersGroup.value = filterGroup && filterGroup.conditions.length > 0 ? filterGroup : undefined
+  advancedFiltersGroup.value =
+    filterGroup && filterGroup.conditions.length > 0 ? filterGroup : undefined
   showAdvancedFilters.value = false
   updateFilters({
     logic: 'AND',
@@ -271,6 +274,56 @@ const onSortingChange = (newSorting: SortingState): void => {
   sorting.value = newSorting as Array<{ id: string; desc: boolean }>
 }
 
+// Handle clear sorting
+const handleClearSorting = () => {
+  sorting.value = []
+  updateSorts([])
+}
+
+// Get column label for sorting summary
+const getColumnLabel = (columnId: string): string => {
+  const labelMap: Record<string, string> = {
+    displayName: 'Shipper',
+    vehicleType: 'Vehicle Type',
+    capacityKg: 'Capacity',
+    status: 'Status',
+    createdAt: 'Created At',
+  }
+  return labelMap[columnId] || columnId
+}
+
+// Get operator label for display
+const getOperatorLabel = (operator: string): string => {
+  const operatorMap: Record<string, string> = {
+    eq: '=',
+    ne: '!=',
+    contains: 'contains',
+    startsWith: 'starts with',
+    endsWith: 'ends with',
+    gt: '>',
+    gte: '>=',
+    lt: '<',
+    lte: '<=',
+    in: 'in',
+    notIn: 'not in',
+  }
+  return operatorMap[operator] || operator
+}
+
+// Sortable columns list (derived from filterableColumns, excluding non-sortable fields)
+const sortableColumnsList = computed(() => {
+  return filterableColumns.value
+    .filter((col) => {
+      // Exclude non-sortable fields like arrays, objects, etc.
+      const nonSortableFields = ['id', 'select', 'actions']
+      return !nonSortableFields.includes(col.field)
+    })
+    .map((col) => ({
+      id: col.field,
+      label: col.label,
+    }))
+})
+
 watch(
   sorts,
   (newSorts) => {
@@ -298,61 +351,38 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="container mx-auto px-4 py-6">
+  <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
     <PageHeader title="Delivery" description="Manage shippers and their delivery sessions">
       <template #actions>
         <UButton
           variant="soft"
           color="primary"
           icon="i-heroicons-map"
+          size="sm"
+          class="md:size-md"
           @click="router.push('/zones/map/demo-routing')"
         >
-          Demo Routing
+          <span class="hidden sm:inline">Demo Routing</span>
+          <span class="sm:hidden">Routing</span>
         </UButton>
       </template>
     </PageHeader>
 
-    <div class="mb-6 space-y-4">
-      <div class="flex flex-col sm:flex-row gap-4">
-        <div class="flex-1">
-          <UInput
-            v-model="searchValue"
-            placeholder="Search shippers..."
-            icon="i-heroicons-magnifying-glass"
-            size="lg"
-          />
-        </div>
-      </div>
-
-      <div class="flex justify-between items-center">
-        <div
-          v-if="getAllActiveFilters() && getAllActiveFilters()!.length > 0"
-          class="flex items-center gap-2"
-        >
-          <span class="text-sm text-gray-600 dark:text-gray-400">Active filters:</span>
-          <UBadge color="primary" variant="soft" size="sm" class="max-w-md truncate">
-            {{ getFilterStructure() }}
-          </UBadge>
-          <UButton
-            variant="ghost"
-            size="xs"
-            color="neutral"
-            icon="i-heroicons-x-mark"
-            @click="handleAdvancedFilterClear"
-            title="Clear all filters"
-          />
-        </div>
-
-        <UButton
-          variant="soft"
-          color="primary"
-          icon="i-heroicons-funnel"
-          @click="showAdvancedFilters = true"
-        >
-          Advanced Filters
-        </UButton>
-      </div>
-    </div>
+    <!-- Table Filters (includes Search + Filters + Sort) -->
+    <TableFilters
+      :search-value="searchValue"
+      search-placeholder="Search shippers..."
+      :active-filters="getAllActiveFilters()"
+      :filter-structure="getFilterStructure()"
+      :sorting="sorting"
+      :get-column-label="getColumnLabel"
+      :sortable-columns="sortableColumnsList"
+      @update:search-value="searchValue = $event"
+      @update:sorting="onSortingChange"
+      @clear-filters="handleAdvancedFilterClear"
+      @clear-sorting="handleClearSorting"
+      @open-advanced-filters="showAdvancedFilters = true"
+    />
 
     <UCard>
       <UTable
@@ -364,6 +394,11 @@ onMounted(async () => {
         :manual-sorting="true"
         enable-multi-sort
         @update:sorting="onSortingChange"
+        :ui="{
+          empty: 'text-center py-12',
+          root: 'h-[50vh]',
+          thead: 'sticky top-0 bg-white dark:bg-gray-800',
+        }"
       >
         <template #cell(displayName)="{ row }">
           <div class="flex flex-col">
@@ -408,7 +443,9 @@ onMounted(async () => {
           <div class="mx-auto h-12 w-12 text-gray-400">
             <UIcon name="i-heroicons-truck" class="h-12 w-12" />
           </div>
-          <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No shippers found</h3>
+          <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+            No shippers found
+          </h3>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Try adjusting your search or filter criteria.
           </p>
@@ -416,14 +453,17 @@ onMounted(async () => {
       </template>
     </UCard>
 
-    <div v-if="!loading && filteredShippers.length > 0" class="mt-6 flex items-center justify-between">
-      <div class="text-sm text-gray-700 dark:text-gray-300">
+    <div
+      v-if="!loading && filteredShippers.length > 0"
+      class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4"
+    >
+      <div class="text-sm text-gray-700 dark:text-gray-300 text-center sm:text-left">
         Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
         {{ total }} results
       </div>
-      <UPagination 
-        :model-value="page + 1" 
-        :items-per-page="pageSize" 
+      <UPagination
+        :model-value="page + 1"
+        :items-per-page="pageSize"
         :total="total"
         @update:model-value="(newPage: number) => handlePageChange(newPage - 1)"
       />

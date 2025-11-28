@@ -4,10 +4,13 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
-    <!-- Màu theme chính -->
-    <color name="colorPrimary">#FF1976D2</color>
-    <color name="colorPrimaryDark">#FF1565C0</color>
-    <color name="colorAccent">#FF03DAC5</color>
+    <!-- Màu theme chính - đồng bộ với web (orange primary, amber/brown secondary) -->
+    <!-- Primary: Orange 500 (#F97316) -->
+    <color name="colorPrimary">#FFF97316</color>
+    <!-- Darker primary: Orange 600 (#EA580C) -->
+    <color name="colorPrimaryDark">#FFEA580C</color>
+    <!-- Secondary: Brown/Amber dựa trên #78350F -->
+    <color name="colorAccent">#FF78350F</color>
 
     <!-- Màu chữ mặc định (thường là màu xám đậm) -->
     <color name="default_text_color">#FF333333</color>

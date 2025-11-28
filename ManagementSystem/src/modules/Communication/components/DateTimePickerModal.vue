@@ -77,7 +77,7 @@ selectedDate.value = new CalendarDate(today.getFullYear(), today.getMonth() + 1,
 </script>
 
 <template>
-  <UModal :title="modalTitle">
+  <UModal :title="modalTitle" :ui="{ width: 'sm:max-w-sm md:max-w-md' }">
     <template #body>
       <div class="space-y-4 p-4">
         <div>

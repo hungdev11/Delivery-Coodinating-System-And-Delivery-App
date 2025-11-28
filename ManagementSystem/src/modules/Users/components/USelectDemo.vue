@@ -4,22 +4,13 @@
 
     <div>
       <label class="block text-sm font-medium mb-2">Simple Select:</label>
-      <USelect
-        v-model="selectedValue"
-        :items="options"
-        placeholder="Select an option"
-      />
+      <USelect v-model="selectedValue" :items="options" placeholder="Select an option" />
       <p class="text-sm text-gray-600 mt-2">Selected: {{ selectedValue }}</p>
     </div>
 
     <div>
       <label class="block text-sm font-medium mb-2">Advanced Filter Demo:</label>
-      <UButton
-        color="primary"
-        @click="showDrawer = true"
-      >
-        Open Advanced Filter Drawer
-      </UButton>
+      <UButton color="primary" @click="showDrawer = true"> Open Advanced Filter Drawer </UButton>
 
       <AdvancedFilterDrawer
         :show="showDrawer"
@@ -44,7 +35,7 @@ const options = [
   { label: 'Backlog', value: 'backlog' },
   { label: 'Todo', value: 'todo' },
   { label: 'In Progress', value: 'in-progress' },
-  { label: 'Done', value: 'done' }
+  { label: 'Done', value: 'done' },
 ]
 
 const filterableColumns: FilterableColumn[] = [

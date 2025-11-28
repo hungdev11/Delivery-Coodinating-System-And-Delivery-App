@@ -38,7 +38,9 @@ Zones/
 ## Types
 
 ### ZoneDto
+
 Represents a delivery zone entity:
+
 - `id`: Unique identifier (UUID)
 - `code`: Zone code (e.g., "ZONE001")
 - `name`: Zone display name
@@ -48,12 +50,15 @@ Represents a delivery zone entity:
 - `centerName`: Center name (read-only)
 
 Methods:
+
 - `displayName`: Returns formatted zone name
 - `hasPolygon`: Checks if polygon is defined
 - `centerDisplayName`: Returns formatted center name
 
 ### CenterDto
+
 Represents a distribution center:
+
 - `id`: Unique identifier (UUID)
 - `code`: Center code
 - `name`: Center display name
@@ -61,14 +66,18 @@ Represents a distribution center:
 - `location`: GeoJSON point for center location (optional)
 
 ### CreateZoneRequest
+
 Request payload for creating a new zone:
+
 - `code`: Required
 - `name`: Required
 - `polygon`: Optional GeoJSON polygon
 - `centerId`: Required
 
 ### UpdateZoneRequest
+
 Request payload for updating a zone (all fields optional):
+
 - `code`
 - `name`
 - `polygon`
@@ -77,9 +86,11 @@ Request payload for updating a zone (all fields optional):
 ## API Functions
 
 ### getZones(params?)
+
 Get paginated list of zones.
 
 **Parameters:**
+
 - `params.page`: Page number (0-indexed)
 - `params.size`: Page size
 - `params.search`: Search query
@@ -88,55 +99,68 @@ Get paginated list of zones.
 **Returns:** `Promise<GetZonesResponse>`
 
 ### getZoneById(id)
+
 Get zone by ID.
 
 **Parameters:**
+
 - `id`: Zone UUID
 
 **Returns:** `Promise<GetZoneResponse>`
 
 ### getZoneByCode(code)
+
 Get zone by code.
 
 **Parameters:**
+
 - `code`: Zone code string
 
 **Returns:** `Promise<GetZoneResponse>`
 
 ### getZonesByCenter(centerId)
+
 Get all zones for a distribution center.
 
 **Parameters:**
+
 - `centerId`: Center UUID
 
 **Returns:** `Promise<ZoneDto[]>`
 
 ### createZone(data)
+
 Create a new zone.
 
 **Parameters:**
+
 - `data`: CreateZoneRequest object
 
 **Returns:** `Promise<CreateZoneResponse>`
 
 ### updateZone(id, data)
+
 Update an existing zone.
 
 **Parameters:**
+
 - `id`: Zone UUID
 - `data`: UpdateZoneRequest object
 
 **Returns:** `Promise<UpdateZoneResponse>`
 
 ### deleteZone(id)
+
 Delete a zone.
 
 **Parameters:**
+
 - `id`: Zone UUID
 
 **Returns:** `Promise<DeleteZoneResponse>`
 
 ### getCenters()
+
 Get list of all distribution centers.
 
 **Returns:** `Promise<GetCentersResponse>`
@@ -144,7 +168,9 @@ Get list of all distribution centers.
 ## Components
 
 ### ZonesView
+
 Main view component that provides:
+
 - Data table with sortable columns
 - Search functionality
 - Center filter dropdown
@@ -155,7 +181,9 @@ Main view component that provides:
 - Delete confirmation dialog
 
 ### ZoneDetailView
+
 Detail view component that displays:
+
 - Zone information card
 - Distribution center details
 - Polygon status
@@ -207,6 +235,7 @@ The zone detail view includes a placeholder for map integration. Future implemen
 ## Permissions
 
 Access to the Zones module requires authentication and one of the following roles:
+
 - ADMIN
 - MANAGER
 

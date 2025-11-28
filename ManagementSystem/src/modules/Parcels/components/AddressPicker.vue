@@ -176,7 +176,7 @@ const loadNearby = async (lat: number, lon: number) => {
   nearbyLoading.value = true
   try {
     const res = await addrStore.findByPoint({ lat, lon, radius: 100, limit: 10 })
-    const result = (res && 'result' in res ? (res as { result?: ByPointResult }).result : undefined)
+    const result = res && 'result' in res ? (res as { result?: ByPointResult }).result : undefined
     const items: typeof nearbyResults.value = []
     if (result && result.local) {
       for (const a of result.local) {
@@ -201,7 +201,9 @@ const loadNearby = async (lat: number, lon: number) => {
         })
       }
     }
-    nearbyResults.value = items!.sort((a, b) => (a.source === 'local' ? -1 : 1) - (b.source === 'local' ? -1 : 1))
+    nearbyResults.value = items!.sort(
+      (a, b) => (a.source === 'local' ? -1 : 1) - (b.source === 'local' ? -1 : 1),
+    )
   } catch {
     nearbyResults.value = []
   } finally {
@@ -229,7 +231,10 @@ onUnmounted(() => {
         <UInput
           :model-value="addressText"
           :placeholder="placeholder"
-          @update:model-value="addressText = $event; handleAddressTextChange()"
+          @update:model-value="
+            addressText = $event,
+            handleAddressTextChange()
+          "
         />
 
         <!-- Coordinates Display -->
@@ -238,12 +243,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Toggle Map Button -->
-        <UButton
-          size="xs"
-          variant="outline"
-          color="primary"
-          @click="showMap = !showMap"
-        >
+        <UButton size="xs" variant="outline" color="primary" @click="showMap = !showMap">
           {{ showMap ? 'Hide Map' : 'Pick on Map' }}
         </UButton>
 
@@ -319,19 +319,28 @@ onUnmounted(() => {
             </template>
             <div class="space-y-1 max-h-32 overflow-y-auto">
               <div v-if="nearbyLoading" class="text-xs text-gray-500">Loading...</div>
-              <div v-else-if="nearbyResults && nearbyResults.length === 0" class="text-xs text-gray-500">
+              <div
+                v-else-if="nearbyResults && nearbyResults.length === 0"
+                class="text-xs text-gray-500"
+              >
                 No nearby points. Click on map to search.
               </div>
               <div
                 v-for="(n, i) in nearbyResults || []"
                 :key="`nb-${i}`"
                 class="p-2 rounded border cursor-pointer text-xs"
-                :class="n.source === 'local' ? 'bg-green-50 hover:bg-green-100 border-green-200' : 'hover:bg-gray-50'"
+                :class="
+                  n.source === 'local'
+                    ? 'bg-green-50 hover:bg-green-100 border-green-200'
+                    : 'hover:bg-gray-50'
+                "
                 @click="selectNearby(n)"
               >
                 <div class="flex items-center justify-between">
                   <p class="font-medium">{{ n.name }}</p>
-                  <UBadge :color="n.source === 'local' ? 'primary' : 'neutral'" size="xs">{{ n.source }}</UBadge>
+                  <UBadge :color="n.source === 'local' ? 'primary' : 'neutral'" size="xs">{{
+                    n.source
+                  }}</UBadge>
                 </div>
                 <p v-if="n.addressText" class="text-gray-500">{{ n.addressText }}</p>
               </div>

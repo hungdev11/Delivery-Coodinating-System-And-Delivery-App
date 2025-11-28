@@ -25,6 +25,7 @@ import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { useTemplateRef } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 import AdvancedFilterDrawer from '../../common/components/filters/AdvancedFilterDrawer.vue'
+import TableFilters from '../../common/components/table/TableFilters.vue'
 import type { SortingState, Column } from '@tanstack/table-core'
 import type { FilterCondition, FilterGroup } from '../../common/types/filter'
 import { createSortConfig } from '../../common/utils/query-builder'
@@ -40,11 +41,14 @@ const PageHeader = defineAsyncComponent(() => import('../../common/components/Pa
 
 // Lazy load modals
 const LazyParcelFormModal = defineAsyncComponent(() => import('./components/ParcelFormModal.vue'))
-const LazyParcelDeleteModal = defineAsyncComponent(() => import('./components/ParcelDeleteModal.vue'))
+const LazyParcelDeleteModal = defineAsyncComponent(
+  () => import('./components/ParcelDeleteModal.vue'),
+)
 const LazyParcelQRModal = defineAsyncComponent(() => import('./components/ParcelQRModal.vue'))
 const UCheckbox = resolveComponent('UCheckbox')
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
+const UDropdownMenu = resolveComponent('UDropdownMenu')
 
 const overlay = useOverlay()
 const table = useTemplateRef('table')
@@ -58,7 +62,11 @@ const globalChat = useGlobalChat()
 
 // Update notification listener
 const updateNotificationListener: GlobalChatListener = {
-  onUpdateNotificationReceived: (updateNotification: any) => {
+  onUpdateNotificationReceived: (updateNotification: {
+    entityType?: string
+    action?: string
+    message?: string
+  }) => {
     if (!updateNotification) return
 
     const entityType = updateNotification.entityType
@@ -164,13 +172,7 @@ type HeaderConfig = {
 
 type HeaderColumn = Column<ParcelDto, unknown>
 
-const setupHeader = ({
-  column,
-  config,
-}: {
-  column: HeaderColumn
-  config: HeaderConfig
-}) =>
+const setupHeader = ({ column, config }: { column: HeaderColumn; config: HeaderConfig }) =>
   h(TableHeaderCell<ParcelDto>, {
     column,
     config,
@@ -240,7 +242,8 @@ const getActiveFilterGroup = (): FilterGroup | undefined => {
 
 // Advanced filter handlers
 const handleAdvancedFilterApply = (filterGroup: FilterGroup) => {
-  advancedFiltersGroup.value = filterGroup && filterGroup.conditions.length > 0 ? filterGroup : undefined
+  advancedFiltersGroup.value =
+    filterGroup && filterGroup.conditions.length > 0 ? filterGroup : undefined
   applyCombinedFilters()
   showAdvancedFilters.value = false
 }
@@ -300,48 +303,27 @@ const handleFiltersUpdate = ({ columnId, filters }: ColumnFilterUpdatePayload) =
   applyCombinedFilters()
 }
 
+const columnPinning = ref({
+  left: ['select', 'actions'],
+})
+
+// Helper to wrap cell content with row click handler
+const wrapCellWithClickHandler = (content: ReturnType<typeof h>, parcel: ParcelDto) => {
+  return h(
+    'div',
+    {
+      onClick: () => openQRModal(parcel),
+      style: { cursor: 'pointer' },
+      class: 'w-full',
+    },
+    [content],
+  )
+}
+
 // Table columns configuration
 const columns: TableColumn<ParcelDto>[] = [
   {
-    accessorKey: 'actions',
-    header: 'Actions',
-    cell: ({ row }) => {
-      const parcel = row.original
-      return h('div', { class: 'flex space-x-2' }, [
-        h(UButton, {
-          icon: 'i-heroicons-chat-bubble-left-right',
-          size: 'sm',
-          variant: 'ghost',
-          title: 'Chat with receiver',
-          onClick: () => openChat(parcel),
-        }),
-        h(UButton, {
-          icon: 'i-heroicons-qr-code',
-          size: 'sm',
-          variant: 'ghost',
-          title: 'Show QR Code',
-          onClick: () => openQRModal(parcel),
-        }),
-        h(UButton, {
-          icon: 'i-heroicons-pencil',
-          size: 'sm',
-          variant: 'ghost',
-          title: 'Edit parcel',
-          onClick: () => openEditModal(parcel),
-        }),
-        h(UButton, {
-          icon: 'i-heroicons-trash',
-          size: 'sm',
-          variant: 'ghost',
-          color: 'error',
-          title: 'Delete parcel',
-          onClick: () => openDeleteModal(parcel),
-        }),
-      ])
-    },
-  },
-  {
-    id: 'select',
+    accessorKey: 'select',
     header: ({ table }) =>
       h(UCheckbox, {
         modelValue: table.getIsSomePageRowsSelected()
@@ -359,6 +341,51 @@ const columns: TableColumn<ParcelDto>[] = [
       }),
   },
   {
+    accessorKey: 'actions',
+    header: 'Actions',
+    cell: ({ row }) => {
+      const parcel = row.original
+      return h(
+        UDropdownMenu,
+        {
+          items: [
+            [
+              {
+                label: 'Chat with receiver',
+                icon: 'i-heroicons-chat-bubble-left-right',
+                onClick: () => openChat(parcel),
+              },
+              {
+                label: 'Show QR Code',
+                icon: 'i-heroicons-qr-code',
+                onClick: () => openQRModal(parcel),
+              },
+              {
+                label: 'Edit parcel',
+                icon: 'i-heroicons-pencil',
+                onClick: () => openEditModal(parcel),
+              },
+              {
+                label: 'Delete parcel',
+                icon: 'i-heroicons-trash',
+                onClick: () => openDeleteModal(parcel),
+              },
+            ],
+          ],
+        },
+        {
+          default: () =>
+            h(UButton, {
+              icon: 'i-heroicons-ellipsis-vertical',
+              size: 'sm',
+              variant: 'outline',
+              title: 'Actions',
+            }),
+        },
+      )
+    },
+  },
+  {
     accessorKey: 'code',
     header: ({ column }) =>
       setupHeader({
@@ -372,6 +399,21 @@ const columns: TableColumn<ParcelDto>[] = [
           filterable: true,
         },
       }),
+    cell: ({ row }) => {
+      const parcel = row.original
+      return h(
+        'span',
+        {
+          class: 'font-mono text-sm',
+          onClick: (e: MouseEvent) => {
+            e.stopPropagation()
+            openQRModal(parcel)
+          },
+          style: { cursor: 'pointer' },
+        },
+        parcel.code,
+      )
+    },
   },
   {
     accessorKey: 'senderId',
@@ -389,7 +431,14 @@ const columns: TableColumn<ParcelDto>[] = [
       }),
     cell: ({ row }) => {
       const parcel = row.original
-      return h('span', parcel.senderName || parcel.senderId)
+      return h(
+        'span',
+        {
+          onClick: () => openQRModal(parcel),
+          style: { cursor: 'pointer' },
+        },
+        parcel.senderName || parcel.senderId,
+      )
     },
   },
   {
@@ -408,7 +457,14 @@ const columns: TableColumn<ParcelDto>[] = [
       }),
     cell: ({ row }) => {
       const parcel = row.original
-      return h('span', parcel.receiverName || parcel.receiverId)
+      return h(
+        'span',
+        {
+          onClick: () => openQRModal(parcel),
+          style: { cursor: 'pointer' },
+        },
+        parcel.receiverName || parcel.receiverId,
+      )
     },
   },
   {
@@ -426,8 +482,10 @@ const columns: TableColumn<ParcelDto>[] = [
         },
       }),
     cell: ({ row }) => {
+      const parcel = row.original
       const deliveryType = row.getValue('deliveryType') as string
-      return h(UBadge, { variant: 'soft', color: 'primary', size: 'sm' }, () => deliveryType)
+      const badge = h(UBadge, { variant: 'soft', color: 'primary', size: 'sm' }, () => deliveryType)
+      return wrapCellWithClickHandler(badge, parcel)
     },
   },
   {
@@ -445,10 +503,12 @@ const columns: TableColumn<ParcelDto>[] = [
         },
       }),
     cell: ({ row }) => {
+      const parcel = row.original
       const status = row.getValue('status') as ParcelStatus
       const color = getStatusColor(status)
       const displayStatus = getDisplayStatus(status)
-      return h(UBadge, { class: 'capitalize', variant: 'soft', color }, () => displayStatus)
+      const badge = h(UBadge, { class: 'capitalize', variant: 'soft', color }, () => displayStatus)
+      return wrapCellWithClickHandler(badge, parcel)
     },
   },
   {
@@ -466,8 +526,10 @@ const columns: TableColumn<ParcelDto>[] = [
         },
       }),
     cell: ({ row }) => {
-      const createdAt = row.getValue('createdAt') as string
-      return h('span', new Date(createdAt).toLocaleString())
+      const parcel = row.original
+      const createdAt = row.getValue('createdAt') as string | null | undefined
+      const content = h('span', createdAt ? new Date(createdAt).toLocaleString() : '-')
+      return wrapCellWithClickHandler(content, parcel)
     },
   },
   {
@@ -485,8 +547,10 @@ const columns: TableColumn<ParcelDto>[] = [
         },
       }),
     cell: ({ row }) => {
-      const weight = row.getValue('weight') as number
-      return h('span', `${weight} kg`)
+      const parcel = row.original
+      const weight = row.getValue('weight') as number | null | undefined
+      const content = h('span', weight != null ? `${weight} kg` : '-')
+      return wrapCellWithClickHandler(content, parcel)
     },
   },
   {
@@ -504,8 +568,15 @@ const columns: TableColumn<ParcelDto>[] = [
         },
       }),
     cell: ({ row }) => {
-      const value = row.getValue('value') as number
-      return h('span', new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value))
+      const parcel = row.original
+      const value = row.getValue('value') as number | null | undefined
+      const content = h(
+        'span',
+        value != null
+          ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
+          : '-',
+      )
+      return wrapCellWithClickHandler(content, parcel)
     },
   },
   {
@@ -523,8 +594,10 @@ const columns: TableColumn<ParcelDto>[] = [
         },
       }),
     cell: ({ row }) => {
-      const lat = row.getValue('lat') as number | undefined
-      return h('span', lat !== undefined ? lat.toFixed(6) : '-')
+      const parcel = row.original
+      const lat = row.getValue('lat') as number | null | undefined
+      const content = h('span', lat != null && !isNaN(lat) ? lat.toFixed(6) : '-')
+      return wrapCellWithClickHandler(content, parcel)
     },
   },
   {
@@ -542,8 +615,10 @@ const columns: TableColumn<ParcelDto>[] = [
         },
       }),
     cell: ({ row }) => {
-      const lon = row.getValue('lon') as number | undefined
-      return h('span', lon !== undefined ? lon.toFixed(6) : '-')
+      const parcel = row.original
+      const lon = row.getValue('lon') as number | null | undefined
+      const content = h('span', lon != null && !isNaN(lon) ? lon.toFixed(6) : '-')
+      return wrapCellWithClickHandler(content, parcel)
     },
   },
   {
@@ -833,6 +908,37 @@ const onSortingChange = (newSorting: SortingState): void => {
   sorting.value = newSorting
 }
 
+// Handle clear sorting
+const handleClearSorting = () => {
+  sorting.value = []
+  updateSorts([])
+}
+
+// Computed properties for bulk actions
+const selectedCount = computed((): number => {
+  if (!table.value?.tableApi?.getFilteredSelectedRowModel) return 0
+  return table.value?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0
+})
+
+const totalCount = computed((): number => {
+  if (!table.value?.tableApi?.getFilteredRowModel) return 0
+  return table.value?.tableApi?.getFilteredRowModel()?.rows?.length || 0
+})
+
+// Sortable columns list (derived from filterableColumns, excluding non-sortable fields)
+const sortableColumnsList = computed(() => {
+  return filterableColumns.value
+    .filter((col) => {
+      // Exclude non-sortable fields like arrays, objects, etc.
+      const nonSortableFields = ['id', 'select', 'actions']
+      return !nonSortableFields.includes(col.field)
+    })
+    .map((col) => ({
+      id: col.field,
+      label: col.label,
+    }))
+})
+
 // Watch for sorts changes and sync with sorting
 watch(
   sorts,
@@ -848,183 +954,208 @@ watch(
 </script>
 
 <template>
-  <div class="container mx-auto px-4 py-6">
+  <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
     <PageHeader title="Parcels" description="Manage system parcels">
       <template #actions>
-        <UButton
-          icon="i-heroicons-sparkles"
-          color="primary"
-          variant="soft"
-          @click="showSeedModal = true"
-        >
-          Seed Parcels
-        </UButton>
-        <UButton icon="i-heroicons-plus" @click="openCreateModal"> Add Parcel </UButton>
+        <div class="flex gap-2">
+          <UButton
+            icon="i-heroicons-sparkles"
+            color="primary"
+            variant="soft"
+            size="sm"
+            class="md:size-md"
+            @click="showSeedModal = true"
+          >
+            <span class="hidden sm:inline">Seed Parcels</span>
+            <span class="sm:hidden">Seed</span>
+          </UButton>
+          <UButton icon="i-heroicons-plus" size="sm" class="md:size-md" @click="openCreateModal">
+            <span class="hidden sm:inline">Add Parcel</span>
+            <span class="sm:hidden">Add</span>
+          </UButton>
+        </div>
       </template>
     </PageHeader>
 
-    <!-- Filters and Search -->
-    <div class="mb-6 space-y-4">
-      <!-- Simple Search -->
-      <div class="flex flex-col sm:flex-row gap-4">
-        <!-- Search Input -->
-        <div class="flex-1">
-          <UInput
-            v-model="searchValue"
-            placeholder="Search parcels..."
-            icon="i-heroicons-magnifying-glass"
-            size="lg"
-          />
-        </div>
-      </div>
+    <!-- Table Filters (includes Search + Bulk Actions + Filters + Sort) -->
+    <TableFilters
+      :search-value="searchValue"
+      search-placeholder="Search parcels..."
+      :active-filters="getAllActiveFilters()"
+      :filter-structure="getFilterStructure()"
+      :sorting="sorting"
+      :get-column-label="getColumnLabel"
+      :selected-count="selectedCount"
+      :total-count="totalCount"
+      :on-bulk-export="handleBulkExport"
+      :on-bulk-delete="handleBulkDelete"
+      :sortable-columns="sortableColumnsList"
+      @update:search-value="searchValue = $event"
+      @update:sorting="onSortingChange"
+      @clear-filters="handleAdvancedFilterClear"
+      @clear-sorting="handleClearSorting"
+      @open-advanced-filters="showAdvancedFilters = true"
+    />
 
-      <!-- Advanced Filters Button -->
-      <div class="flex justify-between items-center">
-        <!-- Active Filters Display -->
-        <div
-          v-if="getAllActiveFilters() && getAllActiveFilters()!.length > 0"
-          class="flex items-center gap-2"
-        >
-          <span class="text-sm text-gray-600 dark:text-gray-400">Active filters:</span>
-          <div class="flex items-center gap-1">
-            <UBadge color="primary" variant="soft" size="sm" class="max-w-md">
-              {{ getFilterStructure() }}
-            </UBadge>
-          </div>
-          <UButton
-            variant="ghost"
-            size="xs"
-            color="neutral"
-            icon="i-heroicons-x-mark"
-            @click="handleAdvancedFilterClear"
-            title="Clear all filters"
-          />
-        </div>
-
-        <!-- Advanced Filters Button -->
-        <UButton
-          variant="soft"
-          color="primary"
-          icon="i-heroicons-cog-6-tooth"
-          @click="showAdvancedFilters = true"
-        >
-          Advanced Filters
-        </UButton>
-      </div>
-
-      <!-- Sorting Summary -->
-      <div
-        v-if="sorting.length > 0"
-        class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400"
-      >
-        <span>Sorted by:</span>
-        <div class="flex items-center gap-1">
-          <UBadge
-            v-for="sort in sorting"
-            :key="sort.id"
-            :color="sort.desc ? 'error' : 'success'"
-            variant="soft"
-            size="sm"
-          >
-            {{ getColumnLabel(sort.id) }}
-            <UIcon
-              :name="
-                sort.desc ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-narrow-wide'
-              "
-              class="ml-1"
-            />
-          </UBadge>
-        </div>
-        <UButton
-          variant="ghost"
-          size="xs"
-          color="neutral"
-          icon="i-heroicons-x-mark"
-          @click="sorting = []"
-          title="Clear all sorting"
+    <!-- Desktop Table View -->
+    <div class="hidden md:block">
+      <UCard>
+        <UTable
+          ref="table"
+          :column-pinning="columnPinning"
+          :sorting="sorting"
+          :data="parcels"
+          :columns="columns"
+          :loading="loading"
+          :manual-sorting="true"
+          enable-multi-sort
+          @update:sorting="onSortingChange($event)"
+          :ui="{
+            empty: 'text-center py-12',
+            root: 'h-[50vh]',
+            thead: 'sticky top-0 bg-white dark:bg-gray-800',
+          }"
         />
-      </div>
+
+        <!-- Empty State -->
+        <template v-if="!loading && parcels.length === 0">
+          <div class="text-center py-12">
+            <div class="mx-auto h-12 w-12 text-gray-400">
+              <UIcon name="i-heroicons-cube" class="h-12 w-12" />
+            </div>
+            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+              No parcels found
+            </h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{
+                searchValue || (filters.conditions && filters.conditions.length > 0)
+                  ? 'Try adjusting your search or filter criteria.'
+                  : 'Get started by creating a new parcel.'
+              }}
+            </p>
+            <div class="mt-6">
+              <UButton
+                v-if="!searchValue && (!filters.conditions || filters.conditions.length === 0)"
+                icon="i-heroicons-plus"
+                @click="openCreateModal"
+              >
+                Add Parcel
+              </UButton>
+              <UButton v-else variant="soft" @click="clearFilters"> Clear Filters </UButton>
+            </div>
+          </div>
+        </template>
+      </UCard>
     </div>
 
-    <!-- Bulk Actions -->
-    <div
-      v-if="
-        table &&
-        table?.tableApi?.getFilteredSelectedRowModel()?.rows &&
-        (table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0) > 0
-      "
-      class="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
-    >
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-gray-600 dark:text-gray-400">
-          {{ table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0 }} of
-          {{ table?.tableApi?.getFilteredRowModel()?.rows?.length || 0 }} row(s) selected.
-        </span>
-        <div class="flex space-x-2">
-          <UButton
-            size="sm"
-            variant="soft"
-            icon="i-heroicons-arrow-down-tray"
-            @click="handleBulkExport"
-          >
-            Export
-          </UButton>
-          <UButton
-            size="sm"
-            variant="soft"
-            color="error"
-            icon="i-heroicons-trash"
-            @click="handleBulkDelete"
-          >
-            Delete
-          </UButton>
-        </div>
-      </div>
-    </div>
-
-    <!-- Table -->
-    <UCard>
-      <UTable
-        ref="table"
-        :sorting="sorting"
-        :data="parcels"
-        :columns="columns"
-        :loading="loading"
-        :manual-sorting="true"
-        enable-multi-sort
-        @update:sorting="onSortingChange($event)"
-      />
-
-      <!-- Empty State -->
-      <template v-if="!loading && parcels.length === 0">
-        <div class="text-center py-12">
-          <div class="mx-auto h-12 w-12 text-gray-400">
-            <UIcon name="i-heroicons-cube" class="h-12 w-12" />
-          </div>
-          <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No parcels found</h3>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {{
-              searchValue || (filters.conditions && filters.conditions.length > 0)
-                ? 'Try adjusting your search or filter criteria.'
-                : 'Get started by creating a new parcel.'
-            }}
-          </p>
-          <div class="mt-6">
-            <UButton
-              v-if="!searchValue && (!filters.conditions || filters.conditions.length === 0)"
-              icon="i-heroicons-plus"
-              @click="openCreateModal"
-            >
-              Add Parcel
-            </UButton>
-            <UButton v-else variant="soft" @click="clearFilters"> Clear Filters </UButton>
-          </div>
-        </div>
+    <!-- Mobile Card View -->
+    <div class="md:hidden space-y-3">
+      <template v-if="loading">
+        <USkeleton v-for="i in 3" :key="i" class="h-48 w-full rounded-lg" />
       </template>
-    </UCard>
+      <template v-else-if="parcels.length === 0">
+        <UCard>
+          <div class="text-center py-12">
+            <div class="mx-auto h-12 w-12 text-gray-400">
+              <UIcon name="i-heroicons-cube" class="h-12 w-12" />
+            </div>
+            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+              No parcels found
+            </h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{
+                searchValue || (filters.conditions && filters.conditions.length > 0)
+                  ? 'Try adjusting your search or filter criteria.'
+                  : 'Get started by creating a new parcel.'
+              }}
+            </p>
+            <div class="mt-6">
+              <UButton
+                v-if="!searchValue && (!filters.conditions || filters.conditions.length === 0)"
+                icon="i-heroicons-plus"
+                @click="openCreateModal"
+              >
+                Add Parcel
+              </UButton>
+              <UButton v-else variant="soft" @click="clearFilters"> Clear Filters </UButton>
+            </div>
+          </div>
+        </UCard>
+      </template>
+      <template v-else>
+        <UCard v-for="parcel in parcels" :key="parcel.id" class="overflow-hidden">
+          <div class="space-y-3">
+            <!-- Header: Code and Status -->
+            <div class="flex items-center justify-between">
+              <span class="font-mono text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {{ parcel.code }}
+              </span>
+              <UBadge :color="getStatusColor(parcel.status)" variant="soft" size="sm">
+                {{ getDisplayStatus(parcel.status) }}
+              </UBadge>
+            </div>
+
+            <!-- Info Grid -->
+            <div class="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <span class="text-gray-500 dark:text-gray-400">Sender:</span>
+                <p class="font-medium text-gray-900 dark:text-gray-100 truncate">
+                  {{ parcel.senderName || 'N/A' }}
+                </p>
+              </div>
+              <div>
+                <span class="text-gray-500 dark:text-gray-400">Type:</span>
+                <p class="font-medium text-gray-900 dark:text-gray-100">
+                  {{ parcel.deliveryType }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Destination -->
+            <div class="text-sm">
+              <span class="text-gray-500 dark:text-gray-400">Destination:</span>
+              <p class="font-medium text-gray-900 dark:text-gray-100 line-clamp-2">
+                {{ parcel.targetDestination || 'N/A' }}
+              </p>
+            </div>
+
+            <!-- Created Date -->
+            <div class="text-xs text-gray-500 dark:text-gray-400">
+              Created: {{ new Date(parcel.createdAt).toLocaleString('vi-VN') }}
+            </div>
+
+            <!-- Actions -->
+            <div
+              class="flex items-center justify-end gap-2 pt-2 border-t border-gray-200 dark:border-gray-700"
+            >
+              <UButton
+                icon="i-heroicons-pencil"
+                size="sm"
+                variant="ghost"
+                @click="openEditModal(parcel)"
+              >
+                Edit
+              </UButton>
+              <UButton
+                icon="i-heroicons-trash"
+                size="sm"
+                variant="ghost"
+                color="error"
+                @click="openDeleteModal(parcel)"
+              >
+                Delete
+              </UButton>
+            </div>
+          </div>
+        </UCard>
+      </template>
+    </div>
 
     <!-- Pagination -->
-    <div v-if="!loading && total > 0" class="mt-6 flex items-center justify-between">
+    <div
+      v-if="!loading && total > 0"
+      class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4"
+    >
       <div class="text-sm text-gray-700 dark:text-gray-300">
         Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
         {{ total }} results
@@ -1049,7 +1180,12 @@ watch(
     />
 
     <!-- Seed Parcels Modal -->
-    <UModal v-model:open="showSeedModal" title="Seed Parcels" description="Create parcels randomly or with specific shop/client. Uses primary addresses automatically.">
+    <UModal
+      v-model:open="showSeedModal"
+      title="Seed Parcels"
+      description="Create parcels randomly or with specific shop/client. Uses primary addresses automatically."
+      :ui="{ content: 'sm:max-w-md md:max-w-lg' }"
+    >
       <template #body>
         <form @submit.prevent="handleSeedParcels" class="space-y-4">
           <UFormField label="Number of Parcels" required>
@@ -1073,7 +1209,8 @@ watch(
               :disabled="seeding"
             />
             <template #hint>
-              Select a specific shop as sender. If not selected, randomly selects from available shops.
+              Select a specific shop as sender. If not selected, randomly selects from available
+              shops.
             </template>
           </UFormField>
 
@@ -1085,7 +1222,8 @@ watch(
               :disabled="seeding"
             />
             <template #hint>
-              Select a specific client as receiver. If not selected, randomly selects from available clients.
+              Select a specific client as receiver. If not selected, randomly selects from available
+              clients.
             </template>
           </UFormField>
 
@@ -1107,11 +1245,7 @@ watch(
           >
             Cancel
           </UButton>
-          <UButton
-            color="primary"
-            :loading="seeding"
-            @click="handleSeedParcels"
-          >
+          <UButton color="primary" :loading="seeding" @click="handleSeedParcels">
             {{ seeding ? 'Seeding...' : 'Seed Parcels' }}
           </UButton>
         </div>

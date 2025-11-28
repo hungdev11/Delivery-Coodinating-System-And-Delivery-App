@@ -26,6 +26,7 @@ const router = createRouter({
     ...clientRoutes,
     {
       path: '/:pathMatch(.*)*',
+      name: 'not-found',
       component: () => import('@/modules/common/NotFoundPage.vue'),
       meta: {
         requiresAuth: false,

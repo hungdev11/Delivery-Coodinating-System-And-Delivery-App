@@ -17,13 +17,8 @@ const apiClient = new AxiosHttpClient(import.meta.env.VITE_API_URL)
 /**
  * Calculate demo route with priority-based ordering
  */
-export const calculateDemoRoute = async (
-  request: DemoRouteRequest
-): Promise<DemoRouteResponse> => {
-  return apiClient.post<DemoRouteResponse, DemoRouteRequest>(
-    '/v1/routing/demo-route',
-    request
-  )
+export const calculateDemoRoute = async (request: DemoRouteRequest): Promise<DemoRouteResponse> => {
+  return apiClient.post<DemoRouteResponse, DemoRouteRequest>('/v1/routing/demo-route', request)
 }
 
 /**

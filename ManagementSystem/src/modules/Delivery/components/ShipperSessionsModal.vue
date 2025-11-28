@@ -5,11 +5,15 @@
  * Displays all sessions of a given shipper in a modal using UModal
  */
 
-import { onMounted, computed, ref } from 'vue'
+import { onMounted, computed, ref, h, resolveComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { getDeliverySessions } from '../api'
 import type { DeliveryManDto, DeliverySessionDto } from '../model.type'
 import type { FilterGroup } from '@/common/types/filter'
+import type { TableColumn } from '@nuxt/ui'
+
+const UButton = resolveComponent('UButton')
+const UBadge = resolveComponent('UBadge')
 
 interface Props {
   shipper: DeliveryManDto
@@ -68,7 +72,9 @@ const loadAllSessions = async () => {
 
 const totalSessions = computed(() => sessions.value.length)
 const activeSessions = computed(() => sessions.value.filter((session) => session.isActive).length)
-const inactiveSessions = computed(() => sessions.value.filter((session) => !session.isActive).length)
+const inactiveSessions = computed(
+  () => sessions.value.filter((session) => !session.isActive).length,
+)
 
 const displayedSessions = computed(() => {
   if (showInactive.value) {
@@ -93,6 +99,74 @@ const formatDate = (value?: string | null) => {
     timeStyle: 'short',
   }).format(new Date(value))
 }
+
+// Table columns configuration (defined after functions to avoid hoisting issues)
+const columns: TableColumn<DeliverySessionDto>[] = [
+  {
+    accessorKey: 'actions',
+    header: 'Actions',
+    cell: ({ row }) => {
+      const session = row.original
+      return h(
+        UButton,
+        {
+          size: 'xs',
+          variant: 'ghost',
+          icon: 'i-heroicons-arrow-top-right-on-square',
+          onClick: () => navigateToSession(session),
+        },
+        () => 'View detail',
+      )
+    },
+  },
+  {
+    accessorKey: 'id',
+    header: 'Session ID',
+  },
+  {
+    accessorKey: 'status',
+    header: 'Status',
+    cell: ({ row }) => {
+      const status = row.original.status
+      const color = status === 'COMPLETED' ? 'success' : status === 'FAILED' ? 'error' : 'warning'
+      return h(
+        UBadge,
+        {
+          variant: 'soft',
+          color,
+          class: 'capitalize',
+        },
+        () => status.toLowerCase(),
+      )
+    },
+  },
+  {
+    accessorKey: 'totalTasks',
+    header: 'Tasks',
+  },
+  {
+    accessorKey: 'completedTasks',
+    header: 'Completed',
+  },
+  {
+    accessorKey: 'failedTasks',
+    header: 'Failed',
+  },
+  {
+    accessorKey: 'startTime',
+    header: 'Start Time',
+    cell: ({ row }) => {
+      return h('span', formatDate(row.original.startTime))
+    },
+  },
+  {
+    accessorKey: 'endTime',
+    header: 'End Time',
+    cell: ({ row }) => {
+      return h('span', row.original.endTime ? formatDate(row.original.endTime) : '—')
+    },
+  },
+]
 </script>
 
 <template>
@@ -100,14 +174,24 @@ const formatDate = (value?: string | null) => {
     :title="`Sessions for ${shipper.displayName}`"
     :description="`Total sessions: ${totalSessions}`"
     :close="{ onClick: handleClose }"
-    :ui="{ footer: 'justify-end' }"
+    :ui="{
+      content: 'min-w-[100vh] md:min-w-none sm:min-w-none sm:max-w-md md:max-w-lg',
+      footer: 'justify-end',
+    }"
   >
     <template #body>
       <div class="space-y-4">
         <div class="flex items-center justify-between text-sm text-gray-500">
-          <span>Email: <strong>{{ shipper.email || 'N/A' }}</strong></span>
-          <span>Phone: <strong>{{ shipper.phone || 'N/A' }}</strong></span>
-          <span>Active: <strong>{{ activeSessions }}</strong> / Total: <strong>{{ totalSessions }}</strong></span>
+          <span
+            >Email: <strong>{{ shipper.email || 'N/A' }}</strong></span
+          >
+          <span
+            >Phone: <strong>{{ shipper.phone || 'N/A' }}</strong></span
+          >
+          <span
+            >Active: <strong>{{ activeSessions }}</strong> / Total:
+            <strong>{{ totalSessions }}</strong></span
+          >
         </div>
 
         <div v-if="inactiveSessions > 0" class="flex justify-end">
@@ -128,58 +212,23 @@ const formatDate = (value?: string | null) => {
             color="neutral"
             variant="soft"
             title="No sessions found"
-            :description="showInactive ? 'This shipper has no delivery sessions yet.' : 'No active sessions. Click Show Inactive to view completed sessions.'"
+            :description="
+              showInactive
+                ? 'This shipper has no delivery sessions yet.'
+                : 'No active sessions. Click Show Inactive to view completed sessions.'
+            "
           />
 
           <UTable
             v-else
             :data="displayedSessions"
-            :columns="[
-              { accessorKey: 'id', header: 'Session ID' },
-              { accessorKey: 'status', header: 'Status' },
-              { accessorKey: 'totalTasks', header: 'Tasks' },
-              { accessorKey: 'completedTasks', header: 'Completed' },
-              { accessorKey: 'failedTasks', header: 'Failed' },
-              { accessorKey: 'startTime', header: 'Start Time' },
-              { accessorKey: 'endTime', header: 'End Time' },
-              { accessorKey: 'actions', header: 'Actions' },
-            ]"
-          >
-            <template #cell(status)="{ row }">
-              <UBadge
-                :color="
-                  row.original.status === 'COMPLETED'
-                    ? 'success'
-                    : row.original.status === 'FAILED'
-                      ? 'error'
-                      : 'warning'
-                "
-                variant="soft"
-                class="capitalize"
-              >
-                {{ row.original.status.toLowerCase() }}
-              </UBadge>
-            </template>
-
-            <template #cell(startTime)="{ row }">
-              {{ formatDate(row.original.startTime) }}
-            </template>
-
-            <template #cell(endTime)="{ row }">
-              {{ row.original.endTime ? formatDate(row.original.endTime) : '—' }}
-            </template>
-
-            <template #cell(actions)="{ row }">
-              <UButton
-                size="xs"
-                variant="ghost"
-                icon="i-heroicons-arrow-top-right-on-square"
-                @click="navigateToSession(row.original)"
-              >
-                View detail
-              </UButton>
-            </template>
-          </UTable>
+            :columns="columns"
+            :ui="{
+              empty: 'text-center py-12',
+              root: 'h-[50vh]',
+              thead: 'sticky top-0 bg-white dark:bg-gray-800',
+            }"
+          />
         </div>
       </div>
     </template>

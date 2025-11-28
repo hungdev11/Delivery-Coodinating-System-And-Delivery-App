@@ -213,7 +213,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <UModal v-model="showPopup" :ui="{ content: 'sm:max-w-md' }">
+  <UModal v-model:open="showPopup" :ui="{ content: 'sm:max-w-sm md:max-w-md' }">
     <template #header>
       <div class="flex items-center justify-between">
         <h3 class="text-lg font-semibold">{{ proposalTitle }}</h3>

@@ -145,10 +145,7 @@ onMounted(() => {
 
 <template>
   <div class="container mx-auto px-4 py-6 space-y-6">
-    <PageHeader
-      title="Create Parcel"
-      description="Create a new parcel using your addresses"
-    >
+    <PageHeader title="Create Parcel" description="Create a new parcel using your addresses">
       <template #actions>
         <UButton variant="ghost" icon="i-heroicons-arrow-left" @click="router.back()">
           Back
@@ -170,10 +167,12 @@ onMounted(() => {
           <UFormField label="Sender Address" required>
             <USelect
               v-model="form.senderDestinationId"
-              :options="addresses.map((addr) => ({
-                label: `${addr.destinationDetails?.name || 'Unnamed'}${addr.isPrimary ? ' (Primary)' : ''}`,
-                value: addr.destinationId,
-              }))"
+              :options="
+                addresses.map((addr) => ({
+                  label: `${addr.destinationDetails?.name || 'Unnamed'}${addr.isPrimary ? ' (Primary)' : ''}`,
+                  value: addr.destinationId,
+                }))
+              "
               placeholder="Select sender address"
               @update:model-value="handleSenderAddressChange"
             />
@@ -182,10 +181,12 @@ onMounted(() => {
           <UFormField label="Receiver Address" required>
             <USelect
               v-model="form.receiverDestinationId"
-              :options="addresses.map((addr) => ({
-                label: `${addr.destinationDetails?.name || 'Unnamed'}${addr.isPrimary ? ' (Primary)' : ''}`,
-                value: addr.destinationId,
-              }))"
+              :options="
+                addresses.map((addr) => ({
+                  label: `${addr.destinationDetails?.name || 'Unnamed'}${addr.isPrimary ? ' (Primary)' : ''}`,
+                  value: addr.destinationId,
+                }))
+              "
               placeholder="Select receiver address"
               @update:model-value="handleReceiverAddressChange"
             />
@@ -200,9 +201,7 @@ onMounted(() => {
           description="Please create at least one address before creating a parcel"
         >
           <template #actions>
-            <UButton color="primary" size="sm" @click="goToCreateAddress">
-              Create Address
-            </UButton>
+            <UButton color="primary" size="sm" @click="goToCreateAddress"> Create Address </UButton>
           </template>
         </UAlert>
 

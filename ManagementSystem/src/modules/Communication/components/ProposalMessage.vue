@@ -42,7 +42,8 @@ onMounted(async () => {
       if (response.content) {
         // Filter: only assignments where receiverId = proposerId (client who sent the proposal)
         affectedAssignments.value = response.content.filter(
-          (assignment: DeliveryAssignmentTask) => assignment.receiverId === props.proposal.proposerId
+          (assignment: DeliveryAssignmentTask) =>
+            assignment.receiverId === props.proposal.proposerId,
         )
       }
     } catch (error) {
@@ -65,10 +66,7 @@ const formatMessageTime = (dateString: string) => {
  * Check if proposal can be responded to
  */
 const canRespond = computed(() => {
-  return (
-    props.proposal.status === 'PENDING' &&
-    props.proposal.recipientId === props.currentUserId
-  )
+  return props.proposal.status === 'PENDING' && props.proposal.recipientId === props.currentUserId
 })
 
 /**
@@ -119,10 +117,7 @@ const getBorderColor = computed(() => {
 </script>
 
 <template>
-  <div
-    class="max-w-xs lg:max-w-md px-4 py-3 rounded-lg bg-white border-2"
-    :class="getBorderColor"
-  >
+  <div class="max-w-xs lg:max-w-md px-4 py-3 rounded-lg bg-white border-2" :class="getBorderColor">
     <div class="flex items-start justify-between mb-2">
       <div class="flex-1">
         <p class="text-sm font-semibold text-gray-900">

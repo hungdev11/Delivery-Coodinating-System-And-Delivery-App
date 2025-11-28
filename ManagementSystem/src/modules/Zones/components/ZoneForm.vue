@@ -81,7 +81,6 @@ const initializeForm = () => {
  * Parse polygon input string
  */
 const parsePolygonInput = (input: string): any => {
-   
   if (!input.trim()) return null
 
   try {
@@ -217,7 +216,12 @@ watch(
 
         <!-- Zone Name -->
         <UFormField label="Zone Name" required :error="errors.name">
-          <UInput class="w-1/2" v-model="form.name" placeholder="Enter zone name" :disabled="props.loading" />
+          <UInput
+            class="w-1/2"
+            v-model="form.name"
+            placeholder="Enter zone name"
+            :disabled="props.loading"
+          />
         </UFormField>
 
         <!-- Distribution Center -->

@@ -40,23 +40,25 @@ export const getZones = async (params?: {
     page: params?.page ?? 0,
     size: params?.size ?? 10,
     search: params?.search,
-    filters: params?.centerId ? {
-      logic: 'AND' as const,
-      conditions: [
-        {
-          field: 'centerId',
-          operator: 'eq' as const,
-          value: params.centerId
+    filters: params?.centerId
+      ? {
+          logic: 'AND' as const,
+          conditions: [
+            {
+              field: 'centerId',
+              operator: 'eq' as const,
+              value: params.centerId,
+            },
+          ],
         }
-      ]
-    } : undefined,
+      : undefined,
     sorts: [
       {
         field: 'name',
-        direction: 'asc' as const
-      }
+        direction: 'asc' as const,
+      },
     ],
-    selected: []
+    selected: [],
   }
 
   return apiClient.post<GetZonesResponse, any>('/v1/zones', requestBody)

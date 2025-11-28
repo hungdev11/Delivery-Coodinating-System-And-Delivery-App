@@ -48,10 +48,9 @@ export function useDeliverySessions() {
       assignment.assignmentId ??
       `${assignment.sessionId ?? 'session'}-${assignment.parcelId ?? 'parcel'}`
     const parcelId = assignment.parcelId ?? ''
-    const status =
-      (assignment.status ??
-        assignment.assignmentStatus ??
-        'IN_PROGRESS') as AssignmentStatus
+    const status = (assignment.status ??
+      assignment.assignmentStatus ??
+      'IN_PROGRESS') as AssignmentStatus
 
     return new DeliveryAssignmentDto({
       id: fallbackId,
@@ -84,8 +83,7 @@ export function useDeliverySessions() {
 
     const sessionIdValue =
       data.id ?? (assignments.length > 0 ? `${assignments[0].id}-session` : 'unknown-session')
-    const deliveryManId =
-      data.deliveryManId ?? data.deliveryManAssignedId ?? 'unknown-delivery-man'
+    const deliveryManId = data.deliveryManId ?? data.deliveryManAssignedId ?? 'unknown-delivery-man'
 
     const normalized = new DeliverySessionDto({
       id: sessionIdValue,
@@ -127,14 +125,20 @@ export function useDeliverySessions() {
       const activeSessionId = activeSessionResponse.result?.id
 
       // Get history tasks
-      const historyTasks = await getAssignmentHistoryForDeliveryMan(deliveryManId, { page: 0, size: 50 })
+      const historyTasks = await getAssignmentHistoryForDeliveryMan(deliveryManId, {
+        page: 0,
+        size: 50,
+      })
 
       const taskGroups = new Map<string, DeliveryAssignmentTask[]>()
 
       // Collect active session assignments if exists
       if (activeSessionId) {
         try {
-          const activeAssignments = await getAssignmentsBySessionId(activeSessionId, { page: 0, size: 100 })
+          const activeAssignments = await getAssignmentsBySessionId(activeSessionId, {
+            page: 0,
+            size: 100,
+          })
           if (activeAssignments.content) {
             taskGroups.set(activeSessionId, activeAssignments.content)
           }

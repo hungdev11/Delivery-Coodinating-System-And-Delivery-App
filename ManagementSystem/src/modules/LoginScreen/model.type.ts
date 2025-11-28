@@ -123,7 +123,7 @@ export class TokenPayload {
     this.exp = exp
     this.user = user
     this.roles = roles
-    this.keycloakPayload = keycloakPayload || {} as KeycloakJwtPayload
+    this.keycloakPayload = keycloakPayload || ({} as KeycloakJwtPayload)
   }
 
   // Helper methods for Keycloak integration
@@ -140,16 +140,12 @@ export class TokenPayload {
   }
 
   hasRole(role: string): boolean {
-    const allRoles = [
-      ...this.getRealmRoles(),
-      ...this.getClientRoles(),
-      ...this.roles
-    ]
+    const allRoles = [...this.getRealmRoles(), ...this.getClientRoles(), ...this.roles]
     return allRoles.includes(role)
   }
 
   hasAnyRole(roles: string[]): boolean {
-    return roles.some(role => this.hasRole(role))
+    return roles.some((role) => this.hasRole(role))
   }
 
   isEmailVerified(): boolean {

@@ -38,7 +38,11 @@ const handleCancel = () => {
 </script>
 
 <template>
-  <UModal title="Delete Zone" :close="{ onClick: handleCancel }" :ui="{ footer: 'justify-end' }">
+  <UModal
+    title="Delete Zone"
+    :close="{ onClick: handleCancel }"
+    :ui="{ width: 'sm:max-w-sm md:max-w-md', footer: 'justify-end' }"
+  >
     <template #body>
       <p class="text-gray-600">{{ message }}</p>
     </template>

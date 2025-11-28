@@ -22,18 +22,18 @@ export const useSettingsStore = defineStore('settings', () => {
     page: 0,
     size: 10,
     totalElements: 0,
-    totalPages: 0
+    totalPages: 0,
   })
 
   // Getters - removed filteredSettings, will be handled in component
 
   const selectedSettings = computed(() =>
-    settings.value.filter(setting => selected.value.includes(setting.key))
+    settings.value.filter((setting) => selected.value.includes(setting.key)),
   )
 
   const settingsByGroup = computed(() => {
     const groups: Record<string, SystemSettingDto[]> = {}
-    settings.value.forEach(setting => {
+    settings.value.forEach((setting) => {
       if (!groups[setting.group]) {
         groups[setting.group] = []
       }
@@ -62,9 +62,10 @@ export const useSettingsStore = defineStore('settings', () => {
       const sizeToUse = query?.size ?? pagination.value.size
       const searchToUse = query?.search ?? searchValue.value
 
-      const v2Filters = filtersToUse && filtersToUse.conditions.length > 0
-        ? convertV1ToV2Filter(filtersToUse)
-        : undefined
+      const v2Filters =
+        filtersToUse && filtersToUse.conditions.length > 0
+          ? convertV1ToV2Filter(filtersToUse)
+          : undefined
 
       const response = await listSettingsV2({
         page: pageToUse,
@@ -77,7 +78,9 @@ export const useSettingsStore = defineStore('settings', () => {
       const result = response.result
 
       if (result?.data) {
-        settings.value = result.data.map((setting: SystemSettingDto) => new SystemSettingDto(setting))
+        settings.value = result.data.map(
+          (setting: SystemSettingDto) => new SystemSettingDto(setting),
+        )
       } else {
         settings.value = []
       }
@@ -88,14 +91,14 @@ export const useSettingsStore = defineStore('settings', () => {
           page: result.page.page,
           size: result.page.size,
           totalElements: result.page.totalElements,
-          totalPages: result.page.totalPages
+          totalPages: result.page.totalPages,
         }
       } else {
         pagination.value = {
           page: 0,
           size: sizeToUse,
           totalElements: 0,
-          totalPages: 0
+          totalPages: 0,
         }
       }
     } catch (err: unknown) {
@@ -134,7 +137,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
       if (resultSetting) {
         const dto = new SystemSettingDto(resultSetting)
-        const existingIndex = settings.value.findIndex(s => s.key === data.key && s.group === data.group)
+        const existingIndex = settings.value.findIndex(
+          (s) => s.key === data.key && s.group === data.group,
+        )
         if (existingIndex >= 0) {
           settings.value[existingIndex] = dto
         } else {
@@ -161,7 +166,7 @@ export const useSettingsStore = defineStore('settings', () => {
       await deleteSetting(group, key)
 
       // Update local state
-      const index = settings.value.findIndex(s => s.key === key && s.group === group)
+      const index = settings.value.findIndex((s) => s.key === key && s.group === group)
       if (index >= 0) {
         settings.value.splice(index, 1)
       }
@@ -186,8 +191,8 @@ export const useSettingsStore = defineStore('settings', () => {
     error.value = null
 
     try {
-      const deletePromises = keys.map(key => {
-        const setting = settings.value.find(s => s.key === key)
+      const deletePromises = keys.map((key) => {
+        const setting = settings.value.find((s) => s.key === key)
         if (setting) {
           return deleteSetting(setting.group, key)
         }
@@ -197,8 +202,8 @@ export const useSettingsStore = defineStore('settings', () => {
       await Promise.all(deletePromises)
 
       // Update local state
-      settings.value = settings.value.filter(s => !keys.includes(s.key))
-      selected.value = selected.value.filter(key => !keys.includes(key))
+      settings.value = settings.value.filter((s) => !keys.includes(s.key))
+      selected.value = selected.value.filter((key) => !keys.includes(key))
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to delete settings'
       error.value = message
@@ -268,7 +273,7 @@ export const useSettingsStore = defineStore('settings', () => {
       page: 0,
       size: 10,
       totalElements: 0,
-      totalPages: 0
+      totalPages: 0,
     }
   }
 
@@ -303,6 +308,6 @@ export const useSettingsStore = defineStore('settings', () => {
     setPage,
     setPageSize,
     clearFilters,
-    reset
+    reset,
   }
 })

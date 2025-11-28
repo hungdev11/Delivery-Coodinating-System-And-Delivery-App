@@ -16,7 +16,7 @@
 
       <div class="flex flex-wrap gap-2">
         <UBadge
-          v-for="filter in (activeFilters || [])"
+          v-for="filter in activeFilters || []"
           :key="filter.id"
           :color="getFilterColor(filter)"
           variant="soft"
@@ -66,7 +66,10 @@
       </UButton>
 
       <div v-if="(activeFilters?.length || 0) > 0" class="text-xs text-gray-500 dark:text-gray-400">
-        {{ activeFilters?.length || 0 }} filter{{ (activeFilters?.length || 0) === 1 ? '' : 's' }} active
+        {{ activeFilters?.length || 0 }} filter{{
+          (activeFilters?.length || 0) === 1 ? '' : 's'
+        }}
+        active
       </div>
     </div>
 
@@ -259,7 +262,6 @@ function handleAdvancedClear() {
 // Initialize columnFilters from props
 function initializeColumnFilters() {
   const filtersByColumn: Record<string, FilterCondition[]> = Object.create(null)
-
   (props.activeFilters || []).forEach((filter: FilterCondition) => {
     if (!filtersByColumn[filter.field]) {
       filtersByColumn[filter.field] = []

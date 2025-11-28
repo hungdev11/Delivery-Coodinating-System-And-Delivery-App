@@ -5,7 +5,16 @@
  * View for managing system settings with UTable and Nuxt UI v3 best practices
  */
 
-import { onMounted, ref, watch, reactive, computed, resolveComponent, h, defineAsyncComponent } from 'vue'
+import {
+  onMounted,
+  ref,
+  watch,
+  reactive,
+  computed,
+  resolveComponent,
+  h,
+  defineAsyncComponent,
+} from 'vue'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
 import { PageHeader } from '@/common/components'
 import { SystemSettingDto } from './model.type'
@@ -16,12 +25,15 @@ import type { SortingState } from '@tanstack/table-core'
 import { storeToRefs } from 'pinia'
 import TableHeaderCell from '@/common/components/TableHeaderCell.vue'
 import AdvancedFilterDrawer from '@/common/components/filters/AdvancedFilterDrawer.vue'
+import TableFilters from '@/common/components/table/TableFilters.vue'
 import type { Column } from '@tanstack/table-core'
 import type { FilterableColumn, FilterCondition, FilterGroup } from '@/common/types/filter'
 
 // Lazy load modals
 const LazySettingFormModal = defineAsyncComponent(() => import('./components/SettingFormModal.vue'))
-const LazySettingDeleteModal = defineAsyncComponent(() => import('./components/SettingDeleteModal.vue'))
+const LazySettingDeleteModal = defineAsyncComponent(
+  () => import('./components/SettingDeleteModal.vue'),
+)
 
 const UCheckbox = resolveComponent('UCheckbox')
 const UBadge = resolveComponent('UBadge')
@@ -47,13 +59,14 @@ const setupHeader = ({
     inactiveColor?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
     filterable?: boolean
   }
-}) => h(TableHeaderCell<SystemSettingDto>, {
-  column,
-  config,
-  filterableColumns: filterableColumns,
-  activeFilters: activeFilters.value,
-  'onUpdate:filters': handleFiltersUpdate
-})
+}) =>
+  h(TableHeaderCell<SystemSettingDto>, {
+    column,
+    config,
+    filterableColumns: filterableColumns,
+    activeFilters: activeFilters.value,
+    'onUpdate:filters': handleFiltersUpdate,
+  })
 
 // Destructure store state - use storeToRefs for reactive variables
 const { settings, loading, searchValue, pagination } = storeToRefs(settingsStore)
@@ -126,7 +139,7 @@ const filterableColumns: FilterableColumn[] = [
 // Table columns configuration
 const columns: TableColumn<SystemSettingDto>[] = [
   {
-    id: 'select',
+    accessorKey: 'select',
     header: ({ table }) =>
       h(UCheckbox, {
         modelValue: table.getIsSomePageRowsSelected()
@@ -142,6 +155,32 @@ const columns: TableColumn<SystemSettingDto>[] = [
         'onUpdate:modelValue': (value: boolean | 'indeterminate') => row.toggleSelected(!!value),
         'aria-label': 'Select row',
       }),
+  },
+  {
+    accessorKey: 'actions',
+    header: 'Actions',
+    cell: ({ row }) => {
+      const setting = row.original
+      return h('div', { class: 'flex space-x-2' }, [
+        h(UButton, {
+          icon: 'i-heroicons-pencil',
+          size: 'sm',
+          variant: 'ghost',
+          title: 'Edit setting',
+          disabled: setting.isReadOnly,
+          onClick: () => openEditModal(setting),
+        }),
+        h(UButton, {
+          icon: 'i-heroicons-trash',
+          size: 'sm',
+          variant: 'ghost',
+          color: 'error',
+          title: 'Delete setting',
+          disabled: setting.isReadOnly,
+          onClick: () => openDeleteModal(setting),
+        }),
+      ])
+    },
   },
   {
     accessorKey: 'key',
@@ -174,10 +213,14 @@ const columns: TableColumn<SystemSettingDto>[] = [
       }),
     cell: ({ row }) => {
       const description = row.getValue('description') as string
-      return h('span', {
-        class: 'text-sm text-gray-600 dark:text-gray-400 max-w-xs truncate',
-        title: description
-      }, description || '-')
+      return h(
+        'span',
+        {
+          class: 'text-sm text-gray-600 dark:text-gray-400 max-w-xs truncate',
+          title: description,
+        },
+        description || '-',
+      )
     },
   },
   {
@@ -197,19 +240,26 @@ const columns: TableColumn<SystemSettingDto>[] = [
     cell: ({ row }) => {
       const setting = row.original
       return h('div', { class: 'flex items-center space-x-2' }, [
-        h('span', {
-          class: 'text-sm font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded max-w-xs truncate',
-          title: setting.value
-        }, getDisplayValue(setting)),
-        ...(setting.displayMode === 'PASSWORD' ? [
-          h(UButton, {
-            icon: 'i-heroicons-eye',
-            size: 'xs',
-            variant: 'ghost',
-            title: 'Show password',
-            onClick: () => togglePasswordVisibility(setting.key)
-          })
-        ] : [])
+        h(
+          'span',
+          {
+            class:
+              'text-sm font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded max-w-xs truncate',
+            title: setting.value,
+          },
+          getDisplayValue(setting),
+        ),
+        ...(setting.displayMode === 'PASSWORD'
+          ? [
+              h(UButton, {
+                icon: 'i-heroicons-eye',
+                size: 'xs',
+                variant: 'ghost',
+                title: 'Show password',
+                onClick: () => togglePasswordVisibility(setting.key),
+              }),
+            ]
+          : []),
       ])
     },
   },
@@ -248,32 +298,6 @@ const columns: TableColumn<SystemSettingDto>[] = [
         },
       }),
   },
-  {
-    accessorKey: 'actions',
-    header: 'Actions',
-    cell: ({ row }) => {
-      const setting = row.original
-      return h('div', { class: 'flex space-x-2' }, [
-        h(UButton, {
-          icon: 'i-heroicons-pencil',
-          size: 'sm',
-          variant: 'ghost',
-          title: 'Edit setting',
-          disabled: setting.isReadOnly,
-          onClick: () => openEditModal(setting),
-        }),
-        h(UButton, {
-          icon: 'i-heroicons-trash',
-          size: 'sm',
-          variant: 'ghost',
-          color: 'error',
-          title: 'Delete setting',
-          disabled: setting.isReadOnly,
-          onClick: () => openDeleteModal(setting),
-        }),
-      ])
-    },
-  },
 ]
 
 /**
@@ -291,7 +315,6 @@ const getColumnLabel = (columnId: string): string => {
   }
   return labelMap[columnId] || columnId
 }
-
 
 /**
  * Event handlers
@@ -311,6 +334,37 @@ const onSortingChange = (newSorting: SortingState) => {
   sorting.value = newSorting
   // loadSettings() will be called by the watcher
 }
+
+// Handle clear sorting
+const handleClearSorting = () => {
+  sorting.value = []
+  settingsStore.setSorting([])
+}
+
+// Computed properties for bulk actions
+const selectedCount = computed((): number => {
+  if (!table.value?.tableApi?.getFilteredSelectedRowModel) return 0
+  return table.value?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0
+})
+
+const totalCount = computed((): number => {
+  if (!table.value?.tableApi?.getFilteredRowModel) return 0
+  return table.value?.tableApi?.getFilteredRowModel()?.rows?.length || 0
+})
+
+// Sortable columns list (derived from filterableColumns, excluding non-sortable fields)
+const sortableColumnsList = computed(() => {
+  return filterableColumns
+    .filter((col) => {
+      // Exclude non-sortable fields like arrays, objects, etc.
+      const nonSortableFields = ['id', 'select', 'actions']
+      return !nonSortableFields.includes(col.field)
+    })
+    .map((col) => ({
+      id: col.field,
+      label: col.label,
+    }))
+})
 
 const handlePageChange = (page: number) => {
   settingsStore.setPage(page - 1)
@@ -516,7 +570,8 @@ const getOperatorLabel = (operator: string): string => {
 
 // Advanced filter handlers
 const handleAdvancedFilterApply = (filterGroup: FilterGroup) => {
-  advancedFiltersGroup.value = filterGroup && filterGroup.conditions.length > 0 ? filterGroup : undefined
+  advancedFiltersGroup.value =
+    filterGroup && filterGroup.conditions.length > 0 ? filterGroup : undefined
   applyCombinedFilters()
   showAdvancedFilters.value = false
 }
@@ -548,12 +603,13 @@ const applyCombinedFilters = () => {
     combinedConditions.push(...columnFilters)
   }
 
-  const combinedFilterGroup = combinedConditions.length > 0
-    ? {
-        logic: 'AND' as const,
-        conditions: combinedConditions,
-      }
-    : undefined
+  const combinedFilterGroup =
+    combinedConditions.length > 0
+      ? {
+          logic: 'AND' as const,
+          conditions: combinedConditions,
+        }
+      : undefined
 
   settingsStore.setFilters(combinedFilterGroup)
   settingsStore.setPage(0)
@@ -616,125 +672,34 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="container mx-auto px-4 py-6">
+  <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
     <PageHeader title="Settings" description="Manage system configuration settings">
       <template #actions>
-        <UButton icon="i-heroicons-plus" @click="openCreateModal"> Add Setting </UButton>
+        <UButton icon="i-heroicons-plus" size="sm" class="md:size-md" @click="openCreateModal">
+          <span class="hidden sm:inline">Add Setting</span>
+          <span class="sm:hidden">Add</span>
+        </UButton>
       </template>
     </PageHeader>
 
-    <!-- Filters and Search -->
-    <div class="mb-6 space-y-4">
-      <!-- Simple Search -->
-      <div class="flex flex-col sm:flex-row gap-4">
-        <!-- Search Input -->
-        <div class="flex-1">
-          <UInput
-            v-model="searchValue"
-            placeholder="Search settings..."
-            icon="i-heroicons-magnifying-glass"
-            size="lg"
-          />
-        </div>
-      </div>
-
-      <!-- Advanced Filters Button -->
-      <div class="flex justify-between items-center">
-        <!-- Active Filters Display -->
-        <div
-          v-if="getAllActiveFilters() && getAllActiveFilters()!.length > 0"
-          class="flex items-center gap-2"
-        >
-          <span class="text-sm text-gray-600 dark:text-gray-400">Active filters:</span>
-          <div class="flex items-center gap-1">
-            <UBadge color="primary" variant="soft" size="sm" class="max-w-md">
-              {{ getFilterStructure() }}
-            </UBadge>
-          </div>
-          <UButton
-            variant="ghost"
-            size="xs"
-            color="neutral"
-            icon="i-heroicons-x-mark"
-            @click="handleAdvancedFilterClear"
-            title="Clear all filters"
-          />
-        </div>
-
-        <!-- Advanced Filters Button -->
-        <UButton
-          variant="soft"
-          color="primary"
-          icon="i-heroicons-cog-6-tooth"
-          @click="showAdvancedFilters = true"
-        >
-          Advanced Filters
-        </UButton>
-      </div>
-
-      <!-- Sorting Summary -->
-      <div
-        v-if="sorting.length > 0"
-        class="mt-4 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400"
-      >
-        <span>Sorted by:</span>
-        <div class="flex items-center gap-1">
-          <UBadge
-            v-for="sort in sorting"
-            :key="sort.id"
-            :color="sort.desc ? 'error' : 'success'"
-            variant="soft"
-            size="sm"
-          >
-            {{ getColumnLabel(sort.id) }}
-            <UIcon
-              :name="
-                sort.desc
-                  ? 'i-lucide-arrow-down-wide-narrow'
-                  : 'i-lucide-arrow-up-narrow-wide'
-              "
-              class="ml-1"
-            />
-          </UBadge>
-        </div>
-        <UButton
-          variant="ghost"
-          size="xs"
-          color="neutral"
-          icon="i-heroicons-x-mark"
-          @click="settingsStore.setSorting([])"
-          title="Clear all sorting"
-        />
-      </div>
-    </div>
-
-    <!-- Bulk Actions -->
-    <div
-      v-if="
-        table &&
-        table?.tableApi?.getFilteredSelectedRowModel()?.rows &&
-        (table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0) > 0
-      "
-      class="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
-    >
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-gray-600 dark:text-gray-400">
-          {{ table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0 }} of
-          {{ table?.tableApi?.getFilteredRowModel()?.rows?.length || 0 }} row(s) selected.
-        </span>
-        <div class="flex space-x-2">
-              <UButton
-                size="sm"
-            variant="soft"
-            color="error"
-            icon="i-heroicons-trash"
-            @click="handleBulkDelete"
-          >
-            Delete
-          </UButton>
-        </div>
-      </div>
-            </div>
+    <!-- Table Filters (includes Search + Bulk Actions + Filters + Sort) -->
+    <TableFilters
+      :search-value="searchValue"
+      search-placeholder="Search settings..."
+      :active-filters="getAllActiveFilters()"
+      :filter-structure="getFilterStructure()"
+      :sorting="sorting"
+      :get-column-label="getColumnLabel"
+      :selected-count="selectedCount"
+      :total-count="totalCount"
+      :on-bulk-delete="handleBulkDelete"
+      :sortable-columns="sortableColumnsList"
+      @update:search-value="searchValue = $event"
+      @update:sorting="onSortingChange"
+      @clear-filters="handleAdvancedFilterClear"
+      @clear-sorting="handleClearSorting"
+      @open-advanced-filters="showAdvancedFilters = true"
+    />
 
     <!-- Table -->
     <UCard>
@@ -747,6 +712,11 @@ onMounted(async () => {
         :manual-sorting="true"
         enable-multi-sort
         @update:sorting="onSortingChange($event)"
+        :ui="{
+          empty: 'text-center py-12',
+          root: 'h-[50vh]',
+          thead: 'sticky top-0 bg-white dark:bg-gray-800',
+        }"
       />
 
       <!-- Empty State -->
@@ -754,7 +724,7 @@ onMounted(async () => {
         <div class="text-center py-12">
           <div class="mx-auto h-12 w-12 text-gray-400">
             <UIcon name="i-heroicons-cog-6-tooth" class="h-12 w-12" />
-            </div>
+          </div>
           <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
             No settings found
           </h3>
@@ -773,11 +743,14 @@ onMounted(async () => {
           </div>
         </div>
       </template>
-      </UCard>
+    </UCard>
 
     <!-- Pagination -->
-    <div v-if="settings.length > 0" class="mt-6 flex items-center justify-between">
-      <div class="text-sm text-gray-700 dark:text-gray-300">
+    <div
+      v-if="settings.length > 0"
+      class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4"
+    >
+      <div class="text-sm text-gray-700 dark:text-gray-300 text-center sm:text-left">
         Showing {{ pagination.page * pagination.size + 1 }}-{{
           Math.min((pagination.page + 1) * pagination.size, pagination.totalElements)
         }}

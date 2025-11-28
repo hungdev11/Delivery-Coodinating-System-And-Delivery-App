@@ -192,9 +192,8 @@ const mapRoutes = computed((): RouteData[] => {
     })
   } catch {}
 
-  const coords = stepCoords.length > 0
-    ? stepCoords
-    : parseRouteGeometry(routeResult.value.route.geometry)
+  const coords =
+    stepCoords.length > 0 ? stepCoords : parseRouteGeometry(routeResult.value.route.geometry)
 
   if (coords.length === 0) return []
 
@@ -327,7 +326,7 @@ const handleStepClick = (legIndex: number, stepIndex: number) => {
           pitch: 60, // Higher tilt for better 3D view
           duration: 1500, // Smooth animation
           maxZoom: 19, // Very high zoom for street-level detail
-        }
+        },
       )
     }
   }, 100)
@@ -345,7 +344,8 @@ const calculateBearing = (start: [number, number], end: [number, number]): numbe
   const dLng = endLng - startLng
 
   const y = Math.sin(dLng) * Math.cos(endLat)
-  const x = Math.cos(startLat) * Math.sin(endLat) - Math.sin(startLat) * Math.cos(endLat) * Math.cos(dLng)
+  const x =
+    Math.cos(startLat) * Math.sin(endLat) - Math.sin(startLat) * Math.cos(endLat) * Math.cos(dLng)
 
   const bearing = Math.atan2(y, x)
   return ((bearing * 180) / Math.PI + 360) % 360
@@ -489,7 +489,7 @@ const zoomOutToFullRoute = () => {
           bearing: 0, // Reset bearing to north
           pitch: 0, // Reset pitch to flat
           duration: 1500, // Smooth animation
-        }
+        },
       )
     }
   }, 100)
@@ -586,17 +586,12 @@ onUnmounted(() => {
           </template>
 
           <div class="space-y-3">
-            <URadioGroup
-              v-model="routingStrategy"
-              :items="strategyItems"
-            />
+            <URadioGroup v-model="routingStrategy" :items="strategyItems" />
             <div class="text-xs text-gray-500">
               <span v-if="routingStrategy === 'strict_urgent'">
                 URGENT orders MUST be delivered first, regardless of detour cost
               </span>
-              <span v-else>
-                Consider all priorities together, URGENT gets very high weight
-              </span>
+              <span v-else> Consider all priorities together, URGENT gets very high weight </span>
             </div>
           </div>
         </UCard>
@@ -612,12 +607,17 @@ onUnmounted(() => {
               v-model="vehicleType"
               :items="[
                 { label: '🏍️ Motorbike (Xe máy)', value: 'motorbike' },
-                { label: '🚗 Car (Ô tô)', value: 'car' }
+                { label: '🚗 Car (Ô tô)', value: 'car' },
               ]"
             />
             <div class="text-xs text-gray-500">
-              <span v-if="vehicleType === 'motorbike'">Motorbike routing - optimized for Vietnam traffic, no motorways</span>
-              <span v-else>Car routing - full OSRM car.lua profile with dynamic weights (priority_factor, rating, flow)</span>
+              <span v-if="vehicleType === 'motorbike'"
+                >Motorbike routing - optimized for Vietnam traffic, no motorways</span
+              >
+              <span v-else
+                >Car routing - full OSRM car.lua profile with dynamic weights (priority_factor,
+                rating, flow)</span
+              >
             </div>
           </div>
         </UCard>
@@ -635,15 +635,27 @@ onUnmounted(() => {
                 { label: '⭐ V2 Full (Rating→Weight, Blocking→Speed)', value: 'v2-full' },
                 { label: '👥 V2 Rating Only (User Feedback→Weight)', value: 'v2-rating-only' },
                 { label: '🚦 V2 Blocking Only (Traffic→Speed)', value: 'v2-blocking-only' },
-                { label: '🏍️ V2 Base (VN Motorbike Optimized)', value: 'v2-base' }
+                { label: '🏍️ V2 Base (VN Motorbike Optimized)', value: 'v2-base' },
               ]"
             />
 
             <div class="text-xs text-gray-500 mt-3 p-2 bg-gray-50 dark:bg-gray-800 rounded">
-              <span v-if="routingMode === 'v2-full'">✨ <strong>V2 Full:</strong> User rating affects weight (cost), traffic blocking affects speed (time). Best for production use.</span>
-              <span v-else-if="routingMode === 'v2-rating-only'">✨ <strong>V2 Rating:</strong> Only user feedback affects weight, traffic conditions ignored. Useful for testing user feedback impact.</span>
-              <span v-else-if="routingMode === 'v2-blocking-only'">✨ <strong>V2 Blocking:</strong> Only traffic affects speed, user feedback ignored. Useful for testing traffic impact.</span>
-              <span v-else-if="routingMode === 'v2-base'">✨ <strong>V2 Base:</strong> VN motorbike profile (35km/h, easy turns, flexible oneways). No user feedback or traffic data.</span>
+              <span v-if="routingMode === 'v2-full'"
+                >✨ <strong>V2 Full:</strong> User rating affects weight (cost), traffic blocking
+                affects speed (time). Best for production use.</span
+              >
+              <span v-else-if="routingMode === 'v2-rating-only'"
+                >✨ <strong>V2 Rating:</strong> Only user feedback affects weight, traffic
+                conditions ignored. Useful for testing user feedback impact.</span
+              >
+              <span v-else-if="routingMode === 'v2-blocking-only'"
+                >✨ <strong>V2 Blocking:</strong> Only traffic affects speed, user feedback ignored.
+                Useful for testing traffic impact.</span
+              >
+              <span v-else-if="routingMode === 'v2-base'"
+                >✨ <strong>V2 Base:</strong> VN motorbike profile (35km/h, easy turns, flexible
+                oneways). No user feedback or traffic data.</span
+              >
             </div>
           </div>
         </UCard>
@@ -653,11 +665,7 @@ onUnmounted(() => {
           <template #header>
             <div class="flex items-center justify-between">
               <h3 class="text-lg font-semibold">Click Mode</h3>
-              <UToggle
-                v-model="useLegacyPriority"
-                size="xs"
-                color="neutral"
-              >
+              <UToggle v-model="useLegacyPriority" size="xs" color="neutral">
                 <template #label>
                   <span class="text-xs text-gray-500">Legacy (0-4)</span>
                 </template>
@@ -815,19 +823,27 @@ onUnmounted(() => {
                 <div class="flex items-center gap-2">
                   <h3 class="text-lg font-semibold">Route Steps</h3>
                   <UBadge color="primary">
-                    {{ routeResult.route.legs.reduce((sum, leg) => sum + leg.steps.length, 0) }} steps
+                    {{
+                      routeResult.route.legs.reduce((sum, leg) => sum + leg.steps.length, 0)
+                    }}
+                    steps
                   </UBadge>
                 </div>
-              <UButton
-                v-if="selectedStep"
-                color="warning"
-                variant="soft"
-                size="xs"
-                icon="i-heroicons-x-mark"
-                @click="() => { selectedStep = null; zoomOutToFullRoute() }"
-              >
-                Clear
-              </UButton>
+                <UButton
+                  v-if="selectedStep"
+                  color="warning"
+                  variant="soft"
+                  size="xs"
+                  icon="i-heroicons-x-mark"
+                  @click="
+                    () => {
+                      selectedStep = null
+                      zoomOutToFullRoute()
+                    }
+                  "
+                >
+                  Clear
+                </UButton>
               </div>
               <p class="text-xs text-gray-500 dark:text-gray-400">
                 Click on any step to highlight and focus on the map
@@ -838,7 +854,9 @@ onUnmounted(() => {
           <div class="space-y-2 max-h-96 overflow-y-auto">
             <template v-for="(leg, legIndex) in routeResult.route.legs" :key="legIndex">
               <!-- Leg Header -->
-              <div class="sticky top-0 bg-gray-50 dark:bg-gray-800 px-3 py-2 -mx-3 font-medium text-sm">
+              <div
+                class="sticky top-0 bg-gray-50 dark:bg-gray-800 px-3 py-2 -mx-3 font-medium text-sm"
+              >
                 Leg {{ legIndex + 1 }}
                 <span class="text-gray-500 text-xs ml-2">
                   {{ formatDistance(leg.distance) }} · {{ formatDuration(leg.duration) }}
@@ -856,8 +874,9 @@ onUnmounted(() => {
                 :class="{
                   'bg-amber-50 dark:bg-amber-900/20 ring-2 ring-amber-400 dark:ring-amber-600':
                     selectedStep?.legIndex === legIndex && selectedStep?.stepIndex === stepIndex,
-                  'hover:bg-gray-50 dark:hover:bg-gray-800':
-                    !(selectedStep?.legIndex === legIndex && selectedStep?.stepIndex === stepIndex),
+                  'hover:bg-gray-50 dark:hover:bg-gray-800': !(
+                    selectedStep?.legIndex === legIndex && selectedStep?.stepIndex === stepIndex
+                  ),
                 }"
                 @click="handleStepClick(legIndex, stepIndex)"
               >
@@ -867,8 +886,9 @@ onUnmounted(() => {
                   :class="{
                     'bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400':
                       selectedStep?.legIndex === legIndex && selectedStep?.stepIndex === stepIndex,
-                    'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400':
-                      !(selectedStep?.legIndex === legIndex && selectedStep?.stepIndex === stepIndex),
+                    'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400': !(
+                      selectedStep?.legIndex === legIndex && selectedStep?.stepIndex === stepIndex
+                    ),
                   }"
                 >
                   {{ stepIndex + 1 }}
@@ -883,19 +903,10 @@ onUnmounted(() => {
                     {{ formatDistance(step.distance) }} · {{ formatDuration(step.duration) }}
                   </p>
                   <div class="flex items-center gap-2 mt-1">
-                    <UBadge
-                      v-if="step.maneuver?.type"
-                      color="neutral"
-                      size="xs"
-                    >
+                    <UBadge v-if="step.maneuver?.type" color="neutral" size="xs">
                       {{ step.maneuver.type }}
                     </UBadge>
-                    <UBadge
-                      v-if="step.maneuver?.modifier"
-                      color="neutral"
-                      size="xs"
-                      variant="soft"
-                    >
+                    <UBadge v-if="step.maneuver?.modifier" color="neutral" size="xs" variant="soft">
                       {{ step.maneuver.modifier }}
                     </UBadge>
                   </div>
@@ -903,11 +914,22 @@ onUnmounted(() => {
 
                 <!-- Selected Indicator -->
                 <div
-                  v-if="selectedStep?.legIndex === legIndex && selectedStep?.stepIndex === stepIndex"
+                  v-if="
+                    selectedStep?.legIndex === legIndex && selectedStep?.stepIndex === stepIndex
+                  "
                   class="flex-shrink-0 text-amber-500 dark:text-amber-400"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-5 w-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                      clip-rule="evenodd"
+                    />
                   </svg>
                 </div>
               </div>
@@ -964,17 +986,10 @@ onUnmounted(() => {
 
               <!-- Step Counter -->
               <div class="flex items-center gap-2 min-w-[120px] justify-center">
-                <UBadge
-                  v-if="selectedStep"
-                  color="primary"
-                  size="lg"
-                  variant="solid"
-                >
+                <UBadge v-if="selectedStep" color="primary" size="lg" variant="solid">
                   {{ getCurrentStepNumber }} / {{ getTotalSteps }}
                 </UBadge>
-                <span v-else class="text-sm text-gray-500">
-                  {{ getTotalSteps }} steps
-                </span>
+                <span v-else class="text-sm text-gray-500"> {{ getTotalSteps }} steps </span>
               </div>
 
               <!-- Next Button -->
@@ -996,7 +1011,12 @@ onUnmounted(() => {
               color="error"
               variant="soft"
               icon="i-heroicons-stop"
-              @click="() => { selectedStep = null; zoomOutToFullRoute() }"
+              @click="
+                () => {
+                  selectedStep = null
+                  zoomOutToFullRoute()
+                }
+              "
             >
               Stop
             </UButton>
@@ -1005,20 +1025,27 @@ onUnmounted(() => {
 
           <!-- Keyboard Hint -->
           <div class="mt-3 pt-3 border-t">
-            <p class="text-xs text-gray-500 dark:text-gray-400 text-center flex items-center justify-center gap-2">
+            <p
+              class="text-xs text-gray-500 dark:text-gray-400 text-center flex items-center justify-center gap-2"
+            >
               <span>💡 Use</span>
-              <kbd class="px-2 py-1 text-xs font-semibold text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded">←</kbd>
-              <kbd class="px-2 py-1 text-xs font-semibold text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded">→</kbd>
+              <kbd
+                class="px-2 py-1 text-xs font-semibold text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                >←</kbd
+              >
+              <kbd
+                class="px-2 py-1 text-xs font-semibold text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                >→</kbd
+              >
               <span>arrow keys to navigate</span>
             </p>
           </div>
 
           <!-- Current Step Info -->
-          <div
-            v-if="selectedStep && routeResult"
-            class="mt-3 pt-3 border-t flex items-start gap-3"
-          >
-            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400 flex items-center justify-center text-sm font-bold">
+          <div v-if="selectedStep && routeResult" class="mt-3 pt-3 border-t flex items-start gap-3">
+            <div
+              class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400 flex items-center justify-center text-sm font-bold"
+            >
               {{ getCurrentStepNumber }}
             </div>
             <div class="flex-1">
@@ -1032,14 +1059,14 @@ onUnmounted(() => {
                 {{
                   formatDistance(
                     routeResult.route.legs[selectedStep.legIndex]?.steps[selectedStep.stepIndex]
-                      ?.distance || 0
+                      ?.distance || 0,
                   )
                 }}
                 ·
                 {{
                   formatDuration(
                     routeResult.route.legs[selectedStep.legIndex]?.steps[selectedStep.stepIndex]
-                      ?.duration || 0
+                      ?.duration || 0,
                   )
                 }}
               </p>

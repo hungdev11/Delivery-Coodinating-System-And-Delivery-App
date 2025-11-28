@@ -14,7 +14,7 @@ import {
   useProposals,
   useMessageStatus,
   useTypingIndicator,
-  useNotifications
+  useNotifications,
 } from './composables'
 import type {
   MessageResponse,
@@ -37,8 +37,12 @@ import { getActiveSessionForDeliveryMan, getAssignmentsBySessionId } from '../De
 import type { DeliveryAssignmentTask } from '../Delivery/model.type'
 
 // Lazy load modals
-const LazyDateTimePickerModal = defineAsyncComponent(() => import('./components/DateTimePickerModal.vue'))
-const LazyDateTimeRangePickerModal = defineAsyncComponent(() => import('./components/DateTimeRangePickerModal.vue'))
+const LazyDateTimePickerModal = defineAsyncComponent(
+  () => import('./components/DateTimePickerModal.vue'),
+)
+const LazyDateTimeRangePickerModal = defineAsyncComponent(
+  () => import('./components/DateTimeRangePickerModal.vue'),
+)
 const LazyTextInputModal = defineAsyncComponent(() => import('./components/TextInputModal.vue'))
 
 const route = useRoute()
@@ -140,7 +144,7 @@ const loadPartnerInfo = async () => {
   }
   // Find the current conversation to get partner info
   const { conversations } = useConversations()
-  const currentConv = conversations.value.find(c => c.conversationId === conversationId.value)
+  const currentConv = conversations.value.find((c) => c.conversationId === conversationId.value)
   if (currentConv) {
     partnerName.value = currentConv.partnerName
     partnerUsername.value = currentConv.partnerUsername || ''
@@ -232,7 +236,12 @@ const loadActiveSessionAndAssignments = async () => {
       if (assignmentsResponse.content) {
         // Show ALL assignments in the session (not filtered by receiverId)
         sessionAssignments.value = assignmentsResponse.content
-        console.log('📦 Loaded', sessionAssignments.value.length, 'parcels in active session for shipper:', shipperId)
+        console.log(
+          '📦 Loaded',
+          sessionAssignments.value.length,
+          'parcels in active session for shipper:',
+          shipperId,
+        )
       } else {
         sessionAssignments.value = []
       }
@@ -290,7 +299,6 @@ const connectWebSocket = async () => {
   await connect(
     currentUserId.value,
     async (message: MessageResponse) => {
-
       // Add message if it belongs to this conversation
       // Backend sends messages to both sender and recipient
       // We need to verify it belongs to the current conversation
@@ -320,13 +328,14 @@ const connectWebSocket = async () => {
 
           // Parse message content to get parcelId
           try {
-            const messageData = typeof message.content === 'string' ? JSON.parse(message.content) : message.content
+            const messageData =
+              typeof message.content === 'string' ? JSON.parse(message.content) : message.content
             const parcelId = messageData?.parcelId || messageData?.parcelCode
 
             if (parcelId) {
               // Update assignment status in local list immediately (optimistic update)
               const assignmentIndex = sessionAssignments.value.findIndex(
-                (a) => a.parcelId === parcelId || a.parcelCode === parcelId
+                (a) => a.parcelId === parcelId || a.parcelCode === parcelId,
               )
               if (assignmentIndex !== -1) {
                 sessionAssignments.value[assignmentIndex].status = 'COMPLETED'
@@ -348,15 +357,16 @@ const connectWebSocket = async () => {
         // If this is a postpone message (TEXT with postpone data), refresh session assignments
         if (message.type === 'TEXT' && message.content) {
           try {
-            const messageData = typeof message.content === 'string' ? JSON.parse(message.content) : message.content
+            const messageData =
+              typeof message.content === 'string' ? JSON.parse(message.content) : message.content
             if (messageData?.postponeDateTime || (messageData?.parcelId && messageData?.reason)) {
               console.log('⏸️ Postpone message received, refreshing session assignments...')
-              
+
               const parcelId = messageData?.parcelId
               if (parcelId) {
                 // Update assignment status in local list (remove from active session if postponed)
                 const assignmentIndex = sessionAssignments.value.findIndex(
-                  (a) => a.parcelId === parcelId || a.parcelCode === parcelId
+                  (a) => a.parcelId === parcelId || a.parcelCode === parcelId,
                 )
                 if (assignmentIndex !== -1) {
                   // Remove from active session list (parcel is postponed, no longer in active session)
@@ -392,7 +402,7 @@ const connectWebSocket = async () => {
     handleTypingIndicator, // Typing indicator callback
     handleNotification, // Notification callback
     handleProposalUpdate, // Proposal update callback
-    handleUpdateNotification // Update notification callback
+    handleUpdateNotification, // Update notification callback
   )
 }
 
@@ -609,13 +619,7 @@ const showDateTimeRangePickerModal = async () => {
   const instance = modal.open({})
   const result = await instance.result
 
-  if (
-    result &&
-    result.startDate &&
-    result.startTime &&
-    result.endDate &&
-    result.endTime
-  ) {
+  if (result && result.startDate && result.startTime && result.endDate && result.endTime) {
     await handleDateTimeRangePickerConfirm(
       result.startDate,
       result.startTime,
@@ -760,7 +764,10 @@ const sendProposalRequest = async (type: string, data: string) => {
     } catch (e) {
       console.warn('⚠️ Failed to parse proposal data, using original data:', e)
       // Fallback: create new object with parcelId
-      proposalData = JSON.stringify({ parcelId: currentParcel.value.id, ...JSON.parse(data || '{}') })
+      proposalData = JSON.stringify({
+        parcelId: currentParcel.value.id,
+        ...JSON.parse(data || '{}'),
+      })
     }
   }
 
@@ -805,9 +812,7 @@ const handleProposalUpdate = (update: ProposalUpdateDTO) => {
   console.log('📋 Proposal update received:', update)
 
   // Find message with matching proposal ID and update its status
-  const messageIndex = messages.value.findIndex(
-    (msg) => msg.proposal?.id === update.proposalId
-  )
+  const messageIndex = messages.value.findIndex((msg) => msg.proposal?.id === update.proposalId)
 
   if (messageIndex !== -1) {
     const message = messages.value[messageIndex]
@@ -910,13 +915,10 @@ const isMyMessage = (message: MessageResponse) => {
       <div class="flex items-center space-x-2">
         <!-- Parcels Popover (always show icon, with badge if parcels exist) -->
         <UPopover v-model:open="showParcelsPopover" :content="{ side: 'bottom', align: 'end' }">
-          <UButton
-            variant="ghost"
-            color="neutral"
-            icon="i-heroicons-cube"
-            class="relative"
-          >
-            <span v-if="sessionAssignments.length > 0" class="ml-1">{{ sessionAssignments.length }}</span>
+          <UButton variant="ghost" color="neutral" icon="i-heroicons-cube" class="relative">
+            <span v-if="sessionAssignments.length > 0" class="ml-1">{{
+              sessionAssignments.length
+            }}</span>
             <!-- Red dot indicator when parcels exist -->
             <span
               v-if="sessionAssignments.length > 0"
@@ -929,14 +931,20 @@ const isMyMessage = (message: MessageResponse) => {
                 <h3 class="font-semibold text-gray-900 dark:text-gray-100">
                   Parcels in Active Session
                 </h3>
-                <p v-if="sessionAssignments.length > 0" class="text-sm text-gray-500 dark:text-gray-400">
+                <p
+                  v-if="sessionAssignments.length > 0"
+                  class="text-sm text-gray-500 dark:text-gray-400"
+                >
                   {{ sessionAssignments.length }} parcel(s) being delivered
                 </p>
               </div>
 
               <USkeleton v-if="loadingSession" class="h-32 w-full" />
 
-              <div v-else-if="sessionAssignments.length === 0" class="text-center py-8 text-gray-500">
+              <div
+                v-else-if="sessionAssignments.length === 0"
+                class="text-center py-8 text-gray-500"
+              >
                 <p>Không có đơn hàng trong phiên hiện tại.</p>
               </div>
 
@@ -1090,7 +1098,11 @@ const isMyMessage = (message: MessageResponse) => {
     </div>
 
     <!-- Postpone Options Modal -->
-    <UModal v-model:open="showPostponeOptionsModal" title="Select Postpone Type">
+    <UModal
+      v-model:open="showPostponeOptionsModal"
+      title="Select Postpone Type"
+      :ui="{ width: 'sm:max-w-sm md:max-w-md' }"
+    >
       <template #body>
         <div class="space-y-2 p-4">
           <UButton block variant="ghost" @click="handlePostponeOption('SPECIFIC')">
@@ -1108,6 +1120,5 @@ const isMyMessage = (message: MessageResponse) => {
         </div>
       </template>
     </UModal>
-
   </div>
 </template>

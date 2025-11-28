@@ -311,7 +311,7 @@ export function useGlobalChat() {
             }
           }
         })
-      }
+      },
     )
   }
 

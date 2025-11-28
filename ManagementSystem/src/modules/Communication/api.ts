@@ -26,8 +26,12 @@ const apiClient = new AxiosHttpClient(import.meta.env.VITE_API_URL)
 /**
  * Get conversations for a user
  */
-export const getConversations = async (userId: string): Promise<GetConversationsResponse | ConversationResponse[]> => {
-  return apiClient.get<GetConversationsResponse | ConversationResponse[]>(`/v1/conversations/user/${userId}`)
+export const getConversations = async (
+  userId: string,
+): Promise<GetConversationsResponse | ConversationResponse[]> => {
+  return apiClient.get<GetConversationsResponse | ConversationResponse[]>(
+    `/v1/conversations/user/${userId}`,
+  )
 }
 
 /**
@@ -86,9 +90,7 @@ export const respondToProposal = async (
  * Backend returns direct array (not wrapped in IApiResponse)
  * AxiosHttpClient already unwraps response.data, so we get the array directly
  */
-export const getAvailableConfigs = async (
-  roles: string[],
-): Promise<ProposalTypeConfig[]> => {
+export const getAvailableConfigs = async (roles: string[]): Promise<ProposalTypeConfig[]> => {
   const rolesParam = roles.join(',')
   // Backend returns ResponseEntity<List<ProposalTypeConfig>> which becomes direct array
   const response = await apiClient.get<ProposalTypeConfig[]>(

@@ -92,13 +92,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="container mx-auto px-4 py-6 space-y-6">
+  <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
     <!-- Admin Dashboard -->
     <template v-if="isAdmin">
-      <PageHeader
-        title="Admin Dashboard"
-        description="System overview and management"
-      />
+      <PageHeader title="Admin Dashboard" description="System overview and management" />
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <UCard>
@@ -108,15 +105,9 @@ onMounted(() => {
               <UIcon name="i-heroicons-user-group" class="w-5 h-5" />
             </div>
           </template>
-          <div class="text-3xl font-semibold">
-            —
-          </div>
+          <div class="text-3xl font-semibold">—</div>
           <div class="text-xs mt-2">
-            <UButton
-              variant="ghost"
-              size="xs"
-              @click="router.push({ name: 'users' })"
-            >
+            <UButton variant="ghost" size="xs" @click="router.push({ name: 'users' })">
               View All →
             </UButton>
           </div>
@@ -129,15 +120,9 @@ onMounted(() => {
               <UIcon name="i-heroicons-cube" class="w-5 h-5" />
             </div>
           </template>
-          <div class="text-3xl font-semibold">
-            —
-          </div>
+          <div class="text-3xl font-semibold">—</div>
           <div class="text-xs mt-2">
-            <UButton
-              variant="ghost"
-              size="xs"
-              @click="router.push({ name: 'parcels' })"
-            >
+            <UButton variant="ghost" size="xs" @click="router.push({ name: 'parcels' })">
               View All →
             </UButton>
           </div>
@@ -150,15 +135,9 @@ onMounted(() => {
               <UIcon name="i-heroicons-truck" class="w-5 h-5" />
             </div>
           </template>
-          <div class="text-3xl font-semibold">
-            —
-          </div>
+          <div class="text-3xl font-semibold">—</div>
           <div class="text-xs mt-2">
-            <UButton
-              variant="ghost"
-              size="xs"
-              @click="router.push({ name: 'delivery-shippers' })"
-            >
+            <UButton variant="ghost" size="xs" @click="router.push({ name: 'delivery-shippers' })">
               View All →
             </UButton>
           </div>
@@ -171,15 +150,9 @@ onMounted(() => {
               <UIcon name="i-heroicons-map" class="w-5 h-5" />
             </div>
           </template>
-          <div class="text-3xl font-semibold">
-            —
-          </div>
+          <div class="text-3xl font-semibold">—</div>
           <div class="text-xs mt-2">
-            <UButton
-              variant="ghost"
-              size="xs"
-              @click="router.push({ name: 'zones' })"
-            >
+            <UButton variant="ghost" size="xs" @click="router.push({ name: 'zones' })">
               View All →
             </UButton>
           </div>
@@ -236,10 +209,7 @@ onMounted(() => {
 
     <!-- Client Dashboard -->
     <template v-else-if="isClient">
-      <PageHeader
-        title="My Dashboard"
-        description="Overview of your parcels and addresses"
-      />
+      <PageHeader title="My Dashboard" description="Overview of your parcels and addresses" />
 
       <USkeleton v-if="loading" class="h-32 w-full" />
 
@@ -255,11 +225,7 @@ onMounted(() => {
             {{ clientStats.totalParcels }}
           </div>
           <div class="text-xs mt-2">
-            <UButton
-              variant="ghost"
-              size="xs"
-              @click="router.push({ name: 'client-parcels' })"
-            >
+            <UButton variant="ghost" size="xs" @click="router.push({ name: 'client-parcels' })">
               View All →
             </UButton>
           </div>
@@ -302,11 +268,7 @@ onMounted(() => {
             {{ clientStats.totalAddresses }}
           </div>
           <div class="text-xs mt-2">
-            <UButton
-              variant="ghost"
-              size="xs"
-              @click="router.push({ name: 'client-addresses' })"
-            >
+            <UButton variant="ghost" size="xs" @click="router.push({ name: 'client-addresses' })">
               Manage →
             </UButton>
           </div>
@@ -363,15 +325,10 @@ onMounted(() => {
 
     <!-- Default Dashboard (for other roles) -->
     <template v-else>
-      <PageHeader
-        title="Dashboard"
-        description="Welcome to the system"
-      />
+      <PageHeader title="Dashboard" description="Welcome to the system" />
 
       <div class="space-y-6">
-        <p>
-          Welcome to the Dashboard
-        </p>
+        <p>Welcome to the Dashboard</p>
       </div>
     </template>
   </div>

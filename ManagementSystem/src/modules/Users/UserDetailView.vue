@@ -128,9 +128,7 @@ onMounted(() => {
       show-back
     >
       <template #actions>
-        <UButton variant="outline" icon="i-heroicons-pencil" @click="openEditModal">
-          Edit
-        </UButton>
+        <UButton variant="outline" icon="i-heroicons-pencil" @click="openEditModal"> Edit </UButton>
         <UButton color="error" variant="soft" icon="i-heroicons-trash" @click="openDeleteModal">
           Delete
         </UButton>

@@ -17,7 +17,9 @@
       placeholder="Select field"
       size="sm"
       class="min-w-32"
-      @update:model-value="(value) => updateCondition({ ...condition, field: value as string, value: '' })"
+      @update:model-value="
+        (value) => updateCondition({ ...condition, field: value as string, value: '' })
+      "
     />
 
     <!-- Operator Selector -->
@@ -27,7 +29,9 @@
       placeholder="Operator"
       size="sm"
       class="min-w-24"
-      @update:model-value="(value) => updateCondition({ ...condition, operator: value as any, value: '' })"
+      @update:model-value="
+        (value) => updateCondition({ ...condition, operator: value as any, value: '' })
+      "
     />
 
     <!-- Value Input -->
@@ -94,9 +98,7 @@
       </div>
 
       <!-- No Value Input (for null/empty operators) -->
-      <div v-else class="text-sm text-gray-500 italic">
-        No value needed
-      </div>
+      <div v-else class="text-sm text-gray-500 italic">No value needed</div>
     </div>
 
     <!-- Remove Button -->
@@ -130,15 +132,15 @@ const emit = defineEmits<Emits>()
 
 // Computed properties
 const selectedColumn = computed(() => {
-  return props.columns.find(col => col.field === props.condition.field)
+  return props.columns.find((col) => col.field === props.condition.field)
 })
 
 const fieldOptions = computed(() => {
   return props.columns
-    .filter(col => col.filterable !== false)
-    .map(col => ({
+    .filter((col) => col.filterable !== false)
+    .map((col) => ({
       label: col.label,
-      value: col.field
+      value: col.field,
     }))
 })
 
@@ -147,9 +149,9 @@ const operatorOptions = computed(() => {
   if (!column) return []
 
   const operators = getOperatorsForType(column.type)
-  return operators.map(op => ({
+  return operators.map((op) => ({
     label: getOperatorLabel(op),
-    value: op
+    value: op,
   }))
 })
 
@@ -158,8 +160,12 @@ const isTextInput = computed(() => {
   if (!column) return false
 
   return (
-    (column.type === 'string' && ['eq', 'ne', 'contains', 'startsWith', 'endsWith', 'regex'].includes(props.condition.operator)) ||
-    (column.type === 'number' && ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'].includes(props.condition.operator))
+    (column.type === 'string' &&
+      ['eq', 'ne', 'contains', 'startsWith', 'endsWith', 'regex'].includes(
+        props.condition.operator,
+      )) ||
+    (column.type === 'number' &&
+      ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'].includes(props.condition.operator))
   )
 })
 
@@ -167,24 +173,27 @@ const isNumberInput = computed(() => {
   const column = selectedColumn.value
   if (!column) return false
 
-  return column.type === 'number' && ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'].includes(props.condition.operator)
+  return (
+    column.type === 'number' &&
+    ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'].includes(props.condition.operator)
+  )
 })
 
 const isDateInput = computed(() => {
   const column = selectedColumn.value
   if (!column) return false
 
-  return column.type === 'date' && ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'].includes(props.condition.operator)
+  return (
+    column.type === 'date' &&
+    ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'].includes(props.condition.operator)
+  )
 })
 
 const isSelectInput = computed(() => {
   const column = selectedColumn.value
   if (!column) return false
 
-  return (
-    column.type === 'enum' ||
-    ['in', 'notIn'].includes(props.condition.operator)
-  )
+  return column.type === 'enum' || ['in', 'notIn'].includes(props.condition.operator)
 })
 
 const isMultiSelect = computed(() => {
@@ -273,13 +282,13 @@ function getOperatorLabel(operator: string): string {
     containsAny: 'contains any',
     containsAll: 'contains all',
     isEmpty: 'is empty',
-    isNotEmpty: 'is not empty'
+    isNotEmpty: 'is not empty',
   }
   return labels[operator] || operator
 }
 
 const logicOptions = [
   { label: 'AND', value: 'AND' },
-  { label: 'OR', value: 'OR' }
+  { label: 'OR', value: 'OR' },
 ]
 </script>

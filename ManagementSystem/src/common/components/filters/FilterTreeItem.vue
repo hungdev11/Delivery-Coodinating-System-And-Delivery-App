@@ -8,12 +8,7 @@
         <span class="text-sm">{{ item.value }}</span>
 
         <div class="flex gap-1 ml-auto">
-          <UButton
-            icon="i-heroicons-pencil"
-            size="xs"
-            variant="ghost"
-            @click="editCondition"
-          />
+          <UButton icon="i-heroicons-pencil" size="xs" variant="ghost" @click="editCondition" />
           <UButton
             icon="i-heroicons-trash"
             size="xs"
@@ -34,24 +29,9 @@
           </span>
 
           <div class="flex gap-1 ml-auto">
-            <UButton
-              icon="i-heroicons-plus"
-              size="xs"
-              variant="ghost"
-              @click="addCondition"
-            />
-            <UButton
-              icon="i-heroicons-folder-plus"
-              size="xs"
-              variant="ghost"
-              @click="addGroup"
-            />
-            <UButton
-              icon="i-heroicons-pencil"
-              size="xs"
-              variant="ghost"
-              @click="editGroup"
-            />
+            <UButton icon="i-heroicons-plus" size="xs" variant="ghost" @click="addCondition" />
+            <UButton icon="i-heroicons-folder-plus" size="xs" variant="ghost" @click="addGroup" />
+            <UButton icon="i-heroicons-pencil" size="xs" variant="ghost" @click="editGroup" />
             <UButton
               icon="i-heroicons-trash"
               size="xs"
@@ -103,41 +83,24 @@
         </draggable>
 
         <!-- Add Items to Group -->
-        <div v-if="(item as TreeGroup).items.length === 0" class="flex gap-2 p-2 border-2 border-dashed border-gray-300 rounded">
-          <UButton
-            size="xs"
-            variant="outline"
-            icon="i-heroicons-plus"
-            @click="addCondition"
-          >
+        <div
+          v-if="(item as TreeGroup).items.length === 0"
+          class="flex gap-2 p-2 border-2 border-dashed border-gray-300 rounded"
+        >
+          <UButton size="xs" variant="outline" icon="i-heroicons-plus" @click="addCondition">
             Add Condition
           </UButton>
-          <UButton
-            size="xs"
-            variant="outline"
-            icon="i-heroicons-folder-plus"
-            @click="addGroup"
-          >
+          <UButton size="xs" variant="outline" icon="i-heroicons-folder-plus" @click="addGroup">
             Add Group
           </UButton>
         </div>
 
         <!-- Add More Items to Group -->
         <div v-else class="flex gap-2 p-2 border-2 border-dashed border-gray-300 rounded">
-          <UButton
-            size="xs"
-            variant="outline"
-            icon="i-heroicons-plus"
-            @click="addCondition"
-          >
+          <UButton size="xs" variant="outline" icon="i-heroicons-plus" @click="addCondition">
             Add Condition
           </UButton>
-          <UButton
-            size="xs"
-            variant="outline"
-            icon="i-heroicons-folder-plus"
-            @click="addGroup"
-          >
+          <UButton size="xs" variant="outline" icon="i-heroicons-folder-plus" @click="addGroup">
             Add Group
           </UButton>
         </div>
@@ -183,13 +146,13 @@ const emit = defineEmits<{
   'remove:item': []
   'add:condition': []
   'add:group': []
-  'add:item': [{ groupId: string, item: any }]
+  'add:item': [{ groupId: string; item: any }]
 }>()
 
 // Computed
 const logicOptions = computed(() => [
   { label: 'AND', value: 'AND' },
-  { label: 'OR', value: 'OR' }
+  { label: 'OR', value: 'OR' },
 ])
 
 // Utility function
@@ -199,7 +162,7 @@ function generateId(): string {
 
 // Methods
 function getFieldLabel(field: string) {
-  const column = props.columns.find(col => col.field === field)
+  const column = props.columns.find((col) => col.field === field)
   return column?.label || field
 }
 
@@ -220,13 +183,13 @@ function addCondition() {
     field: '',
     operator: '',
     value: '',
-    logic: 'AND'
+    logic: 'AND',
   }
 
   if (props.item.type === 'group') {
     const updatedGroup = {
       ...props.item,
-      items: [...props.item.items, newCondition]
+      items: [...props.item.items, newCondition],
     }
     emit('update:item', updatedGroup)
   }
@@ -238,13 +201,13 @@ function addGroup() {
     id: generateId(),
     type: 'group',
     items: [],
-    logic: 'AND'
+    logic: 'AND',
   }
 
   if (props.item.type === 'group') {
     const updatedGroup = {
       ...props.item,
-      items: [...props.item.items, newGroup]
+      items: [...props.item.items, newGroup],
     }
     emit('update:item', updatedGroup)
   }
@@ -259,9 +222,9 @@ function updateLogic(itemId: string, logic: string) {
   if (props.item.type === 'group') {
     const updatedGroup = {
       ...props.item,
-      items: props.item.items.map(item =>
-        item.id === itemId ? { ...item, logic: logic as 'AND' | 'OR' } : item
-      )
+      items: props.item.items.map((item) =>
+        item.id === itemId ? { ...item, logic: logic as 'AND' | 'OR' } : item,
+      ),
     }
     emit('update:item', updatedGroup)
   }
@@ -271,9 +234,7 @@ function updateSubItem(itemId: string, updatedItem: TreeItem) {
   if (props.item.type === 'group') {
     const updatedGroup = {
       ...props.item,
-      items: props.item.items.map(item =>
-        item.id === itemId ? updatedItem : item
-      )
+      items: props.item.items.map((item) => (item.id === itemId ? updatedItem : item)),
     }
     emit('update:item', updatedGroup)
   }
@@ -283,7 +244,7 @@ function removeSubItem(itemId: string) {
   if (props.item.type === 'group') {
     const updatedGroup = {
       ...props.item,
-      items: props.item.items.filter(item => item.id !== itemId)
+      items: props.item.items.filter((item) => item.id !== itemId),
     }
     emit('update:item', updatedGroup)
   }

@@ -16,7 +16,9 @@ import type { TableColumn } from '@nuxt/ui'
 import { useConversations } from '@/modules/Communication/composables'
 
 const PageHeader = defineAsyncComponent(() => import('@/common/components/PageHeader.vue'))
-const LazyParcelQRModal = defineAsyncComponent(() => import('@/modules/Parcels/components/ParcelQRModal.vue'))
+const LazyParcelQRModal = defineAsyncComponent(
+  () => import('@/modules/Parcels/components/ParcelQRModal.vue'),
+)
 
 const UButton = resolveComponent('UButton')
 
@@ -79,7 +81,10 @@ const goToCreateParcel = () => {
 }
 
 const getStatusColor = (status: ParcelStatus) => {
-  const colorMap: Record<ParcelStatus, 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'> = {
+  const colorMap: Record<
+    ParcelStatus,
+    'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
+  > = {
     IN_WAREHOUSE: 'neutral',
     ON_ROUTE: 'primary',
     DELIVERED: 'success',
@@ -152,7 +157,7 @@ const openChat = async (parcel: ParcelDto) => {
   try {
     // Find or create conversation between current user and sender
     const conversation = await findOrCreateConversation(currentUser.id, parcel.senderId)
-    
+
     if (!conversation || !conversation.conversationId) {
       toast.add({
         title: 'Error',
@@ -208,13 +213,17 @@ const columns: TableColumn<ParcelDto>[] = [
       const status = row.original.status
       const color = getStatusColor(status)
       return h('div', { class: 'flex flex-col gap-2' }, [
-        h('span', {
-          class: 'inline-flex items-center px-2 py-1 rounded-md text-xs font-medium',
-          style: {
-            backgroundColor: `var(--color-${color}-50)`,
-            color: `var(--color-${color}-700)`,
+        h(
+          'span',
+          {
+            class: 'inline-flex items-center px-2 py-1 rounded-md text-xs font-medium',
+            style: {
+              backgroundColor: `var(--color-${color}-50)`,
+              color: `var(--color-${color}-700)`,
+            },
           },
-        }, row.original.displayStatus || status),
+          row.original.displayStatus || status,
+        ),
       ])
     },
   },
@@ -222,9 +231,13 @@ const columns: TableColumn<ParcelDto>[] = [
     accessorKey: 'deliveryType',
     header: 'Type',
     cell: ({ row }) => {
-      return h('span', {
-        class: 'inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border',
-      }, row.original.deliveryType)
+      return h(
+        'span',
+        {
+          class: 'inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border',
+        },
+        row.original.deliveryType,
+      )
     },
   },
   {
@@ -241,7 +254,7 @@ const columns: TableColumn<ParcelDto>[] = [
       const parcel = row.original
       const canConfirm = canConfirmParcel(parcel)
       const canChatWithSender = canChat(parcel)
-      
+
       return h('div', { class: 'flex space-x-2' }, [
         // Chat with sender button
         h(UButton, {
@@ -261,17 +274,21 @@ const columns: TableColumn<ParcelDto>[] = [
           onClick: () => openQRModal(parcel),
         }),
         // Confirm received button
-        h(UButton, {
-          size: 'sm',
-          variant: 'ghost',
-          color: 'primary',
-          disabled: !canConfirm || isConfirming(parcel.id),
-          loading: isConfirming(parcel.id),
-          title: canConfirm 
-            ? 'Confirm that you have received this parcel' 
-            : 'Parcel must be DELIVERED to confirm receipt',
-          onClick: () => handleConfirmReceived(parcel),
-        }, () => isConfirming(parcel.id) ? 'Confirming...' : 'Confirm received'),
+        h(
+          UButton,
+          {
+            size: 'sm',
+            variant: 'ghost',
+            color: 'primary',
+            disabled: !canConfirm || isConfirming(parcel.id),
+            loading: isConfirming(parcel.id),
+            title: canConfirm
+              ? 'Confirm that you have received this parcel'
+              : 'Parcel must be DELIVERED to confirm receipt',
+            onClick: () => handleConfirmReceived(parcel),
+          },
+          () => (isConfirming(parcel.id) ? 'Confirming...' : 'Confirm received'),
+        ),
       ])
     },
   },
@@ -284,12 +301,15 @@ onMounted(() => {
 
 <template>
   <div class="container mx-auto px-2 md:px-4 py-4 md:py-6 space-y-4 md:space-y-6">
-    <PageHeader
-      title="Đơn hàng của tôi"
-      description="Xem và quản lý đơn hàng"
-    >
+    <PageHeader title="Đơn hàng của tôi" description="Xem và quản lý đơn hàng">
       <template #actions>
-        <UButton color="primary" icon="i-heroicons-plus" size="sm" class="md:size-md" @click="goToCreateParcel">
+        <UButton
+          color="primary"
+          icon="i-heroicons-plus"
+          size="sm"
+          class="md:size-md"
+          @click="goToCreateParcel"
+        >
           <span class="hidden sm:inline">Tạo đơn hàng</span>
           <span class="sm:hidden">Tạo</span>
         </UButton>
@@ -303,6 +323,11 @@ onMounted(() => {
           :data="parcels"
           :columns="columns"
           :loading="loading"
+          :ui="{
+            empty: 'text-center py-12',
+            root: 'h-[50vh]',
+            thead: 'sticky top-0 bg-white dark:bg-gray-800',
+          }"
         >
           <template #cell(code)="{ row }">
             <span class="font-mono text-sm">{{ row.original.code }}</span>
@@ -316,22 +341,14 @@ onMounted(() => {
           <USkeleton v-for="i in 3" :key="i" class="h-40 w-full rounded-lg" />
         </template>
         <template v-else>
-          <UCard
-            v-for="parcel in parcels"
-            :key="parcel.id"
-            class="overflow-hidden"
-          >
+          <UCard v-for="parcel in parcels" :key="parcel.id" class="overflow-hidden">
             <div class="space-y-3">
               <!-- Header: Code and Status -->
               <div class="flex items-center justify-between">
                 <span class="font-mono text-sm font-semibold text-gray-900">
                   {{ parcel.code }}
                 </span>
-                <UBadge
-                  :color="getStatusColor(parcel.status)"
-                  variant="soft"
-                  size="sm"
-                >
+                <UBadge :color="getStatusColor(parcel.status)" variant="soft" size="sm">
                   {{ parcel.displayStatus || parcel.status }}
                 </UBadge>
               </div>
@@ -351,7 +368,9 @@ onMounted(() => {
               <!-- Destination -->
               <div class="text-sm">
                 <span class="text-gray-500">Địa chỉ giao:</span>
-                <p class="font-medium text-gray-900 line-clamp-2">{{ parcel.targetDestination || 'N/A' }}</p>
+                <p class="font-medium text-gray-900 line-clamp-2">
+                  {{ parcel.targetDestination || 'N/A' }}
+                </p>
               </div>
 
               <!-- Created Date -->

@@ -114,7 +114,9 @@ export interface GetUserPrimaryAddressResponse {
 /**
  * Get primary address for a user
  */
-export const getUserPrimaryAddress = async (userId: string): Promise<GetUserPrimaryAddressResponse> => {
+export const getUserPrimaryAddress = async (
+  userId: string,
+): Promise<GetUserPrimaryAddressResponse> => {
   return apiClient.get<GetUserPrimaryAddressResponse>(`/v1/users/${userId}/addresses/primary`)
 }
 

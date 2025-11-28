@@ -42,12 +42,10 @@ export function useMap() {
         sources: {
           'osm-tiles': {
             type: 'raster',
-            tiles: [
-              'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-            ],
+            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
             tileSize: 256,
-            attribution: '© OpenStreetMap contributors'
-          }
+            attribution: '© OpenStreetMap contributors',
+          },
         },
         layers: [
           {
@@ -55,9 +53,9 @@ export function useMap() {
             type: 'raster',
             source: 'osm-tiles',
             minzoom: 0,
-            maxzoom: 19
-          }
-        ]
+            maxzoom: 19,
+          },
+        ],
       },
       center: [106.6297, 10.8231], // Ho Chi Minh City
       zoom: 12,
@@ -149,10 +147,7 @@ export function useMap() {
   /**
    * Add zone polygon layer
    */
-  const addZoneLayer = (
-    zones: ZonePolygon[],
-    options: ZoneLayerOptions = {},
-  ): void => {
+  const addZoneLayer = (zones: ZonePolygon[], options: ZoneLayerOptions = {}): void => {
     if (!map.value || !loaded.value) return
 
     const layerId = 'zones-layer'
@@ -245,10 +240,7 @@ export function useMap() {
   /**
    * Add routing layer
    */
-  const addRoutingLayer = (
-    routes: RouteData[],
-    options: RoutingLayerOptions = {},
-  ): void => {
+  const addRoutingLayer = (routes: RouteData[], options: RoutingLayerOptions = {}): void => {
     if (!map.value || !loaded.value) return
 
     const layerId = 'routing-layer'
@@ -332,10 +324,7 @@ export function useMap() {
   /**
    * Add traffic layer
    */
-  const addTrafficLayer = (
-    trafficData: TrafficData[],
-    options: TrafficLayerOptions = {},
-  ): void => {
+  const addTrafficLayer = (trafficData: TrafficData[], options: TrafficLayerOptions = {}): void => {
     if (!map.value || !loaded.value) return
 
     const layerId = 'traffic-layer'
@@ -387,15 +376,7 @@ export function useMap() {
       type: 'heatmap',
       source: sourceId,
       paint: {
-        'heatmap-weight': [
-          'interpolate',
-          ['linear'],
-          ['get', 'speed'],
-          0,
-          1,
-          100,
-          0,
-        ],
+        'heatmap-weight': ['interpolate', ['linear'], ['get', 'speed'], 0, 1, 100, 0],
         'heatmap-intensity': 1,
         'heatmap-color': [
           'interpolate',

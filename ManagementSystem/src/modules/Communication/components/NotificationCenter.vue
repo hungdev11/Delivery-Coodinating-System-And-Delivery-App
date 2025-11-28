@@ -9,7 +9,8 @@ import { computed } from 'vue'
 import { useNotifications } from '../composables'
 import type { Notification } from '../composables/useNotifications'
 
-const { notifications, unreadCount, markAsRead, markAllAsRead, removeNotification } = useNotifications()
+const { notifications, unreadCount, markAsRead, markAllAsRead, removeNotification } =
+  useNotifications()
 
 const hasUnread = computed(() => unreadCount.value > 0)
 
@@ -113,11 +114,13 @@ const formatTime = (timestamp: string) => {
 <template>
   <UDropdownMenu
     :items="[
-      [{
-        label: 'Notifications',
-        slot: 'header',
-      }],
-      notifications.slice(0, 10).map(n => ({
+      [
+        {
+          label: 'Notifications',
+          slot: 'header',
+        },
+      ],
+      notifications.slice(0, 10).map((n) => ({
         id: n.id,
         label: n.title,
         description: n.message,
@@ -126,15 +129,18 @@ const formatTime = (timestamp: string) => {
         badge: !n.read ? '•' : undefined,
         click: () => handleNotificationClick(n),
       })),
-      [{
-        label: 'Mark all as read',
-        icon: 'i-heroicons-check-badge',
-        click: markAllAsRead,
-      }, {
-        label: 'Clear all',
-        icon: 'i-heroicons-trash',
-        click: () => notifications.length = 0,
-      }]
+      [
+        {
+          label: 'Mark all as read',
+          icon: 'i-heroicons-check-badge',
+          click: markAllAsRead,
+        },
+        {
+          label: 'Clear all',
+          icon: 'i-heroicons-trash',
+          click: () => (notifications.length = 0),
+        },
+      ],
     ]"
     :popper="{ placement: 'bottom-end' }"
   >
@@ -147,8 +153,12 @@ const formatTime = (timestamp: string) => {
     >
       <template #badge v-if="hasUnread">
         <span class="absolute -top-1 -right-1 flex h-5 w-5">
-          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-          <span class="relative inline-flex rounded-full h-5 w-5 bg-red-500 items-center justify-center text-xs text-white">
+          <span
+            class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"
+          ></span>
+          <span
+            class="relative inline-flex rounded-full h-5 w-5 bg-red-500 items-center justify-center text-xs text-white"
+          >
             {{ unreadCount > 9 ? '9+' : unreadCount }}
           </span>
         </span>
@@ -165,12 +175,17 @@ const formatTime = (timestamp: string) => {
     </template>
 
     <template #item="{ item }">
-      <div class="flex items-start space-x-3 px-4 py-3 hover:bg-gray-50 cursor-pointer" :class="{ 'bg-blue-50': item.badge }">
+      <div
+        class="flex items-start space-x-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+        :class="{ 'bg-primary-50 dark:bg-primary-900/20': item.badge }"
+      >
         <UIcon :name="item.icon" :class="item.iconClass" class="w-5 h-5 flex-shrink-0 mt-0.5" />
         <div class="flex-1 min-w-0">
           <div class="flex items-start justify-between">
             <p class="text-sm font-medium text-gray-900 truncate">{{ item.label }}</p>
-            <UBadge v-if="item.badge" color="primary" variant="solid" size="xs" class="ml-2">New</UBadge>
+            <UBadge v-if="item.badge" color="primary" variant="solid" size="xs" class="ml-2"
+              >New</UBadge
+            >
           </div>
           <p class="text-sm text-gray-500 line-clamp-2">{{ item.description }}</p>
         </div>

@@ -57,12 +57,7 @@ const formatPostponeDateTime = (dateString?: string) => {
       <div class="flex-1">
         <div class="flex items-center space-x-2 mb-1">
           <div class="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center">
-            <svg
-              class="w-5 h-5 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -76,13 +71,13 @@ const formatPostponeDateTime = (dateString?: string) => {
           </p>
         </div>
       </div>
-      <UBadge color="warning" variant="subtle" size="xs">
-        Hoãn
-      </UBadge>
+      <UBadge color="warning" variant="subtle" size="xs"> Hoãn </UBadge>
     </div>
 
     <!-- Parcel Info -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg p-3 mb-2 border border-gray-200 dark:border-gray-700">
+    <div
+      class="bg-white dark:bg-gray-800 rounded-lg p-3 mb-2 border border-gray-200 dark:border-gray-700"
+    >
       <div class="space-y-2">
         <div class="flex items-center justify-between">
           <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Mã đơn hàng:</span>
@@ -91,15 +86,14 @@ const formatPostponeDateTime = (dateString?: string) => {
           </span>
         </div>
         <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Thời gian hoãn đến:</span>
+          <span class="text-xs font-medium text-gray-600 dark:text-gray-400"
+            >Thời gian hoãn đến:</span
+          >
           <span class="text-xs text-gray-900 dark:text-gray-100">
             {{ formatPostponeDateTime(messageData.postponeDateTime) }}
           </span>
         </div>
-        <div
-          v-if="messageData.reason"
-          class="flex items-start justify-between"
-        >
+        <div v-if="messageData.reason" class="flex items-start justify-between">
           <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Lý do:</span>
           <span class="text-xs text-gray-900 dark:text-gray-100 text-right flex-1 ml-2">
             {{ messageData.reason }}

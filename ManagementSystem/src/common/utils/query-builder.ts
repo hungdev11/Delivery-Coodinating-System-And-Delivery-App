@@ -15,7 +15,7 @@ import type {
   FilterValidationResult,
   FilterValidationError,
   FieldType,
-  AllOperators
+  AllOperators,
 } from '../types/filter'
 
 // ============================================================================
@@ -30,7 +30,7 @@ export function buildMongoQuery(group: FilterGroup): MongoQuery {
     return {}
   }
 
-  const mongoConditions = group.conditions.map(condition => {
+  const mongoConditions = group.conditions.map((condition) => {
     if ('field' in condition) {
       // It's a FilterCondition
       return buildMongoCondition(condition)
@@ -46,7 +46,7 @@ export function buildMongoQuery(group: FilterGroup): MongoQuery {
 
   const operator = group.logic === 'AND' ? '$and' : '$or'
   return {
-    [operator]: mongoConditions
+    [operator]: mongoConditions,
   }
 }
 
@@ -144,7 +144,7 @@ export function buildMongoCondition(condition: FilterCondition): MongoQuery {
 export function buildMongoSort(sorts: SortConfig[]): MongoSort {
   const mongoSort: MongoSort = {}
 
-  sorts.forEach(sort => {
+  sorts.forEach((sort) => {
     mongoSort[sort.field] = sort.direction === 'asc' ? 1 : -1
   })
 
@@ -223,7 +223,7 @@ export function validateFilters(group: FilterGroup): FilterValidationResult {
         errors.push({
           field: fieldPath,
           message: 'Field name is required',
-          code: 'FIELD_REQUIRED'
+          code: 'FIELD_REQUIRED',
         })
       }
 
@@ -232,7 +232,7 @@ export function validateFilters(group: FilterGroup): FilterValidationResult {
         errors.push({
           field: fieldPath,
           message: 'Operator is required',
-          code: 'OPERATOR_REQUIRED'
+          code: 'OPERATOR_REQUIRED',
         })
       }
 
@@ -241,28 +241,33 @@ export function validateFilters(group: FilterGroup): FilterValidationResult {
         errors.push({
           field: fieldPath,
           message: 'Value is required for this operator',
-          code: 'VALUE_REQUIRED'
+          code: 'VALUE_REQUIRED',
         })
       }
 
       // Validate between operator
-      if (condition.operator === 'between' && (!Array.isArray(condition.value) || condition.value.length !== 2)) {
+      if (
+        condition.operator === 'between' &&
+        (!Array.isArray(condition.value) || condition.value.length !== 2)
+      ) {
         errors.push({
           field: fieldPath,
           message: 'Between operator requires exactly 2 values',
-          code: 'BETWEEN_INVALID'
+          code: 'BETWEEN_INVALID',
         })
       }
 
       // Validate array operators
-      if (['in', 'notIn', 'containsAny', 'containsAll'].includes(condition.operator) && !Array.isArray(condition.value)) {
+      if (
+        ['in', 'notIn', 'containsAny', 'containsAll'].includes(condition.operator) &&
+        !Array.isArray(condition.value)
+      ) {
         errors.push({
           field: fieldPath,
           message: 'This operator requires an array value',
-          code: 'ARRAY_REQUIRED'
+          code: 'ARRAY_REQUIRED',
         })
       }
-
     } else {
       // It's a FilterGroup
       const group = node as FilterGroup
@@ -271,7 +276,7 @@ export function validateFilters(group: FilterGroup): FilterValidationResult {
         errors.push({
           field: path || 'root',
           message: 'Filter group must have at least one condition',
-          code: 'EMPTY_GROUP'
+          code: 'EMPTY_GROUP',
         })
       }
 
@@ -285,7 +290,7 @@ export function validateFilters(group: FilterGroup): FilterValidationResult {
 
   return {
     valid: errors.length === 0,
-    errors
+    errors,
   }
 }
 
@@ -313,7 +318,7 @@ function escapeRegex(str: string): string {
 export function createEmptyFilterGroup(): FilterGroup {
   return {
     logic: 'AND',
-    conditions: []
+    conditions: [],
   }
 }
 
@@ -324,14 +329,14 @@ export function createFilterCondition(
   field: string,
   operator: AllOperators,
   value: any,
-  caseSensitive?: boolean
+  caseSensitive?: boolean,
 ): FilterCondition {
   return {
     field,
     operator,
     value,
     caseSensitive,
-    id: generateId()
+    id: generateId(),
   }
 }
 
@@ -341,7 +346,7 @@ export function createFilterCondition(
 export function createSortConfig(field: string, direction: 'asc' | 'desc'): SortConfig {
   return {
     field,
-    direction
+    direction,
   }
 }
 
@@ -358,7 +363,18 @@ function generateId(): string {
 export function getOperatorsForType(type: FieldType): AllOperators[] {
   switch (type) {
     case 'string':
-      return ['eq', 'ne', 'contains', 'startsWith', 'endsWith', 'regex', 'in', 'notIn', 'isNull', 'isNotNull']
+      return [
+        'eq',
+        'ne',
+        'contains',
+        'startsWith',
+        'endsWith',
+        'regex',
+        'in',
+        'notIn',
+        'isNull',
+        'isNotNull',
+      ]
     case 'number':
       return ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'between', 'in', 'notIn', 'isNull', 'isNotNull']
     case 'date':

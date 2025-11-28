@@ -57,7 +57,7 @@ export function parseRouteGeometry(geometryString: string): [number, number][] {
  * Calculate bounds for waypoints
  */
 export function calculateBounds(
-  waypoints: Waypoint[]
+  waypoints: Waypoint[],
 ): [[number, number], [number, number]] | null {
   if (waypoints.length === 0) {
     return null

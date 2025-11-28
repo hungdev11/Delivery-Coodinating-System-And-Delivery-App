@@ -110,9 +110,7 @@ export const setMyPrimaryAddress = async (
 /**
  * Get all addresses for a user (Admin)
  */
-export const getUserAddresses = async (
-  userId: string,
-): Promise<IApiResponse<UserAddressDto[]>> => {
+export const getUserAddresses = async (userId: string): Promise<IApiResponse<UserAddressDto[]>> => {
   return apiClient.get<IApiResponse<UserAddressDto[]>>(`/v1/users/${userId}/addresses`)
 }
 

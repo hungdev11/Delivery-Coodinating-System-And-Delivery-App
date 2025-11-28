@@ -99,7 +99,7 @@ export function useWebSocket() {
     onTypingIndicator?: (typingIndicator: any) => void,
     onNotification?: (notification: any) => void,
     onProposalUpdate?: (proposalUpdate: any) => void,
-    onUpdateNotification?: (updateNotification: any) => void
+    onUpdateNotification?: (updateNotification: any) => void,
   ) => {
     if (connected.value || connecting.value) {
       return
@@ -124,7 +124,9 @@ export function useWebSocket() {
       }
 
       // Get user roles from token
-      const { getUserRoles: getUserRolesFromToken } = await import('@/common/utils/jwtDecode/jwtDecode.util')
+      const { getUserRoles: getUserRolesFromToken } = await import(
+        '@/common/utils/jwtDecode/jwtDecode.util'
+      )
       const userRoles = getUserRolesFromToken(token)
       const rolesHeader = userRoles.length > 0 ? userRoles.join(',') : ''
 
@@ -351,11 +353,11 @@ export function useWebSocket() {
       if (reconnectAttempts.value < maxReconnectAttempts) {
         scheduleReconnect()
       } else {
-      toast.add({
-        title: 'Connection Error',
+        toast.add({
+          title: 'Connection Error',
           description: 'Failed to initialize WebSocket connection after multiple attempts',
-        color: 'error',
-      })
+          color: 'error',
+        })
       }
     }
   }
@@ -384,7 +386,7 @@ export function useWebSocket() {
           typingCallback.value || undefined,
           notificationCallback.value || undefined,
           proposalUpdateCallback.value || undefined,
-          updateNotificationCallback.value || undefined
+          updateNotificationCallback.value || undefined,
         )
       }
     }, delay)
@@ -532,7 +534,11 @@ export function useWebSocket() {
   /**
    * Send quick action for proposals
    */
-  const sendQuickAction = (proposalId: string, action: 'ACCEPT' | 'REJECT' | 'POSTPONE', data?: any) => {
+  const sendQuickAction = (
+    proposalId: string,
+    action: 'ACCEPT' | 'REJECT' | 'POSTPONE',
+    data?: any,
+  ) => {
     if (!stompClient.value || !connected.value) {
       return false
     }
@@ -619,7 +625,12 @@ export function useWebSocket() {
    * Handle visibility change - reconnect when tab becomes visible
    */
   const handleVisibilityChange = () => {
-    if (document.visibilityState === 'visible' && !connected.value && currentUserId.value && messageCallback.value) {
+    if (
+      document.visibilityState === 'visible' &&
+      !connected.value &&
+      currentUserId.value &&
+      messageCallback.value
+    ) {
       console.log('Tab became visible, attempting to reconnect WebSocket...')
       reconnectAttempts.value = 0 // Reset attempts
       connect(
@@ -630,7 +641,7 @@ export function useWebSocket() {
         typingCallback.value || undefined,
         notificationCallback.value || undefined,
         proposalUpdateCallback.value || undefined,
-        updateNotificationCallback.value || undefined
+        updateNotificationCallback.value || undefined,
       )
     }
   }

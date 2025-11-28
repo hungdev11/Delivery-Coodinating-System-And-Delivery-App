@@ -6,14 +6,14 @@
         :color="hasActiveFilters ? 'primary' : 'neutral'"
         :variant="hasActiveFilters ? 'solid' : 'ghost'"
         size="sm"
-        :title="`Filter by ${column.label}`"
+        :title="`Filter by ${column?.label || '(?)'}`"
       />
 
       <template #content>
         <div class="p-4 w-80">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">
-              Filter by {{ column.label }}
+              Filter by {{ column?.label || '(?)' }}
             </h3>
             <UButton
               v-if="hasActiveFilters"

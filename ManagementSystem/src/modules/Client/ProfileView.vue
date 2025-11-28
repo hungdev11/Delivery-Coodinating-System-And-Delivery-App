@@ -93,10 +93,7 @@ onMounted(() => {
 
 <template>
   <div class="container mx-auto px-2 md:px-4 py-4 md:py-6 space-y-4 md:space-y-6">
-    <PageHeader
-      title="Hồ sơ của tôi"
-      description="Quản lý thông tin cá nhân"
-    />
+    <PageHeader title="Hồ sơ của tôi" description="Quản lý thông tin cá nhân" />
 
     <USkeleton v-if="loading" class="h-64 w-full rounded-lg" />
 
@@ -104,7 +101,9 @@ onMounted(() => {
       <template #header>
         <div class="flex items-center gap-4">
           <!-- Avatar -->
-          <div class="w-16 h-16 md:w-20 md:h-20 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
+          <div
+            class="w-16 h-16 md:w-20 md:h-20 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0"
+          >
             <span class="text-2xl md:text-3xl font-bold text-white">
               {{
                 form.firstName && form.lastName
@@ -115,7 +114,11 @@ onMounted(() => {
           </div>
           <div class="min-w-0">
             <h3 class="text-lg md:text-xl font-semibold text-gray-900 truncate">
-              {{ form.firstName && form.lastName ? `${form.firstName} ${form.lastName}` : form.username || 'Người dùng' }}
+              {{
+                form.firstName && form.lastName
+                  ? `${form.firstName} ${form.lastName}`
+                  : form.username || 'Người dùng'
+              }}
             </h3>
             <p class="text-sm text-gray-500 truncate">{{ form.email || 'Chưa có email' }}</p>
           </div>
@@ -147,9 +150,7 @@ onMounted(() => {
 
       <template #footer>
         <div class="flex items-center justify-end">
-          <UButton color="primary" :loading="saving" @click="handleSave">
-            Lưu thay đổi
-          </UButton>
+          <UButton color="primary" :loading="saving" @click="handleSave"> Lưu thay đổi </UButton>
         </div>
       </template>
     </UCard>

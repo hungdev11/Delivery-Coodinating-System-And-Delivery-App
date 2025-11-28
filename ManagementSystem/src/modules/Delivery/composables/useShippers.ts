@@ -14,11 +14,7 @@ import {
   deleteDeliveryMan,
   getDeliveryManById,
 } from '../api'
-import {
-  DeliveryManDto,
-  CreateDeliveryManRequest,
-  UpdateDeliveryManRequest,
-} from '../model.type'
+import { DeliveryManDto, CreateDeliveryManRequest, UpdateDeliveryManRequest } from '../model.type'
 import type { FilterGroup, SortConfig, FilterableColumn } from '@/common/types/filter'
 import { createEmptyFilterGroup } from '@/common/utils/query-builder'
 import { convertV1ToV2Filter } from '@/common/utils/filter-v2-converter'
@@ -45,9 +41,7 @@ export function useShippers() {
       let filtersToSend: FilterGroup | FilterGroupItemV2 | undefined = undefined
 
       if (filters.value.conditions.length > 0) {
-        filtersToSend = useV2Api.value
-          ? convertV1ToV2Filter(filters.value)
-          : filters.value
+        filtersToSend = useV2Api.value ? convertV1ToV2Filter(filters.value) : filters.value
       }
 
       const params = {

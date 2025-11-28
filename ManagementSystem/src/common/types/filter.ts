@@ -10,46 +10,46 @@
 // ============================================================================
 
 export type StringOperator =
-  | 'eq'           // equals
-  | 'ne'           // not equals
-  | 'contains'     // contains substring
-  | 'startsWith'   // starts with
-  | 'endsWith'     // ends with
-  | 'regex'        // regular expression
-  | 'in'           // in array
-  | 'notIn'        // not in array
-  | 'isNull'       // is null
-  | 'isNotNull'    // is not null
+  | 'eq' // equals
+  | 'ne' // not equals
+  | 'contains' // contains substring
+  | 'startsWith' // starts with
+  | 'endsWith' // ends with
+  | 'regex' // regular expression
+  | 'in' // in array
+  | 'notIn' // not in array
+  | 'isNull' // is null
+  | 'isNotNull' // is not null
 
 export type NumberOperator =
-  | 'eq'           // equals
-  | 'ne'           // not equals
-  | 'gt'           // greater than
-  | 'gte'          // greater than or equal
-  | 'lt'           // less than
-  | 'lte'          // less than or equal
-  | 'between'      // between two values
-  | 'in'           // in array
-  | 'notIn'        // not in array
-  | 'isNull'       // is null
-  | 'isNotNull'    // is not null
+  | 'eq' // equals
+  | 'ne' // not equals
+  | 'gt' // greater than
+  | 'gte' // greater than or equal
+  | 'lt' // less than
+  | 'lte' // less than or equal
+  | 'between' // between two values
+  | 'in' // in array
+  | 'notIn' // not in array
+  | 'isNull' // is null
+  | 'isNotNull' // is not null
 
 export type DateOperator =
-  | 'eq'           // equals
-  | 'ne'           // not equals
-  | 'gt'           // greater than
-  | 'gte'          // greater than or equal
-  | 'lt'           // less than
-  | 'lte'          // less than or equal
-  | 'between'      // between two dates
-  | 'isNull'       // is null
-  | 'isNotNull'    // is not null
+  | 'eq' // equals
+  | 'ne' // not equals
+  | 'gt' // greater than
+  | 'gte' // greater than or equal
+  | 'lt' // less than
+  | 'lte' // less than or equal
+  | 'between' // between two dates
+  | 'isNull' // is null
+  | 'isNotNull' // is not null
 
 export type ArrayOperator =
-  | 'containsAny'  // contains any of the values
-  | 'containsAll'  // contains all values
-  | 'isEmpty'      // array is empty
-  | 'isNotEmpty'   // array is not empty
+  | 'containsAny' // contains any of the values
+  | 'containsAll' // contains all values
+  | 'isEmpty' // array is empty
+  | 'isNotEmpty' // array is not empty
 
 export type AllOperators = StringOperator | NumberOperator | DateOperator | ArrayOperator
 
@@ -158,12 +158,15 @@ export interface FilteredResponse<T> {
 // UTILITY TYPES
 // ============================================================================
 
-export type OperatorByType<T extends FieldType> =
-  T extends 'string' ? StringOperator :
-  T extends 'number' ? NumberOperator :
-  T extends 'date' ? DateOperator :
-  T extends 'array' ? ArrayOperator :
-  AllOperators
+export type OperatorByType<T extends FieldType> = T extends 'string'
+  ? StringOperator
+  : T extends 'number'
+    ? NumberOperator
+    : T extends 'date'
+      ? DateOperator
+      : T extends 'array'
+        ? ArrayOperator
+        : AllOperators
 
 export interface FilterPreset {
   id: string

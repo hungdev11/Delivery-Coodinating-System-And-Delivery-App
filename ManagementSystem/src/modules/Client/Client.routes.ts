@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 export const clientRoutes: RouteRecordRaw[] = [
   {
     path: '/client',
+    name: 'client',
     meta: {
       requiresAuth: true,
       requiredRoles: ['CLIENT'],
@@ -11,6 +12,7 @@ export const clientRoutes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
+        name: 'client-index',
         redirect: '/client/parcels',
       },
       {

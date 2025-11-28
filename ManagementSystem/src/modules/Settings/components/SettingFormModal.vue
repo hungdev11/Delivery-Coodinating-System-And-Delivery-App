@@ -31,35 +31,43 @@ const formData = ref<UpsertSettingRequest>({
 })
 
 // Initialize form data
-watch(() => props.setting, (setting) => {
-  if (setting && props.mode === 'edit') {
-    formData.value = {
-      key: setting.key,
-      value: isSensitiveValue(setting) ? '' : setting.value, // Don't show sensitive values
-      group: setting.group,
-      description: setting.description || '',
-      type: setting.type,
-      displayMode: setting.displayMode,
+watch(
+  () => props.setting,
+  (setting) => {
+    if (setting && props.mode === 'edit') {
+      formData.value = {
+        key: setting.key,
+        value: isSensitiveValue(setting) ? '' : setting.value, // Don't show sensitive values
+        group: setting.group,
+        description: setting.description || '',
+        type: setting.type,
+        displayMode: setting.displayMode,
+      }
     }
-  }
-}, { immediate: true })
+  },
+  { immediate: true },
+)
 
 /**
  * Check if value is sensitive (password or other sensitive data)
  */
 const isSensitiveValue = (setting: SystemSettingDto) => {
-  return setting.displayMode === 'PASSWORD' ||
-         setting.key.toLowerCase().includes('password') ||
-         setting.key.toLowerCase().includes('secret') ||
-         setting.key.toLowerCase().includes('key') ||
-         setting.key.toLowerCase().includes('token')
+  return (
+    setting.displayMode === 'PASSWORD' ||
+    setting.key.toLowerCase().includes('password') ||
+    setting.key.toLowerCase().includes('secret') ||
+    setting.key.toLowerCase().includes('key') ||
+    setting.key.toLowerCase().includes('token')
+  )
 }
 
 // Form validation
 const isValid = computed(() => {
-  return formData.value.key.trim() !== '' &&
-         formData.value.value.trim() !== '' &&
-         formData.value.group.trim() !== ''
+  return (
+    formData.value.key.trim() !== '' &&
+    formData.value.value.trim() !== '' &&
+    formData.value.group.trim() !== ''
+  )
 })
 
 // Submit form
@@ -117,9 +125,11 @@ const getValuePlaceholder = () => {
 <template>
   <UModal
     :title="mode === 'create' ? 'Create Setting' : 'Edit Setting'"
-    :description="mode === 'create' ? 'Configure a new system setting' : 'Update the selected system setting'"
+    :description="
+      mode === 'create' ? 'Configure a new system setting' : 'Update the selected system setting'
+    "
     :close="{ onClick: handleCancel }"
-    :ui="{ footer: 'justify-end space-x-2' }"
+    :ui="{ width: 'sm:max-w-md md:max-w-lg', footer: 'justify-end space-x-2' }"
   >
     <template #body>
       <form class="space-y-4" @submit.prevent="handleSubmit">
@@ -134,7 +144,11 @@ const getValuePlaceholder = () => {
         <UFormField label="Value" required>
           <div class="space-y-2">
             <UInput
-              v-if="formData.displayMode !== 'PASSWORD' && formData.displayMode !== 'TEXTAREA' && formData.displayMode !== 'CODE'"
+              v-if="
+                formData.displayMode !== 'PASSWORD' &&
+                formData.displayMode !== 'TEXTAREA' &&
+                formData.displayMode !== 'CODE'
+              "
               v-model="formData.value"
               :placeholder="getValuePlaceholder()"
               :type="getInputType()"
@@ -170,10 +184,7 @@ const getValuePlaceholder = () => {
         </UFormField>
 
         <UFormField label="Description">
-          <UTextarea
-            v-model="formData.description"
-            placeholder="Enter setting description"
-          />
+          <UTextarea v-model="formData.description" placeholder="Enter setting description" />
         </UFormField>
 
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -210,9 +221,7 @@ const getValuePlaceholder = () => {
     </template>
 
     <template #footer>
-      <UButton variant="outline" color="neutral" @click="handleCancel">
-        Cancel
-      </UButton>
+      <UButton variant="outline" color="neutral" @click="handleCancel"> Cancel </UButton>
       <UButton :disabled="!isValid" @click="handleSubmit">
         {{ mode === 'create' ? 'Create' : 'Update' }}
       </UButton>

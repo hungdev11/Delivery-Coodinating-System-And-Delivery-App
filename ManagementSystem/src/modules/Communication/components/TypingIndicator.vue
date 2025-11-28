@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * TypingIndicator Component
- * 
+ *
  * Shows "User is typing..." animation
  */
 
@@ -14,7 +14,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   userName: 'Someone',
-  show: false
+  show: false,
 })
 
 const displayText = computed(() => {
@@ -33,9 +33,18 @@ const displayText = computed(() => {
   >
     <div v-if="show" class="flex items-center space-x-2 px-4 py-2 text-sm text-gray-500">
       <div class="flex space-x-1">
-        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
-        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
-        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
+        <div
+          class="w-2 h-2 bg-neutral-400 rounded-full animate-bounce"
+          style="animation-delay: 0ms"
+        ></div>
+        <div
+          class="w-2 h-2 bg-neutral-400 rounded-full animate-bounce"
+          style="animation-delay: 150ms"
+        ></div>
+        <div
+          class="w-2 h-2 bg-neutral-400 rounded-full animate-bounce"
+          style="animation-delay: 300ms"
+        ></div>
       </div>
       <span class="italic">{{ displayText }}</span>
     </div>
@@ -44,7 +53,8 @@ const displayText = computed(() => {
 
 <style scoped>
 @keyframes bounce {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0);
   }
   50% {

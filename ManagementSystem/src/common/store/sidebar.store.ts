@@ -1,4 +1,4 @@
- import { defineStore } from 'pinia'
+import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebar_collapsed'

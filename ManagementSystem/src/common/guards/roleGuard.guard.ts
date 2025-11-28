@@ -101,7 +101,13 @@ export function createRoleGuard(config: RoleGuardConfig = {}) {
       console.log(
         Warn('User not authenticated - redirecting to login', { redirectTo }, DebugContexts.ROUTER),
       )
-      return next(redirectTo)
+      // Save the current route as redirect target (only if not already going to login)
+      if (to.path !== '/login' && to.path !== redirectTo) {
+        const redirectPath = to.fullPath
+        localStorage.setItem('auth_redirect', redirectPath)
+        console.log(Info('Saved redirect path', { redirectPath }, DebugContexts.ROUTER))
+      }
+      return next({ path: redirectTo, query: { redirect: to.fullPath } })
     }
 
     // If no roles required, allow access

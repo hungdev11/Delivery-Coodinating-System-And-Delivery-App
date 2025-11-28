@@ -9,7 +9,13 @@ import type { IApiResponse } from '@/common/types'
 /**
  * Content Type
  */
-export type ContentType = 'TEXT' | 'PROPOSAL' | 'INTERACTIVE_PROPOSAL' | 'IMAGE' | 'FILE' | 'DELIVERY_COMPLETED'
+export type ContentType =
+  | 'TEXT'
+  | 'PROPOSAL'
+  | 'INTERACTIVE_PROPOSAL'
+  | 'IMAGE'
+  | 'FILE'
+  | 'DELIVERY_COMPLETED'
 
 /**
  * Proposal Status

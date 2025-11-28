@@ -35,13 +35,13 @@ const loadPartnerInfo = async () => {
 ```typescript
 const handleReconnect = async () => {
   console.log('🔄 WebSocket reconnected!')
-  
+
   // 1. Load missed messages
   await loadMissedMessages(conversationId.value, currentUserId.value)
-  
+
   // 2. ✅ CASE 2: Reload conversations after reconnection
   await loadConversations(currentUserId.value)
-  
+
   console.log('✅ Reconnect complete')
 }
 ```
@@ -56,13 +56,14 @@ const handleReconnect = async () => {
 // ❌ BAD: Polling on every message
 await connect(userId, async (message) => {
   addMessage(message)
-  
+
   // ❌ WRONG: Don't reload conversations list on every message!
   await loadConversations(currentUserId.value)
 })
 ```
 
 **Why it's bad:**
+
 - Creates unnecessary HTTP requests
 - Causes UI flicker/lag
 - Defeats the purpose of WebSocket
@@ -75,13 +76,14 @@ await connect(userId, async (message) => {
 // ❌ BAD: Polling after sending
 const handleSendMessage = async () => {
   sendMessage(payload)
-  
+
   // ❌ WRONG: Don't reload conversations after sending!
   await loadConversations(currentUserId.value)
 }
 ```
 
 **Why it's bad:**
+
 - Message is already sent via WebSocket
 - WebSocket will deliver the confirmation
 - Creates race conditions
@@ -93,13 +95,14 @@ const handleSendMessage = async () => {
 // ❌ BAD: Polling on typing
 const handleTypingIndicator = (indicator) => {
   showTyping(indicator)
-  
+
   // ❌ WRONG: Don't reload conversations on typing!
   await loadConversations(currentUserId.value)
 }
 ```
 
 **Why it's bad:**
+
 - Typing indicators come via WebSocket
 - Would cause constant reloading
 - Terrible performance
@@ -220,17 +223,20 @@ Fast & efficient
 Open Chrome DevTools → Network tab:
 
 **✅ Good:**
+
 - Initial load: 1 request to `/api/conversations`
 - During chat: 0 requests to `/api/conversations`
 - After reconnect: 1 request to `/api/conversations`
 
 **❌ Bad:**
+
 - Every message: 1 request to `/api/conversations`
 - Constant polling to `/api/conversations`
 
 ### Check 2: Console Logs
 
 **✅ Good logs:**
+
 ```javascript
 // Initial connection
 [INFO] Loading conversations... (CASE 1)
@@ -245,6 +251,7 @@ Open Chrome DevTools → Network tab:
 ```
 
 **❌ Bad logs:**
+
 ```javascript
 // Receive message
 [INFO] 📥 RECEIVED MESSAGE
@@ -281,12 +288,14 @@ If you find it in other places (message callbacks, send handlers, etc.), those a
 ### When to Use HTTP vs WebSocket
 
 **HTTP (REST API):**
+
 - ✅ Initial data load
 - ✅ User-initiated actions
 - ✅ Historical data
 - ✅ Retry after failure
 
 **WebSocket:**
+
 - ✅ Real-time updates
 - ✅ Push notifications
 - ✅ Live status changes
@@ -299,12 +308,14 @@ If you find it in other places (message callbacks, send handlers, etc.), those a
 ### Mistake 1: "I want to update conversations after sending"
 
 **Wrong Approach:**
+
 ```typescript
 sendMessage(payload)
 await loadConversations(userId) // ❌
 ```
 
 **Right Approach:**
+
 ```typescript
 sendMessage(payload)
 // Wait for WebSocket to deliver confirmation
@@ -314,12 +325,14 @@ sendMessage(payload)
 ### Mistake 2: "I want to update last message time"
 
 **Wrong Approach:**
+
 ```typescript
 addMessage(message)
 await loadConversations(userId) // ❌ To update lastMessageTime
 ```
 
 **Right Approach:**
+
 ```typescript
 // Backend should send updated conversation via WebSocket
 // Or update lastMessageTime in addMessage() locally
@@ -329,12 +342,14 @@ addMessage(message) // This should handle it!
 ### Mistake 3: "I need to refresh the list"
 
 **Wrong Approach:**
+
 ```typescript
 // On any event
 await loadConversations(userId) // ❌
 ```
 
 **Right Approach:**
+
 ```typescript
 // Ask yourself: "Is this initial load or reconnection?"
 // If NO, then you should use WebSocket updates instead!
@@ -347,6 +362,7 @@ await loadConversations(userId) // ❌
 ### The Golden Rule
 
 > **`loadConversations()` should ONLY be called on:**
+>
 > 1. Initial connection (opening chat)
 > 2. Reconnection after disconnect
 >
@@ -354,14 +370,14 @@ await loadConversations(userId) // ❌
 
 ### Quick Reference
 
-| Event | Use HTTP? | Use WebSocket? |
-|-------|-----------|----------------|
-| Open chat | ✅ YES (initial) | - |
-| Send message | ❌ NO | ✅ YES |
-| Receive message | ❌ NO | ✅ YES |
-| Typing indicator | ❌ NO | ✅ YES |
-| Status update | ❌ NO | ✅ YES |
-| Reconnect | ✅ YES (reload) | - |
+| Event            | Use HTTP?        | Use WebSocket? |
+| ---------------- | ---------------- | -------------- |
+| Open chat        | ✅ YES (initial) | -              |
+| Send message     | ❌ NO            | ✅ YES         |
+| Receive message  | ❌ NO            | ✅ YES         |
+| Typing indicator | ❌ NO            | ✅ YES         |
+| Status update    | ❌ NO            | ✅ YES         |
+| Reconnect        | ✅ YES (reload)  | -              |
 
 ---
 

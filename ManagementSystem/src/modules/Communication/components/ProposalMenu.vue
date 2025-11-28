@@ -6,7 +6,7 @@
  */
 
 import type { ProposalTypeConfig } from '../model.type'
-import { ref } from 'vue';
+import { ref } from 'vue'
 
 interface Props {
   availableConfigs: ProposalTypeConfig[]
@@ -39,10 +39,7 @@ const handleSelect = (config: ProposalTypeConfig) => {
     />
     <template #content>
       <div class="p-2 min-w-[200px]">
-        <div
-          v-if="props.availableConfigs.length === 0"
-          class="p-2 text-sm text-gray-500"
-        >
+        <div v-if="props.availableConfigs.length === 0" class="p-2 text-sm text-gray-500">
           No proposals available
         </div>
         <div v-else class="space-y-1">

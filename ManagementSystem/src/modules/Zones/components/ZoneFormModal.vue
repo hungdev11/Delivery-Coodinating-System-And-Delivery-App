@@ -78,7 +78,7 @@ onMounted(() => {
   <UModal
     :title="isEditMode ? 'Edit Zone' : 'Create Zone'"
     :close="{ onClick: handleCancel }"
-    :ui="{ footer: 'justify-end' }"
+    :ui="{ width: 'sm:max-w-md md:max-w-lg', footer: 'justify-end' }"
   >
     <template #body>
       <form @submit.prevent="handleSubmit" class="space-y-4">

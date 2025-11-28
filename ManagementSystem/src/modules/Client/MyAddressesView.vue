@@ -43,7 +43,9 @@ const loadAddresses = async () => {
 }
 
 const handleDelete = async (address: UserAddressDto) => {
-  if (!confirm(`Are you sure you want to delete "${address.destinationDetails?.name || address.id}"?`)) {
+  if (
+    !confirm(`Are you sure you want to delete "${address.destinationDetails?.name || address.id}"?`)
+  ) {
     return
   }
 
@@ -95,12 +97,15 @@ onMounted(() => {
 
 <template>
   <div class="container mx-auto px-2 md:px-4 py-4 md:py-6 space-y-4 md:space-y-6">
-    <PageHeader
-      title="Địa chỉ của tôi"
-      description="Quản lý địa chỉ giao hàng"
-    >
+    <PageHeader title="Địa chỉ của tôi" description="Quản lý địa chỉ giao hàng">
       <template #actions>
-        <UButton color="primary" icon="i-heroicons-plus" size="sm" class="md:size-md" @click="goToCreateAddress">
+        <UButton
+          color="primary"
+          icon="i-heroicons-plus"
+          size="sm"
+          class="md:size-md"
+          @click="goToCreateAddress"
+        >
           <span class="hidden sm:inline">Thêm địa chỉ</span>
           <span class="sm:hidden">Thêm</span>
         </UButton>
@@ -115,9 +120,7 @@ onMounted(() => {
 
     <div v-else-if="addresses.length === 0" class="text-center py-12">
       <UIcon name="i-heroicons-map-pin" class="w-16 h-16 text-gray-400 mx-auto mb-4" />
-      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-        Chưa có địa chỉ
-      </h3>
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Chưa có địa chỉ</h3>
       <p class="text-gray-500 mb-4">Thêm địa chỉ đầu tiên để nhận đơn hàng</p>
       <UButton color="primary" icon="i-heroicons-plus" @click="goToCreateAddress">
         Thêm địa chỉ
@@ -128,10 +131,7 @@ onMounted(() => {
       <UCard
         v-for="address in addresses"
         :key="address.id"
-        :class="[
-          'relative',
-          address.isPrimary ? 'ring-2 ring-orange-500' : '',
-        ]"
+        :class="['relative', address.isPrimary ? 'ring-2 ring-orange-500' : '']"
       >
         <template #header>
           <div class="flex items-start justify-between gap-2">
@@ -140,14 +140,23 @@ onMounted(() => {
                 {{ address.destinationDetails?.name || 'Địa chỉ chưa đặt tên' }}
               </h3>
             </div>
-            <UBadge v-if="address.isPrimary" color="primary" variant="soft" size="xs" class="flex-shrink-0">
+            <UBadge
+              v-if="address.isPrimary"
+              color="primary"
+              variant="soft"
+              size="xs"
+              class="flex-shrink-0"
+            >
               Mặc định
             </UBadge>
           </div>
         </template>
 
         <div class="space-y-2 text-sm">
-          <div v-if="address.destinationDetails?.addressText" class="text-gray-600 dark:text-gray-400 line-clamp-2">
+          <div
+            v-if="address.destinationDetails?.addressText"
+            class="text-gray-600 dark:text-gray-400 line-clamp-2"
+          >
             <UIcon name="i-heroicons-map-pin" class="w-4 h-4 inline mr-1 flex-shrink-0" />
             {{ address.destinationDetails.addressText }}
           </div>
@@ -155,9 +164,7 @@ onMounted(() => {
             Tọa độ: {{ address.destinationDetails?.lat?.toFixed(6) }},
             {{ address.destinationDetails?.lon?.toFixed(6) }}
           </div>
-          <div v-if="address.tag" class="text-gray-500 text-xs">
-            Nhãn: {{ address.tag }}
-          </div>
+          <div v-if="address.tag" class="text-gray-500 text-xs">Nhãn: {{ address.tag }}</div>
           <div v-if="address.note" class="text-gray-500 text-xs line-clamp-1">
             Ghi chú: {{ address.note }}
           </div>

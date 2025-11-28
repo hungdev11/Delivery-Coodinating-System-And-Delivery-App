@@ -57,14 +57,7 @@ let mapOnMouseMove: ((e: { lngLat?: { lng: number; lat: number } }) => void) | n
 const { search, create } = useAddresses()
 
 const addrStore = useAddresses()
-const {
-  success,
-  error,
-  searchTerm,
-  searching,
-  creating,
-  searchResult,
-} = storeToRefs(addrStore)
+const { success, error, searchTerm, searching, creating, searchResult } = storeToRefs(addrStore)
 
 const createDialogOpen = ref(false)
 const newAddressName = ref('')
@@ -184,12 +177,11 @@ const deleteSelected = async () => {
   if (!sel || sel.source !== 'local' || !sel.id) return
   try {
     await addrStore.remove(sel.id)
-    nearbyResults.value = (nearbyResults.value || []).filter(x => x.id !== sel.id)
+    nearbyResults.value = (nearbyResults.value || []).filter((x) => x.id !== sel.id)
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to delete address'
   }
 }
-
 
 // Update existing local address
 const updateAddress = async () => {
@@ -222,20 +214,35 @@ const loadNearby = async (lat: number, lon: number) => {
   try {
     // Prefer small radius per requirement (5-15m)
     const res = await addrStore.findByPoint({ lat, lon, radius: 100, limit: 10 })
-    const result = (res && 'result' in res ? (res as { result?: ByPointResult }).result : undefined)
+    const result = res && 'result' in res ? (res as { result?: ByPointResult }).result : undefined
     const items: typeof nearbyResults.value = []
     if (result && result.local) {
       for (const a of result.local) {
-        items!.push({ source: 'local', id: a.id, name: a.name, lat: a.lat, lon: a.lon, addressText: a.addressText || undefined })
+        items!.push({
+          source: 'local',
+          id: a.id,
+          name: a.name,
+          lat: a.lat,
+          lon: a.lon,
+          addressText: a.addressText || undefined,
+        })
       }
     }
     if (result && result.external) {
       for (const e of result.external) {
-        items!.push({ source: 'track-asia', name: e.name, lat: e.lat, lon: e.lon, addressText: e.formattedAddress })
+        items!.push({
+          source: 'track-asia',
+          name: e.name,
+          lat: e.lat,
+          lon: e.lon,
+          addressText: e.formattedAddress,
+        })
       }
     }
     // Sort: local first for prioritization
-    nearbyResults.value = items!.sort((a, b) => (a.source === 'local' ? -1 : 1) - (b.source === 'local' ? -1 : 1))
+    nearbyResults.value = items!.sort(
+      (a, b) => (a.source === 'local' ? -1 : 1) - (b.source === 'local' ? -1 : 1),
+    )
   } catch {
     nearbyResults.value = []
   } finally {
@@ -243,7 +250,14 @@ const loadNearby = async (lat: number, lon: number) => {
   }
 }
 
-const selectNearby = (item: { id?: string; source: 'local' | 'track-asia'; name: string; lat: number; lon: number; addressText?: string }) => {
+const selectNearby = (item: {
+  id?: string
+  source: 'local' | 'track-asia'
+  name: string
+  lat: number
+  lon: number
+  addressText?: string
+}) => {
   jumpTo(item.lat, item.lon, item.name)
   newAddressName.value = item.name
   if (item.addressText) newAddressNote.value = item.addressText
@@ -251,34 +265,41 @@ const selectNearby = (item: { id?: string; source: 'local' | 'track-asia'; name:
 }
 
 // Load sender primary address when senderId changes
-watch(() => quickParcelForm.value.senderId, async (senderId) => {
-  if (!senderId) {
-    senderPrimaryAddress.value = null
-    return
-  }
-
-  loadingSenderAddress.value = true
-  try {
-    const response = await getUserPrimaryAddress(senderId)
-    if (response.result?.destinationId) {
-      // Get address detail from zone-service
-      const addressResponse = await getAddressById(response.result.destinationId)
-      if (addressResponse.result) {
-        senderPrimaryAddress.value = addressResponse.result
-        // Update map center to sender's primary address
-        jumpTo(addressResponse.result.lat, addressResponse.result.lon, addressResponse.result.name)
-        // Pre-fill receiveFrom with sender's primary address
-        quickParcelForm.value.receiveFrom = addressResponse.result.name || ''
-      }
+watch(
+  () => quickParcelForm.value.senderId,
+  async (senderId) => {
+    if (!senderId) {
+      senderPrimaryAddress.value = null
+      return
     }
-  } catch (error) {
-    console.error('Failed to load sender primary address:', error)
-    // Don't show error toast - user might not have a primary address yet
-    senderPrimaryAddress.value = null
-  } finally {
-    loadingSenderAddress.value = false
-  }
-})
+
+    loadingSenderAddress.value = true
+    try {
+      const response = await getUserPrimaryAddress(senderId)
+      if (response.result?.destinationId) {
+        // Get address detail from zone-service
+        const addressResponse = await getAddressById(response.result.destinationId)
+        if (addressResponse.result) {
+          senderPrimaryAddress.value = addressResponse.result
+          // Update map center to sender's primary address
+          jumpTo(
+            addressResponse.result.lat,
+            addressResponse.result.lon,
+            addressResponse.result.name,
+          )
+          // Pre-fill receiveFrom with sender's primary address
+          quickParcelForm.value.receiveFrom = addressResponse.result.name || ''
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load sender primary address:', error)
+      // Don't show error toast - user might not have a primary address yet
+      senderPrimaryAddress.value = null
+    } finally {
+      loadingSenderAddress.value = false
+    }
+  },
+)
 
 // Quick create parcel from selected address
 const openQuickCreateParcel = () => {
@@ -351,7 +372,11 @@ const addAddressToClient = async (
 }
 
 const handleQuickCreateParcel = async () => {
-  if (!quickParcelForm.value.code || !quickParcelForm.value.senderId || !quickParcelForm.value.receiverId) {
+  if (
+    !quickParcelForm.value.code ||
+    !quickParcelForm.value.senderId ||
+    !quickParcelForm.value.receiverId
+  ) {
     toast.add({
       title: 'Error',
       description: 'Please fill in code, sender, and receiver',
@@ -368,7 +393,8 @@ const handleQuickCreateParcel = async () => {
     if (senderPrimaryAddress.value) {
       // Use sender's primary address
       senderDestinationId = senderPrimaryAddress.value.id
-      quickParcelForm.value.receiveFrom = senderPrimaryAddress.value.name || quickParcelForm.value.receiveFrom
+      quickParcelForm.value.receiveFrom =
+        senderPrimaryAddress.value.name || quickParcelForm.value.receiveFrom
     } else {
       // Get or create sender destination from current map center
       const senderResponse = await getOrCreateAddress({
@@ -415,7 +441,7 @@ const handleQuickCreateParcel = async () => {
         quickParcelForm.value.receiverId,
         receiverResponse.result.id,
         receiverResponse.result.name,
-        receiverResponse.result.addressText || undefined
+        receiverResponse.result.addressText || undefined,
       )
     } catch (error) {
       console.error('Failed to add address to client:', error)
@@ -470,7 +496,12 @@ const handleQuickCreateParcel = async () => {
       description="Search, fine-tune on map center, and create address"
     >
       <template #actions>
-        <UButton color="neutral" variant="outline" icon="i-heroicons-home" @click="router.push('/')">
+        <UButton
+          color="neutral"
+          variant="outline"
+          icon="i-heroicons-home"
+          @click="router.push('/')"
+        >
           Home
         </UButton>
       </template>
@@ -485,10 +516,19 @@ const handleQuickCreateParcel = async () => {
             <h3 class="text-lg font-semibold">Search Address</h3>
           </template>
           <div class="space-y-3">
-            <UInput v-model="searchTerm" placeholder="Type address e.g. 'Landmark 81'" @keydown.enter.prevent="fetchSearch" />
+            <UInput
+              v-model="searchTerm"
+              placeholder="Type address e.g. 'Landmark 81'"
+              @keydown.enter.prevent="fetchSearch"
+            />
             <div class="flex items-center gap-2">
               <UButton color="primary" :loading="searching" @click="fetchSearch">Search</UButton>
-              <span class="text-xs text-gray-500" v-if="searchResult">{{ ((searchResult?.local?.length || 0) + (searchResult?.external?.length || 0)) }} results</span>
+              <span class="text-xs text-gray-500" v-if="searchResult"
+                >{{
+                  (searchResult?.local?.length || 0) + (searchResult?.external?.length || 0)
+                }}
+                results</span
+              >
             </div>
             <div class="space-y-2 max-h-64 overflow-y-auto">
               <div v-if="searchResult?.local?.length">
@@ -526,21 +566,34 @@ const handleQuickCreateParcel = async () => {
           </template>
           <div class="space-y-2 max-h-64 overflow-y-auto">
             <div v-if="nearbyLoading" class="text-xs text-gray-500">Loading nearby points...</div>
-            <div v-else-if="nearbyResults && nearbyResults.length === 0" class="text-xs text-gray-500">No nearby points</div>
+            <div
+              v-else-if="nearbyResults && nearbyResults.length === 0"
+              class="text-xs text-gray-500"
+            >
+              No nearby points
+            </div>
             <div v-else>
               <div
                 v-for="(n, i) in nearbyResults || []"
                 :key="`nb-${i}`"
                 class="p-2 rounded border cursor-pointer"
-                :class="n.source === 'local' ? 'bg-green-50 hover:bg-green-100 border-green-200' : 'hover:bg-gray-50'"
+                :class="
+                  n.source === 'local'
+                    ? 'bg-green-50 hover:bg-green-100 border-green-200'
+                    : 'hover:bg-gray-50'
+                "
                 @click="selectNearby(n)"
               >
                 <div class="flex items-center justify-between">
                   <p class="text-sm font-medium">{{ n.name }}</p>
-                  <UBadge :color="n.source === 'local' ? 'primary' : 'neutral'" size="xs">{{ n.source }}</UBadge>
+                  <UBadge :color="n.source === 'local' ? 'primary' : 'neutral'" size="xs">{{
+                    n.source
+                  }}</UBadge>
                 </div>
                 <p v-if="n.addressText" class="text-xs text-gray-500">{{ n.addressText }}</p>
-                <p class="text-[10px] text-gray-400">{{ n.lat.toFixed(6) }}, {{ n.lon.toFixed(6) }}</p>
+                <p class="text-[10px] text-gray-400">
+                  {{ n.lat.toFixed(6) }}, {{ n.lon.toFixed(6) }}
+                </p>
               </div>
             </div>
           </div>
@@ -553,7 +606,9 @@ const handleQuickCreateParcel = async () => {
           </template>
 
           <div class="space-y-3">
-            <div class="text-xs text-gray-500">Point is fixed at the map center. Drag the map to adjust.</div>
+            <div class="text-xs text-gray-500">
+              Point is fixed at the map center. Drag the map to adjust.
+            </div>
             <div class="text-sm"><strong>Center:</strong> {{ centerLabel }}</div>
             <UFormField label="Name">
               <UInput v-model="newAddressName" placeholder="e.g. Customer A - Gate" />
@@ -570,16 +625,15 @@ const handleQuickCreateParcel = async () => {
               >
                 Save Address
               </UButton>
-              <UButton
-                v-else
-                color="warning"
-                :loading="creating"
-                @click="updateAddress"
-              >
+              <UButton v-else color="warning" :loading="creating" @click="updateAddress">
                 Update Address
               </UButton>
               <UButton
-                v-if="addrStore.selected && addrStore.selected.source === 'local' && addrStore.selected.id"
+                v-if="
+                  addrStore.selected &&
+                  addrStore.selected.source === 'local' &&
+                  addrStore.selected.id
+                "
                 color="error"
                 variant="soft"
                 :loading="creating"
@@ -626,7 +680,13 @@ const handleQuickCreateParcel = async () => {
         </UCard>
 
         <UAlert v-if="error" color="error" variant="soft" title="Error" :description="error" />
-        <UAlert v-if="success" color="success" variant="soft" title="Success" :description="success" />
+        <UAlert
+          v-if="success"
+          color="success"
+          variant="soft"
+          title="Success"
+          :description="success"
+        />
       </div>
 
       <!-- Map Panel -->
@@ -663,7 +723,7 @@ const handleQuickCreateParcel = async () => {
       v-model:open="quickCreateParcelModalOpen"
       title="Quick Create Parcel"
       description="Create a parcel quickly using the selected address"
-      :ui="{ footer: 'justify-end' }"
+      :ui="{ width: 'sm:max-w-md md:max-w-lg', footer: 'justify-end' }"
     >
       <template #body>
         <form @submit.prevent="handleQuickCreateParcel" class="space-y-4">
@@ -703,18 +763,14 @@ const handleQuickCreateParcel = async () => {
             </UFormField>
           </div>
 
-          <div class="text-xs text-gray-500">
-            📍 Address coordinates: {{ centerLabel }}
-          </div>
+          <div class="text-xs text-gray-500">📍 Address coordinates: {{ centerLabel }}</div>
         </form>
       </template>
       <template #footer>
         <UButton color="neutral" variant="ghost" @click="quickCreateParcelModalOpen = false">
           Cancel
         </UButton>
-        <UButton color="primary" @click="handleQuickCreateParcel">
-          Create Parcel
-        </UButton>
+        <UButton color="primary" @click="handleQuickCreateParcel"> Create Parcel </UButton>
       </template>
     </UModal>
   </div>
@@ -747,7 +803,7 @@ const handleQuickCreateParcel = async () => {
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   position: relative;
-  box-shadow: 0 0 0 2px rgba(255,255,255,0.9);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
 }
 
 .center-pin .pin:after {
@@ -766,7 +822,7 @@ const handleQuickCreateParcel = async () => {
   left: 50%;
   bottom: 10px;
   transform: translateX(-50%);
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
   color: #fff;
   font-size: 12px;
   padding: 4px 8px;

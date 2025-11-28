@@ -8,8 +8,8 @@
 import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
-import { useConversations } from './composables'
-import type { ConversationResponse } from './model.type'
+import { useConversations, useGlobalChat, type GlobalChatListener } from './composables'
+import type { ConversationResponse, MessageResponse } from './model.type'
 import { getCurrentUser } from '@/common/guards/roleGuard.guard'
 import { defineAsyncComponent } from 'vue'
 
@@ -23,10 +23,11 @@ const selectedConversationId = ref<string | null>(null)
 const isMobileView = ref(false)
 const showConversationList = ref(true)
 
+// Initialize global chat to listen for messages even when not in chat view
+const globalChat = useGlobalChat()
+
 // Lazy load create chat modal
-const LazyCreateChatModal = defineAsyncComponent(
-  () => import('./components/CreateChatModal.vue'),
-)
+const LazyCreateChatModal = defineAsyncComponent(() => import('./components/CreateChatModal.vue'))
 
 /**
  * Load conversations on mount
@@ -52,9 +53,31 @@ const handleRouteChange = () => {
   syncListVisibility()
 }
 
+// Global chat listener to receive messages even when not in chat view
+const globalChatListener: GlobalChatListener = {
+  onMessageReceived: (message: MessageResponse) => {
+    // Reload conversations list to get updated last message
+    if (currentUser?.id) {
+      loadConversations(currentUser.id).catch(console.error)
+    }
+  },
+  onNotificationReceived: () => {
+    // Reload conversations on notification
+    if (currentUser?.id) {
+      loadConversations(currentUser.id).catch(console.error)
+    }
+  },
+}
+
 onMounted(async () => {
   if (currentUser?.id) {
     await loadConversations(currentUser.id)
+    // Initialize global chat listener
+    globalChat.addListener(globalChatListener)
+    // Ensure global chat is initialized
+    if (!globalChat.connected.value && currentUser.id) {
+      await globalChat.initialize()
+    }
   }
   updateResponsiveState()
   window.addEventListener('resize', updateResponsiveState)
@@ -63,6 +86,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateResponsiveState)
+  // Remove global chat listener
+  globalChat.removeListener(globalChatListener)
 })
 
 watch(
@@ -123,7 +148,7 @@ const openChat = (conversation: ConversationResponse) => {
 const openCreateChat = async () => {
   const modal = overlay.create(LazyCreateChatModal)
   const instance = modal.open({ currentUserId: currentUser?.id || '' })
-  const result = await instance.result as { partnerId: string } | null
+  const result = (await instance.result) as { partnerId: string } | null
 
   if (result && result.partnerId && currentUser?.id) {
     // Find or create conversation
@@ -136,7 +161,6 @@ const openCreateChat = async () => {
     }
   }
 }
-
 </script>
 
 <template>
@@ -164,7 +188,10 @@ const openCreateChat = async () => {
         <UIcon name="i-heroicons-arrow-path" class="animate-spin text-2xl" />
       </div>
 
-      <div v-else-if="sortedConversations.length === 0" class="flex items-center justify-center h-full">
+      <div
+        v-else-if="sortedConversations.length === 0"
+        class="flex items-center justify-center h-full"
+      >
         <div class="text-center text-gray-500">
           <p>No conversations yet</p>
           <UButton
@@ -184,7 +211,10 @@ const openCreateChat = async () => {
           v-for="conversation in sortedConversations"
           :key="conversation.conversationId"
           class="p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
-          :class="{ 'bg-blue-50': selectedConversationId === conversation.conversationId }"
+          :class="{
+            'bg-primary-50 dark:bg-primary-900/20':
+              selectedConversationId === conversation.conversationId,
+          }"
           @click="openChat(conversation)"
         >
           <div class="flex items-center space-x-3">
@@ -198,7 +228,7 @@ const openCreateChat = async () => {
               <div
                 v-if="conversation.isOnline !== null"
                 class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white"
-                :class="conversation.isOnline ? 'bg-green-500' : 'bg-gray-400'"
+                :class="conversation.isOnline ? 'bg-success-500' : 'bg-neutral-400'"
                 :title="conversation.isOnline ? 'Online' : 'Offline'"
               />
             </div>
@@ -211,12 +241,13 @@ const openCreateChat = async () => {
                   <p v-if="conversation.partnerUsername" class="text-xs text-gray-500 truncate">
                     @{{ conversation.partnerUsername }}
                   </p>
-                  <p v-if="conversation.lastMessageContent" class="text-xs text-gray-600 truncate mt-1">
+                  <p
+                    v-if="conversation.lastMessageContent"
+                    class="text-xs text-gray-600 truncate mt-1"
+                  >
                     {{ conversation.lastMessageContent }}
                   </p>
-                  <p v-else class="text-xs text-gray-400 italic mt-1">
-                    No messages yet
-                  </p>
+                  <p v-else class="text-xs text-gray-400 italic mt-1">No messages yet</p>
                 </div>
                 <div class="flex flex-col items-end ml-2">
                   <span class="text-xs text-gray-500">
@@ -240,19 +271,10 @@ const openCreateChat = async () => {
     </div>
 
     <!-- Chat Container -->
-    <div
-      v-if="!isMobileView || !showConversationList"
-      class="flex-1 flex flex-col bg-gray-50"
-    >
+    <div v-if="!isMobileView || !showConversationList" class="flex-1 flex flex-col bg-gray-50">
       <RouterView v-slot="{ Component }">
-        <component
-          v-if="Component"
-          :is="Component"
-        />
-        <div
-          v-else
-          class="flex-1 flex items-center justify-center bg-gray-50"
-        >
+        <component v-if="Component" :is="Component" />
+        <div v-else class="flex-1 flex items-center justify-center bg-gray-50">
           <div class="text-center">
             <UIcon name="i-heroicons-chat-bubble-left-right" class="text-6xl text-gray-300 mb-4" />
             <p class="text-gray-500">Select a conversation to start chatting</p>

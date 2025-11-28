@@ -1,6 +1,6 @@
 /**
  * Chat History Store (Pinia)
- * 
+ *
  * Manages chat messages with localStorage persistence
  * Syncs with server on load and handles offline scenarios
  */
@@ -94,9 +94,9 @@ export const useChatHistoryStore = defineStore('chatHistory', {
      */
     addMessage(conversationId: string, message: MessageResponse) {
       const messages = this.messages.get(conversationId) || []
-      
+
       // Check if message already exists (by ID)
-      const existingIndex = messages.findIndex(m => m.id === message.id)
+      const existingIndex = messages.findIndex((m) => m.id === message.id)
       if (existingIndex !== -1) {
         // Update existing message
         messages[existingIndex] = message
@@ -104,12 +104,10 @@ export const useChatHistoryStore = defineStore('chatHistory', {
         // Add new message
         messages.push(message)
       }
-      
+
       // Sort by timestamp
-      messages.sort((a, b) => 
-        new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime()
-      )
-      
+      messages.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime())
+
       this.messages.set(conversationId, messages)
       this.saveToStorage(conversationId)
     },
@@ -119,8 +117,8 @@ export const useChatHistoryStore = defineStore('chatHistory', {
      */
     updateMessage(conversationId: string, messageId: string, updates: Partial<MessageResponse>) {
       const messages = this.messages.get(conversationId) || []
-      const messageIndex = messages.findIndex(m => m.id === messageId)
-      
+      const messageIndex = messages.findIndex((m) => m.id === messageId)
+
       if (messageIndex !== -1) {
         messages[messageIndex] = { ...messages[messageIndex], ...updates }
         this.messages.set(conversationId, messages)
@@ -134,7 +132,7 @@ export const useChatHistoryStore = defineStore('chatHistory', {
     clearConversation(conversationId: string) {
       this.messages.delete(conversationId)
       this.lastSync.delete(conversationId)
-      
+
       try {
         const key = `chat_${conversationId}`
         localStorage.removeItem(key)
@@ -149,11 +147,11 @@ export const useChatHistoryStore = defineStore('chatHistory', {
     clearAll() {
       this.messages.clear()
       this.lastSync.clear()
-      
+
       try {
         // Clear all chat_* keys from localStorage
         const keys = Object.keys(localStorage)
-        keys.forEach(key => {
+        keys.forEach((key) => {
           if (key.startsWith('chat_')) {
             localStorage.removeItem(key)
           }

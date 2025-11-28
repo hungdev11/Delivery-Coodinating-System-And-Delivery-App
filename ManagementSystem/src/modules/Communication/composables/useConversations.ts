@@ -6,11 +6,7 @@
 
 import { ref } from 'vue'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
-import {
-  getConversations,
-  getConversationByUsers,
-  getMessages,
-} from '../api'
+import { getConversations, getConversationByUsers, getMessages } from '../api'
 import type { ConversationResponse, MessageResponse, PageResponse } from '../model.type'
 
 export function useConversations() {
@@ -138,7 +134,10 @@ export function useConversations() {
         }
       }
       // Check if response is direct PageResponse format
-      else if ('content' in response && Array.isArray((response as unknown as PageResponse<MessageResponse>).content)) {
+      else if (
+        'content' in response &&
+        Array.isArray((response as unknown as PageResponse<MessageResponse>).content)
+      ) {
         pageData = response as unknown as PageResponse<MessageResponse>
         messagesArray = pageData.content
       }
@@ -150,7 +149,9 @@ export function useConversations() {
       // Update pagination state
       if (pageData) {
         hasMoreMessages.value = !pageData.last
-        console.log(`📜 Loaded page 0: ${messagesArray.length} messages, hasMore=${hasMoreMessages.value}`)
+        console.log(
+          `📜 Loaded page 0: ${messagesArray.length} messages, hasMore=${hasMoreMessages.value}`,
+        )
       }
 
       // Messages come sorted DESC (newest first) from backend
@@ -178,13 +179,14 @@ export function useConversations() {
   /**
    * Load more messages (Infinite scroll - pagination)
    */
-  const loadMoreMessages = async (
-    conversationId: string,
-    userId: string,
-    size: number = 30,
-  ) => {
+  const loadMoreMessages = async (conversationId: string, userId: string, size: number = 30) => {
     if (isLoadingMore.value || !hasMoreMessages.value) {
-      console.log('⏸️ Skip loading more: isLoading=' + isLoadingMore.value + ', hasMore=' + hasMoreMessages.value)
+      console.log(
+        '⏸️ Skip loading more: isLoading=' +
+          isLoadingMore.value +
+          ', hasMore=' +
+          hasMoreMessages.value,
+      )
       return
     }
 
@@ -205,7 +207,10 @@ export function useConversations() {
         if (pageData.content && Array.isArray(pageData.content)) {
           messagesArray = pageData.content
         }
-      } else if ('content' in response && Array.isArray((response as unknown as PageResponse<MessageResponse>).content)) {
+      } else if (
+        'content' in response &&
+        Array.isArray((response as unknown as PageResponse<MessageResponse>).content)
+      ) {
         pageData = response as unknown as PageResponse<MessageResponse>
         messagesArray = pageData.content
       } else if (Array.isArray(response)) {
@@ -224,7 +229,9 @@ export function useConversations() {
         const reversedNewMessages = [...messagesArray].reverse()
         messages.value = [...reversedNewMessages, ...messages.value]
 
-        console.log(`✅ Loaded ${messagesArray.length} more messages, total: ${messages.value.length}, hasMore=${hasMoreMessages.value}`)
+        console.log(
+          `✅ Loaded ${messagesArray.length} more messages, total: ${messages.value.length}, hasMore=${hasMoreMessages.value}`,
+        )
       } else {
         hasMoreMessages.value = false
         console.log('📭 No more messages to load')
@@ -254,7 +261,10 @@ export function useConversations() {
 
     // Remove optimistic message with same content if exists
     const optimisticIndex = messages.value.findIndex(
-      (m) => m.id.startsWith('temp-') && m.content === message.content && m.senderId === message.senderId,
+      (m) =>
+        m.id.startsWith('temp-') &&
+        m.content === message.content &&
+        m.senderId === message.senderId,
     )
     if (optimisticIndex !== -1) {
       messages.value.splice(optimisticIndex, 1)
@@ -318,7 +328,10 @@ export function useConversations() {
           if (pageData.content && Array.isArray(pageData.content)) {
             messagesArray = pageData.content
           }
-        } else if ('content' in response && Array.isArray((response as unknown as PageResponse<MessageResponse>).content)) {
+        } else if (
+          'content' in response &&
+          Array.isArray((response as unknown as PageResponse<MessageResponse>).content)
+        ) {
           const pageData = response as unknown as PageResponse<MessageResponse>
           messagesArray = pageData.content
         } else if (Array.isArray(response)) {

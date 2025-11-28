@@ -33,7 +33,7 @@ export const useRoutingStore = defineStore('routing', () => {
   const error = ref<string | null>(null)
   const routingMode = ref<'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base'>('v2-full')
   const routingStrategy = ref<'strict_urgent' | 'flexible'>('strict_urgent')
-  const vehicleType = ref<'car' | 'motorbike'>('motorbike')  // Vehicle type selector
+  const vehicleType = ref<'car' | 'motorbike'>('motorbike') // Vehicle type selector
 
   // Computed
   const hasStartPoint = computed(() => startPoint.value !== null)
@@ -150,8 +150,13 @@ export const useRoutingStore = defineStore('routing', () => {
 
       if (response.result && response.result.code === 'Ok') {
         // Validate that the route has valid distance and duration
-        if (response.result.summary.totalDistance === 0 || response.result.summary.totalDuration === 0) {
-          throw new Error('No valid route found. The waypoints may be too close together or OSRM data is not available for this area.')
+        if (
+          response.result.summary.totalDistance === 0 ||
+          response.result.summary.totalDuration === 0
+        ) {
+          throw new Error(
+            'No valid route found. The waypoints may be too close together or OSRM data is not available for this area.',
+          )
         }
         routeResult.value = response.result
         toast.add({

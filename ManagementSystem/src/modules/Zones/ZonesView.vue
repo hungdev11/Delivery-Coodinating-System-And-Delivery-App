@@ -23,8 +23,14 @@ import { storeToRefs } from 'pinia'
 import { useTemplateRef } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 import AdvancedFilterDrawer from '@/common/components/filters/AdvancedFilterDrawer.vue'
+import TableFilters from '@/common/components/table/TableFilters.vue'
 import type { SortingState } from '@tanstack/table-core'
-import type { FilterCondition, FilterGroup, FilterableColumn, SortConfig } from '../../common/types/filter'
+import type {
+  FilterCondition,
+  FilterGroup,
+  FilterableColumn,
+  SortConfig,
+} from '../../common/types/filter'
 import TableHeaderCell from '@/common/components/TableHeaderCell.vue'
 
 // Dynamic imports to avoid TypeScript issues
@@ -530,11 +536,37 @@ const onSortingChange = (newSorting: SortingState): void => {
   loadZones()
 }
 
-const clearSorting = () => {
+// Handle clear sorting
+const handleClearSorting = () => {
   sorting.value = []
   setSorts([])
   loadZones()
 }
+
+// Computed properties for bulk actions
+const selectedCount = computed((): number => {
+  if (!table.value?.tableApi?.getFilteredSelectedRowModel) return 0
+  return table.value?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0
+})
+
+const totalCount = computed((): number => {
+  if (!table.value?.tableApi?.getFilteredRowModel) return 0
+  return table.value?.tableApi?.getFilteredRowModel()?.rows?.length || 0
+})
+
+// Sortable columns list (derived from filterableColumns, excluding non-sortable fields)
+const sortableColumnsList = computed(() => {
+  return filterableColumns
+    .filter((col) => {
+      // Exclude non-sortable fields like arrays, objects, etc.
+      const nonSortableFields = ['id', 'select', 'actions']
+      return !nonSortableFields.includes(col.field)
+    })
+    .map((col) => ({
+      id: col.field,
+      label: col.label,
+    }))
+})
 
 // Watch for sorts changes and sync with sorting
 watch(
@@ -551,131 +583,47 @@ watch(
 </script>
 
 <template>
-  <div class="container mx-auto px-4 py-6">
+  <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
     <PageHeader title="Zones" description="Manage delivery zones and distribution areas">
       <template #actions>
-        <UButton
-          color="primary"
-          variant="outline"
-          icon="i-heroicons-map"
-          @click="router.push('/zones/map')"
-        >
-          Map View
-        </UButton>
-        <UButton icon="i-heroicons-plus" @click="openCreateModal"> Add Zone </UButton>
+        <div class="flex gap-2">
+          <UButton
+            color="primary"
+            variant="outline"
+            icon="i-heroicons-map"
+            size="sm"
+            class="md:size-md"
+            @click="router.push('/zones/map')"
+          >
+            <span class="hidden sm:inline">Map View</span>
+            <span class="sm:hidden">Map</span>
+          </UButton>
+          <UButton icon="i-heroicons-plus" size="sm" class="md:size-md" @click="openCreateModal">
+            <span class="hidden sm:inline">Add Zone</span>
+            <span class="sm:hidden">Add</span>
+          </UButton>
+        </div>
       </template>
     </PageHeader>
 
-    <!-- Filters and Search -->
-    <div class="mb-6 space-y-4">
-      <!-- Simple Search -->
-      <div class="flex flex-col sm:flex-row gap-4">
-        <!-- Search Input -->
-        <div class="flex-1">
-          <UInput
-            v-model="searchValue"
-            placeholder="Search zones..."
-            icon="i-heroicons-magnifying-glass"
-            size="lg"
-          />
-        </div>
-      </div>
-
-      <!-- Advanced Filters Button -->
-      <div class="flex justify-between items-center">
-        <!-- Active Filters Display -->
-        <div
-          v-if="getAllActiveFilters() && getAllActiveFilters()!.length > 0"
-          class="flex items-center gap-2"
-        >
-          <span class="text-sm text-gray-600 dark:text-gray-400">Active filters:</span>
-          <div class="flex items-center gap-1">
-            <UBadge color="primary" variant="soft" size="sm" class="max-w-md">
-              {{ getFilterStructure() }}
-            </UBadge>
-          </div>
-          <UButton
-            variant="ghost"
-            size="xs"
-            color="neutral"
-            icon="i-heroicons-x-mark"
-            @click="handleAdvancedFilterClear"
-            title="Clear all filters"
-          />
-        </div>
-
-        <!-- Advanced Filters Button -->
-        <UButton
-          variant="soft"
-          color="primary"
-          icon="i-heroicons-cog-6-tooth"
-          @click="showAdvancedFilters = true"
-        >
-          Advanced Filters
-        </UButton>
-      </div>
-
-      <!-- Sorting Summary -->
-      <div
-        v-if="sorting.length > 0"
-        class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400"
-      >
-        <span>Sorted by:</span>
-        <div class="flex items-center gap-1">
-          <UBadge
-            v-for="sort in sorting"
-            :key="sort.id"
-            :color="sort.desc ? 'error' : 'success'"
-            variant="soft"
-            size="sm"
-          >
-            {{ getColumnLabel(sort.id) }}
-            <UIcon
-              :name="
-                sort.desc ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-narrow-wide'
-              "
-              class="ml-1"
-            />
-          </UBadge>
-        </div>
-        <UButton
-          variant="ghost"
-          size="xs"
-          color="neutral"
-          icon="i-heroicons-x-mark"
-          @click="clearSorting"
-          title="Clear all sorting"
-        />
-      </div>
-    </div>
-
-    <!-- Bulk Actions -->
-    <div
-      v-if="
-        table &&
-        table?.tableApi?.getFilteredSelectedRowModel()?.rows &&
-        (table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0) > 0
-      "
-      class="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
-    >
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-gray-600 dark:text-gray-400">
-          {{ table?.tableApi?.getFilteredSelectedRowModel()?.rows?.length || 0 }} of
-          {{ table?.tableApi?.getFilteredRowModel()?.rows?.length || 0 }} row(s) selected.
-        </span>
-        <div class="flex space-x-2">
-          <UButton
-            size="sm"
-            variant="soft"
-            color="error"
-            icon="i-heroicons-trash"
-            @click="handleBulkDelete"
-          >
-            Delete
-          </UButton>
-        </div>
-      </div>
-    </div>
+    <!-- Table Filters (includes Search + Bulk Actions + Filters + Sort) -->
+    <TableFilters
+      :search-value="searchValue"
+      search-placeholder="Search zones..."
+      :active-filters="getAllActiveFilters()"
+      :filter-structure="getFilterStructure()"
+      :sorting="sorting"
+      :get-column-label="getColumnLabel"
+      :selected-count="selectedCount"
+      :total-count="totalCount"
+      :on-bulk-delete="handleBulkDelete"
+      :sortable-columns="sortableColumnsList"
+      @update:search-value="searchValue = $event"
+      @update:sorting="onSortingChange"
+      @clear-filters="handleAdvancedFilterClear"
+      @clear-sorting="handleClearSorting"
+      @open-advanced-filters="showAdvancedFilters = true"
+    />
 
     <!-- Table -->
     <UCard>
@@ -688,6 +636,11 @@ watch(
         :manual-sorting="true"
         enable-multi-sort
         @update:sorting="onSortingChange($event)"
+        :ui="{
+          empty: 'text-center py-12',
+          root: 'h-[50vh]',
+          thead: 'sticky top-0 z-10 bg-white dark:bg-gray-800',
+        }"
       />
 
       <!-- Empty State -->
@@ -715,8 +668,11 @@ watch(
     </UCard>
 
     <!-- Pagination -->
-    <div v-if="!loading && filteredZones.length > 0" class="mt-6 flex items-center justify-between">
-      <div class="text-sm text-gray-700 dark:text-gray-300">
+    <div
+      v-if="!loading && filteredZones.length > 0"
+      class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4"
+    >
+      <div class="text-sm text-gray-700 dark:text-gray-300 text-center sm:text-left">
         Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
         {{ total }} results
       </div>

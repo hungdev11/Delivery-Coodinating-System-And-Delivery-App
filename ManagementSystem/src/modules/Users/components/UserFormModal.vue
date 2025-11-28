@@ -6,7 +6,7 @@
  * Usage with useOverlay()
  */
 
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue'
 import type { UserDto, UserStatus } from '../model.type'
 
 interface Props {
@@ -31,24 +31,28 @@ const form = ref({
 })
 
 // Watch for prop changes and update form
-watch(() => props.user, (newUser) => {
-  if (newUser) {
-    // Extract the actual user data from the table row object
-    const userData = newUser.original || newUser
+watch(
+  () => props.user,
+  (newUser) => {
+    if (newUser) {
+      // Extract the actual user data from the table row object
+      const userData = newUser.original || newUser
 
-    form.value = {
-      username: userData.username || '',
-      email: userData.email || '',
-      firstName: userData.firstName || '',
-      lastName: userData.lastName || '',
-      phone: userData.phone || '',
-      address: userData.address || '',
-      identityNumber: userData.identityNumber || '',
-      password: '',
-      status: userData.status || 'ACTIVE',
+      form.value = {
+        username: userData.username || '',
+        email: userData.email || '',
+        firstName: userData.firstName || '',
+        lastName: userData.lastName || '',
+        phone: userData.phone || '',
+        address: userData.address || '',
+        identityNumber: userData.identityNumber || '',
+        password: '',
+        status: userData.status || 'ACTIVE',
+      }
     }
-  }
-}, { immediate: true })
+  },
+  { immediate: true },
+)
 
 const submitting = ref(false)
 
@@ -81,7 +85,7 @@ const handleCancel = () => {
     :title="isEditMode ? 'Edit User' : 'Create User'"
     :description="isEditMode ? 'Update user information' : 'Create a new user account'"
     :close="{ onClick: handleCancel }"
-    :ui="{ footer: 'justify-end' }"
+    :ui="{ width: 'sm:max-w-md md:max-w-lg', footer: 'justify-end' }"
   >
     <template #body>
       <form @submit.prevent="handleSubmit" class="space-y-4">
@@ -112,11 +116,20 @@ const handleCancel = () => {
         </UFormField>
 
         <UFormField label="Identity Number" name="identityNumber">
-          <UInput class="w-full" v-model="form.identityNumber" placeholder="Enter identity number" />
+          <UInput
+            class="w-full"
+            v-model="form.identityNumber"
+            placeholder="Enter identity number"
+          />
         </UFormField>
 
         <UFormField v-if="!isEditMode" label="Password" name="password">
-          <UInput class="w-full" v-model="form.password" type="password" placeholder="Enter password" />
+          <UInput
+            class="w-full"
+            v-model="form.password"
+            type="password"
+            placeholder="Enter password"
+          />
         </UFormField>
 
         <UFormField v-if="isEditMode" label="Status" name="status" required>

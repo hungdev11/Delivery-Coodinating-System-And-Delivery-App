@@ -1,6 +1,7 @@
 export const routes = [
   {
     path: '/',
+    name: 'home',
     component: () => import('./HomeView.vue'),
     meta: {
       requiresAuth: true,
@@ -8,6 +9,7 @@ export const routes = [
   },
   {
     path: '/unauthorized',
+    name: 'unauthorized',
     component: () => import('./UnauthorizedView.vue'),
     meta: {
       requiresAuth: false,

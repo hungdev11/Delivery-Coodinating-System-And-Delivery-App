@@ -5,7 +5,7 @@ import {
   type LoginResponse,
   type LogoutRequest,
   type RefreshTokenRequest,
-  type TokenValidationResponse
+  type TokenValidationResponse,
 } from './model.type'
 import type { IApiResponse } from '@/common/types/http'
 
@@ -17,7 +17,7 @@ export const login = async (form: LoginForm) => {
     {
       username: form.username,
       password: form.password,
-      type: 'FRONTEND' // Use FRONTEND type for client/shipper login
+      type: 'FRONTEND', // Use FRONTEND type for client/shipper login
     },
   )
   return response
@@ -27,21 +27,24 @@ export const logout = async (refreshToken: string) => {
   const response = await axiosHttpClient.post<IApiResponse<boolean>, LogoutRequest>(
     '/v1/auth/logout',
     {
-      refreshToken: refreshToken
-    }
+      refreshToken: refreshToken,
+    },
   )
   return response
 }
 
 export const validateToken = async (token: string) => {
-  const response = await axiosHttpClient.post<IApiResponse<TokenValidationResponse>, Record<string, never>>(
+  const response = await axiosHttpClient.post<
+    IApiResponse<TokenValidationResponse>,
+    Record<string, never>
+  >(
     '/v1/auth/validate-token',
     {},
     {
       headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    }
+        Authorization: `Bearer ${token}`,
+      },
+    },
   )
   return response
 }
@@ -50,8 +53,8 @@ export const refreshToken = async (refreshToken: string) => {
   const response = await axiosHttpClient.post<IApiResponse<LoginResponse>, RefreshTokenRequest>(
     '/v1/auth/refresh-token',
     {
-      refreshToken: refreshToken
-    }
+      refreshToken: refreshToken,
+    },
   )
   return response
 }

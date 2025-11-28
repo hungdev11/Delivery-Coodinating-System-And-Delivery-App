@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * MessageStatusIndicator Component
- * 
+ *
  * Displays message status icons (SENT, DELIVERED, READ)
  */
 
@@ -14,7 +14,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   status: 'SENT',
-  size: 'sm'
+  size: 'sm',
 })
 
 const statusIcon = computed(() => {
@@ -74,10 +74,6 @@ const iconSize = computed(() => {
 
 <template>
   <UTooltip :text="statusTooltip">
-    <UIcon 
-      :name="statusIcon" 
-      :class="[statusColor, iconSize]"
-      class="flex-shrink-0"
-    />
+    <UIcon :name="statusIcon" :class="[statusColor, iconSize]" class="flex-shrink-0" />
   </UTooltip>
 </template>
