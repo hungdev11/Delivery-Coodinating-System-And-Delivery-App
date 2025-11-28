@@ -2,8 +2,6 @@
 set -euo pipefail
 
 # Setup Android app signing configuration
-# Usage: setup-signing.sh [keystore_base64] [keystore_password] [key_alias] [key_password]
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_DIR="$PROJECT_DIR/app"
@@ -11,68 +9,54 @@ KEYSTORE_PATH="$APP_DIR/release.keystore"
 KEYSTORE_PROPERTIES="$APP_DIR/keystore.properties"
 BUILD_GRADLE="$APP_DIR/build.gradle"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
 log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+    echo "[INFO] $1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo "[WARN] $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo "[ERROR] $1"
 }
 
-# Parse arguments or environment variables
-KEYSTORE_BASE64="${1:-${KEYSTORE_BASE64:-}}"
-KEYSTORE_PASSWORD="${2:-${KEYSTORE_PASSWORD:-}}"
-KEY_ALIAS="${3:-${KEY_ALIAS:-}}"
-KEY_PASSWORD="${4:-${KEY_PASSWORD:-}}"
+# Read environment variables
+KEYSTORE_BASE64="${KEYSTORE_BASE64:-}"
+KEYSTORE_PASSWORD="${KEYSTORE_PASSWORD:-}"
+KEY_ALIAS="${KEY_ALIAS:-}"
+KEY_PASSWORD="${KEY_PASSWORD:-}"
 
 # Setup keystore
 setup_keystore() {
-    # Check if real keystore secrets are provided
+    cd "$APP_DIR"
+    
     if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
         log_info "Using provided keystore from secrets"
         echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
-        
-        KEYSTORE_FILE="release.keystore"
         STORE_PASSWORD="$KEYSTORE_PASSWORD"
         KEY_ALIAS_VALUE="$KEY_ALIAS"
         KEY_PASSWORD_VALUE="$KEY_PASSWORD"
     else
-        log_warn "No keystore secrets found, creating mock keystore for signing"
-        
-        # Create mock keystore
+        log_warn "No keystore secrets found, creating mock keystore"
         keytool -genkey -v \
             -keystore "$KEYSTORE_PATH" \
             -alias release-key \
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
-            -storepass damnmanweshouldpassthisshit \
-            -keypass damnmanweshouldpassthisshit \
+            -storepass android123 \
+            -keypass android123 \
             -dname "CN=Delivery App, OU=Development, O=DS, L=City, ST=State, C=VN" \
-            -noprompt 2>/dev/null || {
-            log_error "Failed to create mock keystore"
-            exit 1
-        }
+            -noprompt 2>/dev/null || true
         
-        KEYSTORE_FILE="release.keystore"
-        STORE_PASSWORD="damnmanweshouldpassthisshit"
+        STORE_PASSWORD="android123"
         KEY_ALIAS_VALUE="release-key"
-        KEY_PASSWORD_VALUE="damnmanweshouldpassthisshit"
+        KEY_PASSWORD_VALUE="android123"
     fi
     
-    # Create keystore.properties in app directory
     cat > "$KEYSTORE_PROPERTIES" << EOF
-storeFile=$KEYSTORE_FILE
+storeFile=release.keystore
 storePassword=$STORE_PASSWORD
 keyAlias=$KEY_ALIAS_VALUE
 keyPassword=$KEY_PASSWORD_VALUE
@@ -86,45 +70,56 @@ setup_build_gradle() {
     cd "$PROJECT_DIR"
     
     if [ ! -f "$BUILD_GRADLE" ]; then
-        log_error "build.gradle not found at $BUILD_GRADLE"
+        log_error "build.gradle not found"
         exit 1
-    fi
-    
-    # Check if signing already configured
-    if grep -q "signingConfigs" "$BUILD_GRADLE"; then
-        log_info "Signing config already exists in build.gradle"
-        return 0
     fi
     
     log_info "Setting up signing configuration in build.gradle"
     
-    # Create Python script to modify build.gradle
-    python3 << PYTHON_EOF
+    python3 << 'PYEOF'
 import re
 import sys
-import os
 
-# Change to project directory
-os.chdir('$PROJECT_DIR')
-build_gradle_path = 'app/build.gradle'
+build_gradle = 'app/build.gradle'
 
 try:
-    with open(build_gradle_path, 'r') as f:
+    with open(build_gradle, 'r') as f:
         content = f.read()
     
-    # Add keystore properties loading before android block
-    keystore_code = '''def keystorePropertiesFile = rootProject.file("app/keystore.properties")
+    # Remove ALL existing signing config completely
+    # Remove keystore properties
+    content = re.sub(r'^def keystorePropertiesFile.*?\n.*?keystoreProperties\.load.*?\n\n', '', content, flags=re.MULTILINE | re.DOTALL)
+    
+    # Remove signingConfigs block
+    content = re.sub(r'\n\s*signingConfigs\s*\{[^}]*?\n\s*release\s*\{[^}]*?\n\s*\}\s*\}\s*\n', '\n', content, flags=re.DOTALL)
+    
+    # Remove signingConfig from release
+    content = re.sub(r'\n\s*if\s*\(keystorePropertiesFile\.exists\(\)\)\s*\{[^}]*?signingConfig[^}]*?\}', '', content, flags=re.DOTALL)
+    content = re.sub(r'\n\s*signingConfig\s+signingConfigs\.release\s*\n', '\n', content)
+    
+    # Ensure compileSdk exists
+    if 'compileSdk' not in content:
+        print("ERROR: compileSdk not found!")
+        sys.exit(1)
+    
+    # Add keystore properties before android {
+    if 'def keystorePropertiesFile' not in content:
+        keystore_code = '''def keystorePropertiesFile = rootProject.file("app/keystore.properties")
 def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
 '''
-    content = re.sub(r'^(android \{)', keystore_code + r'\1', content, flags=re.MULTILINE)
+        content = keystore_code + content
     
-    # Add signingConfigs after namespace
-    signing_code = '''
-    signingConfigs {
+    # Add signingConfigs after compileSdk line
+    if 'signingConfigs {' not in content:
+        compile_sdk_pattern = r'(    compileSdk \d+\n)'
+        match = re.search(compile_sdk_pattern, content)
+        if match:
+            pos = match.end()
+            signing_block = '''    signingConfigs {
         release {
             if (keystorePropertiesFile.exists()) {
                 storeFile file(keystoreProperties['storeFile'])
@@ -135,51 +130,47 @@ if (keystorePropertiesFile.exists()) {
         }
     }
 '''
-    content = re.sub(r'(    namespace [^\n]+)', r'\1' + signing_code, content)
+            content = content[:pos] + signing_block + content[pos:]
     
-    # Update release buildType to use signing
-    release_match = re.search(r'(        release \{)([^}]+)(\})', content, re.DOTALL)
-    if release_match:
-        release_content = release_match.group(2)
-        new_release = f'''        release {{
-            if (keystorePropertiesFile.exists()) {{
+    # Add signingConfig to release buildType
+    release_pattern = r'(        release \{)(.*?)(\n        \})'
+    match = re.search(release_pattern, content, re.DOTALL)
+    if match and 'signingConfig signingConfigs.release' not in match.group(2):
+        release_body = match.group(2)
+        # Clean any existing signingConfig from body
+        release_body = re.sub(r'\s*if\s*\(keystorePropertiesFile\.exists\(\)\).*?signingConfig.*?\n', '', release_body, flags=re.DOTALL)
+        release_body = re.sub(r'\s*signingConfig.*?\n', '', release_body)
+        
+        signing_lines = '''            if (keystorePropertiesFile.exists()) {
                 signingConfig signingConfigs.release
-            }}{release_content}
-        }}'''
-        content = content.replace(release_match.group(0), new_release)
+            }
+'''
+        new_body = signing_lines + release_body
+        content = content.replace(match.group(0), match.group(1) + new_body + match.group(3))
     
-    with open(build_gradle_path, 'w') as f:
+    with open(build_gradle, 'w') as f:
         f.write(content)
     
-    print("Signing configuration added to build.gradle")
+    print("Signing configuration updated successfully")
     sys.exit(0)
 except Exception as e:
-    print(f"Error setting up signing: {e}")
+    import traceback
+    print(f"Error: {e}")
+    traceback.print_exc()
     sys.exit(1)
-PYTHON_EOF
+PYEOF
     
     if [ $? -ne 0 ]; then
         log_error "Failed to setup signing in build.gradle"
         exit 1
     fi
-    
-    log_info "Signing configuration added to build.gradle"
 }
 
-# Main execution
 main() {
-    log_info "Starting signing setup..."
-    
-    # Change to project directory
-    cd "$PROJECT_DIR"
-    
-    # Setup keystore
+    log_info "Starting Android signing setup..."
     setup_keystore
-    
-    # Setup build.gradle
     setup_build_gradle
-    
-    log_info "Signing setup completed successfully!"
+    log_info "Android signing setup completed!"
 }
 
 main "$@"

@@ -46,7 +46,22 @@ jobs:
         id: check-force
         run: |
           COMMIT_MSG="${{ github.event.head_commit.message }}"
+          FORCE_ALL=false
+          FORCE_FRONTEND=false
+          
+          # Check for specific Frontend flag
+          if echo "$COMMIT_MSG" | grep -qi '\[force-build-frontend\]'; then
+            FORCE_FRONTEND=true
+            echo "force-build-frontend: detected"
+          fi
+          
+          # Check for general force-build flag
           if echo "$COMMIT_MSG" | grep -qi '\[force-build\]'; then
+            FORCE_ALL=true
+            echo "force-build (all): detected"
+          fi
+          
+          if [ "$FORCE_FRONTEND" = "true" ] || [ "$FORCE_ALL" = "true" ]; then
             echo "force-build: true"
             echo "force-build=true" >> $GITHUB_OUTPUT
           else
