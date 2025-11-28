@@ -15,17 +15,19 @@ export const communicationRoutes: RouteRecordRaw[] = [
       title: 'Conversations',
       roles: ['ADMIN', 'CLIENT', 'MANAGER', 'SHIPPER'],
     },
-  },
-  {
-    path: '/communication/chat/:conversationId',
-    name: 'communication-chat',
-    component: () => import('./ChatView.vue'),
-    meta: {
-      requiresAuth: true,
-      layout: 'default',
-      title: 'Chat',
-      roles: ['ADMIN', 'CLIENT', 'MANAGER', 'SHIPPER'],
-    },
+    children: [
+      {
+        path: 'chat/:conversationId',
+        name: 'communication-chat',
+        component: () => import('./ChatView.vue'),
+        meta: {
+          requiresAuth: true,
+          layout: 'default',
+          title: 'Chat',
+          roles: ['ADMIN', 'CLIENT', 'MANAGER', 'SHIPPER'],
+        },
+      },
+    ],
   },
   {
     path: '/communication/proposals/configs',
