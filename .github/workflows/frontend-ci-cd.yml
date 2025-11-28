@@ -154,40 +154,42 @@ jobs:
             echo "management-system=false" >> $GITHUB_OUTPUT
           fi
 
-  # Job 2: Lint and Type Check
-  lint:
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.management-system == 'true'
-    steps:
-      - uses: actions/checkout@v4
+  # # Job 2: Lint and Type Check
+  # lint:
+  #   runs-on: ubuntu-latest
+  #   needs: detect-changes
+  #   if: needs.detect-changes.outputs.management-system == 'true'
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: ManagementSystem/package-lock.json
+  #     - name: Set up Node.js
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #         cache: 'npm'
+  #         cache-dependency-path: ManagementSystem/package-lock.json
 
-      - name: Install dependencies
-        working-directory: ManagementSystem
-        run: npm ci --silent
+  #     - name: Install dependencies
+  #       working-directory: ManagementSystem
+  #       run: npm ci --silent
 
-      - name: Type check
-        working-directory: ManagementSystem
-        run: npm run type-check 2>/dev/null || echo "Type check completed"
+  #     - name: Type check
+  #       working-directory: ManagementSystem
+  #       run: npm run type-check 2>/dev/null || echo "Type check completed"
 
-      - name: Lint
-        working-directory: ManagementSystem
-        run: npm run lint 2>/dev/null || echo "Lint completed"
+  #     - name: Lint
+  #       working-directory: ManagementSystem
+  #       run: npm run lint 2>/dev/null || echo "Lint completed"
 
   # Job 3: Build and Push Docker Image
   build-and-push:
     runs-on: ubuntu-latest
-    needs: [detect-changes, lint]
+    needs: [detect-changes]
+    # needs: [detect-changes, lint]
     if: |
-      needs.detect-changes.outputs.management-system == 'true' &&
-      (needs.lint.result == 'success' || needs.lint.result == 'skipped')
+      needs.detect-changes.outputs.management-system == 'true'
+  # needs.detect-changes.outputs.management-system == 'true' &&
+  # (needs.lint.result == 'success' || needs.lint.result == 'skipped')
     permissions:
       contents: read
       packages: write

@@ -278,16 +278,25 @@ const columns: TableColumn<ParcelDto>[] = [
           UButton,
           {
             size: 'sm',
-            variant: 'ghost',
-            color: 'primary',
+            variant: canConfirm ? 'soft' : 'ghost',
+            color: canConfirm ? 'primary' : 'neutral',
             disabled: !canConfirm || isConfirming(parcel.id),
             loading: isConfirming(parcel.id),
             title: canConfirm
-              ? 'Confirm that you have received this parcel'
-              : 'Parcel must be DELIVERED to confirm receipt',
+              ? 'Xác nhận đã nhận hàng'
+              : 'Chỉ có thể xác nhận khi đơn hàng ở trạng thái DELIVERED',
             onClick: () => handleConfirmReceived(parcel),
+            class: !canConfirm ? 'opacity-50 cursor-not-allowed' : '',
           },
-          () => (isConfirming(parcel.id) ? 'Confirming...' : 'Confirm received'),
+          () => {
+            if (isConfirming(parcel.id)) {
+              return 'Đang xác nhận...'
+            }
+            if (!canConfirm) {
+              return 'Chờ giao hàng'
+            }
+            return 'Xác nhận nhận hàng'
+          },
         ),
       ])
     },
@@ -399,16 +408,7 @@ onMounted(() => {
                 >
                   QR
                 </UButton>
-                <UButton
-                  v-if="canConfirmParcel(parcel)"
-                  size="xs"
-                  variant="soft"
-                  color="primary"
-                  :loading="isConfirming(parcel.id)"
-                  @click="handleConfirmReceived(parcel)"
-                >
-                  {{ isConfirming(parcel.id) ? 'Đang xác nhận...' : 'Đã nhận' }}
-                </UButton>
+                <!-- Note: Confirm received button is hidden on mobile/Android as confirmation is handled in Android app -->
               </div>
             </div>
           </UCard>
