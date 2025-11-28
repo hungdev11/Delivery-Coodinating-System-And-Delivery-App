@@ -17,6 +17,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'pwa-192x192.png', 'pwa-512x512.png'],
+      devOptions: {
+        enabled: true,
+        suppressWarnings: true,
+      },
       manifest: {
         name: 'CRM - Quản lý đơn hàng',
         short_name: 'CRM',
