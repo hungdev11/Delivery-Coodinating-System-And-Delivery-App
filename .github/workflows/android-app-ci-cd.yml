@@ -19,6 +19,8 @@ jobs:
     outputs:
       delivery-app: ${{ steps.tag-check.outputs.delivery-app }}
       force-build: ${{ steps.check-force.outputs.force-build }}
+      pre-release: ${{ steps.tag-check.outputs.pre-release }}
+      latest: ${{ steps.tag-check.outputs.latest }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,23 +45,74 @@ jobs:
             delivery-app:
               - 'DeliveryApp/**'
           list-files: shell
+
+      - name: Check if CI/CD file changed
+        id: check-cicd
+        run: |
+          if [ "${{ steps.changes.outputs.cicd-file }}" = "true" ]; then
+            echo "cicd-changed=true" >> $GITHUB_OUTPUT
+            echo "CI/CD file changed: forcing build"
+          else
+            echo "cicd-changed=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Determine final change status
         id: tag-check
         run: |
+          EVENT_TYPE="${{ github.event_name }}"
+          REF="${{ github.ref }}"
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          ACTION="${{ github.event.action }}"
           FORCE="${{ steps.check-force.outputs.force-build }}"
+          CICD_CHANGED="${{ steps.check-cicd.outputs.cicd-changed }}"
           
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          PRE_RELEASE="false"
+          LATEST="false"
+          BUILD_APP="false"
+          
+          # Tag releases: always build
+          if [[ "$REF" == refs/tags/* ]]; then
             echo "mode: tag release"
-            echo "delivery-app=true" >> $GITHUB_OUTPUT
-          elif [ "$FORCE" = "true" ]; then
-            echo "mode: force-build"
-            echo "delivery-app=true" >> $GITHUB_OUTPUT
-          else
-            echo "mode: change-detection"
-            echo "delivery-app=${{ steps.changes.outputs.delivery-app }}" >> $GITHUB_OUTPUT
+            BUILD_APP="true"
+            LATEST="true"
+          # PR events: only build pre-release when PR is opened/synchronize (not when merged/closed)
+          elif [ "$EVENT_TYPE" = "pull_request" ]; then
+            if [ "$BASE_REF" = "main" ] || [[ "$BASE_REF" =~ ^release/ ]]; then
+              # Only build for opened/synchronize actions, skip for closed/merged
+              if [ "$ACTION" != "closed" ]; then
+                BUILD_APP="true"
+                PRE_RELEASE="true"
+              fi
+            fi
+          # Push events: build latest for main or release/* branches
+          elif [ "$EVENT_TYPE" = "push" ]; then
+            if [ "$REF" = "refs/heads/main" ] || [[ "$REF" =~ ^refs/heads/release/ ]]; then
+              BUILD_APP="true"
+              LATEST="true"
+            elif [ "${{ steps.changes.outputs.delivery-app }}" = "true" ] || [ "$FORCE" = "true" ] || [ "$CICD_CHANGED" = "true" ]; then
+              BUILD_APP="true"
+            fi
           fi
           
-          echo "delivery-app: ${{ steps.changes.outputs.delivery-app }}"
+          # Force build overrides
+          if [ "$FORCE" = "true" ] || [ "$CICD_CHANGED" = "true" ]; then
+            if [ "$CICD_CHANGED" = "true" ]; then
+              echo "mode: force-build (CI/CD file changed)"
+            else
+              echo "mode: force-build (flag detected)"
+            fi
+            BUILD_APP="true"
+          fi
+          
+          echo "delivery-app=$BUILD_APP" >> $GITHUB_OUTPUT
+          echo "pre-release=$PRE_RELEASE" >> $GITHUB_OUTPUT
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          
+          echo "Event type: $EVENT_TYPE"
+          echo "Action: ${ACTION:-N/A}"
+          echo "Pre-release: $PRE_RELEASE"
+          echo "Latest: $LATEST"
+          echo "Build app: $BUILD_APP"
   # Job 2: Run Unit Tests
   test:
     runs-on: ubuntu-latest
@@ -128,14 +181,29 @@ jobs:
         run: |
           echo "Debug APKs:"
           find app/build/outputs/apk/debug -name "*.apk" 2>/dev/null || echo "  none"
-          echo ""
-          echo "Release APKs:"
-          find app/build/outputs/apk/release -name "*.apk" 2>/dev/null || echo "  none"
       
-      - name: Upload Debug APK
+      - name: Upload Debug APK (with SHA tag)
         uses: actions/upload-artifact@v4
         with:
-          name: delivery-app-debug-apk
+          name: delivery-app-debug-apk-sha-${{ github.sha }}
+          path: DeliveryApp/app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+          if-no-files-found: warn
+      
+      - name: Upload Debug APK (pre-release tag)
+        if: needs.detect-changes.outputs.pre-release == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-app-debug-apk-pre-release
+          path: DeliveryApp/app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+          if-no-files-found: warn
+      
+      - name: Upload Debug APK (latest tag)
+        if: needs.detect-changes.outputs.latest == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-app-debug-apk-latest
           path: DeliveryApp/app/build/outputs/apk/debug/*.apk
           retention-days: 30
           if-no-files-found: warn
@@ -175,10 +243,66 @@ jobs:
         working-directory: DeliveryApp
         run: ./gradlew bundleRelease --no-daemon
       
-      - name: Upload Release AAB
+      - name: Verify signed artifacts
+        working-directory: DeliveryApp
+        run: |
+          echo "Verifying signed APK:"
+          jarsigner -verify -verbose -certs app/build/outputs/apk/release/*.apk || echo "Warning: APK verification check"
+          echo ""
+          echo "Release APK found:"
+          find app/build/outputs/apk/release -name "*.apk" || echo "  none"
+          echo ""
+          echo "Release AAB found:"
+          find app/build/outputs/bundle/release -name "*.aab" || echo "  none"
+      
+      - name: Upload Signed Release APK (with SHA tag)
         uses: actions/upload-artifact@v4
         with:
-          name: delivery-app-release-aab
+          name: delivery-app-signed-release-apk-sha-${{ github.sha }}
+          path: DeliveryApp/app/build/outputs/apk/release/*.apk
+          retention-days: 90
+          if-no-files-found: warn
+      
+      - name: Upload Signed Release APK (pre-release tag)
+        if: needs.detect-changes.outputs.pre-release == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-app-signed-release-apk-pre-release
+          path: DeliveryApp/app/build/outputs/apk/release/*.apk
+          retention-days: 90
+          if-no-files-found: warn
+      
+      - name: Upload Signed Release APK (latest tag)
+        if: needs.detect-changes.outputs.latest == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-app-signed-release-apk-latest
+          path: DeliveryApp/app/build/outputs/apk/release/*.apk
+          retention-days: 90
+          if-no-files-found: warn
+      
+      - name: Upload Signed Release AAB (with SHA tag)
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-app-signed-release-aab-sha-${{ github.sha }}
+          path: DeliveryApp/app/build/outputs/bundle/release/*.aab
+          retention-days: 90
+          if-no-files-found: warn
+      
+      - name: Upload Signed Release AAB (pre-release tag)
+        if: needs.detect-changes.outputs.pre-release == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-app-signed-release-aab-pre-release
+          path: DeliveryApp/app/build/outputs/bundle/release/*.aab
+          retention-days: 90
+          if-no-files-found: warn
+      
+      - name: Upload Signed Release AAB (latest tag)
+        if: needs.detect-changes.outputs.latest == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-app-signed-release-aab-latest
           path: DeliveryApp/app/build/outputs/bundle/release/*.aab
           retention-days: 90
           if-no-files-found: warn
@@ -195,22 +319,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Download Debug APK
+      - name: Download artifacts for release
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: delivery-app-debug-apk
+          pattern: delivery-app-*-latest
+          merge-multiple: true
           path: ./artifacts
       
-      - name: Download Release APK
+      - name: Download artifacts by SHA (fallback)
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: delivery-app-release-apk
-          path: ./artifacts
-      
-      - name: Download Release AAB
-        uses: actions/download-artifact@v4
-        with:
-          name: delivery-app-release-aab
+          pattern: delivery-app-*-sha-${{ github.sha }}
+          merge-multiple: true
           path: ./artifacts
       
       - name: Create Release

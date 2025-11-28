@@ -166,6 +166,73 @@ jobs:
             com.ds.branch=${{ github.ref_name }}
             com.ds.commit=${{ github.sha }}
 
+      - name: Retag existing image to latest (skip rebuild)
+        id: retag
+        if: |
+          steps.tag-conditions.outputs.latest == 'true' &&
+          steps.check-existing-image.outputs.image-exists == 'true'
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          OWNER: ${{ env.REPOSITORY_OWNER }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME_PREFIX }}-management-system
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          EXISTING_IMAGE="${{ steps.check-existing-image.outputs.existing-image }}"
+          LATEST_TAG="${REGISTRY}/${OWNER}/${IMAGE_NAME}:latest"
+          SHA_FULL_TAG="${REGISTRY}/${OWNER}/${IMAGE_NAME}:sha-${COMMIT_SHA}"
+          SHA_SHORT_TAG="${REGISTRY}/${OWNER}/${IMAGE_NAME}:sha-${COMMIT_SHA:0:7}"
+          
+          echo "Pulling existing image: $EXISTING_IMAGE"
+          docker pull "$EXISTING_IMAGE" || exit 1
+          
+          # Get digest from existing image before retagging
+          # Try multiple methods to get the digest
+          IMAGE_DIGEST=""
+          
+          # Method 1: From manifest inspect (most reliable)
+          if [ -z "$IMAGE_DIGEST" ]; then
+            MANIFEST_DIGEST=$(docker manifest inspect "$EXISTING_IMAGE" 2>/dev/null | grep -oP '"digest":\s*"\K[^"]+' | head -1 || echo "")
+            if [ -n "$MANIFEST_DIGEST" ]; then
+              IMAGE_DIGEST="$MANIFEST_DIGEST"
+            fi
+          fi
+          
+          # Method 2: From docker inspect RepoDigests
+          if [ -z "$IMAGE_DIGEST" ]; then
+            REPO_DIGEST=$(docker inspect "$EXISTING_IMAGE" --format='{{index .RepoDigests 0}}' 2>/dev/null | cut -d'@' -f2 || echo "")
+            if [ -n "$REPO_DIGEST" ]; then
+              IMAGE_DIGEST="$REPO_DIGEST"
+            fi
+          fi
+          
+          # Method 3: From docker inspect Id (fallback)
+          if [ -z "$IMAGE_DIGEST" ]; then
+            IMAGE_ID=$(docker inspect "$EXISTING_IMAGE" --format='{{.Id}}' 2>/dev/null || echo "")
+            if [ -n "$IMAGE_ID" ] && [[ "$IMAGE_ID" =~ ^sha256: ]]; then
+              IMAGE_DIGEST="$IMAGE_ID"
+            fi
+          fi
+          
+          echo "Retagging to latest + sha tags"
+          docker tag "$EXISTING_IMAGE" "$LATEST_TAG"
+          docker tag "$EXISTING_IMAGE" "$SHA_FULL_TAG"
+          docker tag "$EXISTING_IMAGE" "$SHA_SHORT_TAG"
+          
+          echo "Pushing tags: latest, sha-full, sha-short"
+          docker push "$LATEST_TAG"
+          docker push "$SHA_FULL_TAG"
+          docker push "$SHA_SHORT_TAG"
+          
+          # Output digest for attestation step (always output, even if empty)
+          echo "digest=${IMAGE_DIGEST:-}" >> $GITHUB_OUTPUT
+          if [ -n "$IMAGE_DIGEST" ]; then
+            echo "Image digest: $IMAGE_DIGEST"
+          else
+            echo "Warning: Could not retrieve image digest, attestation will be skipped"
+          fi
+          
+          echo "✅ Image retagged successfully (skipped rebuild, saved time/resources)"
+
       - name: Build and push Docker image
         id: push
         uses: docker/build-push-action@v5
@@ -212,11 +279,28 @@ jobs:
             echo "Link: already linked or manual setup needed"
           fi
 
+      - name: Determine image digest for attestation
+        id: image-digest
+        run: |
+          # Use digest from build step if available, otherwise from retag step
+          if [ -n "${{ steps.push.outputs.digest }}" ]; then
+            echo "digest=${{ steps.push.outputs.digest }}" >> $GITHUB_OUTPUT
+            echo "Using digest from build step"
+          elif [ -n "${{ steps.retag.outputs.digest }}" ]; then
+            echo "digest=${{ steps.retag.outputs.digest }}" >> $GITHUB_OUTPUT
+            echo "Using digest from retag step"
+          else
+            echo "digest=" >> $GITHUB_OUTPUT
+            echo "No digest available"
+          fi
+
       - name: Generate artifact attestation
+        if: steps.image-digest.outputs.digest != ''
+        continue-on-error: true
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ env.IMAGE_NAME_PREFIX }}-management-system
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-digest: ${{ steps.image-digest.outputs.digest }}
           push-to-registry: true
 
   # Job 4: Auto Deploy

@@ -299,55 +299,7 @@ jobs:
           chmod +x mvnw 2>/dev/null || true
           ./mvnw -B -ntp -q clean test 2>/dev/null || mvn -B -ntp -q clean test
 
-  # Job 9: Integration Tests (Non-blocking)
-  integration-tests:
-    runs-on: ubuntu-latest
-    needs: [detect-changes, test-api-gateway, test-user-service, test-settings-service, test-zone-service, test-parcel-service, test-session-service, test-communication-service]
-    if: always() && needs.detect-changes.outputs.any-service == 'true'
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Start services with Docker Compose
-        run: |
-          docker-compose -f docker-compose.test.yml up -d --build
-          sleep 60
-
-      - name: Check service health
-        run: |
-          echo "Health checks:"
-          echo ""
-          curl -sf http://localhost:21500/actuator/health && echo "  api-gateway: ok" || echo "  api-gateway: failed"
-          curl -sf http://localhost:21501/actuator/health && echo "  user-service: ok" || echo "  user-service: failed"
-          curl -sf http://localhost:21502/actuator/health && echo "  settings-service: ok" || echo "  settings-service: failed"
-
-      - name: Run Integration Tests
-        continue-on-error: true
-        run: |
-          echo "Integration tests: running"
-          echo ""
-          # Add integration test commands here
-          echo "Integration tests: completed (non-blocking)"
-
-      - name: Show service logs on failure
-        if: failure()
-        run: |
-          echo "=== API Gateway Logs ==="
-          docker logs dss-api-gateway-test --tail 50 || true
-          echo "=== User Service Logs ==="
-          docker logs dss-user-service-test --tail 50 || true
-          echo "=== Settings Service Logs ==="
-          docker logs dss-settings-service-test --tail 50 || true
-
-      - name: Stop services
-        if: always()
-        run: |
-          docker-compose -f docker-compose.test.yml down -v || true
-
-  # Job 10: Build and Push Docker Images
+  # Job 9: Build and Push Docker Images
   build-and-push:
     runs-on: ubuntu-latest
     needs: [detect-changes, test-api-gateway, test-user-service, test-settings-service, test-zone-service, test-parcel-service, test-session-service, test-communication-service]
@@ -463,6 +415,73 @@ jobs:
             com.ds.run-id=${{ github.run_id }}
             com.ds.run-number=${{ github.run_number }}
 
+      - name: Retag existing image to latest (skip rebuild)
+        id: retag
+        if: |
+          steps.tag-conditions.outputs.latest == 'true' &&
+          steps.check-existing-image.outputs.image-exists == 'true'
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          OWNER: ${{ env.REPOSITORY_OWNER }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME_PREFIX }}-${{ matrix.service.name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          EXISTING_IMAGE="${{ steps.check-existing-image.outputs.existing-image }}"
+          LATEST_TAG="${REGISTRY}/${OWNER}/${IMAGE_NAME}:latest"
+          SHA_FULL_TAG="${REGISTRY}/${OWNER}/${IMAGE_NAME}:sha-${COMMIT_SHA}"
+          SHA_SHORT_TAG="${REGISTRY}/${OWNER}/${IMAGE_NAME}:sha-${COMMIT_SHA:0:7}"
+          
+          echo "Pulling existing image: $EXISTING_IMAGE"
+          docker pull "$EXISTING_IMAGE" || exit 1
+          
+          # Get digest from existing image before retagging
+          # Try multiple methods to get the digest
+          IMAGE_DIGEST=""
+          
+          # Method 1: From manifest inspect (most reliable)
+          if [ -z "$IMAGE_DIGEST" ]; then
+            MANIFEST_DIGEST=$(docker manifest inspect "$EXISTING_IMAGE" 2>/dev/null | grep -oP '"digest":\s*"\K[^"]+' | head -1 || echo "")
+            if [ -n "$MANIFEST_DIGEST" ]; then
+              IMAGE_DIGEST="$MANIFEST_DIGEST"
+            fi
+          fi
+          
+          # Method 2: From docker inspect RepoDigests
+          if [ -z "$IMAGE_DIGEST" ]; then
+            REPO_DIGEST=$(docker inspect "$EXISTING_IMAGE" --format='{{index .RepoDigests 0}}' 2>/dev/null | cut -d'@' -f2 || echo "")
+            if [ -n "$REPO_DIGEST" ]; then
+              IMAGE_DIGEST="$REPO_DIGEST"
+            fi
+          fi
+          
+          # Method 3: From docker inspect Id (fallback)
+          if [ -z "$IMAGE_DIGEST" ]; then
+            IMAGE_ID=$(docker inspect "$EXISTING_IMAGE" --format='{{.Id}}' 2>/dev/null || echo "")
+            if [ -n "$IMAGE_ID" ] && [[ "$IMAGE_ID" =~ ^sha256: ]]; then
+              IMAGE_DIGEST="$IMAGE_ID"
+            fi
+          fi
+          
+          echo "Retagging to latest + sha tags"
+          docker tag "$EXISTING_IMAGE" "$LATEST_TAG"
+          docker tag "$EXISTING_IMAGE" "$SHA_FULL_TAG"
+          docker tag "$EXISTING_IMAGE" "$SHA_SHORT_TAG"
+          
+          echo "Pushing tags: latest, sha-full, sha-short"
+          docker push "$LATEST_TAG"
+          docker push "$SHA_FULL_TAG"
+          docker push "$SHA_SHORT_TAG"
+          
+          # Output digest for attestation step (always output, even if empty)
+          echo "digest=${IMAGE_DIGEST:-}" >> $GITHUB_OUTPUT
+          if [ -n "$IMAGE_DIGEST" ]; then
+            echo "Image digest: $IMAGE_DIGEST"
+          else
+            echo "Warning: Could not retrieve image digest, attestation will be skipped"
+          fi
+          
+          echo "✅ Image retagged successfully (skipped rebuild, saved time/resources)"
+
       - name: Build and push Docker image
         id: push
         uses: docker/build-push-action@v5
@@ -510,80 +529,26 @@ jobs:
             echo "Status: already linked or manual setup needed"
           fi
 
+      - name: Determine image digest for attestation
+        id: image-digest
+        run: |
+          # Use digest from build step if available, otherwise from retag step
+          if [ -n "${{ steps.push.outputs.digest }}" ]; then
+            echo "digest=${{ steps.push.outputs.digest }}" >> $GITHUB_OUTPUT
+            echo "Using digest from build step"
+          elif [ -n "${{ steps.retag.outputs.digest }}" ]; then
+            echo "digest=${{ steps.retag.outputs.digest }}" >> $GITHUB_OUTPUT
+            echo "Using digest from retag step"
+          else
+            echo "digest=" >> $GITHUB_OUTPUT
+            echo "No digest available"
+          fi
+
       - name: Generate artifact attestation
+        if: steps.image-digest.outputs.digest != ''
+        continue-on-error: true
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ env.IMAGE_NAME_PREFIX }}-${{ matrix.service.name }}
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-digest: ${{ steps.image-digest.outputs.digest }}
           push-to-registry: true
-
-  # Job 11: Auto Deploy to aaPanel-managed server
-  auto-deploy:
-    runs-on: ubuntu-latest
-    needs: [detect-changes, build-and-push]
-    if: |
-      needs.detect-changes.outputs.any-service == 'true' &&
-      needs.build-and-push.result == 'success'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Validate deployment
-        env:
-          CHANGED_SERVICES: ${{ needs.detect-changes.outputs.changed-service-names }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-        run: |
-          echo "Services to deploy: ${CHANGED_SERVICES:-none}"
-          echo ""
-          
-          missing=0
-          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
-            if [ -z "${!var}" ]; then
-              echo "ERROR: Missing secret $var"
-              missing=1
-            fi
-          done
-          
-          if [ $missing -eq 1 ]; then
-            exit 1
-          fi
-          echo "Deployment secrets: configured"
-
-      - name: Deploy updated services via aaPanel host
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          CHANGED_SERVICES: ${{ needs.detect-changes.outputs.changed-service-names }}
-          AAPANEL_STACK_PATH: ${{ secrets.AAPANEL_STACK_PATH }}
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: CHANGED_SERVICES,AAPANEL_STACK_PATH
-          script_stop: true
-          script: |
-            set -euo pipefail
-            
-            if [ -z "$CHANGED_SERVICES" ]; then
-              echo "No services changed, skipping deploy"
-              exit 0
-            fi
-            
-            STACK_PATH="${AAPANEL_STACK_PATH:-/www/server/panel/vhost/docker/dss}"
-            if [ ! -d "$STACK_PATH" ]; then
-              echo "ERROR: Stack path not found: $STACK_PATH"
-              exit 1
-            fi
-            cd "$STACK_PATH"
-            
-            echo "Pulling images..."
-            docker compose pull --quiet
-            
-            echo "Restarting: $CHANGED_SERVICES"
-            docker compose up -d --no-deps $CHANGED_SERVICES
-            
-            echo "Cleaning up old images..."
-            docker image prune -f > /dev/null
-            
-            echo ""
-            echo "Deployment: completed"

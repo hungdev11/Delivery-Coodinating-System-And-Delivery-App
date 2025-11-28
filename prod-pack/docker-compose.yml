@@ -7,17 +7,34 @@
 #   - DB_PASSWORD: MySQL password
 #
 # Optional (has defaults):
-#   - REPOSITORY_OWNER: GitHub username (default: phuongp2003)
+#   - REPOSITORY_OWNER: GitHub username (default: hungdev11)
 #   - REGISTRY: Container registry (default: ghcr.io)
 #   - IMAGE_TAG: Image tag (default: latest)
 # ==============================================
 
+version: "3.9"
+
+x-deploy-defaults: &default-deploy
+  mode: replicated
+  replicas: 1
+  restart_policy:
+    condition: on-failure
+    delay: 5s
+    max_attempts: 3
+  update_config:
+    order: start-first
+
+x-deploy-critical: &critical-deploy
+  <<: *default-deploy
+  restart_policy:
+    condition: any
+    delay: 5s
+    max_attempts: 3
+
 services:
   # Settings Service (from CI/CD)
   settings-service:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-settings-service:${IMAGE_TAG:-latest}
-    container_name: dss-settings-service
-    restart: unless-stopped
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-hungdev11}/dss-settings-service:${IMAGE_TAG:-latest}
     env_file:
       - .env
     environment:
@@ -28,6 +45,10 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-root}
       SETTINGS_DB_NAME: ${SETTINGS_DB_NAME:-ds_settings_service}
       SERVER_PORT: 21502
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21502/actuator/health"]
       interval: 10s
@@ -37,9 +58,7 @@ services:
 
   # User Service (from CI/CD)
   user-service:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-user-service:${IMAGE_TAG:-latest}
-    container_name: dss-user-service
-    restart: unless-stopped
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-hungdev11}/dss-user-service:${IMAGE_TAG:-latest}
     env_file:
       - .env
     environment:
@@ -56,11 +75,10 @@ services:
       SETTINGS_SERVICE_URL: http://settings-service:21502
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21501
-    depends_on:
-      settings-service:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21501/actuator/health"]
       interval: 10s
@@ -75,11 +93,13 @@ services:
   # Zookeeper (Required for Kafka)
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
-    container_name: dss-zookeeper
-    restart: unless-stopped
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    deploy:
+      <<: *critical-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
       interval: 10s
@@ -90,11 +110,6 @@ services:
   # Kafka
   kafka:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: dss-kafka
-    restart: unless-stopped
-    depends_on:
-      zookeeper:
-        condition: service_healthy
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -106,6 +121,10 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    deploy:
+      <<: *critical-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
       interval: 10s
@@ -113,15 +132,27 @@ services:
       retries: 10
       start_period: 120s
 
+  # Kafka UI (Optional - monitoring)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    environment:
+      KAFKA_CLUSTERS_0_NAME: dss-kafka
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    ports:
+      - "8081:8080"
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
+
   # ============================================
   # BUSINESS SERVICES (Depend on Settings & Kafka)
   # ============================================
 
   # Zone Service (from CI/CD)
   zone-service:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-zone-service:${IMAGE_TAG:-latest}
-    container_name: dss-zone-service
-    restart: unless-stopped
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-hungdev11}/dss-zone-service:${IMAGE_TAG:-latest}
     env_file:
       - .env
     environment:
@@ -134,9 +165,10 @@ services:
       OSRM_V2_BLOCKING_URL: http://osrm-v2-blocking-only:5000
       OSRM_V2_BASE_URL: http://osrm-v2-base:5000
       PORT: 21503
-    depends_on:
-      settings-service:
-        condition: service_healthy
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:21503/health"]
       interval: 30s
@@ -146,9 +178,7 @@ services:
 
   # Parcel Service (from CI/CD)
   parcel-service:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-parcel-service:${IMAGE_TAG:-latest}
-    container_name: dss-parcel-service
-    restart: unless-stopped
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-hungdev11}/dss-parcel-service:${IMAGE_TAG:-latest}
     env_file:
       - .env
     environment:
@@ -162,13 +192,10 @@ services:
       ZONE_SERVICE_URL: ${ZONE_SERVICE_URL:-http://zone-service:21503}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21506
-    depends_on:
-      settings-service:
-        condition: service_healthy
-      user-service:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21506/actuator/health"]
       interval: 10s
@@ -178,9 +205,7 @@ services:
 
   # Session Service (from CI/CD)
   session-service:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-session-service:${IMAGE_TAG:-latest}
-    container_name: dss-session-service
-    restart: unless-stopped
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-hungdev11}/dss-session-service:${IMAGE_TAG:-latest}
     env_file:
       - .env
     environment:
@@ -195,17 +220,10 @@ services:
       ZONE_SERVICE_URL: ${ZONE_SERVICE_URL:-http://zone-service:21503}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21505
-    depends_on:
-      settings-service:
-        condition: service_healthy
-      parcel-service:
-        condition: service_healthy
-      user-service:
-        condition: service_healthy
-      zone-service:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21505/actuator/health"]
       interval: 10s
@@ -215,9 +233,7 @@ services:
 
   # Communication Service (from CI/CD)
   communication-service:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-communication-service:${IMAGE_TAG:-latest}
-    container_name: dss-communication-service
-    restart: unless-stopped
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-hungdev11}/dss-communication-service:${IMAGE_TAG:-latest}
     env_file:
       - .env
     environment:
@@ -231,15 +247,10 @@ services:
       USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:21501}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21511
-    depends_on:
-      settings-service:
-        condition: service_healthy
-      session-service:
-        condition: service_healthy
-      user-service:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:21511/actuator/health"]
       interval: 10s
@@ -253,9 +264,7 @@ services:
 
   # API Gateway (from CI/CD)
   api-gateway:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-api-gateway:${IMAGE_TAG:-latest}
-    container_name: dss-api-gateway
-    restart: unless-stopped
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-hungdev11}/dss-api-gateway:${IMAGE_TAG:-latest}
     env_file:
       - .env
     environment:
@@ -271,21 +280,10 @@ services:
       COMMUNICATION_SERVICE_URL: ${COMMUNICATION_SERVICE_URL:-http://communication-service:21511}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       SERVER_PORT: 21500
-    depends_on:
-      user-service:
-        condition: service_healthy
-      settings-service:
-        condition: service_healthy
-      zone-service:
-        condition: service_healthy
-      session-service:
-        condition: service_healthy
-      parcel-service:
-        condition: service_healthy
-      communication-service:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:21500/api/v1/health || exit 1"]
       interval: 10s
@@ -295,14 +293,16 @@ services:
 
   # ManagementSystem Frontend (from CI/CD)
   management-system:
-    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-phuongp2003}/dss-management-system:${IMAGE_TAG:-latest}
-    container_name: dss-management-system
-    restart: unless-stopped
+    image: ${REGISTRY:-ghcr.io}/${REPOSITORY_OWNER:-hungdev11}/dss-management-system:${IMAGE_TAG:-latest}
     command: ["sh", "-c", "cp -r /app/dist/* /shared/ && echo 'ManagementSystem files copied to shared volume' && tail -f /dev/null"]
     volumes:
       - management-system-dist:/shared
     env_file:
       - .env
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD", "test", "-f", "/shared/index.html"]
       interval: 10s
@@ -313,18 +313,15 @@ services:
   # Nginx Reverse Proxy - Serves frontend and proxies API requests
   nginx-proxy:
     image: nginx:alpine
-    container_name: dss-nginx-proxy
-    restart: unless-stopped
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - management-system-dist:/usr/share/nginx/html:ro
     ports:
       - "8080:8080"
-    depends_on:
-      management-system:
-        condition: service_healthy
-      api-gateway:
-        condition: service_healthy
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD-SHELL", "pgrep nginx || exit 1"]
       interval: 10s
@@ -339,11 +336,13 @@ services:
   # OSRM V2 Full (Rating affects weight, Blocking affects speed)
   osrm-v2-full:
     image: osrm/osrm-backend:latest
-    container_name: dss-osrm-v2-full
-    restart: on-failure
     volumes:
       - ./osrm_data/osrm-full:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
@@ -354,11 +353,13 @@ services:
   # OSRM V2 Rating Only (User feedback affects weight)
   osrm-v2-rating-only:
     image: osrm/osrm-backend:latest
-    container_name: dss-osrm-v2-rating-only
-    restart: on-failure
     volumes:
       - ./osrm_data/osrm-rating-only:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
@@ -369,11 +370,13 @@ services:
   # OSRM V2 Blocking Only (Traffic affects speed)
   osrm-v2-blocking-only:
     image: osrm/osrm-backend:latest
-    container_name: dss-osrm-v2-blocking-only
-    restart: on-failure
     volumes:
       - ./osrm_data/osrm-blocking-only:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
@@ -381,20 +384,26 @@ services:
       retries: 3
       start_period: 10s
 
-  # OSRM V2 Base (VN motorbike optimized, no modifiers)
+# OSRM V2 Base (VN motorbike optimized, no modifiers)
   osrm-v2-base:
     image: osrm/osrm-backend:latest
-    container_name: dss-osrm-v2-base
-    restart: on-failure
     volumes:
       - ./osrm_data/osrm-base:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    deploy:
+      <<: *default-deploy
+    networks:
+      - dss-net
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 10s
+
+networks:
+  dss-net:
+    driver: overlay
 
 volumes:
   management-system-dist:
