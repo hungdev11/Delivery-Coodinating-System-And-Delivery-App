@@ -4,9 +4,12 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
+import android.widget.Spinner;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -21,6 +24,7 @@ import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.KeycloakUserInfoDto;
 import com.ds.deliveryapp.clients.res.LoginResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
+import com.ds.deliveryapp.configs.ServerConfigManager;
 import com.ds.deliveryapp.utils.SessionManager;
 
 import java.util.List;
@@ -33,10 +37,16 @@ public class LoginActivity extends AppCompatActivity {
     private EditText edtUsername, edtPassword;
     private Button btnLogin;
     private ProgressBar loadingIndicator;
+    private Spinner spinnerServer;
+    private Button btnShipper01, btnShipper02, btnShipper03;
 
     private AuthManager authManager;
     private AuthClient authClient;
     private SessionManager sessionManager;
+    private ServerConfigManager serverConfigManager;
+
+    // Default shipper password
+    private static final String SHIPPER_PASSWORD = "shipper123";
 
     private static final String TAG = "LoginActivity";
 
@@ -49,9 +59,12 @@ public class LoginActivity extends AppCompatActivity {
         // Khởi tạo các đối tượng quản lý
         authManager = new AuthManager(this);
         sessionManager = new SessionManager(this);
-        authClient = RetrofitClient.getAuthRetrofitInstance().create(AuthClient.class);
+        serverConfigManager = ServerConfigManager.getInstance(this);
+        authClient = RetrofitClient.getAuthRetrofitInstance(this).create(AuthClient.class);
 
         initViews();
+        setupServerPicker();
+        setupQuickLoginButtons();
 
         // --- BƯỚC 1: KIỂM TRA TOKEN KHI KHỞI ĐỘNG ---
         String existingToken = authManager.getAccessToken();
@@ -73,6 +86,63 @@ public class LoginActivity extends AppCompatActivity {
         edtPassword = findViewById(R.id.edtPassword);
         btnLogin = findViewById(R.id.btnLogin);
         loadingIndicator = findViewById(R.id.loading_indicator);
+        spinnerServer = findViewById(R.id.spinnerServer);
+        btnShipper01 = findViewById(R.id.btnShipper01);
+        btnShipper02 = findViewById(R.id.btnShipper02);
+        btnShipper03 = findViewById(R.id.btnShipper03);
+    }
+
+    private void setupServerPicker() {
+        // Get server names from ServerConfigManager
+        String[] serverNames = ServerConfigManager.getServerNames();
+        
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+            this,
+            android.R.layout.simple_spinner_item,
+            serverNames
+        );
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerServer.setAdapter(adapter);
+        
+        // Set current selection
+        int currentIndex = serverConfigManager.getCurrentServerIndex();
+        spinnerServer.setSelection(currentIndex);
+        
+        // Handle server selection changes
+        spinnerServer.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                String serverName = ServerConfigManager.SERVERS[position][0];
+                String baseUrl = ServerConfigManager.SERVERS[position][1];
+                
+                // Only save if different from current
+                if (!baseUrl.equals(serverConfigManager.getBaseUrl())) {
+                    serverConfigManager.saveServerConfig(serverName, baseUrl);
+                    // Recreate auth client with new server
+                    authClient = RetrofitClient.getAuthRetrofitInstance(LoginActivity.this).create(AuthClient.class);
+                    Log.d(TAG, "Server changed to: " + serverName + " (" + baseUrl + ")");
+                    Toast.makeText(LoginActivity.this, "Server: " + serverName, Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                // Do nothing
+            }
+        });
+    }
+
+    private void setupQuickLoginButtons() {
+        btnShipper01.setOnClickListener(v -> fillCredentials("shipper01", SHIPPER_PASSWORD));
+        btnShipper02.setOnClickListener(v -> fillCredentials("shipper02", SHIPPER_PASSWORD));
+        btnShipper03.setOnClickListener(v -> fillCredentials("shipper03", SHIPPER_PASSWORD));
+    }
+
+    private void fillCredentials(String username, String password) {
+        edtUsername.setText(username);
+        edtPassword.setText(password);
+        // Auto-trigger login after filling credentials
+        handleLogin();
     }
 
     private void setupLoginListener() {

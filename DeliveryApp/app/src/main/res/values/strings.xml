@@ -8,4 +8,7 @@
         <item>SUCCESS</item>
         <item>FAILED</item>
     </string-array>
+    <!-- Server picker -->
+    <string name="server_label">Server</string>
+    <string name="quick_login_label">Quick Login (Shipper)</string>
 </resources>

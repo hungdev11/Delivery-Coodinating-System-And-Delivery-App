@@ -8,6 +8,7 @@ import com.ds.deliveryapp.auth.AuthManager;
 import com.ds.deliveryapp.clients.req.ProposalUpdateDTO;
 import com.ds.deliveryapp.clients.res.Message;
 import com.ds.deliveryapp.clients.res.UpdateNotification;
+import com.ds.deliveryapp.configs.ServerConfigManager;
 import com.ds.deliveryapp.utils.ChatWebSocketListener;
 import com.ds.deliveryapp.utils.ChatWebSocketManager;
 import com.ds.deliveryapp.enums.ContentType;
@@ -25,7 +26,6 @@ import java.util.List;
  */
 public class GlobalChatService implements ChatWebSocketListener {
     private static final String TAG = "GlobalChatService";
-    private static final String SERVER_WEBSOCKET_URL = "wss://localweb.phuongy.works/ws/websocket";
 
     private static GlobalChatService instance;
     private ChatWebSocketManager webSocketManager;
@@ -78,8 +78,10 @@ public class GlobalChatService implements ChatWebSocketListener {
             return;
         }
 
-        Log.d(TAG, "Initializing GlobalChatService...");
-        webSocketManager = new ChatWebSocketManager(SERVER_WEBSOCKET_URL, jwtToken, userId, userRoles);
+        // Get WebSocket URL from ServerConfigManager
+        String webSocketUrl = ServerConfigManager.getInstance(context).getWebSocketUrl();
+        Log.d(TAG, "Initializing GlobalChatService with WebSocket URL: " + webSocketUrl);
+        webSocketManager = new ChatWebSocketManager(webSocketUrl, jwtToken, userId, userRoles);
         webSocketManager.setListener(this);
         webSocketManager.connect();
         
