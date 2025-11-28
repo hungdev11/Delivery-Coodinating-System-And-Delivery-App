@@ -1,77 +1,87 @@
 <template>
   <div
-    class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4"
+    class="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-4 pb-6 safe-area-inset"
   >
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-      <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 mb-2">Đăng nhập</h1>
-        <p class="text-gray-600">Vui lòng nhập thông tin đăng nhập của bạn</p>
-      </div>
+    <div class="w-full max-w-md flex flex-col items-center space-y-4 sm:space-y-6">
+      <UCard class="w-full shadow-xl">
+        <template #header>
+          <div class="text-center">
+            <div class="flex justify-center mb-4">
+              <div class="w-14 h-14 sm:w-16 sm:h-16 bg-primary-500 rounded-2xl flex items-center justify-center shadow-lg transition-transform hover:scale-105">
+                <UIcon name="i-heroicons-folder-open" class="w-7 h-7 sm:w-8 sm:h-8 text-white" />
+              </div>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold">Đăng nhập</h1>
+            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2">
+              Vui lòng nhập thông tin đăng nhập của bạn
+            </p>
+          </div>
+        </template>
 
-      <form @submit.prevent="login" class="space-y-6">
-        <div class="space-y-2">
-          <label for="username" class="block text-sm font-medium text-gray-700"
-            >Username / Tên đăng nhập</label
-          >
-          <input
-            id="username"
-            v-model="loginForm.username"
-            type="text"
-            placeholder="Nhập username hoặc tên đăng nhập"
-            required
-            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none"
-          />
-        </div>
-
-        <div class="space-y-2">
-          <label for="password" class="block text-sm font-medium text-gray-700">Mật khẩu</label>
-          <input
-            id="password"
-            v-model="loginForm.password"
-            type="password"
-            placeholder="Nhập mật khẩu"
-            required
-            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none"
-          />
-        </div>
-
-        <div class="flex items-center">
-          <label class="flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              v-model="loginForm.rememberMe"
-              class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+        <form @submit.prevent="login" class="space-y-4 sm:space-y-5">
+          <UFormField label="Username / Tên đăng nhập">
+            <UInput
+              id="username"
+              v-model="loginForm.username"
+              type="text"
+              placeholder="Nhập username hoặc tên đăng nhập"
+              required
+              size="lg"
+              class="w-full"
+              autocomplete="username"
             />
-            <span class="ml-2 text-sm text-gray-700">Ghi nhớ đăng nhập</span>
-          </label>
-        </div>
+          </UFormField>
 
-        <button
-          type="submit"
-          :disabled="isLoading"
-          class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-          <span v-if="isLoading">Đang đăng nhập...</span>
-          <span v-else>Đăng nhập</span>
-        </button>
+          <UFormField label="Mật khẩu">
+            <UInput
+              id="password"
+              v-model="loginForm.password"
+              type="password"
+              placeholder="Nhập mật khẩu"
+              required
+              size="lg"
+              class="w-full"
+              autocomplete="current-password"
+            />
+          </UFormField>
 
-        <!-- Dev only button -->
-        <button
-          v-if="isDev"
-          type="button"
-          @click="useFakeToken"
-          class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
-        >
-          🚀 Dev: Sử dụng token giả
-        </button>
+          <div class="flex items-center pt-1 pb-2">
+            <UCheckbox
+              id="rememberMe"
+              v-model="loginForm.rememberMe"
+              label="Ghi nhớ đăng nhập"
+            />
+          </div>
 
-        <div
-          v-if="error"
-          class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm"
-        >
-          {{ error }}
-        </div>
-      </form>
+          <UButton
+            type="submit"
+            :disabled="isLoading"
+            :loading="isLoading"
+            color="primary"
+            block
+            size="lg"
+            class="mt-2 sm:mt-6"
+          >
+            <span v-if="!isLoading">Đăng nhập</span>
+          </UButton>
+
+          <UAlert
+            v-if="error"
+            color="error"
+            variant="soft"
+            :title="error"
+            icon="i-heroicons-exclamation-circle"
+            class="mt-2 sm:mt-4"
+          />
+        </form>
+      </UCard>
+
+      <!-- Copyright Footer -->
+      <div class="w-full text-center px-4">
+        <p class="text-xs text-gray-500 dark:text-gray-400">
+          © {{ currentYear }} ERP Management System. All rights reserved.
+        </p>
+      </div>
     </div>
   </div>
 </template>
@@ -89,15 +99,15 @@ const authStore = useAuthStore()
 const error = ref('')
 const isLoading = ref(false)
 
+// Current year for copyright
+const currentYear = computed(() => new Date().getFullYear())
+
 // Form data
 const loginForm = ref({
   username: '',
   password: '',
   rememberMe: false,
 })
-
-// Check if in development mode
-const isDev = computed(() => import.meta.env.VITE_ENV === 'development')
 
 const login = async () => {
   console.log(
@@ -182,47 +192,13 @@ const login = async () => {
     isLoading.value = false
   }
 }
-
-const useFakeToken = () => {
-  console.log(Info('Using fake token for development', {}, DebugContexts.AUTH))
-
-  // Sample admin JWT token
-  const sampleToken =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwicm9sZSI6WyJhZG1pbiJdLCJpYXQiOjE1MTYyMzkwMjJ9.CIvtAWDAOgORXRVZR8Ja-yJytoIwLpGRYSm-b7qxO8w'
-
-  try {
-    // Create fake user data for development
-    const fakeUser = {
-      id: '1234567890',
-      keycloakId: '1234567890',
-      username: 'admin',
-      email: 'admin@delivery-system.com',
-      firstName: 'Admin',
-      lastName: 'User',
-      phone: '+1234567890',
-      address: '123 Admin Street',
-      identityNumber: '123456789',
-      status: 'ACTIVE' as const,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-
-    authStore.setAuth(sampleToken, fakeUser, ['ADMIN'])
-
-    console.log(
-      Info(
-        'Fake token login successful',
-        {
-          user: fakeUser.username,
-          roles: ['ADMIN'],
-        },
-        DebugContexts.AUTH,
-      ),
-    )
-    router.push('/')
-  } catch (err) {
-    console.log(ErrorLog('Fake token login failed', err, DebugContexts.AUTH))
-    error.value = 'Không thể sử dụng token giả: ' + (err as Error).message
-  }
-}
 </script>
+
+<style scoped>
+/* Safe area support for devices with notches/home indicators */
+.safe-area-inset {
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+</style>

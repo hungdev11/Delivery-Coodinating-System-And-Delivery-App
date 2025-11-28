@@ -1,97 +1,63 @@
 <template>
-  <div class="unauthorized-view">
-    <div class="error-container">
-      <h1>401 - Unauthorized</h1>
-      <p>You don't have permission to access this page.</p>
-      <div class="user-info" v-if="currentUser">
-        <h3>Your Current Permissions:</h3>
-        <p><strong>Name:</strong> {{ currentUser.name }}</p>
-        <p><strong>Roles:</strong> {{ currentUser.role?.join(', ') }}</p>
+  <div class="flex justify-center items-center min-h-[60vh] p-8">
+    <UCard class="w-full max-w-lg">
+      <template #header>
+        <div class="text-center">
+          <UIcon name="i-heroicons-shield-exclamation" class="w-16 h-16 mx-auto mb-4 text-error-500" />
+          <h1 class="text-4xl font-bold text-error-500 dark:text-error-400 mb-2">
+            401 - Unauthorized
+          </h1>
+        </div>
+      </template>
+
+      <div class="space-y-4 text-center">
+        <p class="text-lg">
+          You don't have permission to access this page.
+        </p>
+
+        <UCard v-if="currentUser" variant="soft" class="text-left">
+          <template #header>
+            <h3 class="font-semibold">Your Current Permissions:</h3>
+          </template>
+          <div class="space-y-2 text-sm">
+            <p>
+              <strong>Name:</strong> {{ currentUser.firstName && currentUser.lastName
+                ? currentUser.firstName + ' ' + currentUser.lastName
+                : currentUser.username || 'Guest User' }}
+            </p>
+            <p>
+              <strong>Roles:</strong> {{ userRoles?.join(', ') || 'None' }}
+            </p>
+          </div>
+        </UCard>
+
+        <div class="flex gap-3 justify-center mt-6">
+          <UButton
+            color="primary"
+            variant="solid"
+            to="/"
+            icon="i-heroicons-home"
+          >
+            Go Home
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="outline"
+            to="/login"
+            icon="i-heroicons-arrow-right-on-rectangle"
+          >
+            Login
+          </UButton>
+        </div>
       </div>
-      <div class="actions">
-        <router-link to="/" class="btn btn-primary">Go Home</router-link>
-        <router-link to="/login" class="btn btn-secondary">Login</router-link>
-      </div>
-    </div>
+    </UCard>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { getCurrentUser } from '@/common/guards/roleGuard.guard'
+import { getCurrentUser, getUserRoles } from '@/common/guards/roleGuard.guard'
 
 const currentUser = computed(() => getCurrentUser())
+const userRoles = computed(() => getUserRoles())
 </script>
-
-<style scoped>
-.unauthorized-view {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 60vh;
-  padding: 2rem;
-}
-
-.error-container {
-  text-align: center;
-  max-width: 500px;
-}
-
-h1 {
-  color: #dc3545;
-  margin-bottom: 1rem;
-  font-size: 2.5rem;
-}
-
-p {
-  color: #666;
-  margin-bottom: 2rem;
-  font-size: 1.1rem;
-}
-
-.user-info {
-  margin: 2rem 0;
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  text-align: left;
-}
-
-.user-info h3 {
-  color: #495057;
-  margin-bottom: 0.5rem;
-}
-
-.actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  margin-top: 2rem;
-}
-
-.btn {
-  padding: 0.75rem 1.5rem;
-  text-decoration: none;
-  border-radius: 4px;
-  font-weight: bold;
-  transition: background-color 0.2s;
-}
-
-.btn-primary {
-  background-color: #007bff;
-  color: white;
-}
-
-.btn-primary:hover {
-  background-color: #0056b3;
-}
-
-.btn-secondary {
-  background-color: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background-color: #545b62;
-}
-</style>

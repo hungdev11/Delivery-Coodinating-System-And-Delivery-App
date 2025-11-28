@@ -113,6 +113,23 @@ services:
       retries: 10
       start_period: 120s
 
+  # Kafka UI (Optional - monitoring)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: dss-kafka-ui
+    restart: unless-stopped
+    environment:
+      KAFKA_CLUSTERS_0_NAME: dss-kafka
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    ports:
+      - "8081:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      zookeeper:
+        condition: service_healthy
+
   # ============================================
   # BUSINESS SERVICES (Depend on Settings & Kafka)
   # ============================================

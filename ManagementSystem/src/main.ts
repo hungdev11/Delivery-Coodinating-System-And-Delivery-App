@@ -14,7 +14,7 @@ import '@/assets/styles/main.css'
   // Set default color mode to light (no auto/system detection)
   const colorMode = useColorMode({
     initialValue: 'light',
-    storageKey: 'crm-color-mode',
+    storageKey: 'erp-color-mode',
   })
   colorMode.value = 'light'
 

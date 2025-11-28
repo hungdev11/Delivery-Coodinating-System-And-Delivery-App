@@ -134,43 +134,43 @@ const handleCancel = () => {
 
         <template #body>
           <div class="space-y-4">
-            <UFormGroup label="Type" required>
+            <UFormField label="Type" required>
               <USelect
                 :model-value="editingConfig?.type || ''"
                 :items="['CONFIRM_REFUSAL', 'POSTPONE_REQUEST', 'DELAY_ORDER_RECEIVE']"
                 placeholder="Select type"
               />
-            </UFormGroup>
+            </UFormField>
 
-            <UFormGroup label="Required Role" required>
+            <UFormField label="Required Role" required>
               <UInput
                 :model-value="editingConfig?.requiredRole || ''"
                 placeholder="e.g., ADMIN, CLIENT, SHIPPER"
               />
-            </UFormGroup>
+            </UFormField>
 
-            <UFormGroup label="Action Type" required>
+            <UFormField label="Action Type" required>
               <USelect
                 :model-value="editingConfig?.actionType || ''"
                 :items="['ACCEPT_DECLINE', 'DATE_PICKER', 'TEXT_INPUT', 'CHOICE']"
                 placeholder="Select action type"
               />
-            </UFormGroup>
+            </UFormField>
 
-            <UFormGroup label="Template (JSON)" required>
+            <UFormField label="Template (JSON)" required>
               <UTextarea
                 :model-value="editingConfig?.template || ''"
                 placeholder='{"title": "Confirm Refusal", "message": "Are you sure?"}'
                 rows="5"
               />
-            </UFormGroup>
+            </UFormField>
 
-            <UFormGroup label="Description">
+            <UFormField label="Description">
               <UInput
                 :model-value="editingConfig?.description || ''"
                 placeholder="Optional description"
               />
-            </UFormGroup>
+            </UFormField>
           </div>
         </template>
 
