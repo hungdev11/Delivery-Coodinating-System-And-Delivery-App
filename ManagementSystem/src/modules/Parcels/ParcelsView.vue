@@ -1153,7 +1153,6 @@ watch(
 
     <!-- Pagination -->
     <div
-      v-if="!loading && total > 0"
       class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4"
     >
       <div class="text-sm text-gray-700 dark:text-gray-300">
@@ -1161,7 +1160,7 @@ watch(
         {{ total }} results
       </div>
       <UPagination
-        :model-value="page + 1"
+        :page="page + 1"
         :page-count="pageSize"
         :total="total"
         @update:page="handlePaginationChange"

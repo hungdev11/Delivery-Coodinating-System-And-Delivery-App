@@ -30,18 +30,17 @@ const formData = ref<UpsertSettingRequest>({
   displayMode: 'TEXT' as DisplayMode,
 })
 
-// Initialize form data
 watch(
   () => props.setting,
   (setting) => {
-    if (setting && props.mode === 'edit') {
+    if (setting) {
       formData.value = {
-        key: setting.key,
-        value: isSensitiveValue(setting) ? '' : setting.value, // Don't show sensitive values
-        group: setting.group,
+        key: setting.key || '',
+        value: setting.value || '',
+        group: setting.group || '',
         description: setting.description || '',
-        type: setting.type,
-        displayMode: setting.displayMode,
+        type: setting.type || 'STRING',
+        displayMode: setting.displayMode || 'TEXT',
       }
     }
   },

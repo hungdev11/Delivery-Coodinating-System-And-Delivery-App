@@ -133,7 +133,7 @@ jobs:
         run: |
           if [ "${{ steps.changes.outputs.cicd-file }}" = "true" ]; then
             echo "cicd-changed=true" >> $GITHUB_OUTPUT
-            echo "CI/CD file changed: forcing build for all services"
+            echo "CI/CD file changed: will use paths-filter to detect which services to build"
           else
             echo "cicd-changed=false" >> $GITHUB_OUTPUT
           fi
@@ -151,22 +151,22 @@ jobs:
           echo "CI/CD file changed: $CICD_CHANGED"
           echo "================================"
           
-          # Priority 1: Force build flag or CI/CD file changed
-          if [ "$FORCE" = "true" ] || [ "$CICD_CHANGED" = "true" ]; then
-            if [ "$CICD_CHANGED" = "true" ]; then
-              echo "mode: force-build (CI/CD file changed)"
-            else
-              echo "mode: force-build (flag detected)"
-            fi
+          # Priority 1: Force build flag - build ALL services
+          if [ "$FORCE" = "true" ]; then
+            echo "mode: force-build (flag detected)"
             echo ""
             for svc in api-gateway user-service settings-service zone-service parcel-service session-service communication-service any-service; do
               echo "${svc}=true" >> $GITHUB_OUTPUT
             done
-          # Priority 2: Paths filter results - primary detection method
+          # Priority 2: Paths filter results - detect which services changed
           else
-            echo "mode: change-detection"
+            if [ "$CICD_CHANGED" = "true" ]; then
+              echo "mode: change-detection (CI/CD file changed, but detecting per-service changes)"
+            else
+              echo "mode: change-detection"
+            fi
             echo ""
-            # Use paths-filter results
+            # Use paths-filter results to determine which services changed
             PATH_FILTER_ANY="${{ steps.changes.outputs.any-service }}"
             
             if [ "$PATH_FILTER_ANY" = "true" ]; then
