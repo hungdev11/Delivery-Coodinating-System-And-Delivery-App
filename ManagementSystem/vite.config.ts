@@ -28,6 +28,7 @@ export default defineConfig({
       devOptions: {
         enabled: true,
         suppressWarnings: true,
+        type: 'module',
       },
       manifest: {
         name: 'ERP - Quản lý đơn hàng',
@@ -66,8 +67,11 @@ export default defineConfig({
         // Remove old cache entries when updating
         cleanupOutdatedCaches: true,
         // Skip waiting and claim clients immediately on update
+        // Set to false to allow manual update control
         skipWaiting: false,
         clientsClaim: false,
+        // Enable navigation preload for better performance
+        navigationPreload: true,
         // Runtime caching rules
         runtimeCaching: [
           // Cache API calls (NetworkFirst)

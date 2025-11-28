@@ -83,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { usePWA } from '@/common/composables/usePWA'
 
 const { canInstall, isInstalled, isIOS, isInStandaloneMode, triggerInstall } = usePWA()
@@ -146,7 +146,20 @@ watch(
   { immediate: true },
 )
 
-// Check if prompt was previously dismissed
+// Check if prompt was previously dismissed and setup event listeners
+let checkInterval: number | null = null
+
+const handleInstallPromptAvailable = () => {
+  console.log('[PWAInstallPrompt] Install prompt available event received')
+  if (!isInstalled.value && !isInStandaloneMode.value && !dismissedPrompt.value) {
+    setTimeout(() => {
+      if (!dismissedPrompt.value && canInstall.value) {
+        showPrompt.value = true
+      }
+    }, 3000)
+  }
+}
+
 onMounted(() => {
   const dismissed = localStorage.getItem('pwa-install-dismissed')
   if (dismissed) {
@@ -163,6 +176,29 @@ onMounted(() => {
     setTimeout(() => {
       showPrompt.value = true
     }, 3000)
+  }
+
+  // Listen for custom event when install prompt becomes available
+  window.addEventListener('pwa-install-prompt-available', handleInstallPromptAvailable)
+
+  // Also check periodically if install prompt becomes available
+  checkInterval = window.setInterval(() => {
+    if (canInstall.value && !isInstalled.value && !isInStandaloneMode.value && !dismissedPrompt.value && !showPrompt.value) {
+      console.log('[PWAInstallPrompt] Install prompt available, showing prompt')
+      showPrompt.value = true
+      if (checkInterval) {
+        clearInterval(checkInterval)
+        checkInterval = null
+      }
+    }
+  }, 5000) // Check every 5 seconds
+})
+
+onUnmounted(() => {
+  window.removeEventListener('pwa-install-prompt-available', handleInstallPromptAvailable)
+  if (checkInterval) {
+    clearInterval(checkInterval)
+    checkInterval = null
   }
 })
 

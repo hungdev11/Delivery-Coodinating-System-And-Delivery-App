@@ -10,6 +10,7 @@ import android.widget.Button;
 import android.widget.EditText; 
 import android.widget.FrameLayout; 
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -34,12 +35,22 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
          */
         void onProposalRespond(UUID proposalId, String resultData);
     }
+    
+    public interface OnDeliveryConfirmListener {
+        /**
+         * @param parcelId ID của parcel
+         * @param messageId ID của message DELIVERY_COMPLETED
+         * @param note Ghi chú xác nhận (optional)
+         */
+        void onDeliveryConfirm(String parcelId, String messageId, String note);
+    }
     // --- KẾT THÚC THAY ĐỔI ---
 
     private List<Message> messageList;
     private String currentUserId;
     private String mRecipientAvatarUrl;
     private OnProposalActionListener mListener;
+    private OnDeliveryConfirmListener mDeliveryConfirmListener;
     private final Gson mGson = new Gson(); // Dùng để parse 'data' JSON
     private boolean showLoadingItem = false; // For pagination loading indicator
 
@@ -47,6 +58,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private static final int VIEW_TYPE_MESSAGE_RECEIVED = 2;
     private static final int VIEW_TYPE_PROPOSAL_SENT = 3;
     private static final int VIEW_TYPE_PROPOSAL_RECEIVED = 4;
+    private static final int VIEW_TYPE_DELIVERY_COMPLETED = 6;
+    private static final int VIEW_TYPE_DELIVERY_SUCCEEDED = 7;
     private static final int VIEW_TYPE_LOADING = 5;
 
     public MessageAdapter(List<Message> messageList, String currentUserId) {
@@ -56,6 +69,10 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
     public void setListener(OnProposalActionListener listener) {
         this.mListener = listener;
+    }
+    
+    public void setDeliveryConfirmListener(OnDeliveryConfirmListener listener) {
+        this.mDeliveryConfirmListener = listener;
     }
 
     @Override
@@ -76,7 +93,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         Message message = messageList.get(messagePosition);
         boolean isMine = message.getSenderId().equals(currentUserId);
 
-        if (message.getType() == ContentType.INTERACTIVE_PROPOSAL) {
+        if (message.getType() == ContentType.DELIVERY_COMPLETED) {
+            return VIEW_TYPE_DELIVERY_COMPLETED;
+        } else if (message.getType() == ContentType.DELIVERY_SUCCEEDED) {
+            return VIEW_TYPE_DELIVERY_SUCCEEDED;
+        } else if (message.getType() == ContentType.INTERACTIVE_PROPOSAL) {
             return isMine ? VIEW_TYPE_PROPOSAL_SENT : VIEW_TYPE_PROPOSAL_RECEIVED;
         } else {
             return isMine ? VIEW_TYPE_MESSAGE_SENT : VIEW_TYPE_MESSAGE_RECEIVED;
@@ -107,6 +128,16 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 view = LayoutInflater.from(parent.getContext())
                         .inflate(R.layout.item_loading, parent, false);
                 return new LoadingViewHolder(view);
+
+            case VIEW_TYPE_DELIVERY_COMPLETED:
+                view = LayoutInflater.from(parent.getContext())
+                        .inflate(R.layout.item_delivery_completed, parent, false);
+                return new DeliveryCompletedViewHolder(view);
+
+            case VIEW_TYPE_DELIVERY_SUCCEEDED:
+                view = LayoutInflater.from(parent.getContext())
+                        .inflate(R.layout.item_delivery_succeeded, parent, false);
+                return new DeliverySucceededViewHolder(view);
 
             case VIEW_TYPE_MESSAGE_RECEIVED:
             default:
@@ -144,6 +175,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 break;
             case VIEW_TYPE_PROPOSAL_RECEIVED:
                 ((ProposalReceiverViewHolder) holder).bind(message, mRecipientAvatarUrl, mListener, mGson);
+                break;
+            case VIEW_TYPE_DELIVERY_COMPLETED:
+                ((DeliveryCompletedViewHolder) holder).bind(message, mDeliveryConfirmListener, mGson);
+                break;
+            case VIEW_TYPE_DELIVERY_SUCCEEDED:
+                ((DeliverySucceededViewHolder) holder).bind(message, mGson);
                 break;
         }
     }
@@ -656,6 +693,239 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         LoadingViewHolder(@NonNull View itemView) {
             super(itemView);
             // No binding needed - just display the loading layout
+        }
+    }
+    
+    /**
+     * ViewHolder for DELIVERY_COMPLETED messages
+     */
+    static class DeliveryCompletedViewHolder extends RecyclerView.ViewHolder {
+        private TextView tvParcelCode;
+        private TextView tvCompletedAt;
+        private TextView tvDeliveryMan;
+        private LinearLayout layoutDeliveryMan;
+        private Button btnConfirmDelivery;
+        private LinearLayout layoutConfirmed;
+        private TextView tvConfirmedStatus;
+        private TextView tvTimestamp;
+        private final Gson gson;
+        
+        DeliveryCompletedViewHolder(@NonNull View itemView) {
+            super(itemView);
+            tvParcelCode = itemView.findViewById(R.id.tv_parcel_code);
+            tvCompletedAt = itemView.findViewById(R.id.tv_completed_at);
+            tvDeliveryMan = itemView.findViewById(R.id.tv_delivery_man);
+            layoutDeliveryMan = itemView.findViewById(R.id.layout_delivery_man);
+            btnConfirmDelivery = itemView.findViewById(R.id.btn_confirm_delivery);
+            layoutConfirmed = itemView.findViewById(R.id.layout_confirmed);
+            tvConfirmedStatus = itemView.findViewById(R.id.tv_confirmed_status);
+            tvTimestamp = itemView.findViewById(R.id.tv_timestamp);
+            gson = new Gson();
+        }
+        
+        void bind(Message message, OnDeliveryConfirmListener listener, Gson gson) {
+            try {
+                // Parse message content (JSON)
+                JsonObject contentData = null;
+                if (message.getContent() != null && !message.getContent().isEmpty()) {
+                    if (message.getContent().startsWith("{")) {
+                        contentData = gson.fromJson(message.getContent(), JsonObject.class);
+                    }
+                }
+                
+                if (contentData != null) {
+                    // Extract parcel info
+                    String parcelId = contentData.has("parcelId") ? contentData.get("parcelId").getAsString() : null;
+                    String parcelCode = contentData.has("parcelCode") ? contentData.get("parcelCode").getAsString() : null;
+                    String completedAt = contentData.has("completedAt") ? contentData.get("completedAt").getAsString() : null;
+                    String deliveryManName = contentData.has("deliveryManName") ? contentData.get("deliveryManName").getAsString() : null;
+                    boolean isConfirmed = contentData.has("confirmedAt") && !contentData.get("confirmedAt").isJsonNull();
+                    
+                    // Display parcel code
+                    if (parcelCode != null && !parcelCode.isEmpty()) {
+                        tvParcelCode.setText(parcelCode);
+                    } else if (parcelId != null) {
+                        tvParcelCode.setText(parcelId.substring(0, Math.min(8, parcelId.length())) + "...");
+                    }
+                    
+                    // Display completion time
+                    if (completedAt != null && !completedAt.isEmpty()) {
+                        try {
+                            java.text.SimpleDateFormat inputFormat = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault());
+                            java.text.SimpleDateFormat outputFormat = new java.text.SimpleDateFormat("HH:mm dd/MM/yyyy", java.util.Locale.getDefault());
+                            java.util.Date date = inputFormat.parse(completedAt.substring(0, Math.min(19, completedAt.length())));
+                            tvCompletedAt.setText(outputFormat.format(date));
+                        } catch (Exception e) {
+                            tvCompletedAt.setText(completedAt);
+                        }
+                    }
+                    
+                    // Display delivery man name if available
+                    if (deliveryManName != null && !deliveryManName.isEmpty()) {
+                        layoutDeliveryMan.setVisibility(android.view.View.VISIBLE);
+                        tvDeliveryMan.setText(deliveryManName);
+                    } else {
+                        layoutDeliveryMan.setVisibility(android.view.View.GONE);
+                    }
+                    
+                    // Show confirm button only if not confirmed and user is receiver
+                    // Note: We need to check if current user is receiver - this should be passed from ChatActivity
+                    // For now, show button if not confirmed
+                    if (!isConfirmed) {
+                        btnConfirmDelivery.setVisibility(android.view.View.VISIBLE);
+                        layoutConfirmed.setVisibility(android.view.View.GONE);
+                        
+                        btnConfirmDelivery.setOnClickListener(v -> {
+                            if (listener != null && parcelId != null) {
+                                listener.onDeliveryConfirm(parcelId, message.getId(), null);
+                            }
+                        });
+                    } else {
+                        btnConfirmDelivery.setVisibility(android.view.View.GONE);
+                        layoutConfirmed.setVisibility(android.view.View.VISIBLE);
+                        tvConfirmedStatus.setText("Đã xác nhận nhận hàng");
+                    }
+                } else {
+                    // Fallback: display raw content
+                    tvParcelCode.setText("N/A");
+                    tvCompletedAt.setText("N/A");
+                    layoutDeliveryMan.setVisibility(android.view.View.GONE);
+                    btnConfirmDelivery.setVisibility(android.view.View.GONE);
+                    layoutConfirmed.setVisibility(android.view.View.GONE);
+                }
+                
+                // Display timestamp
+                if (message.getSentAt() != null && !message.getSentAt().isEmpty()) {
+                    try {
+                        java.text.SimpleDateFormat inputFormat = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault());
+                        java.text.SimpleDateFormat outputFormat = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
+                        java.util.Date date = inputFormat.parse(message.getSentAt().substring(0, Math.min(19, message.getSentAt().length())));
+                        tvTimestamp.setText(outputFormat.format(date));
+                    } catch (Exception e) {
+                        tvTimestamp.setText(message.getSentAt());
+                    }
+                }
+                
+            } catch (Exception e) {
+                Log.e("MessageAdapter", "Error binding delivery completed message", e);
+            }
+        }
+    }
+    
+    /**
+     * ViewHolder for DELIVERY_SUCCEEDED messages
+     */
+    static class DeliverySucceededViewHolder extends RecyclerView.ViewHolder {
+        private TextView tvTitle;
+        private TextView tvStatusBadge;
+        private TextView tvDescription;
+        private TextView tvParcelCode;
+        private TextView tvSucceededAt;
+        private TextView tvConfirmedAt;
+        private LinearLayout layoutConfirmedAt;
+        private TextView tvTimestamp;
+        private final Gson gson;
+        
+        DeliverySucceededViewHolder(@NonNull View itemView) {
+            super(itemView);
+            tvTitle = itemView.findViewById(R.id.tv_title);
+            tvStatusBadge = itemView.findViewById(R.id.tv_status_badge);
+            tvDescription = itemView.findViewById(R.id.tv_description);
+            tvParcelCode = itemView.findViewById(R.id.tv_parcel_code);
+            tvSucceededAt = itemView.findViewById(R.id.tv_succeeded_at);
+            tvConfirmedAt = itemView.findViewById(R.id.tv_confirmed_at);
+            layoutConfirmedAt = itemView.findViewById(R.id.layout_confirmed_at);
+            tvTimestamp = itemView.findViewById(R.id.tv_timestamp);
+            gson = new Gson();
+        }
+        
+        void bind(Message message, Gson gson) {
+            try {
+                // Parse message content (JSON)
+                JsonObject contentData = null;
+                if (message.getContent() != null && !message.getContent().isEmpty()) {
+                    if (message.getContent().startsWith("{")) {
+                        contentData = gson.fromJson(message.getContent(), JsonObject.class);
+                    }
+                }
+                
+                if (contentData != null) {
+                    // Extract parcel info
+                    String parcelId = contentData.has("parcelId") ? contentData.get("parcelId").getAsString() : null;
+                    String parcelCode = contentData.has("parcelCode") ? contentData.get("parcelCode").getAsString() : null;
+                    String succeededAt = contentData.has("succeededAt") ? contentData.get("succeededAt").getAsString() : null;
+                    String source = contentData.has("source") ? contentData.get("source").getAsString() : null;
+                    boolean isUserConfirmed = contentData.has("isUserConfirmed") && contentData.get("isUserConfirmed").getAsBoolean();
+                    String confirmedAt = contentData.has("confirmedAt") ? contentData.get("confirmedAt").getAsString() : null;
+                    
+                    // Set title and description based on source
+                    if (isUserConfirmed) {
+                        tvTitle.setText("Đã xác nhận nhận hàng");
+                        tvDescription.setText("Người nhận đã xác nhận nhận hàng thành công");
+                        tvStatusBadge.setText("Xác nhận");
+                        tvStatusBadge.setBackgroundColor(0xFF4CAF50); // Green
+                    } else {
+                        tvTitle.setText("Tự động hoàn thành");
+                        tvDescription.setText("Đơn hàng đã tự động chuyển sang hoàn thành sau 24 giờ");
+                        tvStatusBadge.setText("Tự động");
+                        tvStatusBadge.setBackgroundColor(0xFF2196F3); // Blue
+                    }
+                    
+                    // Display parcel code
+                    if (parcelCode != null && !parcelCode.isEmpty()) {
+                        tvParcelCode.setText(parcelCode);
+                    } else if (parcelId != null) {
+                        tvParcelCode.setText(parcelId.substring(0, Math.min(8, parcelId.length())) + "...");
+                    }
+                    
+                    // Display succeeded time
+                    if (succeededAt != null && !succeededAt.isEmpty()) {
+                        try {
+                            java.text.SimpleDateFormat inputFormat = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault());
+                            java.text.SimpleDateFormat outputFormat = new java.text.SimpleDateFormat("HH:mm dd/MM/yyyy", java.util.Locale.getDefault());
+                            java.util.Date date = inputFormat.parse(succeededAt.substring(0, Math.min(19, succeededAt.length())));
+                            tvSucceededAt.setText(outputFormat.format(date));
+                        } catch (Exception e) {
+                            tvSucceededAt.setText(succeededAt);
+                        }
+                    }
+                    
+                    // Display confirmed time if user confirmed
+                    if (isUserConfirmed && confirmedAt != null && !confirmedAt.isEmpty()) {
+                        layoutConfirmedAt.setVisibility(android.view.View.VISIBLE);
+                        try {
+                            java.text.SimpleDateFormat inputFormat = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault());
+                            java.text.SimpleDateFormat outputFormat = new java.text.SimpleDateFormat("HH:mm dd/MM/yyyy", java.util.Locale.getDefault());
+                            java.util.Date date = inputFormat.parse(confirmedAt.substring(0, Math.min(19, confirmedAt.length())));
+                            tvConfirmedAt.setText(outputFormat.format(date));
+                        } catch (Exception e) {
+                            tvConfirmedAt.setText(confirmedAt);
+                        }
+                    } else {
+                        layoutConfirmedAt.setVisibility(android.view.View.GONE);
+                    }
+                } else {
+                    // Fallback: display raw content
+                    tvParcelCode.setText("N/A");
+                    tvSucceededAt.setText("N/A");
+                    layoutConfirmedAt.setVisibility(android.view.View.GONE);
+                }
+                
+                // Display timestamp
+                if (message.getSentAt() != null && !message.getSentAt().isEmpty()) {
+                    try {
+                        java.text.SimpleDateFormat inputFormat = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault());
+                        java.text.SimpleDateFormat outputFormat = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
+                        java.util.Date date = inputFormat.parse(message.getSentAt().substring(0, Math.min(19, message.getSentAt().length())));
+                        tvTimestamp.setText(outputFormat.format(date));
+                    } catch (Exception e) {
+                        tvTimestamp.setText(message.getSentAt());
+                    }
+                }
+                
+            } catch (Exception e) {
+                Log.e("MessageAdapter", "Error binding delivery succeeded message", e);
+            }
         }
     }
 }

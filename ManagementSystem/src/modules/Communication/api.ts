@@ -25,13 +25,23 @@ const apiClient = new AxiosHttpClient(import.meta.env.VITE_API_URL)
 
 /**
  * Get conversations for a user
+ * @param userId - User ID
+ * @param includeMessages - Whether to include chat history (default: true)
+ * @param messageLimit - Maximum number of messages per conversation (default: 50)
  */
 export const getConversations = async (
   userId: string,
+  includeMessages: boolean = true,
+  messageLimit: number = 50,
 ): Promise<GetConversationsResponse | ConversationResponse[]> => {
-  return apiClient.get<GetConversationsResponse | ConversationResponse[]>(
-    `/v1/conversations/user/${userId}`,
-  )
+  const params = new URLSearchParams()
+  if (includeMessages) {
+    params.append('includeMessages', 'true')
+    params.append('messageLimit', messageLimit.toString())
+  }
+  const queryString = params.toString()
+  const url = `/v1/conversations/user/${userId}${queryString ? `?${queryString}` : ''}`
+  return apiClient.get<GetConversationsResponse | ConversationResponse[]>(url)
 }
 
 /**

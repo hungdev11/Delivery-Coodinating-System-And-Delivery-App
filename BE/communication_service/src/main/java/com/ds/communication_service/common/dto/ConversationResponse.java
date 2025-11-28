@@ -1,6 +1,7 @@
 package com.ds.communication_service.common.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,4 +22,5 @@ public class ConversationResponse {
     private LocalDateTime lastMessageTime; // Time of last message in conversation
     private String lastMessageContent; // Content of last message
     private Integer unreadCount; // Number of unread messages for current user
+    private List<MessageResponse> messages; // Optional: chat history included in response
 }

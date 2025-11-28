@@ -63,10 +63,12 @@ public interface ChatClient {
 
     /**
      * Lấy danh sách conversations của user
-     * (GET /api/v1/conversations)
+     * (GET /api/v1/conversations/user/{userId})
      */
-    @GET("conversations")
+    @GET("conversations/user/{userId}")
     Call<BaseResponse<List<Conversation>>> getConversations(
-            @Query("userId") String userId
+            @Path("userId") String userId,
+            @Query("includeMessages") boolean includeMessages,
+            @Query("messageLimit") int messageLimit
     );
 }

@@ -89,37 +89,23 @@ public class ConversationApiController {
 
     @GetMapping("/user/{currentUserId}")
     public ResponseEntity<BaseResponse<List<ConversationResponse>>> getMyConversations(
-            @PathVariable String currentUserId) {
+            @PathVariable String currentUserId,
+            @RequestParam(required = false, defaultValue = "false") Boolean includeMessages,
+            @RequestParam(required = false, defaultValue = "50") int messageLimit) {
         try {
-            List<Conversation> conversations = conversationService.getConversationsForUser(currentUserId);
+            // Convert Boolean to boolean, defaulting to false if null
+            boolean includeMessagesFlag = includeMessages != null ? includeMessages : false;
+            log.debug("Getting conversations for user: {}, includeMessages: {} (parsed as {}), messageLimit: {}", 
+                    currentUserId, includeMessages, includeMessagesFlag, messageLimit);
 
-            if (conversations == null || conversations.isEmpty()) {
+            // Delegate to service layer for business logic
+            List<ConversationResponse> responseDtos = conversationService.getConversationsForUserWithMessages(
+                    currentUserId, includeMessagesFlag, messageLimit);
+
+            if (responseDtos == null || responseDtos.isEmpty()) {
                 log.debug("No conversations found for user: {}", currentUserId);
                 return ResponseEntity.ok(BaseResponse.success(java.util.Collections.emptyList()));
             }
-
-            log.debug("Processing {} conversations for user: {}", conversations.size(), currentUserId);
-
-            // Process conversations with error handling to prevent one failure from
-            // blocking all
-            List<ConversationResponse> responseDtos = conversations.stream()
-                    .map(conv -> {
-                        try {
-                            return mapToConversationResponse(conv, currentUserId);
-                        } catch (Exception e) {
-                            log.error("[communication-service] [ConversationApiController.getMyConversations] Error mapping conversation {} for user {}", conv.getId(), currentUserId, e);
-                            // Return a minimal response instead of failing completely
-                            return ConversationResponse.builder()
-                                    .conversationId(conv.getId().toString())
-                                    .partnerId(conv.getUser1Id().equals(currentUserId)
-                                            ? conv.getUser2Id()
-                                            : conv.getUser1Id())
-                                    .partnerName("Unknown User")
-                                    .unreadCount(0)
-                                    .build();
-                        }
-                    })
-                    .collect(Collectors.toList());
 
             log.debug("Successfully processed {} conversations for user: {}", responseDtos.size(), currentUserId);
             return ResponseEntity.ok(BaseResponse.success(responseDtos));
@@ -129,60 +115,36 @@ public class ConversationApiController {
         }
     }
 
+    /**
+     * Map Conversation entity to ConversationResponse DTO (for find-by-users endpoint)
+     * This is a simplified version without messages
+     */
     private ConversationResponse mapToConversationResponse(Conversation conversation, String currentUserId) {
         // Determine partner ID
         String partnerId = conversation.getUser1Id().equals(currentUserId)
                 ? conversation.getUser2Id()
                 : conversation.getUser1Id();
 
-        // Get last message time (with error handling)
-        LocalDateTime lastMessageTime;
-        try {
-            lastMessageTime = messageRepository
-                    .findLastMessageTimeByConversationId(conversation.getId())
-                    .orElse(conversation.getCreatedAt());
-        } catch (Exception e) {
-            log.debug("[communication-service] [ConversationApiController.mapToConversationResponse] Error getting last message time for conversation {}: {}",
-                    conversation.getId(), e.getMessage());
-            lastMessageTime = conversation.getCreatedAt();
-        }
+        // Get last message time
+        LocalDateTime lastMessageTime = messageRepository
+                .findLastMessageTimeByConversationId(conversation.getId())
+                .orElse(conversation.getCreatedAt());
 
-        // Get last message content (with error handling)
-        // Simplified: just get from query, no expensive fallback queries
-        String lastMessageContent = null;
-        try {
-            lastMessageContent = messageRepository
-                    .findLastMessageContentByConversationId(conversation.getId())
-                    .orElse(null);
+        // Get last message content
+        String lastMessageContent = messageRepository
+                .findLastMessageContentByConversationId(conversation.getId())
+                .orElse(null);
 
-            // If empty string, convert to null for cleaner response
-            if (lastMessageContent != null && lastMessageContent.isEmpty()) {
-                lastMessageContent = null;
-            }
-        } catch (Exception e) {
-            log.debug("[communication-service] [ConversationApiController.mapToConversationResponse] Error getting last message content for conversation {}: {}",
-                    conversation.getId(), e.getMessage());
-            lastMessageContent = null;
-        }
+        // Calculate unread count
+        long unreadCount = messageRepository.countUnreadMessagesByConversationIdAndUserId(
+                conversation.getId(), currentUserId);
 
-        // Calculate unread count (messages where sender != currentUserId and status !=
-        // READ)
-        long unreadCount = 0;
-        try {
-            unreadCount = messageRepository.countUnreadMessagesByConversationIdAndUserId(
-                    conversation.getId(), currentUserId);
-        } catch (Exception e) {
-            log.debug("[communication-service] [ConversationApiController.mapToConversationResponse] Error counting unread messages for conversation {}: {}",
-                    conversation.getId(), e.getMessage());
-            unreadCount = 0;
-        }
-
-        // Fetch user info from User Service (with error handling)
+        // Fetch user info
         UserInfoDto userInfo = null;
         try {
             userInfo = userServiceClient.getUserById(partnerId);
         } catch (Exception e) {
-            log.debug("[communication-service] [ConversationApiController.mapToConversationResponse] Error fetching user info for partnerId {}: {}", partnerId, e.getMessage());
+            log.debug("Error fetching user info for partnerId {}: {}", partnerId, e.getMessage());
         }
 
         String partnerName;
@@ -191,12 +153,10 @@ public class ConversationApiController {
             partnerName = userInfo.getFullName();
             partnerUsername = userInfo.getUsername();
         } else {
-            // Fallback if user service is unavailable
             partnerName = "User " + partnerId.substring(0, Math.min(4, partnerId.length()));
-            log.debug("Could not fetch user info for partnerId: {}, using fallback name", partnerId);
         }
 
-        // Check online status from WebSocket session manager (with error handling)
+        // Check online status
         Boolean isOnline = null;
         try {
             if (webSocketSessionManager != null) {
@@ -206,18 +166,16 @@ public class ConversationApiController {
             log.debug("Could not check online status for user {}: {}", partnerId, e.getMessage());
         }
 
-        ConversationResponse dto = ConversationResponse.builder()
+        return ConversationResponse.builder()
                 .conversationId(conversation.getId().toString())
                 .partnerId(partnerId)
                 .partnerName(partnerName)
                 .partnerUsername(partnerUsername)
-                .partnerAvatar(null) // TODO: Add avatar support when available
+                .partnerAvatar(null)
                 .isOnline(isOnline)
                 .lastMessageTime(lastMessageTime)
                 .lastMessageContent(lastMessageContent)
                 .unreadCount((int) unreadCount)
                 .build();
-
-        return dto;
     }
 }

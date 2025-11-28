@@ -19,11 +19,31 @@ interface Props {
     receiverId: string
     receiverName?: string
     receiverPhone?: string
+    confirmedAt?: string
   }
   sentAt: string
+  currentUserId?: string
+  messageId?: string
 }
 
 const props = defineProps<Props>()
+
+const emit = defineEmits<{
+  confirm: [parcelId: string, messageId: string, note?: string]
+}>()
+
+const handleConfirm = () => {
+  if (props.messageData.parcelId && props.messageId) {
+    emit('confirm', props.messageData.parcelId, props.messageId)
+  }
+}
+
+const isConfirmed = computed(() => !!props.messageData.confirmedAt)
+const isReceiver = computed(() => {
+  if (!props.currentUserId || !props.messageData.receiverId) return false
+  return props.currentUserId === props.messageData.receiverId
+})
+const showConfirmButton = computed(() => !isConfirmed.value && isReceiver.value)
 
 /**
  * Format message time
@@ -115,6 +135,29 @@ const formatCompletionTime = (dateString: string) => {
           <span class="font-medium">SĐT:</span> {{ messageData.receiverPhone }}
         </p>
       </div>
+    </div>
+
+    <!-- Confirm Button (only for receiver, if not confirmed) -->
+    <UButton
+      v-if="showConfirmButton"
+      color="success"
+      variant="solid"
+      block
+      class="mt-2"
+      @click="handleConfirm"
+    >
+      Xác nhận đã nhận hàng
+    </UButton>
+
+    <!-- Confirmed Status (if already confirmed) -->
+    <div
+      v-if="isConfirmed"
+      class="flex items-center justify-center gap-2 mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg"
+    >
+      <UIcon name="i-heroicons-check-circle" class="w-4 h-4 text-success-500" />
+      <p class="text-xs font-semibold text-success-600 dark:text-success-400">
+        Đã xác nhận nhận hàng
+      </p>
     </div>
 
     <p class="text-xs text-gray-400 mt-2">

@@ -12,6 +12,7 @@ import { useNotifications } from './useNotifications'
 import { useConversations } from './useConversations'
 import type { MessageResponse, ProposalUpdateDTO } from '../model.type'
 import { getCurrentUser } from '@/common/guards/roleGuard.guard'
+import { useChatStore } from '@/stores/chatStore'
 
 /**
  * Global Chat Listener Interface
@@ -25,6 +26,7 @@ export interface GlobalChatListener {
   onProposalReceived?: (proposal: MessageResponse) => void
   onProposalUpdate?: (update: ProposalUpdateDTO) => void
   onUpdateNotificationReceived?: (updateNotification: any) => void
+  onUserStatusUpdate?: (userId: string, isOnline: boolean) => void
 }
 
 let globalChatInstance: ReturnType<typeof useGlobalChat> | null = null
@@ -36,9 +38,10 @@ export function useGlobalChat() {
   }
 
   const router = useRouter()
-  const { connected, connect, disconnect } = useWebSocket()
+  const { connected, connect, disconnect, sendMessage, sendTyping } = useWebSocket()
   const { handleNotification } = useNotifications()
   const { loadConversations } = useConversations()
+  const chatStore = useChatStore()
 
   const unreadCounts = ref<Map<string, number>>(new Map())
   const processedMessageIds = ref<Set<string>>(new Set())
@@ -140,6 +143,11 @@ export function useGlobalChat() {
     processedMessageIds.value.add(message.id)
 
     console.log('[GlobalChat] Message received:', message.id, message.type)
+
+    // Add message to store (for all conversations)
+    if (message.conversationId) {
+      chatStore.addMessage(message.conversationId, message)
+    }
 
     // Handle proposal messages specially
     if (message.type === 'INTERACTIVE_PROPOSAL') {
@@ -273,8 +281,39 @@ export function useGlobalChat() {
         await loadConversations(currentUserId.value)
       },
       (statusUpdate) => {
-        // onStatusUpdate - handle status updates if needed
-        console.debug('[GlobalChat] Status update:', statusUpdate)
+        // onStatusUpdate - handle user online/offline status updates
+        console.log('[GlobalChat] Status update received:', statusUpdate)
+        
+        // Check if this is a user status update (online/offline)
+        if (statusUpdate && typeof statusUpdate === 'object' && 'userId' in statusUpdate && 'isOnline' in statusUpdate) {
+          const userId = statusUpdate.userId as string
+          const isOnline = statusUpdate.isOnline as boolean
+          
+          // Update conversation online status in store
+          const conversations = chatStore.conversations
+          const conversation = Array.from(conversations.values()).find(
+            (conv) => conv.partnerId === userId
+          )
+          
+          if (conversation) {
+            chatStore.setConversation({
+              ...conversation,
+              isOnline,
+            })
+            console.log(`[GlobalChat] Updated online status for user ${userId}: ${isOnline}`)
+          }
+          
+          // Notify all listeners about user status update
+          listeners.value.forEach((listener) => {
+            if (listener.onUserStatusUpdate) {
+              try {
+                listener.onUserStatusUpdate(userId, isOnline)
+              } catch (error) {
+                console.error('[GlobalChat] Error notifying status update listener:', error)
+              }
+            }
+          })
+        }
       },
       (typingIndicator) => {
         // onTypingIndicator - handle typing indicators if needed
@@ -351,6 +390,8 @@ export function useGlobalChat() {
     initialize,
     cleanup,
     pendingProposals,
+    sendMessage, // Expose sendMessage from the same WebSocket instance
+    sendTyping, // Expose sendTyping from the same WebSocket instance
   }
 
   // Store as singleton

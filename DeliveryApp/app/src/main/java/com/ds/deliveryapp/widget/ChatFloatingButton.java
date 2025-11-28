@@ -306,6 +306,16 @@ public class ChatFloatingButton extends FrameLayout implements GlobalChatService
         // Handle notification if needed
     }
 
+    @Override
+    public void onUserStatusUpdate(String userId, boolean isOnline) {
+        // User status updates are not relevant for floating button
+    }
+
+    @Override
+    public void onTypingIndicatorUpdate(String userId, String conversationId, boolean isTyping) {
+        // Typing indicators are not relevant for floating button
+    }
+
     private void updateUnreadIndicator(int unreadCount) {
         android.util.Log.d("ChatFloatingButton", "updateUnreadIndicator called: count=" + unreadCount + 
             ", indicatorDot=" + (indicatorDot != null ? "exists" : "null") +

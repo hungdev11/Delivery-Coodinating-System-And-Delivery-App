@@ -5,13 +5,14 @@
  * View for listing and selecting conversations
  */
 
-import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
+import { onMounted, onUnmounted, ref, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
 import { useConversations, useGlobalChat, type GlobalChatListener } from './composables'
 import type { ConversationResponse, MessageResponse } from './model.type'
 import { getCurrentUser } from '@/common/guards/roleGuard.guard'
 import { defineAsyncComponent } from 'vue'
+import { useChatStore } from '@/stores/chatStore'
 
 const router = useRouter()
 const route = useRoute()
@@ -56,22 +57,46 @@ const handleRouteChange = () => {
 // Global chat listener to receive messages even when not in chat view
 const globalChatListener: GlobalChatListener = {
   onMessageReceived: (message: MessageResponse) => {
-    // Reload conversations list to get updated last message
-    if (currentUser?.id) {
-      loadConversations(currentUser.id).catch(console.error)
-    }
+    // Push message to conversation
+    const chatStore = useChatStore()
+    chatStore.addMessage(message.conversationId || '', message)
+    // Reload conversations list to get updated last message (without messages to avoid heavy load)
+    // if (currentUser?.id) {
+    //   loadConversations(currentUser.id, false).catch(console.error)
+    // }
   },
   onNotificationReceived: () => {
-    // Reload conversations on notification
-    if (currentUser?.id) {
-      loadConversations(currentUser.id).catch(console.error)
+    // Reload conversations on notification (without messages to avoid heavy load)
+    // if (currentUser?.id) {
+    //   loadConversations(currentUser.id, false).catch(console.error)
+    // }
+  },
+  onUserStatusUpdate: (userId: string, isOnline: boolean) => {
+    // Update online status in conversations list
+    const conversation = conversations.value.find((c) => c.partnerId === userId)
+    if (conversation) {
+      // Update in store
+      const chatStore = useChatStore()
+      chatStore.setConversation({
+        ...conversation,
+        isOnline,
+      })
+      // Update in local list
+      const index = conversations.value.findIndex((c) => c.partnerId === userId)
+      if (index !== -1) {
+        conversations.value[index] = {
+          ...conversations.value[index],
+          isOnline,
+        }
+      }
     }
   },
 }
 
 onMounted(async () => {
   if (currentUser?.id) {
-    await loadConversations(currentUser.id)
+    // Load conversations with messages included (default: true)
+    await loadConversations(currentUser.id, true)
     // Initialize global chat listener
     globalChat.addListener(globalChatListener)
     // Ensure global chat is initialized
@@ -131,12 +156,32 @@ const sortedConversations = computed(() => {
  * Open chat for a conversation
  */
 const openChat = (conversation: ConversationResponse) => {
-  selectedConversationId.value = conversation.conversationId
-  router.push({
-    name: 'communication-chat',
-    params: { conversationId: conversation.conversationId },
-    query: { partnerId: conversation.partnerId },
-  })
+  // Force navigation even if same conversation
+  const targetConversationId = conversation.conversationId
+  const currentRouteId = route.params.conversationId as string
+
+  // If clicking the same conversation, force reload by navigating away first
+  if (targetConversationId === currentRouteId) {
+    // Navigate to conversations list first, then to chat (forces reload)
+    router.push({ name: 'communication-conversations' }).then(() => {
+      nextTick(() => {
+        router.push({
+          name: 'communication-chat',
+          params: { conversationId: targetConversationId },
+          query: { partnerId: conversation.partnerId },
+        })
+      })
+    })
+  } else {
+    // Normal navigation
+    selectedConversationId.value = targetConversationId
+    router.push({
+      name: 'communication-chat',
+      params: { conversationId: targetConversationId },
+      query: { partnerId: conversation.partnerId },
+    })
+  }
+
   if (isMobileView.value) {
     showConversationList.value = false
   }

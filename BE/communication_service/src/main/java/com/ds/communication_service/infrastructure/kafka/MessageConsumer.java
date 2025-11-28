@@ -9,12 +9,18 @@ import com.ds.communication_service.common.dto.UpdateNotificationDTO;
 import com.ds.communication_service.business.v1.services.AssignmentNotificationService;
 import com.ds.communication_service.business.v1.services.PostponeNotificationService;
 import com.ds.communication_service.business.v1.services.SessionCompletionNotificationService;
+import com.ds.communication_service.business.v1.services.ParcelSucceededNotificationService;
 import com.ds.communication_service.infrastructure.kafka.dto.AssignmentCompletedEvent;
 import com.ds.communication_service.infrastructure.kafka.dto.ParcelPostponedEvent;
 import com.ds.communication_service.infrastructure.kafka.dto.SessionCompletedEvent;
+import com.ds.communication_service.app_context.repositories.ConversationRepository;
+import com.ds.communication_service.app_context.models.Conversation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import java.time.LocalDateTime;
+
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
@@ -38,6 +44,8 @@ public class MessageConsumer {
     private final AssignmentNotificationService assignmentNotificationService;
     private final PostponeNotificationService postponeNotificationService;
     private final SessionCompletionNotificationService sessionCompletionNotificationService;
+    private final ParcelSucceededNotificationService parcelSucceededNotificationService;
+    private final ConversationRepository conversationRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -186,7 +194,7 @@ public class MessageConsumer {
         containerFactory = "kafkaListenerContainerFactory"
     )
     public void consumeTypingEvent(
-            @Payload TypingIndicator typingIndicator,
+            @Payload Object payload,
             @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
             @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
             @Header(KafkaHeaders.OFFSET) long offset,
@@ -196,21 +204,112 @@ public class MessageConsumer {
             log.debug("[communication-service] [MessageConsumer.consumeTypingEvent] Received typing event from Kafka. Topic: {}, Partition: {}, Offset: {}", 
                 topic, partition, offset);
             
-            // Broadcast typing indicator to conversation topic
-            String destination = "/topic/conversation/" + typingIndicator.getConversationId() + "/typing";
-            messagingTemplate.convertAndSend(destination, typingIndicator);
+            // Convert payload to TypingIndicator (handle both object and Map cases)
+            TypingIndicator typingIndicator;
+            if (payload instanceof TypingIndicator) {
+                typingIndicator = (TypingIndicator) payload;
+            } else if (payload instanceof java.util.Map) {
+                try {
+                    typingIndicator = objectMapper.convertValue(payload, TypingIndicator.class);
+                } catch (Exception e) {
+                    log.error("[communication-service] [MessageConsumer.consumeTypingEvent] Failed to convert payload to TypingIndicator", e);
+                    if (acknowledgment != null) {
+                        acknowledgment.acknowledge();
+                    }
+                    return;
+                }
+            } else {
+                log.error("[communication-service] [MessageConsumer.consumeTypingEvent] Received unexpected message type in typing-events topic: {}. Expected TypingIndicator or Map.",
+                    payload != null ? payload.getClass().getName() : "null");
+                if (acknowledgment != null) {
+                    acknowledgment.acknowledge();
+                }
+                return;
+            }
             
-            log.debug("[communication-service] [MessageConsumer.consumeTypingEvent] Typing indicator sent via WebSocket: conversationId={}, isTyping={}", 
-                typingIndicator.getConversationId(), typingIndicator.isTyping());
+            // Validate required fields
+            if (typingIndicator.getConversationId() == null || typingIndicator.getUserId() == null) {
+                log.warn("[communication-service] [MessageConsumer.consumeTypingEvent] TypingIndicator missing required fields. Skipping.");
+                if (acknowledgment != null) {
+                    acknowledgment.acknowledge();
+                }
+                return;
+            }
             
-            // Acknowledge message processing
+            String senderUserId = typingIndicator.getUserId();
+            String conversationId = typingIndicator.getConversationId();
+            
+            // Find conversation to get the other participant
+            try {
+                @SuppressWarnings("null")
+                java.util.UUID convId = java.util.UUID.fromString(conversationId);
+                Conversation conversation = conversationRepository.findById(convId).orElse(null);
+                
+                if (conversation == null) {
+                    log.warn("[communication-service] [MessageConsumer.consumeTypingEvent] Conversation not found: {}. Skipping.", conversationId);
+                    if (acknowledgment != null) {
+                        acknowledgment.acknowledge();
+                    }
+                    return;
+                }
+                
+                // Get the other user in the conversation (partner, not the sender)
+                String partnerUserId = conversation.getUser1Id().equals(senderUserId) 
+                    ? conversation.getUser2Id() 
+                    : conversation.getUser1Id();
+                
+                if (partnerUserId == null || partnerUserId.isBlank()) {
+                    log.warn("[communication-service] [MessageConsumer.consumeTypingEvent] Partner userId is null or blank. Skipping.");
+                    if (acknowledgment != null) {
+                        acknowledgment.acknowledge();
+                    }
+                    return;
+                }
+                
+                // Create typing indicator message for WebSocket
+                java.util.Map<String, Object> typingMessage = new java.util.HashMap<>();
+                typingMessage.put("userId", senderUserId);
+                typingMessage.put("conversationId", conversationId);
+                typingMessage.put("isTyping", typingIndicator.isTyping());
+                typingMessage.put("timestamp", typingIndicator.getTimestamp() != 0 ? typingIndicator.getTimestamp() : System.currentTimeMillis());
+                
+                // Send typing indicator to the partner via their personal queue
+                // Frontend subscribes to /user/queue/typing
+                messagingTemplate.convertAndSendToUser(partnerUserId, "/queue/typing", typingMessage);
+                
+                log.debug("[communication-service] [MessageConsumer.consumeTypingEvent] Typing indicator sent via WebSocket: conversationId={}, sender={}, partner={}, isTyping={}", 
+                    conversationId, senderUserId, partnerUserId, typingIndicator.isTyping());
+                
+                // Acknowledge message processing
+                if (acknowledgment != null) {
+                    acknowledgment.acknowledge();
+                }
+                    
+            } catch (java.lang.IllegalArgumentException e) {
+                log.error("[communication-service] [MessageConsumer.consumeTypingEvent] Invalid conversationId format: {}", conversationId, e);
+                if (acknowledgment != null) {
+                    acknowledgment.acknowledge();
+                }
+                return;
+            } catch (Exception e) {
+                log.error("[communication-service] [MessageConsumer.consumeTypingEvent] Error finding conversation or sending typing indicator: conversationId={}", 
+                    conversationId, e);
+                // Acknowledge to avoid infinite retry loop
+                if (acknowledgment != null) {
+                    acknowledgment.acknowledge();
+                }
+                return;
+            }
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
             }
             
         } catch (Exception e) {
             log.error("[communication-service] [MessageConsumer.consumeTypingEvent] Error consuming typing event from Kafka", e);
-            // Don't acknowledge - message will be reprocessed
+            // Acknowledge to avoid infinite retry loop for malformed messages
+            if (acknowledgment != null) {
+                acknowledgment.acknowledge();
+            }
         }
     }
 
@@ -320,6 +419,70 @@ public class MessageConsumer {
                 updateNotification.getAction(), 
                 updateNotification.getUserId(),
                 updateNotification.getClientType());
+            
+            // Check if this is a parcel status changed to SUCCEEDED event
+            if (updateNotification.getUpdateType() == UpdateNotificationDTO.UpdateType.PARCEL_UPDATE
+                    && updateNotification.getEntityType() == UpdateNotificationDTO.EntityType.PARCEL
+                    && updateNotification.getAction() == UpdateNotificationDTO.ActionType.STATUS_CHANGED
+                    && updateNotification.getData() != null) {
+                
+                Object statusObj = updateNotification.getData().get("status");
+                String status = statusObj != null ? statusObj.toString() : null;
+                
+                if ("SUCCEEDED".equals(status) || "SUCCEED".equals(status)) {
+                    // Handle parcel succeeded event
+                    try {
+                        String parcelId = updateNotification.getEntityId();
+                        String parcelCode = updateNotification.getData().get("parcelCode") != null 
+                                ? updateNotification.getData().get("parcelCode").toString() 
+                                : null;
+                        String receiverId = updateNotification.getData().get("receiverId") != null 
+                                ? updateNotification.getData().get("receiverId").toString() 
+                                : null;
+                        String senderId = updateNotification.getData().get("senderId") != null 
+                                ? updateNotification.getData().get("senderId").toString() 
+                                : null;
+                        String deliveryManId = updateNotification.getData().get("deliveryManId") != null 
+                                ? updateNotification.getData().get("deliveryManId").toString() 
+                                : null;
+                        String confirmedBy = updateNotification.getData().get("confirmedBy") != null 
+                                ? updateNotification.getData().get("confirmedBy").toString() 
+                                : null;
+                        
+                        LocalDateTime confirmedAt = null;
+                        if (updateNotification.getData().get("confirmedAt") != null) {
+                            try {
+                                String confirmedAtStr = updateNotification.getData().get("confirmedAt").toString();
+                                confirmedAt = LocalDateTime.parse(confirmedAtStr);
+                            } catch (Exception e) {
+                                log.debug("[communication-service] [MessageConsumer.consumeUpdateNotification] Failed to parse confirmedAt", e);
+                            }
+                        }
+                        
+                        LocalDateTime succeededAt = updateNotification.getTimestamp() != null 
+                                ? updateNotification.getTimestamp() 
+                                : LocalDateTime.now();
+                        
+                        // Create message in chat
+                        parcelSucceededNotificationService.handleParcelSucceeded(
+                                parcelId,
+                                parcelCode,
+                                receiverId,
+                                senderId,
+                                deliveryManId,
+                                confirmedBy,
+                                confirmedAt,
+                                succeededAt
+                        );
+                        
+                        log.debug("[communication-service] [MessageConsumer.consumeUpdateNotification] Handled parcel succeeded event: parcelId={}, confirmedBy={}", 
+                                parcelId, confirmedBy);
+                    } catch (Exception e) {
+                        log.error("[communication-service] [MessageConsumer.consumeUpdateNotification] Error handling parcel succeeded event", e);
+                        // Continue with normal update notification forwarding
+                    }
+                }
+            }
             
             // Handle multiple userIds (comma-separated) for broadcast
             String userIds = updateNotification.getUserId();

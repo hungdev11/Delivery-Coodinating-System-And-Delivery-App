@@ -115,6 +115,9 @@
               class="md:size-md"
               @click="mode = mode === 'dark' ? 'light' : 'dark'"
             />
+            <!-- Chat Notification Popup -->
+            <ChatNotificationPopup ref="chatNotificationRef" />
+            
             <UButton
               variant="ghost"
               color="neutral"
@@ -362,10 +365,14 @@ import { useSidebarStore } from '@/common/store/sidebar.store'
 import { getCurrentUser, getUserRoles, removeToken } from '@/common/guards/roleGuard.guard'
 import type { NavigationMenuItem } from '@nuxt/ui'
 import { storeToRefs } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { logout } from '@/modules/LoginScreen/api'
 import { useColorMode } from '@vueuse/core'
+import ChatNotificationPopup from './ChatNotificationPopup.vue'
+import { useGlobalChat } from '@/modules/Communication/composables/useGlobalChat'
+import { useChatStore } from '@/stores/chatStore'
+import type { MessageResponse } from '@/modules/Communication/model.type'
 
 const mode = useColorMode({
   storageKey: 'erp-color-mode',
@@ -377,6 +384,11 @@ const { toggleSidebar } = sidebarStore
 
 const router = useRouter()
 const route = useRoute()
+
+// Chat notification
+const chatNotificationRef = ref<InstanceType<typeof ChatNotificationPopup> | null>(null)
+const globalChat = useGlobalChat()
+const chatStore = useChatStore()
 
 // Get current user roles
 const userRoles = computed(() => getUserRoles())
@@ -392,6 +404,61 @@ const isClientOnly = computed(() => isClient.value && !showAdminMenu.value)
 const isActiveRoute = (path: string) => {
   return route.path === path || route.path.startsWith(path + '/')
 }
+
+// Handle new message notification
+const handleNewMessage = (message: MessageResponse) => {
+  // Only show notification if not in the active conversation
+  if (!message.conversationId) return
+  
+  const activeConversationId = chatStore.activeConversationId
+  if (activeConversationId === message.conversationId) {
+    // Don't show notification if user is viewing this conversation
+    return
+  }
+
+  // Get conversation info from store
+  const conversation = chatStore.getConversation(message.conversationId)
+  if (!conversation) return
+
+  // Get current user to check if message is from them
+  const currentUser = getCurrentUser()
+  if (message.senderId === currentUser?.id) {
+    // Don't show notification for own messages
+    return
+  }
+
+  // Show notification
+  if (chatNotificationRef.value) {
+    const preview = message.type === 'TEXT' 
+      ? (typeof message.content === 'string' ? message.content : JSON.stringify(message.content))
+      : message.type === 'INTERACTIVE_PROPOSAL'
+        ? 'New proposal'
+        : message.type === 'DELIVERY_COMPLETED'
+          ? 'Delivery completed'
+          : 'New message'
+    
+    chatNotificationRef.value.show({
+      conversationId: message.conversationId,
+      partnerId: conversation.partnerId,
+      partnerName: conversation.partnerName,
+      preview: preview.substring(0, 100),
+      message,
+    })
+  }
+}
+
+// Setup global chat listener
+onMounted(() => {
+  globalChat.addListener({
+    onMessageReceived: handleNewMessage,
+  })
+})
+
+onUnmounted(() => {
+  globalChat.removeListener({
+    onMessageReceived: handleNewMessage,
+  })
+})
 
 // Navigation items
 const navigationItems = computed<NavigationMenuItem[][]>(() => {

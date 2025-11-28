@@ -8,14 +8,8 @@
 import { onMounted, onUnmounted, ref, computed, watch, nextTick, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
-import {
-  useConversations,
-  useWebSocket,
-  useProposals,
-  useMessageStatus,
-  useTypingIndicator,
-  useNotifications,
-} from './composables'
+import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
+import { useConversations, useProposals, useTypingIndicator } from './composables'
 import type {
   MessageResponse,
   ChatMessagePayload,
@@ -24,7 +18,8 @@ import type {
   ProposalUpdateDTO,
 } from './model.type'
 import { getCurrentUser, getUserRoles } from '@/common/guards/roleGuard.guard'
-import { useChatHistoryStore } from '@/stores/chatHistory'
+import { useChatStore } from '@/stores/chatStore'
+import { useGlobalChat } from './composables/useGlobalChat'
 import ChatMessage from './components/ChatMessage.vue'
 import ProposalMessage from './components/ProposalMessage.vue'
 import ProposalMenu from './components/ProposalMenu.vue'
@@ -53,6 +48,7 @@ const conversationId = computed(() => route.params.conversationId as string)
 const partnerId = computed(() => route.query.partnerId as string)
 const partnerName = ref<string>('')
 const partnerUsername = ref<string>('')
+const partnerIsOnline = ref<boolean | null>(null)
 
 const currentUser = getCurrentUser()
 const currentUserId = computed(() => currentUser?.id || '')
@@ -69,27 +65,34 @@ const sessionAssignments = ref<DeliveryAssignmentTask[]>([])
 const loadingSession = ref(false)
 
 const {
-  messages,
   loadMessages,
   loadMoreMessages,
-  addMessage,
-  clearConversation,
   loadConversations,
-  loadMissedMessages,
   hasMoreMessages,
   isLoadingMore,
+  messages: conversationMessages, // Get messages ref from useConversations
 } = useConversations()
-const { connected, connecting, connect, sendMessage, sendTyping, disconnect } = useWebSocket()
+const chatStore = useChatStore()
+const globalChat = useGlobalChat()
+// Use sendMessage and sendTyping from globalChat to ensure same WebSocket instance
+const { sendMessage, sendTyping } = globalChat
+
+// Get messages from store (for display)
+const messages = computed(() => {
+  if (!conversationId.value) return []
+  return chatStore.getMessages(conversationId.value)
+})
+
+// Get connection status from global chat
+const connected = computed(() => globalChat.connected.value)
+const connecting = ref(false)
 const {
   availableConfigs,
   loadAvailableConfigs,
   create: createProposal,
   respond: respondToProposal,
 } = useProposals()
-const { handleStatusUpdate } = useMessageStatus()
-const { handleTypingIndicator, getTypingUsers, clearConversationTyping } = useTypingIndicator()
-const { handleNotification } = useNotifications()
-const chatHistoryStore = useChatHistoryStore()
+const { getTypingUsers, clearConversationTyping } = useTypingIndicator()
 
 const messageInput = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
@@ -97,6 +100,8 @@ const sending = ref(false)
 const loadingProposals = ref(false)
 const typingTimer = ref<number | null>(null)
 const isTyping = ref(false)
+const refreshing = ref(false)
+const canLoadMoreAfterReload = ref(true) // Flag to prevent immediate loadMore after reload
 
 // Parcels popover state
 const showParcelsPopover = ref(false)
@@ -113,11 +118,64 @@ const selectedProposalConfig = ref<ProposalTypeConfig | null>(null)
 const postponeType = ref<'SPECIFIC' | 'BEFORE' | 'AFTER' | null>(null)
 
 /**
- * Load messages and connect WebSocket on mount
+ * Load messages from store or server
+ * Scroll to bottom FIRST, then load messages (reverse order to avoid triggering loadMore)
+ */
+const loadConversationMessages = async () => {
+  if (!conversationId.value || !currentUserId.value) return
+
+  // Set active conversation first
+  chatStore.setActiveConversation(conversationId.value)
+
+  // Scroll to bottom FIRST (before loading) to avoid triggering loadMore
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
+  await nextTick()
+
+  // Check if messages exist in store
+  const storeMessages = chatStore.getMessages(conversationId.value)
+
+  if (storeMessages.length === 0) {
+    // Load from server if store is empty
+    console.log(`📥 Loading messages from server for conversation ${conversationId.value}`)
+    await loadMessages(conversationId.value, currentUserId.value)
+    // Update store with loaded messages
+    const { messages: loadedMessages } = useConversations()
+    chatStore.setMessages(conversationId.value, loadedMessages.value)
+  } else {
+    // Use messages from store
+    console.log(
+      `📦 Using ${storeMessages.length} messages from store for conversation ${conversationId.value}`,
+    )
+  }
+
+  // Ensure scroll to bottom after messages are loaded
+  await nextTick()
+  scrollToBottom()
+}
+
+/**
+ * Watch conversationId changes to load messages from store
+ */
+watch(
+  () => conversationId.value,
+  async (newId, oldId) => {
+    if (newId && newId !== oldId) {
+      await loadConversationMessages()
+      await loadPartnerInfo()
+      await loadActiveSessionAndAssignments()
+    }
+  },
+  { immediate: true },
+)
+
+/**
+ * Load messages and setup on mount
  */
 onMounted(async () => {
   if (conversationId.value && currentUserId.value) {
-    await loadMessages(conversationId.value, currentUserId.value)
+    await loadConversationMessages()
     await loadPartnerInfo()
     await loadAvailableProposalConfigs()
     // Load current parcel if user is CLIENT
@@ -129,28 +187,67 @@ onMounted(async () => {
     // CLIENT: view shipper's (partner's) parcels
     // SHIPPER: view own parcels
     await loadActiveSessionAndAssignments()
-    await connectWebSocket()
-    scrollToBottom()
+
+    // Ensure global chat is connected (don't create new connection)
+    if (!globalChat.connected.value && currentUserId.value) {
+      await globalChat.initialize()
+    }
+
+    // Listen for new messages and updates from global chat
+    globalChat.addListener({
+      onMessageReceived: handleMessageReceived,
+      onProposalUpdate: handleProposalUpdate,
+      onUpdateNotificationReceived: handleUpdateNotification,
+      onUserStatusUpdate: handleUserStatusUpdate,
+    })
   }
 })
 
 /**
- * Load partner information from conversations list
- * (CASE 1: Initial load when opening chat)
+ * Handle user status update (online/offline)
+ */
+const handleUserStatusUpdate = (userId: string, isOnline: boolean) => {
+  // Only update if this is the current chat partner
+  if (partnerId.value === userId) {
+    partnerIsOnline.value = isOnline
+    console.log(`📡 Partner ${userId} is now ${isOnline ? 'online' : 'offline'}`)
+  }
+}
+
+/**
+ * Load partner information from conversations list or store
  */
 const loadPartnerInfo = async () => {
-  if (currentUserId.value) {
-    await loadConversations(currentUserId.value)
+  if (!conversationId.value) return
+
+  // First try to get from store
+  const storeConversation = chatStore.getConversation(conversationId.value)
+  if (storeConversation) {
+    partnerName.value = storeConversation.partnerName
+    partnerUsername.value = storeConversation.partnerUsername || ''
+    partnerIsOnline.value = storeConversation.isOnline ?? null
+    return
   }
+
+  // If not in store, load conversations and find (with messages)
+  if (currentUserId.value) {
+    await loadConversations(currentUserId.value, true)
+    // Update store with conversations
+    const { conversations } = useConversations()
+    chatStore.setConversations(conversations.value)
+  }
+
   // Find the current conversation to get partner info
   const { conversations } = useConversations()
   const currentConv = conversations.value.find((c) => c.conversationId === conversationId.value)
   if (currentConv) {
     partnerName.value = currentConv.partnerName
     partnerUsername.value = currentConv.partnerUsername || ''
+    partnerIsOnline.value = currentConv.isOnline ?? null
   } else {
     // Fallback to partnerId
     partnerName.value = partnerId.value || 'Unknown User'
+    partnerIsOnline.value = null
   }
 }
 
@@ -263,14 +360,16 @@ const loadActiveSessionAndAssignments = async () => {
  * Cleanup on unmount
  */
 onUnmounted(() => {
-  clearConversation()
-  disconnect()
+  // Don't disconnect WebSocket (global connection)
+  // Just clear typing indicator
   if (conversationId.value) {
     clearConversationTyping(conversationId.value)
   }
   if (typingTimer.value) {
     clearTimeout(typingTimer.value)
   }
+  // Clear active conversation
+  chatStore.setActiveConversation(null)
 })
 
 /**
@@ -291,36 +390,13 @@ const loadAvailableProposalConfigs = async () => {
 }
 
 /**
- * Connect WebSocket (CASE 1: Initial connection)
+ * Handle message received from global chat
+ * (Messages are already added to store by globalChat, we just need to handle UI updates)
  */
-const connectWebSocket = async () => {
-  if (!currentUserId.value) return
-
-  await connect(
-    currentUserId.value,
-    async (message: MessageResponse) => {
-      // Add message if it belongs to this conversation
-      // Backend sends messages to both sender and recipient
-      // We need to verify it belongs to the current conversation
-      const isFromPartner = message.senderId === partnerId.value
-      const isFromMe = message.senderId === currentUserId.value
-      const belongsToConversation =
-        !message.conversationId || // Backward compatibility: if no conversationId, check by sender
-        message.conversationId === conversationId.value
-
-      if ((isFromPartner || isFromMe) && belongsToConversation) {
-        console.log('✅ Adding message to chat:', {
-          from: isFromPartner ? 'partner' : 'me',
-          conversationId: message.conversationId,
-          currentConversationId: conversationId.value,
-          type: message.type,
-        })
-        addMessage(message)
-
-        // Save to local storage
-        if (conversationId.value) {
-          chatHistoryStore.addMessage(conversationId.value, message)
-        }
+const handleMessageReceived = async (message: MessageResponse) => {
+  // Message is already in store via globalChat
+  // Just handle UI-specific updates for current conversation
+  if (message.conversationId !== conversationId.value) return
 
         // If this is a DELIVERY_COMPLETED message, refresh session assignments and update parcel status
         if (message.type === 'DELIVERY_COMPLETED') {
@@ -378,38 +454,27 @@ const connectWebSocket = async () => {
               // Refresh from server to ensure consistency
               await loadActiveSessionAndAssignments()
             }
-          } catch (e) {
+    } catch {
             // Not a JSON message, ignore
           }
         }
 
-        nextTick(() => scrollToBottom())
-
-        // ❌ REMOVED: No need to reload conversations on every message
-        // Conversations list should be updated via WebSocket events, not polling
-      } else {
-        console.log('⚠️ Message filtered out:', {
-          isFromPartner,
-          isFromMe,
-          belongsToConversation,
-          messageConversationId: message.conversationId,
-          currentConversationId: conversationId.value,
-        })
-      }
-    },
-    handleReconnect, // Callback for reconnection
-    handleStatusUpdate, // Status update callback
-    handleTypingIndicator, // Typing indicator callback
-    handleNotification, // Notification callback
-    handleProposalUpdate, // Proposal update callback
-    handleUpdateNotification, // Update notification callback
-  )
+  // Scroll to bottom when new message arrives in active conversation
+  await nextTick()
+  scrollToBottom()
 }
 
 /**
  * Handle update notification (session completed, parcel updated, etc.)
  */
-const handleUpdateNotification = (updateNotification: any) => {
+interface UpdateNotification {
+  entityType?: string
+  action?: string
+  entityId?: string
+  message?: string
+}
+
+const handleUpdateNotification = (updateNotification: UpdateNotification) => {
   if (!updateNotification) return
 
   const entityType = updateNotification.entityType
@@ -435,25 +500,6 @@ const handleUpdateNotification = (updateNotification: any) => {
     console.log('📦 Parcel updated, refreshing session assignments...')
     // Refresh session assignments to reflect parcel status changes
     loadActiveSessionAndAssignments()
-  }
-}
-
-/**
- * Handle WebSocket reconnection - load missed messages and refresh conversations
- */
-const handleReconnect = async () => {
-  if (conversationId.value && currentUserId.value) {
-    console.log('🔄 WebSocket reconnected!')
-
-    // 1. Load missed messages for current conversation
-    await loadMissedMessages(conversationId.value, currentUserId.value)
-
-    // 2. Reload conversations list (one of only 2 cases to call this)
-    await loadConversations(currentUserId.value)
-
-    nextTick(() => scrollToBottom())
-
-    console.log('✅ Reconnect complete: missed messages and conversations loaded')
   }
 }
 
@@ -512,10 +558,11 @@ const handleSendMessage = async () => {
     status: 'SENT', // Initial status
   }
 
-  // Add message immediately for optimistic UI update
-  addMessage(optimisticMessage)
+  // Add message to store immediately for optimistic UI update
+  chatStore.addMessage(conversationId.value, optimisticMessage)
   messageInput.value = ''
-  nextTick(() => scrollToBottom())
+  await nextTick()
+  scrollToBottom()
 
   const payload: ChatMessagePayload = {
     content,
@@ -527,9 +574,12 @@ const handleSendMessage = async () => {
 
   if (!success) {
     // Remove optimistic message if send failed
-    const index = messages.value.findIndex((m) => m.id === optimisticMessage.id)
+    const storeMessages = chatStore.getMessages(conversationId.value)
+    const index = storeMessages.findIndex((m) => m.id === optimisticMessage.id)
     if (index !== -1) {
-      messages.value.splice(index, 1)
+      const updatedMessages = [...storeMessages]
+      updatedMessages.splice(index, 1)
+      chatStore.setMessages(conversationId.value, updatedMessages)
     }
   } else {
     // Strategy: Wait for WebSocket to deliver the real message
@@ -541,17 +591,21 @@ const handleSendMessage = async () => {
     // This handles cases where WebSocket might be slow or fail
     setTimeout(async () => {
       // Check if optimistic message still exists (real message didn't arrive via WebSocket)
-      const stillHasOptimistic = messages.value.some((m) => m.id === optimisticMessage.id)
+      const storeMessages = chatStore.getMessages(conversationId.value)
+      const stillHasOptimistic = storeMessages.some((m) => m.id === optimisticMessage.id)
       if (stillHasOptimistic && conversationId.value) {
         console.log('Optimistic message still exists, reloading from server')
         await loadMessages(conversationId.value, currentUserId.value)
-        nextTick(() => scrollToBottom())
+        const { messages: loadedMessages } = useConversations()
+        chatStore.setMessages(conversationId.value, loadedMessages.value)
+        await nextTick()
+        scrollToBottom()
       }
     }, 2000) // Wait 2 seconds for WebSocket delivery
 
-    // Reload conversations list to update lastMessageTime
+    // Reload conversations list to update lastMessageTime (without messages to avoid heavy load)
     if (currentUserId.value) {
-      await loadConversations(currentUserId.value)
+      await loadConversations(currentUserId.value, false)
     }
   }
 
@@ -786,6 +840,8 @@ const sendProposalRequest = async (type: string, data: string) => {
   if (result && conversationId.value) {
     // Reload messages to show the new proposal
     await loadMessages(conversationId.value, currentUserId.value)
+    const { messages: loadedMessages } = useConversations()
+    chatStore.setMessages(conversationId.value, loadedMessages.value)
   }
 }
 
@@ -802,6 +858,8 @@ const handleProposalResponse = async (proposalId: string, resultData: string) =>
   if (result && conversationId.value) {
     // Reload messages to show updated proposal status
     await loadMessages(conversationId.value, currentUserId.value)
+    const { messages: loadedMessages } = useConversations()
+    chatStore.setMessages(conversationId.value, loadedMessages.value)
   }
 }
 
@@ -811,20 +869,27 @@ const handleProposalResponse = async (proposalId: string, resultData: string) =>
 const handleProposalUpdate = (update: ProposalUpdateDTO) => {
   console.log('📋 Proposal update received:', update)
 
-  // Find message with matching proposal ID and update its status
-  const messageIndex = messages.value.findIndex((msg) => msg.proposal?.id === update.proposalId)
+  if (!conversationId.value) return
+
+  // Find message with matching proposal ID and update its status in store
+  const storeMessages = chatStore.getMessages(conversationId.value)
+  const messageIndex = storeMessages.findIndex((msg) => msg.proposal?.id === update.proposalId)
 
   if (messageIndex !== -1) {
-    const message = messages.value[messageIndex]
+    const message = storeMessages[messageIndex]
     if (message.proposal) {
       // Update proposal status
-      message.proposal.status = update.newStatus
-      if (update.resultData) {
-        message.proposal.resultData = update.resultData
+      const updatedMessage = {
+        ...message,
+        proposal: {
+          ...message.proposal,
+          status: update.newStatus,
+          resultData: update.resultData || message.proposal.resultData,
+        },
       }
 
-      // Trigger reactivity
-      messages.value[messageIndex] = { ...message }
+      // Update in store
+      chatStore.updateMessage(conversationId.value, message.id, updatedMessage)
 
       console.log('✅ Updated proposal status:', {
         proposalId: update.proposalId,
@@ -842,7 +907,70 @@ const handleProposalUpdate = (update: ProposalUpdateDTO) => {
  */
 const scrollToBottom = () => {
   if (messagesContainer.value) {
+    // Use requestAnimationFrame to ensure DOM is updated
+    requestAnimationFrame(() => {
+  if (messagesContainer.value) {
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      }
+    })
+  }
+}
+
+/**
+ * Reload chat history from server (pull-to-refresh)
+ * This replaces the messages in store for THIS conversation only
+ */
+const reloadChatHistory = async () => {
+  if (!conversationId.value || !currentUserId.value || refreshing.value) return
+
+  refreshing.value = true
+  canLoadMoreAfterReload.value = false // Prevent loadMore immediately after reload
+  console.log('🔄 Reloading chat history from server for conversation:', conversationId.value)
+
+  try {
+    // Scroll to bottom FIRST (before loading) to avoid triggering loadMore
+    if (messagesContainer.value) {
+      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    }
+    await nextTick()
+
+    // Load messages from server (page 0, first page)
+    // This will update the conversationMessages ref in useConversations
+    await loadMessages(conversationId.value, currentUserId.value, 0, 30)
+
+    // Get the loaded messages from useConversations
+    // Messages are already sorted oldest first (reversed in loadMessages)
+    const loadedMessages = conversationMessages.value || []
+
+    // Replace messages in store (this will trigger UI update via computed messages)
+    // Use nextTick to ensure DOM is updated before scrolling
+    await nextTick()
+
+    if (loadedMessages.length > 0) {
+      chatStore.setMessages(conversationId.value, loadedMessages)
+      console.log('✅ Reloaded chat history:', loadedMessages.length, 'messages')
+    } else {
+      // If no messages, clear the store for this conversation
+      chatStore.setMessages(conversationId.value, [])
+      console.log('✅ Reloaded chat history: 0 messages (cleared)')
+    }
+
+    // Wait for DOM to update with new messages
+    await nextTick()
+
+    // Scroll to bottom after reload (always scroll to bottom for refresh)
+    scrollToBottom()
+
+    // Delay 1 second before allowing loadMore again (prevent immediate trigger)
+    setTimeout(() => {
+      canLoadMoreAfterReload.value = true
+      console.log('✅ Can load more messages after reload delay')
+    }, 1000)
+  } catch (error) {
+    console.error('❌ Failed to reload chat history:', error)
+    canLoadMoreAfterReload.value = true // Re-enable on error
+  } finally {
+    refreshing.value = false
   }
 }
 
@@ -851,17 +979,46 @@ const scrollToBottom = () => {
  */
 const handleScroll = () => {
   if (!messagesContainer.value || !conversationId.value || !currentUserId.value) return
+  if (!canLoadMoreAfterReload.value) return // Prevent loadMore immediately after reload
 
   const scrollTop = messagesContainer.value.scrollTop
+  const scrollHeight = messagesContainer.value.scrollHeight
+  const clientHeight = messagesContainer.value.clientHeight
 
-  // Load more when scrolled to top (within 100px)
-  if (scrollTop < 100 && !isLoadingMore.value && hasMoreMessages.value) {
-    console.log('📜 Reached top, loading more messages...')
+  // Check if can scroll (has overflow)
+  const canScroll = scrollHeight > clientHeight
+  const isAtTop = scrollTop < 100
+
+  // Load more when:
+  // 1. Scrolled to top (within 100px) - reached oldest messages
+  // 2. OR not enough messages to overflow - need more messages to fill screen
+  const shouldLoadMore =
+    (isAtTop || (!canScroll && messages.value.length < 30)) &&
+    !isLoadingMore.value &&
+    hasMoreMessages.value
+
+  if (shouldLoadMore) {
+    console.log('📜 Loading more messages...', {
+      isAtTop,
+      canScroll,
+      messageCount: messages.value.length,
+    })
 
     // Save current scroll height
-    const oldScrollHeight = messagesContainer.value.scrollHeight
+    const oldScrollHeight = scrollHeight
 
-    loadMoreMessages(conversationId.value, currentUserId.value).then(() => {
+    loadMoreMessages(conversationId.value, currentUserId.value).then((newMessages) => {
+      // newMessages are the newly loaded older messages (oldest first, already reversed)
+      // Merge them into store (prepend at beginning)
+      if (newMessages && newMessages.length > 0) {
+        chatStore.prependMessages(conversationId.value, newMessages)
+        console.log(
+          `📦 Merged ${newMessages.length} new messages into store (loadMore), store now has ${chatStore.getMessages(conversationId.value).length} messages`,
+        )
+      } else {
+        console.log('📦 No new messages to merge')
+      }
+
       // Restore scroll position after loading
       nextTick(() => {
         if (messagesContainer.value) {
@@ -874,10 +1031,31 @@ const handleScroll = () => {
 }
 
 /**
- * Watch for new messages and scroll
+ * Watch for new messages and scroll to bottom
  */
 watch(
   () => messages.value.length,
+  () => {
+    // Only scroll if we're at or near the bottom (within 100px)
+    if (messagesContainer.value) {
+      const isNearBottom =
+        messagesContainer.value.scrollHeight -
+          messagesContainer.value.scrollTop -
+          messagesContainer.value.clientHeight <
+        100
+
+      if (isNearBottom) {
+        nextTick(() => scrollToBottom())
+      }
+    }
+  },
+)
+
+/**
+ * Watch conversationId to scroll to bottom when switching conversations
+ */
+watch(
+  () => conversationId.value,
   () => {
     nextTick(() => scrollToBottom())
   },
@@ -889,12 +1067,83 @@ watch(
 const isMyMessage = (message: MessageResponse) => {
   return message.senderId === currentUserId.value
 }
+
+/**
+ * Handle delivery confirmation
+ */
+const handleDeliveryConfirm = async (parcelId: string, messageId: string, note?: string) => {
+  if (!parcelId || !messageId) return
+
+  console.log('📦 Confirming delivery for parcel:', parcelId)
+
+  const toast = useToast()
+
+  try {
+    const { confirmParcelReceived } = await import('../Parcels/api')
+    const response = await confirmParcelReceived(parcelId, {
+      confirmationSource: 'CHAT',
+      note: note || undefined,
+    })
+
+    if (response.result) {
+      console.log('✅ Delivery confirmed successfully')
+
+      // Update message content to include confirmedAt
+      const storeMessages = chatStore.getMessages(conversationId.value)
+      const messageIndex = storeMessages.findIndex((m) => m.id === messageId)
+
+      if (messageIndex !== -1) {
+        const message = storeMessages[messageIndex]
+        try {
+          // Parse existing content
+          let messageData: Record<string, unknown> = {}
+          if (message.content) {
+            messageData =
+              typeof message.content === 'string'
+                ? JSON.parse(message.content)
+                : message.content
+          }
+
+          // Add confirmedAt timestamp
+          messageData.confirmedAt = new Date().toISOString()
+
+          // Update message in store
+          const updatedMessage = {
+            ...message,
+            content: JSON.stringify(messageData),
+          }
+
+          chatStore.updateMessage(conversationId.value, messageId, updatedMessage)
+          console.log('✅ Updated message with confirmedAt')
+        } catch (e) {
+          console.error('Error updating message content:', e)
+        }
+      }
+
+      // Show success toast
+      toast.add({
+        title: 'Thành công',
+        description: 'Đã xác nhận nhận hàng thành công',
+        color: 'success',
+      })
+    }
+  } catch (error) {
+    console.error('❌ Failed to confirm delivery:', error)
+    toast.add({
+      title: 'Lỗi',
+      description: 'Không thể xác nhận nhận hàng. Vui lòng thử lại.',
+      color: 'error',
+    })
+  }
+}
 </script>
 
 <template>
   <div class="flex flex-col h-full">
     <!-- Chat Header -->
-    <div class="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+    <div
+      class="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center justify-between flex-shrink-0"
+    >
       <div class="flex items-center space-x-3">
         <UButton
           icon="i-heroicons-arrow-left"
@@ -902,18 +1151,36 @@ const isMyMessage = (message: MessageResponse) => {
           @click="router.push({ name: 'communication-conversations' })"
         />
         <div
-          class="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-semibold"
+          class="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 font-semibold"
         >
-          {{ (partnerName || partnerId || '?').charAt(0).toUpperCase() }}
+          {{ (partnerName || '?').charAt(0).toUpperCase() }}
         </div>
         <div>
-          <p class="font-semibold">{{ partnerName || partnerId || 'Chat' }}</p>
-          <p v-if="partnerUsername" class="text-sm text-gray-500">@{{ partnerUsername }}</p>
-          <p v-else-if="!partnerName && partnerId" class="text-sm text-gray-500">{{ partnerId }}</p>
+          <div class="flex items-center gap-2">
+            <p class="font-semibold text-gray-900 dark:text-gray-100">
+              {{ partnerName || 'Chat' }}
+            </p>
+            <!-- Online status indicator -->
+            <span
+              v-if="partnerIsOnline !== null"
+              class="w-2 h-2 rounded-full"
+              :class="partnerIsOnline ? 'bg-green-500' : 'bg-gray-400'"
+              :title="partnerIsOnline ? 'Online' : 'Offline'"
+            />
+          </div>
+          <p v-if="partnerUsername" class="text-sm text-gray-500 dark:text-gray-400">
+            @{{ partnerUsername }}
+          </p>
+          <p v-else-if="!partnerName && partnerId" class="text-sm text-gray-500 dark:text-gray-400">
+            {{ partnerId }}
+          </p>
+          <p v-else class="text-xs text-gray-400 dark:text-gray-500">
+            {{ partnerIsOnline === true ? 'Online' : partnerIsOnline === false ? 'Offline' : '' }}
+          </p>
         </div>
       </div>
       <div class="flex items-center space-x-2">
-        <!-- Parcels Popover (always show icon, with badge if parcels exist) -->
+        <!-- Parcels Popover (moved to toolbar) -->
         <UPopover v-model:open="showParcelsPopover" :content="{ side: 'bottom', align: 'end' }">
           <UButton variant="ghost" color="neutral" icon="i-heroicons-cube" class="relative">
             <span v-if="sessionAssignments.length > 0" class="ml-1">{{
@@ -943,7 +1210,7 @@ const isMyMessage = (message: MessageResponse) => {
 
               <div
                 v-else-if="sessionAssignments.length === 0"
-                class="text-center py-8 text-gray-500"
+                class="text-center py-8 text-gray-500 dark:text-gray-400"
               >
                 <p>Không có đơn hàng trong phiên hiện tại.</p>
               </div>
@@ -1004,6 +1271,18 @@ const isMyMessage = (message: MessageResponse) => {
           variant="subtle"
           :label="connected ? 'Connected' : connecting ? 'Connecting...' : 'Disconnected'"
         />
+
+        <!-- Refresh Button (Pull-to-refresh) -->
+        <UButton
+          variant="ghost"
+          color="neutral"
+          icon="i-heroicons-arrow-path"
+          :loading="refreshing"
+          :disabled="refreshing || !conversationId"
+          size="sm"
+          class="md:size-md"
+          @click="reloadChatHistory"
+        />
       </div>
     </div>
 
@@ -1041,6 +1320,16 @@ const isMyMessage = (message: MessageResponse) => {
           v-if="message.type === 'DELIVERY_COMPLETED'"
           :message="message"
           :is-my-message="isMyMessage(message)"
+          :current-user-id="currentUserId"
+          @confirm-delivery="handleDeliveryConfirm"
+        />
+
+        <!-- Delivery Succeeded Message -->
+        <ChatMessage
+          v-if="message.type === 'DELIVERY_SUCCEEDED'"
+          :message="message"
+          :is-my-message="isMyMessage(message)"
+          :current-user-id="currentUserId"
         />
 
         <!-- Text Message -->
@@ -1070,7 +1359,7 @@ const isMyMessage = (message: MessageResponse) => {
     </div>
 
     <!-- Message Input -->
-    <div class="p-4 border-t border-gray-200 bg-white">
+    <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
       <div class="flex items-center space-x-2">
         <!-- Proposal Menu -->
         <ProposalMenu
@@ -1098,11 +1387,7 @@ const isMyMessage = (message: MessageResponse) => {
     </div>
 
     <!-- Postpone Options Modal -->
-    <UModal
-      v-model:open="showPostponeOptionsModal"
-      title="Select Postpone Type"
-      :ui="{ width: 'sm:max-w-sm md:max-w-md' }"
-    >
+    <UModal v-model:open="showPostponeOptionsModal" title="Select Postpone Type">
       <template #body>
         <div class="space-y-2 p-4">
           <UButton block variant="ghost" @click="handlePostponeOption('SPECIFIC')">

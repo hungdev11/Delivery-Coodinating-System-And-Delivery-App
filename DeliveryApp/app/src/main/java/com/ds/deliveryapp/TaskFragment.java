@@ -726,6 +726,16 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     }
 
     @Override
+    public void onUserStatusUpdate(String userId, boolean isOnline) {
+        // User status updates are not relevant for TaskFragment
+    }
+
+    @Override
+    public void onTypingIndicatorUpdate(String userId, String conversationId, boolean isTyping) {
+        // Typing indicators are not relevant for TaskFragment
+    }
+
+    @Override
     public void onUpdateNotificationReceived(UpdateNotification updateNotification) {
         Log.d(TAG, String.format("📥 Update notification received: type=%s, entityType=%s, entityId=%s, action=%s", 
             updateNotification.getUpdateType(), 

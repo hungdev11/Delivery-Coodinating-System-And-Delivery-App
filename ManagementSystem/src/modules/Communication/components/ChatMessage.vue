@@ -10,6 +10,7 @@ import { ref, onMounted, computed } from 'vue'
 import type { MessageResponse } from '../model.type'
 import MessageStatusIndicator from './MessageStatusIndicator.vue'
 import DeliveryCompletedMessage from './DeliveryCompletedMessage.vue'
+import DeliverySucceededMessage from './DeliverySucceededMessage.vue'
 import PostponeMessage from './PostponeMessage.vue'
 import {
   getActiveSessionForDeliveryMan,
@@ -24,9 +25,21 @@ import type { FilterGroup } from '@/common/types/filter'
 interface Props {
   message: MessageResponse
   isMyMessage: boolean
+  currentUserId?: string
 }
 
 const props = defineProps<Props>()
+
+const emit = defineEmits<{
+  confirmDelivery: [parcelId: string, messageId: string, note?: string]
+}>()
+
+/**
+ * Handle delivery confirmation
+ */
+const handleDeliveryConfirm = (parcelId: string, messageId: string, note?: string) => {
+  emit('confirmDelivery', parcelId, messageId, note)
+}
 
 // Session and assignments info for shipper messages
 const activeSessionId = ref<string | null>(null)
@@ -161,10 +174,45 @@ const isDeliveryCompletedMessage = computed(() => {
 })
 
 /**
+ * Check if message is delivery succeeded notification
+ */
+const isDeliverySucceededMessage = computed(() => {
+  // First check message.type (new way)
+  if (props.message.type === 'DELIVERY_SUCCEEDED') {
+    return true
+  }
+
+  // Fallback: check content.type (old way for backward compatibility)
+  if (!props.message.content || typeof props.message.content !== 'string') {
+    return false
+  }
+  try {
+    const messageData = JSON.parse(props.message.content)
+    return messageData && messageData.type === 'DELIVERY_SUCCEEDED'
+  } catch {
+    return false
+  }
+})
+
+/**
  * Parse delivery completed message data
  */
 const deliveryCompletedData = computed(() => {
   if (!isDeliveryCompletedMessage.value) {
+    return null
+  }
+  try {
+    return JSON.parse(props.message.content)
+  } catch {
+    return null
+  }
+})
+
+/**
+ * Parse delivery succeeded message data
+ */
+const deliverySucceededData = computed(() => {
+  if (!isDeliverySucceededMessage.value) {
     return null
   }
   try {
@@ -216,7 +264,21 @@ const postponeData = computed(() => {
 <template>
   <!-- Delivery Completed Message -->
   <div v-if="isDeliveryCompletedMessage && deliveryCompletedData" class="max-w-xs lg:max-w-md">
-    <DeliveryCompletedMessage :message-data="deliveryCompletedData" :sent-at="message.sentAt" />
+    <DeliveryCompletedMessage
+      :message-data="deliveryCompletedData"
+      :sent-at="message.sentAt"
+      :current-user-id="props.currentUserId"
+      :message-id="message.id"
+      @confirm="handleDeliveryConfirm"
+    />
+  </div>
+
+  <!-- Delivery Succeeded Message -->
+  <div v-if="isDeliverySucceededMessage && deliverySucceededData" class="max-w-xs lg:max-w-md">
+    <DeliverySucceededMessage
+      :message-data="deliverySucceededData"
+      :sent-at="message.sentAt"
+    />
   </div>
 
   <!-- Postpone Message -->

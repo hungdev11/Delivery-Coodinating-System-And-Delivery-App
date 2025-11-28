@@ -46,6 +46,9 @@ export function usePWA() {
     })
   }
 
+  // Track if update is available
+  const updateAvailable = ref(false)
+
   // Register service worker with update detection
   const { needRefresh, updateServiceWorker, offlineReady } = useRegisterSW({
     immediate: true,
@@ -56,6 +59,7 @@ export function usePWA() {
       // Check for waiting service worker immediately after registration
       if (registration.waiting) {
         console.log('[PWA] Waiting service worker detected on registration')
+        updateAvailable.value = true
       }
 
       // Listen for updatefound event
@@ -64,18 +68,34 @@ export function usePWA() {
         const newWorker = registration.installing || registration.waiting
         if (newWorker) {
           newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            console.log('[PWA] Service worker state changed:', newWorker.state)
+            if (newWorker.state === 'installed') {
+              if (navigator.serviceWorker.controller) {
+                // There's a new service worker available
               console.log('[PWA] New service worker installed and waiting')
+                updateAvailable.value = true
+              } else {
+                // First time installation
+                console.log('[PWA] Service worker installed for the first time')
+              }
             }
           })
         }
       })
+
+      // Periodically check for updates
+      setInterval(() => {
+        registration.update().catch((err) => {
+          console.error('[PWA] Error checking for updates:', err)
+        })
+      }, 60 * 60 * 1000) // Check every hour
     },
     onRegisterError(error: Error) {
       console.error('[PWA] Service Worker registration error:', error)
     },
     onNeedRefresh() {
-      console.log('[PWA] Update available')
+      console.log('[PWA] Update available - needRefresh triggered')
+      updateAvailable.value = true
     },
     onOfflineReady() {
       console.log('[PWA] App ready to work offline')
@@ -88,7 +108,10 @@ export function usePWA() {
     e.preventDefault()
     // Save the event so it can be triggered later
     installPrompt.value = e as BeforeInstallPromptEvent
-    console.log('[PWA] Install prompt available')
+    console.log('[PWA] Install prompt available', e)
+    
+    // Dispatch custom event to notify components
+    window.dispatchEvent(new CustomEvent('pwa-install-prompt-available'))
   }
 
   // Handle app installed
@@ -265,6 +288,18 @@ export function usePWA() {
 
     // Also check on focus (user returns to app)
     window.addEventListener('focus', checkForUpdate)
+
+    // Check for updates on visibility change
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        checkForUpdate()
+      }
+    })
+
+    // Initial update check after a short delay
+    setTimeout(() => {
+      checkForUpdate()
+    }, 2000)
   })
 
   onUnmounted(() => {
@@ -275,16 +310,20 @@ export function usePWA() {
   })
 
   const canInstall = computed(() => !!installPrompt.value && !isInstalled.value)
+  
+  // Computed that combines needRefresh and updateAvailable
+  const hasUpdate = computed(() => needRefresh.value || updateAvailable.value)
 
   return {
     // State
-    needRefresh,
+    needRefresh: hasUpdate,
     offlineReady,
     installPrompt,
     isInstalled,
     isIOS,
     isInStandaloneMode,
     canInstall,
+    updateAvailable,
 
     // Actions
     requestUpdate,

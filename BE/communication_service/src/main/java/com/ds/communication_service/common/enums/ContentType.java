@@ -16,5 +16,11 @@ public enum ContentType {
      * Tin nhắn thông báo đơn hàng đã hoàn thành giao hàng.
      * Content chứa JSON với thông tin parcel (parcelId, parcelCode, completedAt, etc.)
      */
-    DELIVERY_COMPLETED
+    DELIVERY_COMPLETED,
+    
+    /**
+     * Tin nhắn thông báo đơn hàng đã chuyển sang trạng thái SUCCEEDED (hoàn thành).
+     * Content chứa JSON với thông tin parcel và nguồn gốc (confirmedBy: user confirm hay tự động)
+     */
+    DELIVERY_SUCCEEDED
 }

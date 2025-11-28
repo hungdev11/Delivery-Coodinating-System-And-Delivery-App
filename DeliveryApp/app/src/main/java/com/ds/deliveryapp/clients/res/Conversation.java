@@ -1,5 +1,7 @@
 package com.ds.deliveryapp.clients.res;
 
+import java.util.List;
+
 import lombok.Data;
 
 @Data
@@ -21,6 +23,9 @@ public class Conversation {
     // Online status (maps to "isOnline" from backend EnrichedConversationResponse)
     private Boolean partnerOnline;
     private Boolean isOnline;
+    
+    // Messages included in response (when includeMessages=true)
+    private List<Message> messages;
     
     // Helper method to get online status (checks both fields for compatibility)
     public Boolean getPartnerOnline() {

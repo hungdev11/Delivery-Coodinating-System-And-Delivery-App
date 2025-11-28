@@ -17,6 +17,7 @@ import com.ds.deliveryapp.clients.ChatClient;
 import com.ds.deliveryapp.clients.res.Conversation;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.service.GlobalChatService;
+import com.ds.deliveryapp.repository.ChatHistoryRepository;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -95,8 +96,13 @@ public class ConversationsListActivity extends AppCompatActivity {
 
     private void loadConversations() {
         Log.d(TAG, "📥 Loading conversations for user: " + mCurrentUserId);
+        
+        // Load conversations with messages included (only on initial load)
+        // This will populate local database via GlobalChatService
+        boolean includeMessages = mConversations.isEmpty(); // Only include messages on first load
 
-        Call<com.ds.deliveryapp.clients.res.BaseResponse<List<Conversation>>> call = mChatClient.getConversations(mCurrentUserId);
+        Call<com.ds.deliveryapp.clients.res.BaseResponse<List<Conversation>>> call = 
+                mChatClient.getConversations(mCurrentUserId, includeMessages, 50);
         call.enqueue(new Callback<com.ds.deliveryapp.clients.res.BaseResponse<List<Conversation>>>() {
             @Override
             public void onResponse(@NonNull Call<com.ds.deliveryapp.clients.res.BaseResponse<List<Conversation>>> call, @NonNull Response<com.ds.deliveryapp.clients.res.BaseResponse<List<Conversation>>> response) {
@@ -110,6 +116,31 @@ public class ConversationsListActivity extends AppCompatActivity {
 
                         mConversations.clear();
                         mConversations.addAll(conversations);
+                        
+                        // If messages are included, save them to local database and in-memory store
+                        if (includeMessages && globalChatService != null) {
+                            ChatHistoryRepository chatHistoryRepo = new ChatHistoryRepository(ConversationsListActivity.this);
+                            for (Conversation conv : conversations) {
+                                // Store conversation metadata
+                                globalChatService.setConversationMetadata(conv);
+                                
+                                if (conv.getMessages() != null && !conv.getMessages().isEmpty()) {
+                                    // Convert Conversation.Message to Message and save
+                                    List<com.ds.deliveryapp.clients.res.Message> messages = conv.getMessages();
+                                    
+                                    // Save to local database
+                                    chatHistoryRepo.saveMessages(messages);
+                                    
+                                    // Store in GlobalChatService in-memory store
+                                    globalChatService.setMessagesForConversation(conv.getConversationId(), messages);
+                                    
+                                    Log.d(TAG, "💾 Saved " + messages.size() + " messages for conversation " + conv.getConversationId() + " (DB + memory)");
+                                }
+                            }
+                        } else if (globalChatService != null) {
+                            // Even if not including messages, store conversation metadata
+                            globalChatService.setConversationsMetadata(conversations);
+                        }
                         
                         // Sync unread counts with GlobalChatService
                         if (globalChatService != null) {
@@ -189,6 +220,30 @@ public class ConversationsListActivity extends AppCompatActivity {
             @Override
             public void onNotificationReceived(String notificationJson) {
                 // Handle notifications if needed
+            }
+
+            @Override
+            public void onUserStatusUpdate(String userId, boolean isOnline) {
+                // Update online status for conversations in the list
+                runOnUiThread(() -> {
+                    for (Conversation conv : mConversations) {
+                        if (conv.getPartnerId() != null && conv.getPartnerId().equals(userId)) {
+                            conv.setPartnerOnline(isOnline);
+                            if (mAdapter != null) {
+                                int position = mConversations.indexOf(conv);
+                                if (position >= 0) {
+                                    mAdapter.notifyItemChanged(position);
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            @Override
+            public void onTypingIndicatorUpdate(String userId, String conversationId, boolean isTyping) {
+                // Typing indicators are not shown in conversations list
+                // This is handled in ChatActivity instead
             }
         };
         

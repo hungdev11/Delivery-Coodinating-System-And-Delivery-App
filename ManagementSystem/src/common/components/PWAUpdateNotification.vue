@@ -1,7 +1,7 @@
 <template>
   <Transition name="slide-up">
     <UCard
-      v-if="needRefresh"
+      v-if="showUpdateNotification && needRefresh"
       class="fixed bottom-4 left-4 right-4 z-50 max-w-md mx-auto shadow-lg"
       :ui="{
         root: 'bg-white dark:bg-gray-900',
@@ -38,13 +38,58 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { usePWA } from '@/common/composables/usePWA'
 
 // useToast is auto-imported in Nuxt UI
-const { needRefresh, requestUpdate } = usePWA()
+const { needRefresh, requestUpdate, checkForUpdate } = usePWA()
 const isUpdating = ref(false)
+const showUpdateNotification = ref(false)
 const toast = useToast()
+
+// Watch for needRefresh changes
+watch(
+  () => needRefresh.value,
+  (newValue) => {
+    if (newValue) {
+      console.log('[PWAUpdateNotification] Update available, showing notification')
+      showUpdateNotification.value = true
+    }
+  },
+  { immediate: true },
+)
+
+// Check for updates periodically
+let updateCheckInterval: number | null = null
+
+const handleVisibilityChange = () => {
+  if (!document.hidden) {
+    checkForUpdate()
+  }
+}
+
+onMounted(() => {
+  // Check for updates on mount
+  setTimeout(() => {
+    checkForUpdate()
+  }, 2000)
+
+  // Check for updates when page becomes visible
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+
+  // Periodic update check (every 30 minutes)
+  updateCheckInterval = window.setInterval(() => {
+    checkForUpdate()
+  }, 30 * 60 * 1000)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  if (updateCheckInterval) {
+    clearInterval(updateCheckInterval)
+    updateCheckInterval = null
+  }
+})
 
 const handleUpdate = async () => {
   isUpdating.value = true
@@ -80,11 +125,17 @@ const handleUpdate = async () => {
 const dismissUpdate = () => {
   // Store dismissal in localStorage to prevent showing again for this version
   const currentVersion =
-    document.querySelector('meta[name="version"]')?.getAttribute('content') || 'unknown'
+    document.querySelector('meta[name="version"]')?.getAttribute('content') || 
+    new Date().toISOString()
   localStorage.setItem('pwa-update-dismissed', currentVersion)
-  needRefresh.value = false
-  // Note: needRefresh will still be true, but we can add a flag to hide it
-  // In a real scenario, you might want to show it again after some time
+  showUpdateNotification.value = false
+  
+  // Show again after 1 hour
+  setTimeout(() => {
+    if (needRefresh.value) {
+      showUpdateNotification.value = true
+    }
+  }, 60 * 60 * 1000)
 }
 </script>
 

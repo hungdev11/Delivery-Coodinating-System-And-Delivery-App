@@ -75,6 +75,7 @@ public class ParcelService implements IParcelService{
     private final UserSnapshotRepository userSnapshotRepository;
     private final AssignmentSnapshotService assignmentSnapshotService;
     private final SessionServiceClient sessionServiceClient;
+    private final org.springframework.kafka.core.KafkaTemplate<String, Object> kafkaTemplate;
 
     private final Map<ParcelStatus, IParcelState> stateMap = Map.of(
         ParcelStatus.IN_WAREHOUSE, new InWarehouseState(),
@@ -131,7 +132,68 @@ public class ParcelService implements IParcelService{
         }
         
         parcel.setStatus(nextStatus);
-        return parcelRepository.save(parcel);
+        Parcel saved = parcelRepository.save(parcel);
+        
+        // Publish update notification if status changed to SUCCEEDED
+        if (nextStatus == ParcelStatus.SUCCEEDED) {
+            publishParcelSucceededNotification(saved, null, null); // Auto timeout - no confirmedBy
+        }
+        
+        return saved;
+    }
+    
+    /**
+     * Publish update notification when parcel status changes to SUCCEEDED
+     */
+    private void publishParcelSucceededNotification(Parcel parcel, String confirmedBy, LocalDateTime confirmedAt) {
+        try {
+            Map<String, Object> data = new HashMap<>();
+            data.put("parcelId", parcel.getId().toString());
+            data.put("parcelCode", parcel.getCode());
+            data.put("status", "SUCCEEDED");
+            data.put("receiverId", parcel.getReceiverId() != null ? parcel.getReceiverId().toString() : null);
+            data.put("senderId", parcel.getSenderId() != null ? parcel.getSenderId().toString() : null);
+            
+            // Include confirmedBy and confirmedAt if user confirmed
+            if (confirmedBy != null) {
+                data.put("confirmedBy", confirmedBy);
+                data.put("confirmedAt", confirmedAt != null ? confirmedAt.toString() : LocalDateTime.now().toString());
+            }
+            
+            // Try to get deliveryManId from assignment snapshot
+            try {
+                AssignmentSnapshot snapshot = assignmentSnapshotService.getOrFetch(parcel.getId());
+                if (snapshot != null && snapshot.getDeliveryManId() != null) {
+                    data.put("deliveryManId", snapshot.getDeliveryManId().toString());
+                }
+            } catch (Exception e) {
+                log.debug("[parcel-service] [ParcelService.publishParcelSucceededNotification] Could not get deliveryManId from snapshot", e);
+            }
+            
+            // Create UpdateNotificationDTO as Map (parcel-service doesn't have communication_service dependency)
+            Map<String, Object> updateNotification = new HashMap<>();
+            updateNotification.put("id", UUID.randomUUID().toString());
+            updateNotification.put("userId", parcel.getReceiverId() != null ? parcel.getReceiverId().toString() : "");
+            updateNotification.put("updateType", "PARCEL_UPDATE");
+            updateNotification.put("entityType", "PARCEL");
+            updateNotification.put("entityId", parcel.getId().toString());
+            updateNotification.put("action", "STATUS_CHANGED");
+            updateNotification.put("data", data);
+            updateNotification.put("timestamp", LocalDateTime.now().toString());
+            updateNotification.put("message", String.format("Đơn hàng %s đã chuyển sang trạng thái hoàn thành", 
+                    parcel.getCode() != null ? parcel.getCode() : parcel.getId()));
+            updateNotification.put("clientType", "ALL");
+            
+            // Publish to update-notifications topic
+            kafkaTemplate.send("update-notifications", parcel.getId().toString(), updateNotification);
+            
+            log.debug("[parcel-service] [ParcelService.publishParcelSucceededNotification] Published parcel succeeded notification: parcelId={}, confirmedBy={}", 
+                    parcel.getId(), confirmedBy);
+        } catch (Exception e) {
+            log.error("[parcel-service] [ParcelService.publishParcelSucceededNotification] Failed to publish update notification for parcel {}", 
+                    parcel.getId(), e);
+            // Don't throw - notification failure shouldn't break the transaction
+        }
     }
 
     @Override
@@ -158,7 +220,8 @@ public class ParcelService implements IParcelService{
         }
 
         Parcel confirmed = processTransition(parcelId, ParcelEvent.CUSTOMER_RECEIVED);
-        confirmed.setConfirmedAt(java.time.LocalDateTime.now());
+        LocalDateTime confirmedAtTime = java.time.LocalDateTime.now();
+        confirmed.setConfirmedAt(confirmedAtTime);
         confirmed.setConfirmedBy(userId);
         confirmed.setConfirmationNote(request.getNote());
         Parcel saved = parcelRepository.save(confirmed);
@@ -171,6 +234,9 @@ public class ParcelService implements IParcelService{
         } catch (Exception ex) {
             log.error("[parcel-service] [ParcelService.confirmParcelByClient] Failed to update assignment status for parcel {}", parcelId, ex);
         }
+        
+        // Publish update notification (user confirmed)
+        publishParcelSucceededNotification(saved, userId, confirmedAtTime);
 
         return toDto(saved);
     }

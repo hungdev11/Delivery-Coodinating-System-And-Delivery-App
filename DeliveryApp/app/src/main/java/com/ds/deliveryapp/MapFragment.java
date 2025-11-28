@@ -1408,6 +1408,16 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     }
 
     @Override
+    public void onUserStatusUpdate(String userId, boolean isOnline) {
+        // User status updates are not relevant for MapFragment
+    }
+
+    @Override
+    public void onTypingIndicatorUpdate(String userId, String conversationId, boolean isTyping) {
+        // Typing indicators are not relevant for MapFragment
+    }
+
+    @Override
     public void onUpdateNotificationReceived(UpdateNotification updateNotification) {
         Log.d(TAG, String.format("📥 Update notification received: type=%s, entityType=%s, entityId=%s, action=%s", 
             updateNotification.getUpdateType(), 

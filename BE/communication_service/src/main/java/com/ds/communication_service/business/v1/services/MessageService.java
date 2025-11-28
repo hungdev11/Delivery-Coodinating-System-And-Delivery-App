@@ -21,17 +21,28 @@ import com.ds.communication_service.infrastructure.kafka.MessageProducer;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class MessageService implements IMessageService{
     private final MessageRepository messageRepository;
     private final ConversationRepository conversationRepository;
     private final ConversationService conversationService;
-    private final MessageProducer messageProducer; 
+    private final MessageProducer messageProducer;
+    
+    // Use constructor injection with @Lazy to break circular dependency
+    public MessageService(
+            MessageRepository messageRepository,
+            ConversationRepository conversationRepository,
+            @Lazy ConversationService conversationService,
+            MessageProducer messageProducer) {
+        this.messageRepository = messageRepository;
+        this.conversationRepository = conversationRepository;
+        this.conversationService = conversationService;
+        this.messageProducer = messageProducer;
+    } 
 
     @Override
     public Page<MessageResponse> getMessagesForConversation(UUID conversationId, String userId, Pageable pageable) {

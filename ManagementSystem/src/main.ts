@@ -11,11 +11,13 @@ import '@/assets/styles/main.css'
 
 // Initialize the app
 ;(async function initApp() {
-  // Set default color mode to light (no auto/system detection)
+  // Initialize color mode - will use saved value from localStorage or default to 'light'
+  // Don't force set to 'light' to preserve user's color mode preference
   const colorMode = useColorMode({
     storageKey: 'erp-color-mode',
+    default: 'light', // Only use as default if no saved preference exists
   })
-  colorMode.value = 'light'
+  // Don't force set - let it use saved value or default
 
   const app = createApp(App)
 

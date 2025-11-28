@@ -16,6 +16,7 @@ export type ContentType =
   | 'IMAGE'
   | 'FILE'
   | 'DELIVERY_COMPLETED'
+  | 'DELIVERY_SUCCEEDED'
 
 /**
  * Proposal Status
@@ -46,6 +47,7 @@ export interface ConversationResponse {
   lastMessageTime?: string | null // ISO date string of last message time
   lastMessageContent?: string | null // Content of last message
   unreadCount?: number // Number of unread messages
+  messages?: MessageResponse[] // Optional: chat history included in response
 }
 
 /**

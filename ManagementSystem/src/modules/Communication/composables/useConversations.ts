@@ -54,19 +54,44 @@ export function useConversations() {
 
   /**
    * Load conversations for a user
+   * @param userId - User ID
+   * @param includeMessages - Whether to include chat history (default: true)
    */
-  const loadConversations = async (userId: string) => {
+  const loadConversations = async (userId: string, includeMessages: boolean = true) => {
     return queueRequest(async () => {
       loading.value = true
       try {
-        const response = await getConversations(userId)
+        const response = await getConversations(userId, includeMessages, 50)
         // Handle both wrapped response and direct array
+        let conversationsArray: ConversationResponse[] = []
         if (Array.isArray(response)) {
-          conversations.value = response
+          conversationsArray = response
         } else if (response.result && Array.isArray(response.result)) {
-          conversations.value = response.result
+          conversationsArray = response.result
         } else {
-          conversations.value = []
+          conversationsArray = []
+        }
+
+        conversations.value = conversationsArray
+
+        // If messages are included, add them to store
+        if (includeMessages) {
+          const { useChatStore } = await import('@/stores/chatStore')
+          const chatStore = useChatStore()
+          
+          conversationsArray.forEach((conv) => {
+            // Update conversation metadata in store
+            chatStore.setConversation(conv)
+            
+            // Add messages to store if included
+            if (conv.messages && conv.messages.length > 0) {
+              // Messages come sorted DESC (newest first) from backend
+              // Reverse to display oldest first
+              const sortedMessages = [...conv.messages].reverse()
+              chatStore.setMessages(conv.conversationId, sortedMessages)
+              console.log(`📦 Loaded ${sortedMessages.length} messages for conversation ${conv.conversationId} from API`)
+            }
+          })
         }
       } catch (error) {
         console.error('Failed to load conversations:', error)
@@ -178,8 +203,13 @@ export function useConversations() {
 
   /**
    * Load more messages (Infinite scroll - pagination)
+   * Returns the newly loaded messages (oldest first, already reversed)
    */
-  const loadMoreMessages = async (conversationId: string, userId: string, size: number = 30) => {
+  const loadMoreMessages = async (
+    conversationId: string,
+    userId: string,
+    size: number = 30,
+  ): Promise<MessageResponse[]> => {
     if (isLoadingMore.value || !hasMoreMessages.value) {
       console.log(
         '⏸️ Skip loading more: isLoading=' +
@@ -187,7 +217,7 @@ export function useConversations() {
           ', hasMore=' +
           hasMoreMessages.value,
       )
-      return
+      return []
     }
 
     isLoadingMore.value = true
@@ -232,9 +262,13 @@ export function useConversations() {
         console.log(
           `✅ Loaded ${messagesArray.length} more messages, total: ${messages.value.length}, hasMore=${hasMoreMessages.value}`,
         )
+
+        // Return the newly loaded messages (oldest first, already reversed)
+        return reversedNewMessages
       } else {
         hasMoreMessages.value = false
         console.log('📭 No more messages to load')
+        return []
       }
     } catch (error) {
       console.error('Failed to load more messages:', error)
@@ -243,6 +277,7 @@ export function useConversations() {
         description: 'Failed to load more messages',
         color: 'error',
       })
+      return []
     } finally {
       isLoadingMore.value = false
     }

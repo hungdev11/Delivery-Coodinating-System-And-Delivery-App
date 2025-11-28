@@ -12,6 +12,7 @@ import com.ds.deliveryapp.configs.ServerConfigManager;
 import com.ds.deliveryapp.utils.ChatWebSocketListener;
 import com.ds.deliveryapp.utils.ChatWebSocketManager;
 import com.ds.deliveryapp.enums.ContentType;
+import com.ds.deliveryapp.repository.ChatHistoryRepository;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -32,10 +33,17 @@ public class GlobalChatService implements ChatWebSocketListener {
     private AuthManager authManager;
     private Context context;
     private Gson gson;
+    private ChatHistoryRepository chatHistoryRepository;
 
     // Unread message tracking per conversation
     private java.util.Map<String, Integer> unreadCountPerConversation = new java.util.concurrent.ConcurrentHashMap<>();
     private List<Message> pendingProposals = new ArrayList<>();
+    
+    // In-memory message storage for all conversations (similar to web's chatStore)
+    private java.util.Map<String, java.util.List<Message>> messagesByConversation = new java.util.concurrent.ConcurrentHashMap<>();
+    
+    // Conversations metadata (partner info, online status, etc.)
+    private java.util.Map<String, com.ds.deliveryapp.clients.res.Conversation> conversationsMetadata = new java.util.concurrent.ConcurrentHashMap<>();
     
     // Track processed message IDs to avoid double counting
     private java.util.Set<String> processedMessageIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -47,6 +55,7 @@ public class GlobalChatService implements ChatWebSocketListener {
     private GlobalChatService(Context context) {
         this.context = context.getApplicationContext();
         this.authManager = new AuthManager(context);
+        this.chatHistoryRepository = new ChatHistoryRepository(this.context);
         // Initialize Gson with LocalDateTime support
         this.gson = new GsonBuilder()
                 .setDateFormat("yyyy-MM-dd'T'HH:mm:ss")
@@ -253,12 +262,36 @@ public class GlobalChatService implements ChatWebSocketListener {
 
         Log.d(TAG, "Global message received: " + message.getId() + ", type: " + message.getType());
 
+        // Save message to local database
+        if (chatHistoryRepository != null) {
+            chatHistoryRepository.saveMessage(message);
+            Log.d(TAG, "Message saved to local database: " + message.getId());
+        }
+        
+        // Add message to in-memory store
+        String conversationId = message.getConversationId();
+        if (conversationId != null) {
+            java.util.List<Message> conversationMessages = messagesByConversation.computeIfAbsent(conversationId, k -> new java.util.ArrayList<>());
+            
+            // Check if message already exists (avoid duplicates)
+            boolean exists = conversationMessages.stream().anyMatch(m -> m.getId() != null && m.getId().equals(message.getId()));
+            if (!exists) {
+                conversationMessages.add(message);
+                // Sort by sentAt (oldest first)
+                conversationMessages.sort((m1, m2) -> {
+                    if (m1.getSentAt() == null || m2.getSentAt() == null) return 0;
+                    return m1.getSentAt().compareTo(m2.getSentAt());
+                });
+                Log.d(TAG, "Message added to in-memory store for conversation " + conversationId + ". Total: " + conversationMessages.size());
+            }
+        }
+
         // Handle proposal messages specially
         if (message.getType() == ContentType.INTERACTIVE_PROPOSAL) {
             handleProposalMessage(message);
         } else {
             // Normal message - increment unread count for this conversation
-            String conversationId = message.getConversationId();
+            // Use conversationId already defined above
             if (conversationId != null) {
                 // Only increment if message is not from current user (we assume messages from current user are not counted)
                 String currentUserId = authManager.getUserId();
@@ -288,12 +321,100 @@ public class GlobalChatService implements ChatWebSocketListener {
 
     @Override
     public void onStatusUpdateReceived(String statusJson) {
-        // Handle status updates if needed
+        Log.d(TAG, "📡 Status update received: " + statusJson);
+        
+        try {
+            // Parse status update JSON
+            // Expected format: {"userId": "xxx", "isOnline": true/false}
+            java.util.Map<String, Object> statusUpdate = gson.fromJson(statusJson, java.util.Map.class);
+            
+            if (statusUpdate != null && statusUpdate.containsKey("userId") && statusUpdate.containsKey("isOnline")) {
+                String userId = (String) statusUpdate.get("userId");
+                Boolean isOnline = null;
+                
+                Object isOnlineObj = statusUpdate.get("isOnline");
+                if (isOnlineObj instanceof Boolean) {
+                    isOnline = (Boolean) isOnlineObj;
+                } else if (isOnlineObj instanceof String) {
+                    isOnline = Boolean.parseBoolean((String) isOnlineObj);
+                } else if (isOnlineObj != null) {
+                    isOnline = Boolean.parseBoolean(isOnlineObj.toString());
+                }
+                
+                if (userId != null && isOnline != null) {
+                    Log.d(TAG, "📡 User " + userId + " is now " + (isOnline ? "online" : "offline"));
+                    
+                    // Update conversation metadata if this user is a partner in any conversation
+                    for (java.util.Map.Entry<String, com.ds.deliveryapp.clients.res.Conversation> entry : conversationsMetadata.entrySet()) {
+                        com.ds.deliveryapp.clients.res.Conversation conv = entry.getValue();
+                        if (conv != null && userId.equals(conv.getPartnerId())) {
+                            conv.setPartnerOnline(isOnline);
+                            Log.d(TAG, "✅ Updated online status for conversation " + entry.getKey() + " (partner: " + userId + ")");
+                        }
+                    }
+                    
+                    // Notify all listeners
+                    for (GlobalChatListener listener : listeners) {
+                        try {
+                            listener.onUserStatusUpdate(userId, isOnline);
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error notifying listener of user status update", e);
+                        }
+                    }
+                } else {
+                    Log.w(TAG, "⚠️ Invalid status update format: missing userId or isOnline");
+                }
+            } else {
+                Log.w(TAG, "⚠️ Status update missing required fields: " + statusJson);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "❌ Error parsing status update JSON: " + statusJson, e);
+        }
     }
 
     @Override
     public void onTypingIndicatorReceived(String typingJson) {
-        // Handle typing indicators if needed
+        Log.d(TAG, "⌨️ Typing indicator received: " + typingJson);
+        
+        try {
+            // Parse typing indicator JSON
+            // Expected format: {"userId": "xxx", "conversationId": "yyy", "isTyping": true/false}
+            java.util.Map<String, Object> typingIndicator = gson.fromJson(typingJson, java.util.Map.class);
+            
+            if (typingIndicator != null && typingIndicator.containsKey("userId") && typingIndicator.containsKey("isTyping")) {
+                String userId = (String) typingIndicator.get("userId");
+                String conversationId = (String) typingIndicator.get("conversationId");
+                Boolean isTyping = null;
+                
+                Object isTypingObj = typingIndicator.get("isTyping");
+                if (isTypingObj instanceof Boolean) {
+                    isTyping = (Boolean) isTypingObj;
+                } else if (isTypingObj instanceof String) {
+                    isTyping = Boolean.parseBoolean((String) isTypingObj);
+                } else if (isTypingObj != null) {
+                    isTyping = Boolean.parseBoolean(isTypingObj.toString());
+                }
+                
+                if (userId != null && isTyping != null) {
+                    Log.d(TAG, "⌨️ User " + userId + " is " + (isTyping ? "typing" : "stopped typing") + " in conversation " + conversationId);
+                    
+                    // Notify all listeners
+                    for (GlobalChatListener listener : listeners) {
+                        try {
+                            listener.onTypingIndicatorUpdate(userId, conversationId, isTyping);
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error notifying listener of typing indicator update", e);
+                        }
+                    }
+                } else {
+                    Log.w(TAG, "⚠️ Invalid typing indicator format: missing userId or isTyping");
+                }
+            } else {
+                Log.w(TAG, "⚠️ Typing indicator missing required fields: " + typingJson);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "❌ Error parsing typing indicator JSON: " + typingJson, e);
+        }
     }
 
     @Override
@@ -379,6 +500,71 @@ public class GlobalChatService implements ChatWebSocketListener {
     public ChatWebSocketManager getWebSocketManager() {
         return webSocketManager;
     }
+    
+    /**
+     * Set messages for a conversation (initial load from API)
+     * This replaces existing messages for the conversation
+     */
+    public void setMessagesForConversation(String conversationId, java.util.List<Message> messages) {
+        if (conversationId == null || messages == null) return;
+        
+        // Sort messages by sentAt (oldest first)
+        java.util.List<Message> sortedMessages = new java.util.ArrayList<>(messages);
+        sortedMessages.sort((m1, m2) -> {
+            if (m1.getSentAt() == null || m2.getSentAt() == null) return 0;
+            return m1.getSentAt().compareTo(m2.getSentAt());
+        });
+        
+        messagesByConversation.put(conversationId, sortedMessages);
+        Log.d(TAG, "Set " + sortedMessages.size() + " messages for conversation " + conversationId);
+    }
+    
+    /**
+     * Get messages for a conversation from in-memory store
+     */
+    public java.util.List<Message> getMessagesForConversation(String conversationId) {
+        if (conversationId == null) return new java.util.ArrayList<>();
+        return new java.util.ArrayList<>(messagesByConversation.getOrDefault(conversationId, new java.util.ArrayList<>()));
+    }
+    
+    /**
+     * Set conversation metadata (partner info, online status, etc.)
+     */
+    public void setConversationMetadata(com.ds.deliveryapp.clients.res.Conversation conversation) {
+        if (conversation != null && conversation.getConversationId() != null) {
+            conversationsMetadata.put(conversation.getConversationId(), conversation);
+            Log.d(TAG, "Set metadata for conversation " + conversation.getConversationId());
+        }
+    }
+    
+    /**
+     * Set multiple conversations metadata
+     */
+    public void setConversationsMetadata(java.util.List<com.ds.deliveryapp.clients.res.Conversation> conversations) {
+        if (conversations == null) return;
+        for (com.ds.deliveryapp.clients.res.Conversation conv : conversations) {
+            setConversationMetadata(conv);
+        }
+        Log.d(TAG, "Set metadata for " + conversations.size() + " conversations");
+    }
+    
+    /**
+     * Get conversation metadata
+     */
+    public com.ds.deliveryapp.clients.res.Conversation getConversationMetadata(String conversationId) {
+        if (conversationId == null) return null;
+        return conversationsMetadata.get(conversationId);
+    }
+    
+    /**
+     * Clear messages for a conversation (when manually refreshed)
+     */
+    public void clearMessagesForConversation(String conversationId) {
+        if (conversationId != null) {
+            messagesByConversation.remove(conversationId);
+            Log.d(TAG, "Cleared messages for conversation " + conversationId);
+        }
+    }
 
     /**
      * Interface for global chat events
@@ -389,6 +575,8 @@ public class GlobalChatService implements ChatWebSocketListener {
         void onConnectionStatusChanged(boolean connected);
         void onError(String error);
         void onNotificationReceived(String notificationJson);
+        void onUserStatusUpdate(String userId, boolean isOnline);
+        void onTypingIndicatorUpdate(String userId, String conversationId, boolean isTyping);
     }
 
     /**
