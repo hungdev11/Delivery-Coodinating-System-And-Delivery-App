@@ -53,19 +53,20 @@ jobs:
 
       - name: Check for force-build flag
         id: check-force
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
           FORCE_ALL=false
           FORCE_BACKEND=false
           
-          # Check for specific Backend flag
-          if echo "$COMMIT_MSG" | grep -qi '\[force-build-backend\]'; then
+          # Safely check for specific Backend flag using printf to avoid quote issues
+          if printf '%s\n' "$COMMIT_MSG" | grep -qi '\[force-build-backend\]'; then
             FORCE_BACKEND=true
             echo "force-build-backend: detected"
           fi
           
           # Check for general force-build flag
-          if echo "$COMMIT_MSG" | grep -qi '\[force-build\]'; then
+          if printf '%s\n' "$COMMIT_MSG" | grep -qi '\[force-build\]'; then
             FORCE_ALL=true
             echo "force-build (all): detected"
           fi
