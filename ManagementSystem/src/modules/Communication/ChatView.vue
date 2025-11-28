@@ -1142,7 +1142,7 @@ const handleDeliveryConfirm = async (parcelId: string, messageId: string, note?:
   <div class="flex flex-col h-full">
     <!-- Chat Header -->
     <div
-      class="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center justify-between flex-shrink-0"
+      class="p-4 border-b border-neutral-200 dark:border-neutral-700 bg-background flex items-center justify-between flex-shrink-0"
     >
       <div class="flex items-center space-x-3">
         <UButton
@@ -1151,30 +1151,30 @@ const handleDeliveryConfirm = async (parcelId: string, messageId: string, note?:
           @click="router.push({ name: 'communication-conversations' })"
         />
         <div
-          class="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 font-semibold"
+          class="w-10 h-10 rounded-full bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center text-foreground font-semibold"
         >
           {{ (partnerName || '?').charAt(0).toUpperCase() }}
         </div>
         <div>
           <div class="flex items-center gap-2">
-            <p class="font-semibold text-gray-900 dark:text-gray-100">
+            <p class="font-semibold text-foreground">
               {{ partnerName || 'Chat' }}
             </p>
             <!-- Online status indicator -->
             <span
               v-if="partnerIsOnline !== null"
               class="w-2 h-2 rounded-full"
-              :class="partnerIsOnline ? 'bg-green-500' : 'bg-gray-400'"
+              :class="partnerIsOnline ? 'bg-success-500' : 'bg-neutral-400'"
               :title="partnerIsOnline ? 'Online' : 'Offline'"
             />
           </div>
-          <p v-if="partnerUsername" class="text-sm text-gray-500 dark:text-gray-400">
+          <p v-if="partnerUsername" class="text-sm text-muted-foreground">
             @{{ partnerUsername }}
           </p>
-          <p v-else-if="!partnerName && partnerId" class="text-sm text-gray-500 dark:text-gray-400">
+          <p v-else-if="!partnerName && partnerId" class="text-sm text-muted-foreground">
             {{ partnerId }}
           </p>
-          <p v-else class="text-xs text-gray-400 dark:text-gray-500">
+          <p v-else class="text-xs text-muted-foreground">
             {{ partnerIsOnline === true ? 'Online' : partnerIsOnline === false ? 'Offline' : '' }}
           </p>
         </div>
@@ -1189,18 +1189,18 @@ const handleDeliveryConfirm = async (parcelId: string, messageId: string, note?:
             <!-- Red dot indicator when parcels exist -->
             <span
               v-if="sessionAssignments.length > 0"
-              class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"
+              class="absolute top-0 right-0 w-2 h-2 bg-error-500 rounded-full border-2 border-background"
             />
           </UButton>
           <template #content>
             <div class="p-4 min-w-80 max-w-md max-h-96 overflow-y-auto">
               <div class="mb-3">
-                <h3 class="font-semibold text-gray-900 dark:text-gray-100">
+                <h3 class="font-semibold text-foreground">
                   Parcels in Active Session
                 </h3>
                 <p
                   v-if="sessionAssignments.length > 0"
-                  class="text-sm text-gray-500 dark:text-gray-400"
+                  class="text-sm text-muted-foreground"
                 >
                   {{ sessionAssignments.length }} parcel(s) being delivered
                 </p>
@@ -1210,7 +1210,7 @@ const handleDeliveryConfirm = async (parcelId: string, messageId: string, note?:
 
               <div
                 v-else-if="sessionAssignments.length === 0"
-                class="text-center py-8 text-gray-500 dark:text-gray-400"
+                class="text-center py-8 text-muted-foreground"
               >
                 <p>Không có đơn hàng trong phiên hiện tại.</p>
               </div>
@@ -1219,12 +1219,12 @@ const handleDeliveryConfirm = async (parcelId: string, messageId: string, note?:
                 <div
                   v-for="assignment in sessionAssignments"
                   :key="assignment.parcelId"
-                  class="p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  class="p-3 border border-neutral-200 dark:border-neutral-700 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
                 >
                   <div class="flex items-start justify-between">
                     <div class="flex-1">
                       <div class="flex items-center space-x-2 mb-2">
-                        <span class="font-semibold text-gray-900 dark:text-gray-100">
+                        <span class="font-semibold text-foreground">
                           {{ assignment.parcelCode || assignment.parcelId }}
                         </span>
                         <UBadge
@@ -1241,7 +1241,7 @@ const handleDeliveryConfirm = async (parcelId: string, messageId: string, note?:
                           {{ assignment.status.toLowerCase() }}
                         </UBadge>
                       </div>
-                      <div class="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                      <div class="text-sm text-muted-foreground space-y-1">
                         <p v-if="assignment.deliveryType">
                           Type: <strong>{{ assignment.deliveryType }}</strong>
                         </p>
@@ -1289,13 +1289,13 @@ const handleDeliveryConfirm = async (parcelId: string, messageId: string, note?:
     <!-- Messages Container -->
     <div
       ref="messagesContainer"
-      class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"
+      class="flex-1 overflow-y-auto p-4 space-y-4 bg-neutral-50 dark:bg-neutral-900/50"
       style="scroll-behavior: smooth"
       @scroll="handleScroll"
     >
       <!-- Loading More Indicator (at top) -->
       <div v-if="isLoadingMore" class="flex justify-center py-4">
-        <div class="flex items-center space-x-2 text-gray-500">
+        <div class="flex items-center space-x-2 text-muted-foreground">
           <UIcon name="i-heroicons-arrow-path" class="animate-spin" />
           <span class="text-sm">Loading more messages...</span>
         </div>
@@ -1303,7 +1303,7 @@ const handleDeliveryConfirm = async (parcelId: string, messageId: string, note?:
 
       <!-- Empty State -->
       <div v-if="messages.length === 0" class="flex items-center justify-center h-full">
-        <div class="text-center text-gray-500">
+        <div class="text-center text-muted-foreground">
           <p>No messages yet. Start the conversation!</p>
         </div>
       </div>
@@ -1359,7 +1359,7 @@ const handleDeliveryConfirm = async (parcelId: string, messageId: string, note?:
     </div>
 
     <!-- Message Input -->
-    <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+    <div class="p-4 border-t border-neutral-200 dark:border-neutral-700 bg-background">
       <div class="flex items-center space-x-2">
         <!-- Proposal Menu -->
         <ProposalMenu

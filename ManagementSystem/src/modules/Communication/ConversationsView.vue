@@ -213,9 +213,9 @@ const openCreateChat = async () => {
     <!-- Conversations List -->
     <div
       v-if="!isMobileView || showConversationList"
-      class="w-full lg:w-1/3 border-r border-gray-200 flex flex-col"
+      class="w-full lg:w-1/3 border-r border-neutral-200 dark:border-neutral-700 flex flex-col"
     >
-      <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+      <div class="p-4 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between">
         <h1 class="text-xl font-semibold">Conversations</h1>
         <UButton
           icon="i-heroicons-plus"
@@ -237,7 +237,7 @@ const openCreateChat = async () => {
         v-else-if="sortedConversations.length === 0"
         class="flex items-center justify-center h-full"
       >
-        <div class="text-center text-gray-500">
+        <div class="text-center text-muted-foreground">
           <p>No conversations yet</p>
           <UButton
             class="mt-4"
@@ -255,7 +255,7 @@ const openCreateChat = async () => {
         <div
           v-for="conversation in sortedConversations"
           :key="conversation.conversationId"
-          class="p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+          class="p-4 border-b border-neutral-100 dark:border-neutral-800 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors"
           :class="{
             'bg-primary-50 dark:bg-primary-900/20':
               selectedConversationId === conversation.conversationId,
@@ -265,14 +265,14 @@ const openCreateChat = async () => {
           <div class="flex items-center space-x-3">
             <div class="relative">
               <div
-                class="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-semibold"
+                class="w-12 h-12 rounded-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-foreground font-semibold"
               >
                 {{ conversation.partnerName.charAt(0).toUpperCase() }}
               </div>
               <!-- Online status indicator -->
               <div
                 v-if="conversation.isOnline !== null"
-                class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white"
+                class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-background"
                 :class="conversation.isOnline ? 'bg-success-500' : 'bg-neutral-400'"
                 :title="conversation.isOnline ? 'Online' : 'Offline'"
               />
@@ -280,22 +280,22 @@ const openCreateChat = async () => {
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
                 <div class="flex flex-col flex-1 min-w-0">
-                  <p class="text-sm font-medium text-gray-900 truncate">
+                  <p class="text-sm font-medium text-foreground truncate">
                     {{ conversation.partnerName }}
                   </p>
-                  <p v-if="conversation.partnerUsername" class="text-xs text-gray-500 truncate">
+                  <p v-if="conversation.partnerUsername" class="text-xs text-muted-foreground truncate">
                     @{{ conversation.partnerUsername }}
                   </p>
                   <p
                     v-if="conversation.lastMessageContent"
-                    class="text-xs text-gray-600 truncate mt-1"
+                    class="text-xs text-muted-foreground truncate mt-1"
                   >
                     {{ conversation.lastMessageContent }}
                   </p>
-                  <p v-else class="text-xs text-gray-400 italic mt-1">No messages yet</p>
+                  <p v-else class="text-xs text-muted-foreground/70 italic mt-1">No messages yet</p>
                 </div>
                 <div class="flex flex-col items-end ml-2">
-                  <span class="text-xs text-gray-500">
+                  <span class="text-xs text-muted-foreground">
                     {{ formatLastMessageTime(conversation.lastMessageTime) }}
                   </span>
                   <UBadge
@@ -316,13 +316,13 @@ const openCreateChat = async () => {
     </div>
 
     <!-- Chat Container -->
-    <div v-if="!isMobileView || !showConversationList" class="flex-1 flex flex-col bg-gray-50">
+    <div v-if="!isMobileView || !showConversationList" class="flex-1 flex flex-col bg-neutral-50 dark:bg-neutral-900/50">
       <RouterView v-slot="{ Component }">
         <component v-if="Component" :is="Component" />
-        <div v-else class="flex-1 flex items-center justify-center bg-gray-50">
+        <div v-else class="flex-1 flex items-center justify-center bg-neutral-50 dark:bg-neutral-900/50">
           <div class="text-center">
-            <UIcon name="i-heroicons-chat-bubble-left-right" class="text-6xl text-gray-300 mb-4" />
-            <p class="text-gray-500">Select a conversation to start chatting</p>
+            <UIcon name="i-heroicons-chat-bubble-left-right" class="text-6xl text-muted-foreground/30 mb-4" />
+            <p class="text-muted-foreground">Select a conversation to start chatting</p>
           </div>
         </div>
       </RouterView>

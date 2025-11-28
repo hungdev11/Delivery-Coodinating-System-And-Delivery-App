@@ -138,11 +138,12 @@ public class SessionService implements ISessionService {
             .build();
         
         // 6. Kiểm tra hết hạn session trước khi thêm đơn
-        if (isSessionExpired(sessionToUse)) {
-            log.debug("[session-service] [SessionService.acceptParcelToSession] Session {} is expired. Auto-failing session before adding parcel.", sessionToUse.getId());
-            failSession(sessionToUse.getId(), "Phiên giao hết hạn");
-            throw new IllegalStateException("Session has expired. Please create a new session.");
-        }
+        // Auto-fail disabled: removed automatic session expiration check
+        // if (isSessionExpired(sessionToUse)) {
+        //     log.debug("[session-service] [SessionService.acceptParcelToSession] Session {} is expired. Auto-failing session before adding parcel.", sessionToUse.getId());
+        //     failSession(sessionToUse.getId(), "Phiên giao hết hạn");
+        //     throw new IllegalStateException("Session has expired. Please create a new session.");
+        // }
 
         // 7. Validation: Nếu số đơn > 5, kiểm tra routing time
         int currentParcelCount = sessionToUse.getAssignments().size();
@@ -450,14 +451,15 @@ public class SessionService implements ISessionService {
         DeliverySession session = sessionRepository.findById(sessionId)
             .orElseThrow(() -> new EntityNotFoundException("Session not found: " + sessionId));
         
+        // Auto-fail disabled: removed automatic session expiration check
         // Check if session is expired and auto-fail it
-        if (isSessionExpired(session)) {
-            log.debug("[session-service] [SessionService.getSessionById] Session {} is expired. Auto-failing session.", sessionId);
-            failSession(sessionId, "Phiên giao hết hạn");
-            // Re-fetch the session after failing
-            session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new EntityNotFoundException("Session not found: " + sessionId));
-        }
+        // if (isSessionExpired(session)) {
+        //     log.debug("[session-service] [SessionService.getSessionById] Session {} is expired. Auto-failing session.", sessionId);
+        //     failSession(sessionId, "Phiên giao hết hạn");
+        //     // Re-fetch the session after failing
+        //     session = sessionRepository.findById(sessionId)
+        //         .orElseThrow(() -> new EntityNotFoundException("Session not found: " + sessionId));
+        // }
         
         return toSessionResponse(session);
     }
@@ -470,13 +472,14 @@ public class SessionService implements ISessionService {
         Optional<DeliverySession> inProgressSession = sessionRepository.findByDeliveryManIdAndStatus(deliveryManId, SessionStatus.IN_PROGRESS);
         if (inProgressSession.isPresent()) {
             DeliverySession session = inProgressSession.get();
+            // Auto-fail disabled: removed automatic session expiration check
             // Check if session is expired and auto-fail it
-            if (isSessionExpired(session)) {
-                log.debug("[session-service] [SessionService.getActiveSession] IN_PROGRESS session {} is expired. Auto-failing session.", session.getId());
-                failSession(session.getId(), "Phiên giao hết hạn");
-                log.debug("[session-service] [SessionService.getActiveSession] No active session found for delivery man {} (expired session was auto-failed)", deliveryManId);
-                return null;
-            }
+            // if (isSessionExpired(session)) {
+            //     log.debug("[session-service] [SessionService.getActiveSession] IN_PROGRESS session {} is expired. Auto-failing session.", session.getId());
+            //     failSession(session.getId(), "Phiên giao hết hạn");
+            //     log.debug("[session-service] [SessionService.getActiveSession] No active session found for delivery man {} (expired session was auto-failed)", deliveryManId);
+            //     return null;
+            // }
             log.debug("[session-service] [SessionService.getActiveSession] Found IN_PROGRESS session {} for delivery man {}", session.getId(), deliveryManId);
             return toSessionResponse(session);
         }
@@ -484,13 +487,14 @@ public class SessionService implements ISessionService {
         Optional<DeliverySession> createdSession = sessionRepository.findByDeliveryManIdAndStatus(deliveryManId, SessionStatus.CREATED);
         if (createdSession.isPresent()) {
             DeliverySession session = createdSession.get();
+            // Auto-fail disabled: removed automatic session expiration check
             // Check if session is expired and auto-fail it
-            if (isSessionExpired(session)) {
-                log.debug("[session-service] [SessionService.getActiveSession] CREATED session {} is expired. Auto-failing session.", session.getId());
-                failSession(session.getId(), "Phiên giao hết hạn");
-                log.debug("[session-service] [SessionService.getActiveSession] No active session found for delivery man {} (expired session was auto-failed)", deliveryManId);
-                return null;
-            }
+            // if (isSessionExpired(session)) {
+            //     log.debug("[session-service] [SessionService.getActiveSession] CREATED session {} is expired. Auto-failing session.", session.getId());
+            //     failSession(session.getId(), "Phiên giao hết hạn");
+            //     log.debug("[session-service] [SessionService.getActiveSession] No active session found for delivery man {} (expired session was auto-failed)", deliveryManId);
+            //     return null;
+            // }
             log.debug("[session-service] [SessionService.getActiveSession] Found CREATED session {} for delivery man {}", session.getId(), deliveryManId);
             return toSessionResponse(session);
         }

@@ -40,16 +40,20 @@ export default defineConfig({
         orientation: 'portrait',
         scope: '/',
         start_url: '/',
+        id: '/',
+        categories: ['business', 'productivity'],
         icons: [
           {
             src: 'pwa-192x192.png',
             sizes: '192x192',
             type: 'image/png',
+            purpose: 'any',
           },
           {
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
+            purpose: 'any',
           },
           {
             src: 'pwa-512x512.png',
@@ -67,11 +71,15 @@ export default defineConfig({
         // Remove old cache entries when updating
         cleanupOutdatedCaches: true,
         // Skip waiting and claim clients immediately on update
-        // Set to false to allow manual update control
+        // Set to false to allow manual update control (user can choose when to update)
         skipWaiting: false,
         clientsClaim: false,
         // Enable navigation preload for better performance
         navigationPreload: true,
+        // Service worker filename
+        swDest: 'sw.js',
+        // Maximum file size to precache (512KB)
+        maximumFileSizeToCacheInBytes: 512 * 1024,
         // Runtime caching rules
         runtimeCaching: [
           // Cache API calls (NetworkFirst)

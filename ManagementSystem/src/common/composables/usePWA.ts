@@ -14,6 +14,8 @@ export function usePWA() {
   const installPrompt = ref<BeforeInstallPromptEvent | null>(null)
   const isInstalled = ref(false)
   const isIOS = ref(false)
+  const isAndroid = ref(false)
+  const isBrave = ref(false)
   const isInStandaloneMode = ref(false)
 
   // Store service worker registration for manual updates
@@ -27,15 +29,34 @@ export function usePWA() {
       (window.navigator as { standalone?: boolean }).standalone === true ||
       document.referrer.includes('android-app://')
 
+    // Check device types
+    const ua = navigator.userAgent.toLowerCase()
+    
     // Check if iOS
-    const ua = navigator.userAgent
     const isIPad =
       /iPad/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
     const isIPhone = /iPhone/.test(ua) && !(window as unknown as { MSStream?: unknown }).MSStream
     isIOS.value = isIPad || isIPhone || /iPod/.test(ua)
 
+    // Check if Android
+    isAndroid.value = /android/.test(ua)
+
+    // Check if Brave browser (Brave has a specific user agent pattern or navigator.brave)
+    isBrave.value = 
+      (navigator as { brave?: { isBrave?: () => Promise<boolean> } }).brave !== undefined ||
+      /brave/i.test(ua) ||
+      /brave/i.test(navigator.userAgent)
+
     // Consider installed if in standalone mode or has service worker registration
     isInstalled.value = isInStandaloneMode.value
+    
+    console.log('[PWA] Device detection:', {
+      isIOS: isIOS.value,
+      isAndroid: isAndroid.value,
+      isBrave: isBrave.value,
+      isInStandaloneMode: isInStandaloneMode.value,
+      isInstalled: isInstalled.value,
+    })
   }
 
   // Setup controller change listener (should be done before registration)
@@ -53,7 +74,13 @@ export function usePWA() {
   const { needRefresh, updateServiceWorker, offlineReady } = useRegisterSW({
     immediate: true,
     onRegistered(registration: ServiceWorkerRegistration) {
-      console.log('[PWA] Service Worker registered:', registration)
+      console.log('[PWA] Service Worker registered:', {
+        scope: registration.scope,
+        active: registration.active?.state,
+        waiting: registration.waiting?.state,
+        installing: registration.installing?.state,
+        controller: navigator.serviceWorker.controller?.scriptURL,
+      })
       swRegistration.value = registration
 
       // Check for waiting service worker immediately after registration
@@ -62,18 +89,31 @@ export function usePWA() {
         updateAvailable.value = true
       }
 
+      // Also check active worker for updates
+      if (registration.active) {
+        console.log('[PWA] Active service worker found:', registration.active.scriptURL)
+      }
+
       // Listen for updatefound event
       registration.addEventListener('updatefound', () => {
         console.log('[PWA] Service worker update found')
         const newWorker = registration.installing || registration.waiting
         if (newWorker) {
           newWorker.addEventListener('statechange', () => {
-            console.log('[PWA] Service worker state changed:', newWorker.state)
+            console.log('[PWA] Service worker state changed:', {
+              state: newWorker.state,
+              scriptURL: newWorker.scriptURL,
+              hasController: !!navigator.serviceWorker.controller,
+            })
             if (newWorker.state === 'installed') {
               if (navigator.serviceWorker.controller) {
                 // There's a new service worker available
-              console.log('[PWA] New service worker installed and waiting')
+                console.log('[PWA] New service worker installed and waiting')
                 updateAvailable.value = true
+                // Also trigger needRefresh callback
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('pwa-update-available'))
+                }
               } else {
                 // First time installation
                 console.log('[PWA] Service worker installed for the first time')
@@ -83,12 +123,14 @@ export function usePWA() {
         }
       })
 
-      // Periodically check for updates
+      // Periodically check for updates (every 30 minutes on production)
+      const updateInterval = import.meta.env.PROD ? 30 * 60 * 1000 : 60 * 60 * 1000
       setInterval(() => {
+        console.log('[PWA] Periodic update check')
         registration.update().catch((err) => {
           console.error('[PWA] Error checking for updates:', err)
         })
-      }, 60 * 60 * 1000) // Check every hour
+      }, updateInterval)
     },
     onRegisterError(error: Error) {
       console.error('[PWA] Service Worker registration error:', error)
@@ -96,6 +138,10 @@ export function usePWA() {
     onNeedRefresh() {
       console.log('[PWA] Update available - needRefresh triggered')
       updateAvailable.value = true
+      // Dispatch custom event for components to listen
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('pwa-update-available'))
+      }
     },
     onOfflineReady() {
       console.log('[PWA] App ready to work offline')
@@ -108,7 +154,12 @@ export function usePWA() {
     e.preventDefault()
     // Save the event so it can be triggered later
     installPrompt.value = e as BeforeInstallPromptEvent
-    console.log('[PWA] Install prompt available', e)
+    console.log('[PWA] Install prompt available', {
+      event: e,
+      isAndroid: isAndroid.value,
+      isBrave: isBrave.value,
+      userAgent: navigator.userAgent,
+    })
     
     // Dispatch custom event to notify components
     window.dispatchEvent(new CustomEvent('pwa-install-prompt-available'))
@@ -287,17 +338,28 @@ export function usePWA() {
     startPeriodicUpdateCheck()
 
     // Also check on focus (user returns to app)
-    window.addEventListener('focus', checkForUpdate)
+    window.addEventListener('focus', () => {
+      console.log('[PWA] Window focused, checking for updates')
+      checkForUpdate()
+    })
 
     // Check for updates on visibility change
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
+        console.log('[PWA] Page visible, checking for updates')
         checkForUpdate()
       }
     })
 
+    // Listen for custom update available event
+    window.addEventListener('pwa-update-available', () => {
+      console.log('[PWA] Custom update available event received')
+      updateAvailable.value = true
+    })
+
     // Initial update check after a short delay
     setTimeout(() => {
+      console.log('[PWA] Initial update check')
       checkForUpdate()
     }, 2000)
   })
@@ -306,6 +368,9 @@ export function usePWA() {
     window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
     window.removeEventListener('appinstalled', handleAppInstalled)
     window.removeEventListener('focus', checkForUpdate)
+    window.removeEventListener('pwa-update-available', () => {
+      updateAvailable.value = true
+    })
     stopPeriodicUpdateCheck()
   })
 
@@ -321,6 +386,8 @@ export function usePWA() {
     installPrompt,
     isInstalled,
     isIOS,
+    isAndroid,
+    isBrave,
     isInStandaloneMode,
     canInstall,
     updateAvailable,

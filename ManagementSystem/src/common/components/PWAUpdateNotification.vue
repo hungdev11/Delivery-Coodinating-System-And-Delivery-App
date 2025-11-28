@@ -2,11 +2,7 @@
   <Transition name="slide-up">
     <UCard
       v-if="showUpdateNotification && needRefresh"
-      class="fixed bottom-4 left-4 right-4 z-50 max-w-md mx-auto shadow-lg"
-      :ui="{
-        root: 'bg-white dark:bg-gray-900',
-        body: 'ring-1 ring-gray-200 dark:ring-gray-700',
-      }"
+      class="fixed bottom-4 left-4 right-4 z-50 max-w-md mx-auto shadow-lg bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-700"
     >
       <div class="flex items-start gap-3">
         <div class="flex-shrink-0">
@@ -52,12 +48,51 @@ watch(
   () => needRefresh.value,
   (newValue) => {
     if (newValue) {
-      console.log('[PWAUpdateNotification] Update available, showing notification')
-      showUpdateNotification.value = true
+      console.log('[PWAUpdateNotification] Update available, showing notification', {
+        needRefresh: needRefresh.value,
+        timestamp: new Date().toISOString(),
+        location: window.location.href,
+      })
+      
+      // Check if dismissed for this version
+      const dismissedVersion = localStorage.getItem('pwa-update-dismissed')
+      const currentVersion =
+        document.querySelector('meta[name="version"]')?.getAttribute('content') || 
+        new Date().toISOString()
+      
+      // Only show if not dismissed for this version
+      if (dismissedVersion !== currentVersion) {
+        showUpdateNotification.value = true
+      } else {
+        console.log('[PWAUpdateNotification] Update notification dismissed for this version')
+      }
     }
   },
   { immediate: true },
 )
+
+// Also listen for custom update available event
+onMounted(() => {
+  const handleUpdateAvailable = () => {
+    console.log('[PWAUpdateNotification] Custom update available event received')
+    if (needRefresh.value) {
+      const dismissedVersion = localStorage.getItem('pwa-update-dismissed')
+      const currentVersion =
+        document.querySelector('meta[name="version"]')?.getAttribute('content') || 
+        new Date().toISOString()
+      
+      if (dismissedVersion !== currentVersion) {
+        showUpdateNotification.value = true
+      }
+    }
+  }
+  
+  window.addEventListener('pwa-update-available', handleUpdateAvailable)
+  
+  onUnmounted(() => {
+    window.removeEventListener('pwa-update-available', handleUpdateAvailable)
+  })
+})
 
 // Check for updates periodically
 let updateCheckInterval: number | null = null
@@ -69,18 +104,40 @@ const handleVisibilityChange = () => {
 }
 
 onMounted(() => {
+  console.log('[PWAUpdateNotification] Component mounted', {
+    needRefresh: needRefresh.value,
+    location: window.location.href,
+    isProduction: import.meta.env.PROD,
+  })
+
   // Check for updates on mount
   setTimeout(() => {
+    console.log('[PWAUpdateNotification] Initial update check')
     checkForUpdate()
   }, 2000)
 
   // Check for updates when page becomes visible
   document.addEventListener('visibilitychange', handleVisibilityChange)
 
-  // Periodic update check (every 30 minutes)
+  // Periodic update check (every 30 minutes on production, every hour on dev)
+  const checkInterval = import.meta.env.PROD ? 30 * 60 * 1000 : 60 * 60 * 1000
   updateCheckInterval = window.setInterval(() => {
+    console.log('[PWAUpdateNotification] Periodic update check')
     checkForUpdate()
-  }, 30 * 60 * 1000)
+  }, checkInterval)
+  
+  // Also check immediately if needRefresh is already true
+  if (needRefresh.value) {
+    console.log('[PWAUpdateNotification] needRefresh is already true on mount')
+    const dismissedVersion = localStorage.getItem('pwa-update-dismissed')
+    const currentVersion =
+      document.querySelector('meta[name="version"]')?.getAttribute('content') || 
+      new Date().toISOString()
+    
+    if (dismissedVersion !== currentVersion) {
+      showUpdateNotification.value = true
+    }
+  }
 })
 
 onUnmounted(() => {
@@ -93,31 +150,38 @@ onUnmounted(() => {
 
 const handleUpdate = async () => {
   isUpdating.value = true
+  console.log('[PWAUpdateNotification] Starting update process')
+  
   try {
-    console.log('[PWA] Updating service worker')
+    console.log('[PWAUpdateNotification] Calling requestUpdate')
     await requestUpdate()
+    
+    console.log('[PWAUpdateNotification] requestUpdate completed, waiting for reload')
+    
     // Note: reload should happen in requestUpdate, but if it doesn't, we'll keep loading state
     // The page will reload, so this component will unmount anyway
-    // If reload doesn't happen after 3 seconds, show error
+    // If reload doesn't happen after 5 seconds (longer timeout for production), show error
     setTimeout(() => {
       if (isUpdating.value) {
-        console.warn('[PWA] Reload did not happen, showing error')
+        console.warn('[PWAUpdateNotification] Reload did not happen after 5 seconds, showing error')
         isUpdating.value = false
         toast.add({
           title: 'Lỗi cập nhật',
-          description: 'Không thể cập nhật ứng dụng. Vui lòng tải lại trang thủ công.',
+          description: 'Không thể cập nhật ứng dụng. Vui lòng tải lại trang thủ công (F5 hoặc Ctrl+R).',
           color: 'error',
+          timeout: 5000,
         })
       }
-    }, 3000)
+    }, 5000) // Increased timeout for production
   } catch (error) {
-    console.error('[PWA] Update error:', error)
+    console.error('[PWAUpdateNotification] Update error:', error)
     isUpdating.value = false
     // Show error to user if update fails
     toast.add({
       title: 'Lỗi cập nhật',
-      description: 'Không thể cập nhật ứng dụng. Vui lòng thử lại sau.',
+      description: `Không thể cập nhật ứng dụng: ${error instanceof Error ? error.message : 'Lỗi không xác định'}. Vui lòng thử lại sau hoặc tải lại trang thủ công.`,
       color: 'error',
+      timeout: 5000,
     })
   }
 }

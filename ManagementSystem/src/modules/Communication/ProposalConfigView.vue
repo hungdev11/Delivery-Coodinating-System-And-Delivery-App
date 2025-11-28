@@ -90,13 +90,13 @@ const handleDelete = async (config: ProposalTypeConfig) => {
     </div>
 
     <div v-else-if="proposalConfigs.length === 0" class="text-center py-12">
-      <div class="mx-auto h-12 w-12 text-gray-400">
+      <div class="mx-auto h-12 w-12 text-muted-foreground/50">
         <UIcon name="i-heroicons-cog-6-tooth" class="h-12 w-12" />
       </div>
-      <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+      <h3 class="mt-2 text-sm font-medium text-foreground">
         No configurations found
       </h3>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p class="mt-1 text-sm text-muted-foreground">
         Get started by creating a new proposal configuration.
       </p>
       <div class="mt-6">
@@ -116,26 +116,26 @@ const handleDelete = async (config: ProposalTypeConfig) => {
         </template>
 
         <div class="space-y-3">
-          <p class="text-sm text-gray-600 dark:text-gray-400">
+          <p class="text-sm text-muted-foreground">
             {{ config.description || 'No description' }}
           </p>
 
           <div class="space-y-2 text-sm">
             <div class="flex items-center justify-between">
-              <span class="text-gray-500 dark:text-gray-400">Creation Action:</span>
+              <span class="text-muted-foreground">Creation Action:</span>
               <UBadge color="primary" variant="outline" size="xs">
                 {{ config.creationActionType }}
               </UBadge>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-gray-500 dark:text-gray-400">Response Action:</span>
+              <span class="text-muted-foreground">Response Action:</span>
               <UBadge color="secondary" variant="outline" size="xs">
                 {{ config.responseActionType }}
               </UBadge>
             </div>
             <div v-if="config.defaultTimeoutMinutes" class="flex items-center justify-between">
-              <span class="text-gray-500 dark:text-gray-400">Timeout:</span>
-              <span class="font-medium">{{ config.defaultTimeoutMinutes }} min</span>
+              <span class="text-muted-foreground">Timeout:</span>
+              <span class="font-medium text-foreground">{{ config.defaultTimeoutMinutes }} min</span>
             </div>
           </div>
         </div>
