@@ -1,16 +1,19 @@
 package com.ds.gateway.application.controllers.v1;
 
 import com.ds.gateway.annotations.PublicRoute;
+import com.ds.gateway.application.controllers.support.ProxyControllerSupport;
 import com.ds.gateway.common.entities.dto.common.BaseResponse;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
 import java.util.List;
@@ -26,16 +29,26 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ConfigController {
 
-    private final RestTemplate restTemplate;
+    private static final String SETTINGS_SERVICE = "settings-service";
+
+    private final ProxyControllerSupport proxyControllerSupport;
+    private final ObjectMapper objectMapper;
 
     @Value("${services.settings.base-url}")
     private String settingsServiceUrl;
+
+    private String settingsBaseUrl;
 
     // List of secret keys that are safe to expose to frontend
     private static final List<String> PUBLIC_SECRET_KEYS = List.of(
         "MAPTILER_API_KEY",
         "GOOGLE_MAPS_API_KEY"
     );
+
+    @PostConstruct
+    private void init() {
+        this.settingsBaseUrl = settingsServiceUrl + "/api/v1/settings";
+    }
 
     /**
      * Get public configuration for frontend applications
@@ -44,19 +57,22 @@ public class ConfigController {
     @PublicRoute
     @GetMapping("/public")
     public ResponseEntity<BaseResponse<Map<String, Object>>> getPublicConfig() {
-        log.debug("Fetching public configuration");
+        log.debug("[api-gateway] [ConfigController.getPublicConfig] GET /api/v1/config/public - Fetching public configuration");
         
         Map<String, Object> config = new HashMap<>();
         
         try {
-            // Fetch SECRETS group from Settings Service
-            String url = settingsServiceUrl + "/api/v1/settings/SECRETS";
-            JsonNode response = restTemplate.getForObject(url, JsonNode.class);
+            // Fetch SECRETS group from Settings Service using proxy support
+            String url = settingsBaseUrl + "/SECRETS";
+            ResponseEntity<Object> response = proxyControllerSupport.forward(SETTINGS_SERVICE, HttpMethod.GET, url, null);
             
-            if (response != null) {
+            if (response != null && response.getBody() != null) {
+                // Parse response body to JsonNode
+                JsonNode responseNode = objectMapper.valueToTree(response.getBody());
+                
                 // BaseResponse uses "result" field, not "data"
-                JsonNode settingsNode = response.has("result") ? response.get("result") : 
-                                       response.has("data") ? response.get("data") : null;
+                JsonNode settingsNode = responseNode.has("result") ? responseNode.get("result") : 
+                                       responseNode.has("data") ? responseNode.get("data") : null;
                 
                 if (settingsNode != null && settingsNode.isArray()) {
                     Map<String, String> secrets = new HashMap<>();
