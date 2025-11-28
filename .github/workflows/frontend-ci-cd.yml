@@ -254,8 +254,21 @@ jobs:
           echo "Pre-release tag: $PRE_RELEASE"
           echo "Latest tag: $LATEST"
 
+      - name: Check force rebuild flag
+        id: check-force-rebuild
+        run: |
+          FORCE_BUILD="${{ needs.detect-changes.outputs.force-build }}"
+          if [ "$FORCE_BUILD" = "true" ]; then
+            echo "force-rebuild=true" >> $GITHUB_OUTPUT
+            echo "Force rebuild flag detected - will rebuild even if image exists"
+          else
+            echo "force-rebuild=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Check if image already exists (from PR build)
-        if: steps.tag-conditions.outputs.latest == 'true'
+        if: |
+          steps.tag-conditions.outputs.latest == 'true' &&
+          steps.check-force-rebuild.outputs.force-rebuild != 'true'
         id: check-existing-image
         env:
           REGISTRY: ${{ env.REGISTRY }}
@@ -267,35 +280,38 @@ jobs:
           SHA_SHORT="${COMMIT_SHA:0:7}"
           SHA_FULL="$COMMIT_SHA"
           
-          # Check sha-<short> format
+          # Check sha-<short> format (exact match - preferred)
           IMAGE_SHA_SHORT="${REGISTRY}/${OWNER}/${IMAGE_NAME}:sha-${SHA_SHORT}"
           
-          # Check sha-<full> format  
+          # Check sha-<full> format (exact match - preferred)
           IMAGE_SHA_FULL="${REGISTRY}/${OWNER}/${IMAGE_NAME}:sha-${SHA_FULL}"
           
-          # Check pre-release tag
-          IMAGE_PRE_RELEASE="${REGISTRY}/${OWNER}/${IMAGE_NAME}:pre-release"
-          
           EXISTING_IMAGE=""
+          MATCH_TYPE=""
           
+          # Priority 1: Check for exact SHA match (short)
           if docker manifest inspect "$IMAGE_SHA_SHORT" >/dev/null 2>&1; then
             EXISTING_IMAGE="$IMAGE_SHA_SHORT"
-            echo "Found existing image: $IMAGE_SHA_SHORT"
+            MATCH_TYPE="sha-short-exact"
+            echo "Found existing image with exact SHA match: $IMAGE_SHA_SHORT"
+          # Priority 2: Check for exact SHA match (full)
           elif docker manifest inspect "$IMAGE_SHA_FULL" >/dev/null 2>&1; then
             EXISTING_IMAGE="$IMAGE_SHA_FULL"
-            echo "Found existing image: $IMAGE_SHA_FULL"
-          elif docker manifest inspect "$IMAGE_PRE_RELEASE" >/dev/null 2>&1; then
-            EXISTING_IMAGE="$IMAGE_PRE_RELEASE"
-            echo "Found existing image: $IMAGE_PRE_RELEASE"
+            MATCH_TYPE="sha-full-exact"
+            echo "Found existing image with exact SHA match: $IMAGE_SHA_FULL"
           fi
           
+          # Only retag if we found an exact SHA match
+          # Don't use pre-release tag as it might be from a different commit
           if [ -n "$EXISTING_IMAGE" ]; then
             echo "image-exists=true" >> $GITHUB_OUTPUT
             echo "existing-image=$EXISTING_IMAGE" >> $GITHUB_OUTPUT
-            echo "Will retag existing image instead of rebuilding"
+            echo "match-type=$MATCH_TYPE" >> $GITHUB_OUTPUT
+            echo "Will retag existing image (exact SHA match) instead of rebuilding"
           else
             echo "image-exists=false" >> $GITHUB_OUTPUT
-            echo "No existing image found, will build new"
+            echo "No existing image found for this commit SHA, will build new"
+            echo "Note: pre-release tag not used to avoid retagging wrong commit"
           fi
 
       - name: Extract metadata
@@ -331,7 +347,8 @@ jobs:
         id: retag
         if: |
           steps.tag-conditions.outputs.latest == 'true' &&
-          steps.check-existing-image.outputs.image-exists == 'true'
+          steps.check-existing-image.outputs.image-exists == 'true' &&
+          steps.check-force-rebuild.outputs.force-rebuild != 'true'
         env:
           REGISTRY: ${{ env.REGISTRY }}
           OWNER: ${{ env.REPOSITORY_OWNER }}
@@ -398,7 +415,8 @@ jobs:
         id: push
         if: |
           steps.tag-conditions.outputs.latest != 'true' ||
-          steps.check-existing-image.outputs.image-exists != 'true'
+          steps.check-existing-image.outputs.image-exists != 'true' ||
+          steps.check-force-rebuild.outputs.force-rebuild == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ManagementSystem

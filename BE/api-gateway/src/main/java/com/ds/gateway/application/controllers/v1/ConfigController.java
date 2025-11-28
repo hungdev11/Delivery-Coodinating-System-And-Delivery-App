@@ -53,24 +53,39 @@ public class ConfigController {
             String url = settingsServiceUrl + "/api/v1/settings/SECRETS";
             JsonNode response = restTemplate.getForObject(url, JsonNode.class);
             
-            if (response != null && response.has("data")) {
-                JsonNode settings = response.get("data");
-                Map<String, String> secrets = new HashMap<>();
+            if (response != null) {
+                // BaseResponse uses "result" field, not "data"
+                JsonNode settingsNode = response.has("result") ? response.get("result") : 
+                                       response.has("data") ? response.get("data") : null;
                 
-                for (JsonNode setting : settings) {
-                    String key = setting.has("key") ? setting.get("key").asText() : null;
-                    String value = setting.has("value") ? setting.get("value").asText() : "";
+                if (settingsNode != null && settingsNode.isArray()) {
+                    Map<String, String> secrets = new HashMap<>();
                     
-                    // Only expose whitelisted keys
-                    if (key != null && PUBLIC_SECRET_KEYS.contains(key)) {
-                        secrets.put(key, value);
+                    for (JsonNode setting : settingsNode) {
+                        String key = setting.has("key") ? setting.get("key").asText() : null;
+                        // Get value - handle null properly
+                        String value = null;
+                        if (setting.has("value") && !setting.get("value").isNull()) {
+                            value = setting.get("value").asText();
+                        }
+                        
+                        // Only expose whitelisted keys and ensure value is not null/empty
+                        if (key != null && PUBLIC_SECRET_KEYS.contains(key) && value != null && !value.trim().isEmpty()) {
+                            secrets.put(key, value);
+                            log.debug("Loaded secret key: {} (value length: {})", key, value.length());
+                        } else if (key != null && PUBLIC_SECRET_KEYS.contains(key)) {
+                            log.warn("Secret key {} found but value is null or empty", key);
+                        }
                     }
+                    
+                    config.put("secrets", secrets);
+                    log.debug("Loaded {} public secrets", secrets.size());
+                } else {
+                    log.warn("Settings response format is invalid or empty");
                 }
-                
-                config.put("secrets", secrets);
             }
         } catch (Exception e) {
-            log.warn("Failed to fetch secrets from Settings Service: {}", e.getMessage());
+            log.error("Failed to fetch secrets from Settings Service", e);
             config.put("secrets", Map.of());
         }
         

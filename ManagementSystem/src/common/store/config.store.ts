@@ -5,11 +5,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-
-interface PublicConfig {
-  secrets: Record<string, string>
-  version: string
-}
+import { getPublicConfig, type PublicConfig } from '@/modules/Config/api'
 
 export const useConfigStore = defineStore('config', () => {
   // State
@@ -34,19 +30,12 @@ export const useConfigStore = defineStore('config', () => {
     error.value = null
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || '/api'
-      const response = await fetch(`${apiUrl}/v1/config/public`)
+      const result = await getPublicConfig()
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch config: ${response.status}`)
-      }
-
-      const result = await response.json()
-
-      if (result.success && result.data) {
-        config.value = result.data
+      if (result.result) {
+        config.value = result.result
         isInitialized.value = true
-        console.log('[ConfigStore] Public config loaded')
+        console.log('[ConfigStore] Public config loaded', config.value)
       } else {
         throw new Error(result.message || 'Invalid response format')
       }
