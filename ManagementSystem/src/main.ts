@@ -13,7 +13,6 @@ import '@/assets/styles/main.css'
 ;(async function initApp() {
   // Set default color mode to light (no auto/system detection)
   const colorMode = useColorMode({
-    initialValue: 'light',
     storageKey: 'erp-color-mode',
   })
   colorMode.value = 'light'

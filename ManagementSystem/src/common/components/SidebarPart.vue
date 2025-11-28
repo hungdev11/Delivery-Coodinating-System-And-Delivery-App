@@ -368,7 +368,6 @@ import { logout } from '@/modules/LoginScreen/api'
 import { useColorMode } from '@vueuse/core'
 
 const mode = useColorMode({
-  initialValue: 'light',
   storageKey: 'erp-color-mode',
 })
 
