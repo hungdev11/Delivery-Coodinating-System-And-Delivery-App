@@ -31,6 +31,7 @@ import com.ds.deliveryapp.clients.res.InteractiveProposal;
 import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.clients.res.ProposalTypeConfig;
 import com.ds.deliveryapp.configs.RetrofitClient;
+import com.ds.deliveryapp.configs.ServerConfigManager;
 import com.ds.deliveryapp.enums.ContentType;
 import com.ds.deliveryapp.service.GlobalChatService;
 import com.ds.deliveryapp.utils.ChatWebSocketListener;
@@ -56,7 +57,6 @@ import retrofit2.Response;
 public class ChatActivity extends AppCompatActivity implements MessageAdapter.OnProposalActionListener, ChatWebSocketListener {
 
     private static final String TAG = "ChatActivity";
-    private static final String SERVER_WEBSOCKET_URL = "wss://localweb.phuongy.works/ws/websocket";
 
     // Views
     private RecyclerView rvMessages;
@@ -444,7 +444,7 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
     }
 
     private void initRetrofitClients() {
-        mChatClient = RetrofitClient.getChatRetrofitInstance().create(ChatClient.class);
+        mChatClient = RetrofitClient.getChatRetrofitInstance(this).create(ChatClient.class);
     }
     /**
      * Lấy ID cuộc trò chuyện (gọi API /conversations/find-by-users).
