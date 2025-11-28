@@ -69,6 +69,17 @@ jobs:
             echo "force-build=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Debug context information
+        run: |
+          echo "=== Debug Information ==="
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "SHA: ${{ github.sha }}"
+          echo "Previous SHA: ${{ github.event.before }}"
+          echo "Current SHA: ${{ github.event.after }}"
+          echo "========================="
+
       - uses: dorny/paths-filter@v3
         id: changes
         with:
@@ -77,6 +88,22 @@ jobs:
               - 'ManagementSystem/**'
             cicd-file:
               - '.github/workflows/frontend-ci-cd.yml'
+          list-files: shell
+
+      - name: Debug paths-filter output
+        run: |
+          echo "=== Paths Filter Results ==="
+          echo "management-system: ${{ steps.changes.outputs.management-system }}"
+          echo "cicd-file: ${{ steps.changes.outputs.cicd-file }}"
+          if [ "${{ steps.changes.outputs.management-system }}" = "true" ]; then
+            echo "Changed files in ManagementSystem:"
+            if [ -n "${{ steps.changes.outputs.management-system_files }}" ]; then
+              echo "${{ steps.changes.outputs.management-system_files }}"
+            else
+              echo "No files listed (but filter detected changes)"
+            fi
+          fi
+          echo "============================"
 
       - name: Check if CI/CD file changed
         id: check-cicd
@@ -93,7 +120,17 @@ jobs:
         run: |
           FORCE="${{ steps.check-force.outputs.force-build }}"
           CICD_CHANGED="${{ steps.check-cicd.outputs.cicd-changed }}"
+          PATH_FILTER_RESULT="${{ steps.changes.outputs.management-system }}"
+          EVENT_TYPE="${{ github.event_name }}"
           
+          echo "=== Change Detection Summary ==="
+          echo "Event type: $EVENT_TYPE"
+          echo "Force build flag: $FORCE"
+          echo "CI/CD file changed: $CICD_CHANGED"
+          echo "Paths filter result: $PATH_FILTER_RESULT"
+          echo "================================="
+          
+          # Priority 1: Force build flag or CI/CD file changed
           if [ "$FORCE" = "true" ] || [ "$CICD_CHANGED" = "true" ]; then
             if [ "$CICD_CHANGED" = "true" ]; then
               echo "mode: force-build (CI/CD file changed)"
@@ -101,9 +138,20 @@ jobs:
               echo "mode: force-build (flag detected)"
             fi
             echo "management-system=true" >> $GITHUB_OUTPUT
+          # Priority 2: Paths filter result - primary detection method
+          elif [ "$PATH_FILTER_RESULT" = "true" ]; then
+            echo "mode: change-detection (paths-filter)"
+            echo "management-system=true" >> $GITHUB_OUTPUT
+          # Priority 3: Fallback - if workflow was triggered by push/PR (not CI/CD file),
+          # assume ManagementSystem changed since workflow has path filter for ManagementSystem/**
+          elif [ "$EVENT_TYPE" = "push" ] || [ "$EVENT_TYPE" = "pull_request" ]; then
+            echo "mode: change-detection (fallback - workflow triggered by push/PR)"
+            echo "⚠️  Paths-filter didn't detect changes, but workflow was triggered."
+            echo "   Assuming ManagementSystem changes exist (fallback logic)."
+            echo "management-system=true" >> $GITHUB_OUTPUT
           else
-            echo "mode: change-detection"
-            echo "management-system=${{ steps.changes.outputs.management-system }}" >> $GITHUB_OUTPUT
+            echo "mode: no-changes-detected"
+            echo "management-system=false" >> $GITHUB_OUTPUT
           fi
 
   # Job 2: Lint and Type Check
