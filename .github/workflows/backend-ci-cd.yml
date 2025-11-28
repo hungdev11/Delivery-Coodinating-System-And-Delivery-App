@@ -202,8 +202,18 @@ jobs:
           SESSION_SERVICE_CHANGED: ${{ steps.final.outputs.session-service }}
           COMMUNICATION_SERVICE_CHANGED: ${{ steps.final.outputs.communication-service }}
         run: |
+          echo "=== Service Change Status ==="
+          echo "API_GATEWAY_CHANGED: $API_GATEWAY_CHANGED"
+          echo "USER_SERVICE_CHANGED: $USER_SERVICE_CHANGED"
+          echo "SETTINGS_SERVICE_CHANGED: $SETTINGS_SERVICE_CHANGED"
+          echo "ZONE_SERVICE_CHANGED: $ZONE_SERVICE_CHANGED"
+          echo "PARCEL_SERVICE_CHANGED: $PARCEL_SERVICE_CHANGED"
+          echo "SESSION_SERVICE_CHANGED: $SESSION_SERVICE_CHANGED"
+          echo "COMMUNICATION_SERVICE_CHANGED: $COMMUNICATION_SERVICE_CHANGED"
+          echo "============================="
+          
           python - <<'PY'
-          import json, os
+          import json, os, sys
 
           mapping = [
               ("api-gateway", "BE/api-gateway", "API_GATEWAY_CHANGED"),
@@ -218,15 +228,27 @@ jobs:
           services = []
           service_names = []
           for name, path, env_key in mapping:
-              if os.environ.get(env_key, "false").lower() == "true":
+              env_value = os.environ.get(env_key, "false")
+              is_changed = env_value.lower() == "true"
+              print(f"{name}: {env_value} -> {is_changed}")
+              if is_changed:
                   services.append({"name": name, "path": path})
                   service_names.append(name)
 
-          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
-              fh.write(f"services={json.dumps(services)}\n")
-              fh.write(f"service-names={' '.join(service_names)}\n")
+          services_json = json.dumps(services)
           
-          print(f"Changed services: {', '.join(service_names) if service_names else 'none'}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"services={services_json}\n")
+              fh.write(f"service-names={' '.join(service_names) if service_names else ''}\n")
+          
+          print(f"\n=== Service Matrix Result ===")
+          print(f"Changed services ({len(services)}): {', '.join(service_names) if service_names else 'none'}")
+          print(f"Service matrix JSON: {services_json}")
+          print(f"=============================")
+          
+          if not services:
+              print("WARNING: No services to build! Matrix will be empty.")
+              sys.exit(0)
           PY
 
   # Job 2: Test API Gateway
@@ -408,6 +430,14 @@ jobs:
         service: ${{ fromJSON(needs.detect-changes.outputs.service-matrix) }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Debug service matrix
+        run: |
+          echo "=== Build Job Debug ==="
+          echo "Service name: ${{ matrix.service.name }}"
+          echo "Service path: ${{ matrix.service.path }}"
+          echo "Matrix service: ${{ toJSON(matrix.service) }}"
+          echo "======================"
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
