@@ -1,15 +1,15 @@
 <template>
-  <div class="flex flex-col md:flex-row h-screen bg-gray-50">
+  <div class="flex flex-col md:flex-row h-screen bg-gray-50 dark:bg-gray-950">
     <!-- Desktop Sidebar (hidden on mobile for client-only users) -->
     <div
       :class="[
-        'bg-white shadow-lg transition-all duration-300 ease-in-out flex-col',
+        'bg-white dark:bg-gray-900 shadow-lg transition-all duration-300 ease-in-out flex-col',
         isCollapsed ? 'w-20' : 'w-80',
         isClientOnly ? 'hidden md:flex' : 'hidden md:flex',
       ]"
     >
       <!-- Header -->
-      <div class="p-6 border-b border-gray-200 flex-shrink-0">
+      <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div class="flex items-center">
           <div class="flex-shrink-0">
             <div class="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
@@ -17,8 +17,8 @@
             </div>
           </div>
           <div v-if="!isCollapsed" class="ml-4 flex-1">
-            <h2 class="text-xl font-bold text-gray-900">CRM</h2>
-            <p class="text-sm text-gray-500">Quản lý đơn hàng</p>
+            <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">ERP</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Quản lý đơn hàng</p>
           </div>
         </div>
       </div>
@@ -47,7 +47,7 @@
       <div class="flex-1"></div>
 
       <!-- User Section -->
-      <div class="p-4 border-t border-gray-200 bg-white flex-shrink-0">
+      <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex-shrink-0">
         <div class="flex items-center">
           <div class="flex-shrink-0">
             <div class="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
@@ -61,14 +61,14 @@
             </div>
           </div>
           <div v-if="!isCollapsed" class="ml-4 flex-1">
-            <p class="text-sm font-medium text-gray-900">
+            <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
               {{
                 currentUser?.firstName && currentUser?.lastName
                   ? currentUser.firstName + ' ' + currentUser.lastName
                   : currentUser?.username || 'Guest User'
               }}
             </p>
-            <p class="text-xs text-gray-500">{{ currentUser?.email || 'No email' }}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ currentUser?.email || 'No email' }}</p>
           </div>
         </div>
       </div>
@@ -77,7 +77,7 @@
     <!-- Main Content -->
     <div class="flex-1 flex flex-col overflow-hidden">
       <!-- Top Navbar with Toggle Button (Desktop) -->
-      <header class="bg-white shadow-sm border-b border-gray-200">
+      <header class="bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between px-4 py-3">
           <div class="flex items-center">
             <UButton
@@ -92,13 +92,21 @@
               <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center mr-2">
                 <UIcon name="i-heroicons-folder-open" class="w-5 h-5 text-white" />
               </div>
-              <h1 class="text-lg font-semibold text-gray-900">CRM</h1>
+              <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100">ERP</h1>
             </div>
-            <h1 class="text-lg font-semibold text-gray-900 hidden md:block">{{ 'Dashboard' }}</h1>
+            <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100 hidden md:block">{{ 'Dashboard' }}</h1>
           </div>
           <div class="flex items-center space-x-2 md:space-x-4">
             <div id="pageNavAction" class="flex justify-between items-center"></div>
             <!-- Placeholder for additional navbar items -->
+            <UButton
+              :icon="mode === 'dark' ? 'i-lucide-moon' : 'i-lucide-sun'"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              class="md:size-md"
+              @click="mode = mode === 'dark' ? 'light' : 'dark'"
+            />
             <UButton variant="ghost" color="neutral" icon="i-heroicons-bell" size="sm" class="md:size-md" />
             <UPopover :content="{ side: 'bottom', align: 'end' }">
               <UButton variant="ghost" color="neutral" icon="i-heroicons-cog-6-tooth" size="sm" class="md:size-md" />
@@ -143,7 +151,7 @@
       </header>
 
       <!-- Page Content -->
-      <main :class="['flex-1 overflow-auto p-4 md:p-6', isClientOnly ? 'pb-20 md:pb-6' : '']">
+      <main :class="['flex-1 overflow-auto p-4 md:p-6', (isClientOnly || showAdminMenu) ? 'pb-20 md:pb-6' : '']">
         <slot />
       </main>
     </div>
@@ -151,7 +159,7 @@
     <!-- Mobile Bottom Navigation (Only for client-only users) -->
     <nav
       v-if="isClientOnly"
-      class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50 safe-area-bottom"
+      class="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg z-50 safe-area-bottom"
     >
       <div class="flex items-center justify-around h-16">
         <!-- Addresses -->
@@ -161,7 +169,7 @@
           :class="[
             isActiveRoute('/client/addresses')
               ? 'text-orange-500'
-              : 'text-gray-500 hover:text-gray-700',
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300',
           ]"
         >
           <UIcon name="i-heroicons-map-pin" class="w-6 h-6" />
@@ -175,7 +183,7 @@
           :class="[
             isActiveRoute('/communication')
               ? 'text-orange-500'
-              : 'text-gray-500 hover:text-gray-700',
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300',
           ]"
         >
           <UIcon name="i-heroicons-chat-bubble-left-right" class="w-6 h-6" />
@@ -200,7 +208,7 @@
           <span
             :class="[
               'text-xs mt-1',
-              isActiveRoute('/client/parcels') ? 'text-orange-500 font-medium' : 'text-gray-500',
+              isActiveRoute('/client/parcels') ? 'text-orange-500 font-medium' : 'text-gray-500 dark:text-gray-400',
             ]"
           >
             Đơn hàng
@@ -214,7 +222,7 @@
           :class="[
             isActiveRoute('/client/profile')
               ? 'text-orange-500'
-              : 'text-gray-500 hover:text-gray-700',
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300',
           ]"
         >
           <UIcon name="i-heroicons-user" class="w-6 h-6" />
@@ -223,11 +231,100 @@
 
         <!-- More (Disabled) -->
         <div
-          class="flex flex-col items-center justify-center flex-1 h-full text-gray-300 cursor-not-allowed"
+          class="flex flex-col items-center justify-center flex-1 h-full text-gray-300 dark:text-gray-600 cursor-not-allowed"
         >
           <UIcon name="i-heroicons-ellipsis-horizontal" class="w-6 h-6" />
           <span class="text-xs mt-1">Thêm</span>
         </div>
+      </div>
+    </nav>
+
+    <!-- Mobile Bottom Navigation (For admin users) -->
+    <nav
+      v-if="showAdminMenu"
+      class="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg z-50 safe-area-bottom"
+    >
+      <div class="flex items-center justify-around h-16">
+        <!-- Dashboard -->
+        <router-link
+          to="/"
+          class="flex flex-col items-center justify-center flex-1 h-full"
+          :class="[
+            isActiveRoute('/') && route.path === '/'
+              ? 'text-orange-500'
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300',
+          ]"
+        >
+          <UIcon name="i-heroicons-home" class="w-6 h-6" />
+          <span class="text-xs mt-1">Dashboard</span>
+        </router-link>
+
+        <!-- Communication -->
+        <router-link
+          to="/communication"
+          class="flex flex-col items-center justify-center flex-1 h-full"
+          :class="[
+            isActiveRoute('/communication')
+              ? 'text-orange-500'
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300',
+          ]"
+        >
+          <UIcon name="i-heroicons-chat-bubble-left-right" class="w-6 h-6" />
+          <span class="text-xs mt-1">Chat</span>
+        </router-link>
+
+        <!-- Parcels (Center - Primary) -->
+        <router-link
+          to="/parcels"
+          class="flex flex-col items-center justify-center flex-1 h-full relative"
+        >
+          <div
+            :class="[
+              'w-14 h-14 rounded-full flex items-center justify-center -mt-6 shadow-lg',
+              isActiveRoute('/parcels')
+                ? 'bg-orange-500'
+                : 'bg-orange-400 hover:bg-orange-500',
+            ]"
+          >
+            <UIcon name="i-heroicons-cube" class="w-7 h-7 text-white" />
+          </div>
+          <span
+            :class="[
+              'text-xs mt-1',
+              isActiveRoute('/parcels') ? 'text-orange-500 font-medium' : 'text-gray-500 dark:text-gray-400',
+            ]"
+          >
+            Đơn hàng
+          </span>
+        </router-link>
+
+        <!-- Users -->
+        <router-link
+          to="/users"
+          class="flex flex-col items-center justify-center flex-1 h-full"
+          :class="[
+            isActiveRoute('/users')
+              ? 'text-orange-500'
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300',
+          ]"
+        >
+          <UIcon name="i-heroicons-user-group" class="w-6 h-6" />
+          <span class="text-xs mt-1">Người dùng</span>
+        </router-link>
+
+        <!-- Settings -->
+        <router-link
+          to="/settings"
+          class="flex flex-col items-center justify-center flex-1 h-full"
+          :class="[
+            isActiveRoute('/settings')
+              ? 'text-orange-500'
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300',
+          ]"
+        >
+          <UIcon name="i-heroicons-cog-6-tooth" class="w-6 h-6" />
+          <span class="text-xs mt-1">Cài đặt</span>
+        </router-link>
       </div>
     </nav>
   </div>
@@ -241,6 +338,12 @@ import { storeToRefs } from 'pinia'
 import { computed, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { logout } from '@/modules/LoginScreen/api'
+import { useColorMode } from '@vueuse/core'
+
+const mode = useColorMode({
+  initialValue: 'light',
+  storageKey: 'erp-color-mode',
+})
 
 const sidebarStore = useSidebarStore()
 const { isCollapsed } = storeToRefs(sidebarStore)

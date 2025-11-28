@@ -13,7 +13,15 @@ export default defineConfig({
     vue(),
     vueJsx(),
     vueDevTools(),
-    ui(),
+    ui({
+      ui: {
+        colors: {
+          primary: 'orange',
+          secondary: 'amber', // Brown/Amber tone for secondary elements
+          neutral: 'slate', // Grayscale for neutral backgrounds, text, borders
+        },
+      },
+    }),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'pwa-192x192.png', 'pwa-512x512.png'],
@@ -22,8 +30,8 @@ export default defineConfig({
         suppressWarnings: true,
       },
       manifest: {
-        name: 'CRM - Quản lý đơn hàng',
-        short_name: 'CRM',
+        name: 'ERP - Quản lý đơn hàng',
+        short_name: 'ERP',
         description: 'Hệ thống quản lý đơn hàng và giao vận',
         theme_color: '#f97316',
         background_color: '#ffffff',

@@ -104,14 +104,14 @@ onMounted(() => {
         <UCard>
           <template #header>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-500">Total Users</span>
-              <UIcon name="i-heroicons-user-group" class="w-5 h-5 text-gray-400" />
+              <span class="text-sm">Total Users</span>
+              <UIcon name="i-heroicons-user-group" class="w-5 h-5" />
             </div>
           </template>
-          <div class="text-3xl font-semibold text-gray-900 dark:text-gray-100">
+          <div class="text-3xl font-semibold">
             —
           </div>
-          <div class="text-xs text-gray-500 mt-2">
+          <div class="text-xs mt-2">
             <UButton
               variant="ghost"
               size="xs"
@@ -125,14 +125,14 @@ onMounted(() => {
         <UCard>
           <template #header>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-500">Total Parcels</span>
-              <UIcon name="i-heroicons-cube" class="w-5 h-5 text-gray-400" />
+              <span class="text-sm">Total Parcels</span>
+              <UIcon name="i-heroicons-cube" class="w-5 h-5" />
             </div>
           </template>
-          <div class="text-3xl font-semibold text-gray-900 dark:text-gray-100">
+          <div class="text-3xl font-semibold">
             —
           </div>
-          <div class="text-xs text-gray-500 mt-2">
+          <div class="text-xs mt-2">
             <UButton
               variant="ghost"
               size="xs"
@@ -146,14 +146,14 @@ onMounted(() => {
         <UCard>
           <template #header>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-500">Active Shippers</span>
-              <UIcon name="i-heroicons-truck" class="w-5 h-5 text-gray-400" />
+              <span class="text-sm">Active Shippers</span>
+              <UIcon name="i-heroicons-truck" class="w-5 h-5" />
             </div>
           </template>
-          <div class="text-3xl font-semibold text-gray-900 dark:text-gray-100">
+          <div class="text-3xl font-semibold">
             —
           </div>
-          <div class="text-xs text-gray-500 mt-2">
+          <div class="text-xs mt-2">
             <UButton
               variant="ghost"
               size="xs"
@@ -167,14 +167,14 @@ onMounted(() => {
         <UCard>
           <template #header>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-500">Zones</span>
-              <UIcon name="i-heroicons-map" class="w-5 h-5 text-gray-400" />
+              <span class="text-sm">Zones</span>
+              <UIcon name="i-heroicons-map" class="w-5 h-5" />
             </div>
           </template>
-          <div class="text-3xl font-semibold text-gray-900 dark:text-gray-100">
+          <div class="text-3xl font-semibold">
             —
           </div>
-          <div class="text-xs text-gray-500 mt-2">
+          <div class="text-xs mt-2">
             <UButton
               variant="ghost"
               size="xs"
@@ -226,7 +226,7 @@ onMounted(() => {
           <template #header>
             <h3 class="text-lg font-semibold">System Information</h3>
           </template>
-          <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+          <div class="space-y-2 text-sm">
             <p>Welcome to the Admin Dashboard</p>
             <p>Use the sidebar to navigate to different management sections.</p>
           </div>
@@ -247,14 +247,14 @@ onMounted(() => {
         <UCard>
           <template #header>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-500">Total Parcels</span>
-              <UIcon name="i-heroicons-cube" class="w-5 h-5 text-gray-400" />
+              <span class="text-sm">Total Parcels</span>
+              <UIcon name="i-heroicons-cube" class="w-5 h-5" />
             </div>
           </template>
-          <div class="text-3xl font-semibold text-gray-900 dark:text-gray-100">
+          <div class="text-3xl font-semibold">
             {{ clientStats.totalParcels }}
           </div>
-          <div class="text-xs text-gray-500 mt-2">
+          <div class="text-xs mt-2">
             <UButton
               variant="ghost"
               size="xs"
@@ -268,40 +268,40 @@ onMounted(() => {
         <UCard>
           <template #header>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-500">Pending</span>
-              <UIcon name="i-heroicons-clock" class="w-5 h-5 text-yellow-400" />
+              <span class="text-sm">Pending</span>
+              <UIcon name="i-heroicons-clock" class="w-5 h-5 text-warning-500" />
             </div>
           </template>
-          <div class="text-3xl font-semibold text-yellow-600 dark:text-yellow-400">
+          <div class="text-3xl font-semibold text-warning-600 dark:text-warning-400">
             {{ clientStats.pendingParcels }}
           </div>
-          <div class="text-xs text-gray-500 mt-2">In warehouse or on route</div>
+          <div class="text-xs mt-2">In warehouse or on route</div>
         </UCard>
 
         <UCard>
           <template #header>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-500">Delivered</span>
-              <UIcon name="i-heroicons-check-circle" class="w-5 h-5 text-green-400" />
+              <span class="text-sm">Delivered</span>
+              <UIcon name="i-heroicons-check-circle" class="w-5 h-5 text-success-500" />
             </div>
           </template>
-          <div class="text-3xl font-semibold text-green-600 dark:text-green-400">
+          <div class="text-3xl font-semibold text-success-600 dark:text-success-400">
             {{ clientStats.deliveredParcels }}
           </div>
-          <div class="text-xs text-gray-500 mt-2">Successfully delivered</div>
+          <div class="text-xs mt-2">Successfully delivered</div>
         </UCard>
 
         <UCard>
           <template #header>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-500">My Addresses</span>
-              <UIcon name="i-heroicons-map-pin" class="w-5 h-5 text-gray-400" />
+              <span class="text-sm">My Addresses</span>
+              <UIcon name="i-heroicons-map-pin" class="w-5 h-5" />
             </div>
           </template>
-          <div class="text-3xl font-semibold text-gray-900 dark:text-gray-100">
+          <div class="text-3xl font-semibold">
             {{ clientStats.totalAddresses }}
           </div>
-          <div class="text-xs text-gray-500 mt-2">
+          <div class="text-xs mt-2">
             <UButton
               variant="ghost"
               size="xs"
@@ -353,7 +353,7 @@ onMounted(() => {
           <template #header>
             <h3 class="text-lg font-semibold">Welcome</h3>
           </template>
-          <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+          <div class="space-y-2 text-sm">
             <p>Welcome back, {{ currentUser?.firstName || currentUser?.username || 'User' }}!</p>
             <p>Manage your parcels, addresses, and profile from here.</p>
           </div>
@@ -369,19 +369,10 @@ onMounted(() => {
       />
 
       <div class="space-y-6">
-        <p class="text-gray-600">
+        <p>
           Welcome to the Dashboard
         </p>
       </div>
     </template>
   </div>
 </template>
-
-<style scoped>
-.home-theme-1 {
-  padding: 20px;
-  background-color: #f0f8ff;
-  border: 1px solid #d4e8ff;
-  border-radius: 8px;
-}
-</style>
