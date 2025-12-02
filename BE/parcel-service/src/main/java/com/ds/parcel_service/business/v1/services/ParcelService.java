@@ -21,17 +21,16 @@ import org.springframework.util.StringUtils;
 
 import com.ds.parcel_service.app_context.models.Parcel;
 import com.ds.parcel_service.app_context.models.ParcelDestination;
-import com.ds.parcel_service.app_context.models.AssignmentSnapshot;
+import com.ds.parcel_service.application.services.AssignmentService.AssignmentInfo;
 import com.ds.parcel_service.app_context.repositories.ParcelDestinationRepository;
 import com.ds.parcel_service.app_context.repositories.ParcelRepository;
-import com.ds.parcel_service.app_context.repositories.UserSnapshotRepository;
-import com.ds.parcel_service.application.client.CreateDestinationRequest;
+import com.ds.parcel_service.application.client.UserServiceClient;
+import com.ds.parcel_service.application.client.UserServiceClient.UserInfo;
 import com.ds.parcel_service.application.client.DesDetail;
 import com.ds.parcel_service.application.client.DestinationResponse;
-import com.ds.parcel_service.application.client.ListAddressResponse;
 import com.ds.parcel_service.application.client.ZoneClient;
 import com.ds.parcel_service.application.client.SessionServiceClient;
-import com.ds.parcel_service.application.services.AssignmentSnapshotService;
+import com.ds.parcel_service.application.services.AssignmentService;
 import com.ds.parcel_service.common.entities.dto.common.PagedData;
 import com.ds.parcel_service.common.entities.dto.request.ParcelCreateRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelFilterRequest;
@@ -72,8 +71,8 @@ public class ParcelService implements IParcelService{
     private final ParcelRepository parcelRepository;
     private final ParcelDestinationRepository parcelDestinationRepository;
     private final ZoneClient zoneClient;
-    private final UserSnapshotRepository userSnapshotRepository;
-    private final AssignmentSnapshotService assignmentSnapshotService;
+    private final UserServiceClient userServiceClient;
+    private final AssignmentService assignmentService;
     private final SessionServiceClient sessionServiceClient;
     private final org.springframework.kafka.core.KafkaTemplate<String, Object> kafkaTemplate;
 
@@ -160,14 +159,14 @@ public class ParcelService implements IParcelService{
                 data.put("confirmedAt", confirmedAt != null ? confirmedAt.toString() : LocalDateTime.now().toString());
             }
             
-            // Try to get deliveryManId from assignment snapshot
+            // Try to get deliveryManId from Session Service
             try {
-                AssignmentSnapshot snapshot = assignmentSnapshotService.getOrFetch(parcel.getId());
-                if (snapshot != null && snapshot.getDeliveryManId() != null) {
-                    data.put("deliveryManId", snapshot.getDeliveryManId().toString());
+                AssignmentInfo assignmentInfo = assignmentService.getOrFetch(parcel.getId());
+                if (assignmentInfo != null && assignmentInfo.getDeliveryManId() != null) {
+                    data.put("deliveryManId", assignmentInfo.getDeliveryManId());
                 }
             } catch (Exception e) {
-                log.debug("[parcel-service] [ParcelService.publishParcelSucceededNotification] Could not get deliveryManId from snapshot", e);
+                log.debug("[parcel-service] [ParcelService.publishParcelSucceededNotification] Could not get deliveryManId from Session Service", e);
             }
             
             // Create UpdateNotificationDTO as Map (parcel-service doesn't have communication_service dependency)
@@ -214,9 +213,9 @@ public class ParcelService implements IParcelService{
             throw new IllegalStateException("Parcel must be in DELIVERED state before confirmation");
         }
 
-        AssignmentSnapshot snapshot = assignmentSnapshotService.getOrFetch(parcelId);
-        if (snapshot == null || snapshot.getAssignmentId() == null || snapshot.getSessionId() == null) {
-            snapshot = assignmentSnapshotService.refreshFromRemote(parcelId);
+        AssignmentInfo assignmentInfo = assignmentService.getOrFetch(parcelId);
+        if (assignmentInfo == null || assignmentInfo.getAssignmentId() == null || assignmentInfo.getSessionId() == null) {
+            assignmentInfo = assignmentService.refreshFromRemote(parcelId);
         }
 
         Parcel confirmed = processTransition(parcelId, ParcelEvent.CUSTOMER_RECEIVED);
@@ -227,9 +226,8 @@ public class ParcelService implements IParcelService{
         Parcel saved = parcelRepository.save(confirmed);
 
         try {
-            if (snapshot != null && snapshot.getAssignmentId() != null && snapshot.getSessionId() != null) {
-                sessionServiceClient.markAssignmentSuccess(snapshot.getSessionId(), snapshot.getAssignmentId(), request.getNote());
-                assignmentSnapshotService.updateStatus(snapshot.getAssignmentId(), "SUCCESS");
+            if (assignmentInfo != null && assignmentInfo.getAssignmentId() != null && assignmentInfo.getSessionId() != null) {
+                sessionServiceClient.markAssignmentSuccess(assignmentInfo.getSessionId(), assignmentInfo.getAssignmentId(), request.getNote());
             }
         } catch (Exception ex) {
             log.error("[parcel-service] [ParcelService.confirmParcelByClient] Failed to update assignment status for parcel {}", parcelId, ex);
@@ -475,25 +473,27 @@ public class ParcelService implements IParcelService{
     }
 
     private ParcelResponse toDto(Parcel parcel) {
-        // Get sender and receiver info from UserSnapshot
+        // Get sender and receiver info from User Service
         final String[] senderName = {null};
         final String[] receiverName = {null};
         final String[] receiverPhoneNumber = {null};
         
         try {
             if (parcel.getSenderId() != null) {
-                userSnapshotRepository.findByUserId(parcel.getSenderId())
-                    .ifPresent(snapshot -> senderName[0] = snapshot.getFullName());
+                UserInfo senderInfo = userServiceClient.getUserById(parcel.getSenderId());
+                if (senderInfo != null) {
+                    senderName[0] = senderInfo.getFullName();
+                }
             }
             if (parcel.getReceiverId() != null) {
-                userSnapshotRepository.findByUserId(parcel.getReceiverId())
-                    .ifPresent(snapshot -> {
-                        receiverName[0] = snapshot.getFullName();
-                        receiverPhoneNumber[0] = snapshot.getPhone();
-                    });
+                UserInfo receiverInfo = userServiceClient.getUserById(parcel.getReceiverId());
+                if (receiverInfo != null) {
+                    receiverName[0] = receiverInfo.getFullName();
+                    receiverPhoneNumber[0] = receiverInfo.getPhone();
+                }
             }
         } catch (Exception e) {
-            log.debug("Could not fetch user info for parcel {}: {}", parcel.getId(), e.getMessage());
+            log.debug("[parcel-service] [ParcelService.toDto] Could not fetch user info for parcel {}: {}", parcel.getId(), e.getMessage());
         }
         
         final String finalSenderName = senderName[0];

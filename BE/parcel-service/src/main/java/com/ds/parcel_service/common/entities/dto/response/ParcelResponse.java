@@ -20,9 +20,9 @@ public class ParcelResponse {
     private String id;
     private String code;
     private String senderId;
-    private String senderName; // Full name from UserSnapshot
+    private String senderName; // Full name from User Service
     private String receiverId;
-    private String receiverName; // Full name from UserSnapshot
+    private String receiverName; // Full name from User Service
     private String receiverPhoneNumber;
     private DeliveryType deliveryType;
     private String receiveFrom;
