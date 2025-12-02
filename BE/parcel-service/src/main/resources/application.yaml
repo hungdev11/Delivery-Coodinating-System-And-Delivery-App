@@ -99,13 +99,5 @@ services:
         base-url: ${ZONE_SERVICE_URL:http://zone-service:21503}
     session:
         base-url: ${SESSION_SERVICE_URL:http://session-service:21505}
-
-# Snapshot Initialization Configuration
-snapshot:
-    initialization:
-        enabled: ${SNAPSHOT_INIT_ENABLED:true}
-
-# User Service Configuration (for snapshot initialization)
-user:
-    service:
-        url: ${USER_SERVICE_URL:http://user-service:21501}
+    user:
+        base-url: ${USER_SERVICE_URL:http://user-service:21501}
