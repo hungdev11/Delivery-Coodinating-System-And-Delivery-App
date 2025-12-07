@@ -117,7 +117,7 @@
             />
             <!-- Chat Notification Popup -->
             <ChatNotificationPopup ref="chatNotificationRef" />
-            
+
             <UButton
               variant="ghost"
               color="neutral"
@@ -355,6 +355,21 @@
           <UIcon name="i-heroicons-cog-6-tooth" class="w-6 h-6" />
           <span class="text-xs mt-1">Cài đặt</span>
         </router-link>
+
+        <!-- System Management (Only for Admin) -->
+        <router-link
+          v-if="isAdmin"
+          to="/system"
+          class="flex flex-col items-center justify-center flex-1 h-full"
+          :class="[
+            isActiveRoute('/system')
+              ? 'text-orange-500'
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300',
+          ]"
+        >
+          <UIcon name="i-heroicons-server" class="w-6 h-6" />
+          <span class="text-xs mt-1">Hệ thống</span>
+        </router-link>
       </div>
     </nav>
   </div>
@@ -409,7 +424,7 @@ const isActiveRoute = (path: string) => {
 const handleNewMessage = (message: MessageResponse) => {
   // Only show notification if not in the active conversation
   if (!message.conversationId) return
-  
+
   const activeConversationId = chatStore.activeConversationId
   if (activeConversationId === message.conversationId) {
     // Don't show notification if user is viewing this conversation
@@ -429,14 +444,14 @@ const handleNewMessage = (message: MessageResponse) => {
 
   // Show notification
   if (chatNotificationRef.value) {
-    const preview = message.type === 'TEXT' 
+    const preview = message.type === 'TEXT'
       ? (typeof message.content === 'string' ? message.content : JSON.stringify(message.content))
       : message.type === 'INTERACTIVE_PROPOSAL'
         ? 'New proposal'
         : message.type === 'DELIVERY_COMPLETED'
           ? 'Delivery completed'
           : 'New message'
-    
+
     chatNotificationRef.value.show({
       conversationId: message.conversationId,
       partnerId: conversation.partnerId,
@@ -566,6 +581,11 @@ const navigationItems = computed<NavigationMenuItem[][]>(() => {
           to: '/settings',
           icon: 'i-heroicons-cog-6-tooth',
         },
+        {
+          label: 'System Management',
+          to: '/system',
+          icon: 'i-heroicons-server',
+        },
       ]
     : []
 
@@ -614,6 +634,11 @@ const handleProfile = () => {
 const handleSettings = () => {
   settingsPopoverOpen.value = false
   router.push({ name: 'settings' })
+}
+
+const handleSystemManagement = () => {
+  settingsPopoverOpen.value = false
+  router.push({ name: 'system-management' })
 }
 
 const handleLogout = async () => {

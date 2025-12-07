@@ -10,6 +10,7 @@ import { addressesRoutes } from '@/modules/Addresses/Addresses.routes'
 import { communicationRoutes } from '@/modules/Communication/Communication.routes'
 import { parcelsRoutes } from '@/modules/Parcels/Parcels.routes'
 import { clientRoutes } from '@/modules/Client/Client.routes'
+import { systemManagementRoutes } from '@/modules/SystemManagement/SystemManagement.routes'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -24,6 +25,7 @@ const router = createRouter({
     ...communicationRoutes,
     ...parcelsRoutes,
     ...clientRoutes,
+    ...systemManagementRoutes,
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',

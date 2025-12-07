@@ -524,6 +524,39 @@ public class ZoneServiceClient implements IZoneServiceClient {
     }
 
     @Override
+    public CompletableFuture<Object> getOSRMBuildHistory(String instanceId) {
+        log.debug("Getting OSRM build history for instance: {}", instanceId);
+        return zoneServiceWebClient.get()
+                .uri("/osrm/history/{instanceId}", instanceId)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getAllOSRMBuildHistory() {
+        log.debug("Getting all OSRM build history");
+        return zoneServiceWebClient.get()
+                .uri("/osrm/history")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getOSRMDeploymentStatus() {
+        log.debug("Getting OSRM deployment status");
+        return zoneServiceWebClient.get()
+                .uri("/osrm/deployment")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
     public CompletableFuture<Object> health() {
         return zoneServiceWebClient.get()
                 .uri("/health")

@@ -287,4 +287,22 @@ public class ZoneProxyController {
         log.debug("[api-gateway] [ZoneProxyController.validateOSRMData] GET /api/v1/osrm/validate/{}", instanceId);
         return zoneServiceClient.validateOSRMData(instanceId).thenApply(ResponseEntity::ok).join();
     }
+
+    @GetMapping("/osrm/history/{instanceId}")
+    public ResponseEntity<?> getOSRMBuildHistory(@PathVariable String instanceId) {
+        log.debug("[api-gateway] [ZoneProxyController.getOSRMBuildHistory] GET /api/v1/osrm/history/{}", instanceId);
+        return zoneServiceClient.getOSRMBuildHistory(instanceId).thenApply(ResponseEntity::ok).join();
+    }
+
+    @GetMapping("/osrm/history")
+    public ResponseEntity<?> getAllOSRMBuildHistory() {
+        log.debug("[api-gateway] [ZoneProxyController.getAllOSRMBuildHistory] GET /api/v1/osrm/history");
+        return zoneServiceClient.getAllOSRMBuildHistory().thenApply(ResponseEntity::ok).join();
+    }
+
+    @GetMapping("/osrm/deployment")
+    public ResponseEntity<?> getOSRMDeploymentStatus() {
+        log.debug("[api-gateway] [ZoneProxyController.getOSRMDeploymentStatus] GET /api/v1/osrm/deployment");
+        return zoneServiceClient.getOSRMDeploymentStatus().thenApply(ResponseEntity::ok).join();
+    }
 }

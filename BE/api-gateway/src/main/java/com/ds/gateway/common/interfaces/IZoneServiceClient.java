@@ -57,6 +57,9 @@ public interface IZoneServiceClient {
     CompletableFuture<Object> getAllOSRMInstancesStatus();
     CompletableFuture<Object> getOSRMHealthCheck();
     CompletableFuture<Object> validateOSRMData(String instanceId);
+    CompletableFuture<Object> getOSRMBuildHistory(String instanceId);
+    CompletableFuture<Object> getAllOSRMBuildHistory();
+    CompletableFuture<Object> getOSRMDeploymentStatus();
     
     // Health endpoint
     CompletableFuture<Object> health();
