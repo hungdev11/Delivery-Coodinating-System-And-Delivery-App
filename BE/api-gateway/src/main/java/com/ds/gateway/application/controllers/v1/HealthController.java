@@ -132,7 +132,7 @@ public class HealthController {
                 log.debug("Health check failed for {}: {}", healthPath, ex.getMessage());
                 Map<String, Object> errorHealth = new HashMap<>();
                 errorHealth.put("status", "DOWN");
-                errorHealth.put("error", ex.getMessage());
+                errorHealth.put("error", ex.getMessage() != null ? ex.getMessage() : "Connection timeout or service unavailable");
                 errorHealth.put("timestamp", LocalDateTime.now());
                 return Mono.just(errorHealth);
             })

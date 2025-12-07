@@ -7,7 +7,8 @@
 
 import { defineAsyncComponent, ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import MapView from '@/common/components/MapView.vue'
+// Lazy load MapView to reduce initial bundle size
+const MapView = defineAsyncComponent(() => import('@/common/components/MapView.vue'))
 import type { RouteData, MapMarker } from '@/common/types/map.type'
 import {
   formatDistance,

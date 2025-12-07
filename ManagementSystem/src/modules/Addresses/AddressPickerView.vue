@@ -7,10 +7,11 @@
  *   2) Search address text (local + TrackAsia through API Gateway), jump to point, fine-tune by dragging map
  */
 
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { PageHeader } from '@/common/components'
-import MapView from '@/common/components/MapView.vue'
+// Lazy load MapView to reduce initial bundle size
+const MapView = defineAsyncComponent(() => import('@/common/components/MapView.vue'))
 import { useAddresses } from './composables'
 import type { ByPointResult, AddressDto } from './api'
 import { storeToRefs } from 'pinia'

@@ -5,12 +5,13 @@
  * Demo page for testing priority-based routing
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import type { RadioGroupItem } from '@nuxt/ui'
 import { PageHeader } from '@/common/components'
-import MapView from '@/common/components/MapView.vue'
+// Lazy load MapView to reduce initial bundle size
+const MapView = defineAsyncComponent(() => import('@/common/components/MapView.vue'))
 import { useRoutingStore } from './composables'
 import { PriorityLevel, PriorityLabel } from './routing.type'
 import type { Waypoint, PriorityLevelType } from './routing.type'

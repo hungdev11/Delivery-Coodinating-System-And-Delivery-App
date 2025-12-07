@@ -6,8 +6,9 @@
  * Allows picking coordinates on map and searching addresses
  */
 
-import { ref, computed, onUnmounted, watch } from 'vue'
-import MapView from '@/common/components/MapView.vue'
+import { ref, computed, onUnmounted, watch, defineAsyncComponent } from 'vue'
+// Lazy load MapView to reduce initial bundle size
+const MapView = defineAsyncComponent(() => import('@/common/components/MapView.vue'))
 import { useAddresses } from '@/modules/Addresses/composables'
 import type { ByPointResult } from '@/modules/Addresses/api'
 import { storeToRefs } from 'pinia'

@@ -243,7 +243,12 @@ public class ZoneProxyController {
     @PostMapping("/osrm/build-all")
     public ResponseEntity<?> buildAllOSRMInstances() {
         log.debug("[api-gateway] [ZoneProxyController.buildAllOSRMInstances] POST /api/v1/osrm/build-all");
-        return zoneServiceClient.buildAllOSRMInstances().thenApply(ResponseEntity::ok).join();
+        try {
+            return zoneServiceClient.buildAllOSRMInstances().thenApply(ResponseEntity::ok).join();
+        } catch (Exception e) {
+            log.error("[api-gateway] [ZoneProxyController.buildAllOSRMInstances] Error building OSRM instances", e);
+            throw e; // Re-throw to be handled by GlobalExceptionHandler
+        }
     }
 
     @PostMapping("/osrm/start/{instanceId}")

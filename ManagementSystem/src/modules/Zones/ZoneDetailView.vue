@@ -9,7 +9,9 @@ import { ref, onMounted, computed, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
-import { PageHeader, MapView } from '@/common/components'
+import { PageHeader } from '@/common/components'
+// Lazy load MapView to reduce initial bundle size
+const MapView = defineAsyncComponent(() => import('@/common/components/MapView.vue'))
 import { getZoneById, deleteZone } from './api'
 import { ZoneDto } from './model.type'
 import type { ZonePolygon, MapMarker } from '@/common/types/map.type'

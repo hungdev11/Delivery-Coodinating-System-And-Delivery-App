@@ -130,4 +130,64 @@ export default defineConfig({
     // In browser, we need to map it to 'window'
     global: 'window',
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          // Split maplibre-gl into separate chunk (large library ~200KB)
+          if (id.includes('maplibre-gl')) {
+            return 'maplibre'
+          }
+
+          // Split @turf/turf into separate chunk (geospatial library)
+          if (id.includes('@turf/turf') || id.includes('@turf/')) {
+            return 'turf'
+          }
+
+          // Split @nuxt/ui into separate chunk (UI library)
+          if (id.includes('@nuxt/ui') || id.includes('nuxt/ui')) {
+            return 'nuxt-ui'
+          }
+
+          // Split vue-router into separate chunk
+          if (id.includes('vue-router')) {
+            return 'vue-router'
+          }
+
+          // Split pinia into separate chunk
+          if (id.includes('pinia')) {
+            return 'pinia'
+          }
+
+          // Split axios into separate chunk
+          if (id.includes('axios')) {
+            return 'axios'
+          }
+
+          // Split MapView and related map components into separate chunk
+          if (id.includes('MapView') || id.includes('useMap')) {
+            return 'map-components'
+          }
+
+          // Split large vendor libraries
+          if (id.includes('node_modules')) {
+            // Group other large libraries
+            if (id.includes('@vueuse') || id.includes('vueuse')) {
+              return 'vueuse'
+            }
+            if (id.includes('@stomp/stompjs') || id.includes('sockjs')) {
+              return 'websocket'
+            }
+            if (id.includes('@tanstack/table')) {
+              return 'table'
+            }
+            // Default vendor chunk for other node_modules
+            return 'vendor'
+          }
+        },
+      },
+    },
+    // Increase chunk size warning limit (since we're splitting manually)
+    chunkSizeWarningLimit: 1000,
+  },
 })

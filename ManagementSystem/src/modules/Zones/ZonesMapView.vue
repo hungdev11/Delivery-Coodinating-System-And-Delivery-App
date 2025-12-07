@@ -5,10 +5,11 @@
  * Interactive map view for managing zones with polygon visualization
  */
 
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { PageHeader } from '@/common/components'
-import MapView from '@/common/components/MapView.vue'
+// Lazy load MapView to reduce initial bundle size
+const MapView = defineAsyncComponent(() => import('@/common/components/MapView.vue'))
 import ZoneForm from './components/ZoneForm.vue'
 import { useZonesStore } from './composables'
 import type { ZoneDto, CreateZoneRequest, UpdateZoneRequest } from './model.type'

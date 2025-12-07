@@ -23,6 +23,7 @@ import type {
   RoutingLayerOptions,
   TrafficLayerOptions,
 } from '@/common/types/map.type'
+// Import maplibre CSS - will be code-split into separate chunk via manualChunks
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 interface Props {
