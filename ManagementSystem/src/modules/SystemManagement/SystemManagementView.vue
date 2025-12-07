@@ -234,7 +234,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="system-management-view">
+  <div class="p-6">
     <PageHeader
       title="System Management"
       description="Monitor system health and manage OSRM routing data"
@@ -329,7 +329,7 @@ onMounted(() => {
                   class="w-3 h-3"
                   :class="component.status === 'UP' ? 'text-green-600' : 'text-red-600'"
                 />
-                <span class="capitalize">{{ key.replace(/([A-Z])/g, ' $1').trim() }}</span>
+                <span class="capitalize">{{ String(key).replace(/([A-Z])/g, ' $1').trim() }}</span>
               </div>
             </div>
           </div>
@@ -462,9 +462,3 @@ onMounted(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-.system-management-view {
-  @apply p-6;
-}
-</style>
