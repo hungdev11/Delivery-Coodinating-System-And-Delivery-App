@@ -1,5 +1,7 @@
-import { axiosInstance } from '@/common/utils/axios'
+import { AxiosHttpClient } from '@/common/utils/axios'
 import type { BaseResponse } from '@/common/types/baseResponse'
+
+const apiClient = new AxiosHttpClient(import.meta.env.VITE_API_URL)
 
 export interface ServiceHealth {
   status: string
@@ -63,70 +65,57 @@ export interface OSRMDeploymentStatus {
 
 // Health Check APIs
 export const getApiGatewayHealth = async (): Promise<BaseResponse<ServiceHealth>> => {
-  const response = await axiosInstance.get<BaseResponse<ServiceHealth>>('/api/v1/health')
-  return response.data
+  return apiClient.get<BaseResponse<ServiceHealth>>('/api/v1/health')
 }
 
 export const getAllServicesHealth = async (): Promise<BaseResponse<AllServicesHealth>> => {
-  const response = await axiosInstance.get<BaseResponse<AllServicesHealth>>('/api/v1/health/all')
-  return response.data
+  return apiClient.get<BaseResponse<AllServicesHealth>>('/api/v1/health/all')
 }
 
 // OSRM Management APIs
 export const getOSRMStatus = async (): Promise<BaseResponse<OSRMStatus>> => {
-  const response = await axiosInstance.get<BaseResponse<OSRMStatus>>('/api/v1/osrm/status')
-  return response.data
+  return apiClient.get<BaseResponse<OSRMStatus>>('/api/v1/osrm/status')
 }
 
 export const getOSRMInstanceStatus = async (instanceId: number): Promise<BaseResponse<OSRMInstance>> => {
-  const response = await axiosInstance.get<BaseResponse<OSRMInstance>>(`/api/v1/osrm/status/${instanceId}`)
-  return response.data
+  return apiClient.get<BaseResponse<OSRMInstance>>(`/api/v1/osrm/status/${instanceId}`)
 }
 
 export const getOSRMHealth = async (): Promise<BaseResponse<OSRMHealth>> => {
-  const response = await axiosInstance.get<BaseResponse<OSRMHealth>>('/api/v1/osrm/health')
-  return response.data
+  return apiClient.get<BaseResponse<OSRMHealth>>('/api/v1/osrm/health')
 }
 
 export const buildOSRMInstance = async (instanceId: number): Promise<BaseResponse<any>> => {
-  const response = await axiosInstance.post<BaseResponse<any>>(`/api/v1/osrm/build/${instanceId}`)
-  return response.data
+  return apiClient.post<BaseResponse<any>>(`/api/v1/osrm/build/${instanceId}`)
 }
 
 export const buildAllOSRMInstances = async (): Promise<BaseResponse<any>> => {
-  const response = await axiosInstance.post<BaseResponse<any>>('/api/v1/osrm/build-all')
-  return response.data
+  return apiClient.post<BaseResponse<any>>('/api/v1/osrm/build-all')
 }
 
 export const startOSRMInstance = async (instanceId: number): Promise<BaseResponse<any>> => {
-  const response = await axiosInstance.post<BaseResponse<any>>(`/api/v1/osrm/start/${instanceId}`)
-  return response.data
+  return apiClient.post<BaseResponse<any>>(`/api/v1/osrm/start/${instanceId}`)
 }
 
 export const stopOSRMInstance = async (instanceId: number): Promise<BaseResponse<any>> => {
-  const response = await axiosInstance.post<BaseResponse<any>>(`/api/v1/osrm/stop/${instanceId}`)
-  return response.data
+  return apiClient.post<BaseResponse<any>>(`/api/v1/osrm/stop/${instanceId}`)
 }
 
 export const rollingRestartOSRM = async (): Promise<BaseResponse<any>> => {
-  const response = await axiosInstance.post<BaseResponse<any>>('/api/v1/osrm/rolling-restart')
-  return response.data
+  return apiClient.post<BaseResponse<any>>('/api/v1/osrm/rolling-restart')
 }
 
 export const validateOSRMData = async (instanceId: number): Promise<BaseResponse<any>> => {
-  const response = await axiosInstance.get<BaseResponse<any>>(`/api/v1/osrm/validate/${instanceId}`)
-  return response.data
+  return apiClient.get<BaseResponse<any>>(`/api/v1/osrm/validate/${instanceId}`)
 }
 
 export const getOSRMBuildHistory = async (instanceId?: number): Promise<BaseResponse<OSRMBuildHistory[]>> => {
-  const url = instanceId
+  const url = instanceId 
     ? `/api/v1/osrm/history/${instanceId}`
     : '/api/v1/osrm/history'
-  const response = await axiosInstance.get<BaseResponse<OSRMBuildHistory[]>>(url)
-  return response.data
+  return apiClient.get<BaseResponse<OSRMBuildHistory[]>>(url)
 }
 
 export const getOSRMDeploymentStatus = async (): Promise<BaseResponse<OSRMDeploymentStatus>> => {
-  const response = await axiosInstance.get<BaseResponse<OSRMDeploymentStatus>>('/api/v1/osrm/deployment')
-  return response.data
+  return apiClient.get<BaseResponse<OSRMDeploymentStatus>>('/api/v1/osrm/deployment')
 }
