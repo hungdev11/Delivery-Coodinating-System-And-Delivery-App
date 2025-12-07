@@ -83,8 +83,14 @@ RUN mkdir -p osrm_data/osrm-car-strict-priority-with-delta \
     osrm_data/osrm-car-base
 
 # Install wget for healthcheck (needed by docker-compose)
+# Install OSRM tools dependencies and build tools
 # Install before switching to non-root user (requires root privileges)
-RUN apk add --no-cache wget
+RUN apk add --no-cache \
+    wget \
+    curl \
+    bash \
+    docker-cli \
+    && rm -rf /var/cache/apk/*
 
 # Change ownership to non-root user
 RUN chown -R nodejs:nodejs /app

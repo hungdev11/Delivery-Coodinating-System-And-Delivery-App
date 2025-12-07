@@ -180,15 +180,21 @@ export class OSRMDataManagerService {
         mkdirSync(instance.dataPath, { recursive: true });
       }
 
-      // Step 1: Extract with osrm-extract
+      // Step 1: Extract with osrm-extract using Docker
       logger.info(`Extracting OSM data for ${instance.name}...`);
-      const extractCmd = `osrm-extract -p /app/osrm_data/osrm-instance-${instanceId}/custom_car.lua ${this.osmFilePath}`;
-      await execAsync(extractCmd, { cwd: instance.dataPath });
+      // Use Docker to run osrm-extract (OSRM tools not installed in container)
+      // Mount the entire /app directory so OSRM can access both input and output files
+      // Convert /app paths to /data paths for Docker mount
+      const osmFileInDocker = this.osmFilePath.replace('/app', '/data');
+      const profileFileInDocker = `/data/osrm_data/osrm-instance-${instanceId}/custom_car.lua`;
+      const extractCmd = `docker run --rm -v /app:/data osrm/osrm-backend:latest osrm-extract -p ${profileFileInDocker} ${osmFileInDocker}`;
+      await execAsync(extractCmd, { maxBuffer: 100 * 1024 * 1024 });
 
-      // Step 2: Contract with osrm-contract
+      // Step 2: Contract with osrm-contract using Docker
       logger.info(`Contracting OSRM data for ${instance.name}...`);
-      const contractCmd = `osrm-contract /app/osrm_data/osrm-instance-${instanceId}/network.osrm`;
-      await execAsync(contractCmd, { cwd: instance.dataPath });
+      // Use Docker to run osrm-contract
+      const contractCmd = `docker run --rm -v /app:/data osrm/osrm-backend:latest osrm-contract /data/osrm_data/osrm-instance-${instanceId}/network.osrm`;
+      await execAsync(contractCmd, { maxBuffer: 100 * 1024 * 1024 });
 
       // Get data size and segment count
       const dataSize = await this.getDataSize(instance.dataPath);

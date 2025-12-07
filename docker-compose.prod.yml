@@ -152,6 +152,8 @@ services:
     volumes:
       # Mount raw_data from host to allow adding files without rebuilding image
       - ./raw_data:/app/raw_data
+      # Mount Docker socket to allow zone-service to run OSRM commands via Docker
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       settings-service:
         condition: service_healthy

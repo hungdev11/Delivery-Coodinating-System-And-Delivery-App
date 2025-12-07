@@ -65,57 +65,57 @@ export interface OSRMDeploymentStatus {
 
 // Health Check APIs
 export const getApiGatewayHealth = async (): Promise<BaseResponse<ServiceHealth>> => {
-  return apiClient.get<BaseResponse<ServiceHealth>>('/api/v1/health')
+  return apiClient.get<BaseResponse<ServiceHealth>>('/v1/health')
 }
 
 export const getAllServicesHealth = async (): Promise<BaseResponse<AllServicesHealth>> => {
-  return apiClient.get<BaseResponse<AllServicesHealth>>('/api/v1/health/all')
+  return apiClient.get<BaseResponse<AllServicesHealth>>('/v1/health/all')
 }
 
 // OSRM Management APIs
 export const getOSRMStatus = async (): Promise<BaseResponse<OSRMStatus>> => {
-  return apiClient.get<BaseResponse<OSRMStatus>>('/api/v1/osrm/status')
+  return apiClient.get<BaseResponse<OSRMStatus>>('/v1/osrm/status')
 }
 
 export const getOSRMInstanceStatus = async (instanceId: number): Promise<BaseResponse<OSRMInstance>> => {
-  return apiClient.get<BaseResponse<OSRMInstance>>(`/api/v1/osrm/status/${instanceId}`)
+  return apiClient.get<BaseResponse<OSRMInstance>>(`/v1/osrm/status/${instanceId}`)
 }
 
 export const getOSRMHealth = async (): Promise<BaseResponse<OSRMHealth>> => {
-  return apiClient.get<BaseResponse<OSRMHealth>>('/api/v1/osrm/health')
+  return apiClient.get<BaseResponse<OSRMHealth>>('/v1/osrm/health')
 }
 
 export const buildOSRMInstance = async (instanceId: number): Promise<BaseResponse<any>> => {
-  return apiClient.post<BaseResponse<any>>(`/api/v1/osrm/build/${instanceId}`)
+  return apiClient.post<BaseResponse<any>>(`/v1/osrm/build/${instanceId}`)
 }
 
 export const buildAllOSRMInstances = async (): Promise<BaseResponse<any>> => {
-  return apiClient.post<BaseResponse<any>>('/api/v1/osrm/build-all')
+  return apiClient.post<BaseResponse<any>>('/v1/osrm/build-all')
 }
 
 export const startOSRMInstance = async (instanceId: number): Promise<BaseResponse<any>> => {
-  return apiClient.post<BaseResponse<any>>(`/api/v1/osrm/start/${instanceId}`)
+  return apiClient.post<BaseResponse<any>>(`/v1/osrm/start/${instanceId}`)
 }
 
 export const stopOSRMInstance = async (instanceId: number): Promise<BaseResponse<any>> => {
-  return apiClient.post<BaseResponse<any>>(`/api/v1/osrm/stop/${instanceId}`)
+  return apiClient.post<BaseResponse<any>>(`/v1/osrm/stop/${instanceId}`)
 }
 
 export const rollingRestartOSRM = async (): Promise<BaseResponse<any>> => {
-  return apiClient.post<BaseResponse<any>>('/api/v1/osrm/rolling-restart')
+  return apiClient.post<BaseResponse<any>>('/v1/osrm/rolling-restart')
 }
 
 export const validateOSRMData = async (instanceId: number): Promise<BaseResponse<any>> => {
-  return apiClient.get<BaseResponse<any>>(`/api/v1/osrm/validate/${instanceId}`)
+  return apiClient.get<BaseResponse<any>>(`/v1/osrm/validate/${instanceId}`)
 }
 
 export const getOSRMBuildHistory = async (instanceId?: number): Promise<BaseResponse<OSRMBuildHistory[]>> => {
-  const url = instanceId 
-    ? `/api/v1/osrm/history/${instanceId}`
-    : '/api/v1/osrm/history'
+  const url = instanceId
+    ? `/v1/osrm/history/${instanceId}`
+    : '/v1/osrm/history'
   return apiClient.get<BaseResponse<OSRMBuildHistory[]>>(url)
 }
 
 export const getOSRMDeploymentStatus = async (): Promise<BaseResponse<OSRMDeploymentStatus>> => {
-  return apiClient.get<BaseResponse<OSRMDeploymentStatus>>('/api/v1/osrm/deployment')
+  return apiClient.get<BaseResponse<OSRMDeploymentStatus>>('/v1/osrm/deployment')
 }
