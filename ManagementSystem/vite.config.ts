@@ -78,8 +78,8 @@ export default defineConfig({
         navigationPreload: true,
         // Service worker filename
         swDest: 'sw.js',
-        // Maximum file size to precache (512KB)
-        maximumFileSizeToCacheInBytes: 512 * 1024,
+        // Maximum file size to precache (2MB - increased to handle large MapView CSS file)
+        maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
         // Runtime caching rules
         runtimeCaching: [
           // Cache API calls (NetworkFirst)
