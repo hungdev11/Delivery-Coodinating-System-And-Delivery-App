@@ -121,6 +121,108 @@ docker compose down -v
 docker compose pull && docker compose up -d
 ```
 
+### 6. Sử dụng API để quản lý OSRM Data
+
+Sau khi hệ thống đã khởi động, bạn có thể sử dụng API của Zone Service để quản lý OSRM routing data.
+
+**Base URL:** `http://localhost:8080/api/v1/osrm` (qua nginx) hoặc `http://localhost:21503/api/v1/osrm` (trực tiếp)
+
+#### 6.1. Kiểm tra trạng thái
+
+```bash
+# Kiểm tra health của OSRM services
+curl http://localhost:8080/api/v1/osrm/health
+
+# Xem trạng thái tất cả instances
+curl http://localhost:8080/api/v1/osrm/status
+
+# Xem trạng thái instance cụ thể (1 hoặc 2)
+curl http://localhost:8080/api/v1/osrm/status/1
+```
+
+#### 6.2. Build OSRM Data
+
+Sau khi thêm file OSM mới vào `raw_data/vietnam/`, bạn cần build OSRM data:
+
+```bash
+# Build cho instance 1
+curl -X POST http://localhost:8080/api/v1/osrm/build/1
+
+# Build cho instance 2
+curl -X POST http://localhost:8080/api/v1/osrm/build/2
+
+# Build cho tất cả instances
+curl -X POST http://localhost:8080/api/v1/osrm/build-all
+```
+
+**Lưu ý:** Quá trình build có thể mất vài phút tùy thuộc vào kích thước file OSM.
+
+#### 6.3. Quản lý OSRM Instances
+
+```bash
+# Start instance 1
+curl -X POST http://localhost:8080/api/v1/osrm/start/1
+
+# Stop instance 1
+curl -X POST http://localhost:8080/api/v1/osrm/stop/1
+
+# Rolling restart (stop instance hiện tại, start instance khác)
+curl -X POST http://localhost:8080/api/v1/osrm/rolling-restart
+```
+
+#### 6.4. Validate và History
+
+```bash
+# Validate OSRM data của instance 1
+curl http://localhost:8080/api/v1/osrm/validate/1
+
+# Xem build history của instance 1
+curl http://localhost:8080/api/v1/osrm/history/1
+
+# Xem tất cả build history
+curl http://localhost:8080/api/v1/osrm/history
+
+# Xem deployment status
+curl http://localhost:8080/api/v1/osrm/deployment
+```
+
+#### 6.5. Workflow khuyến nghị khi thêm OSM file mới
+
+```bash
+# 1. Thêm file OSM mới vào raw_data/vietnam/
+# Ví dụ: raw_data/vietnam/vietnam-251013.osm.pbf
+
+# 2. Kiểm tra service đang chạy
+curl http://localhost:8080/api/v1/osrm/status
+
+# 3. Build OSRM data (chọn instance không đang active)
+curl -X POST http://localhost:8080/api/v1/osrm/build/2
+
+# 4. Đợi build hoàn thành, kiểm tra status
+curl http://localhost:8080/api/v1/osrm/status/2
+
+# 5. Rolling restart để chuyển sang instance mới
+curl -X POST http://localhost:8080/api/v1/osrm/rolling-restart
+
+# 6. Verify instance mới đang chạy
+curl http://localhost:8080/api/v1/osrm/health
+```
+
+#### 6.6. Health Check
+
+```bash
+# Health check của zone-service
+curl http://localhost:8080/api/v1/health
+
+# Health check chi tiết
+curl http://localhost:8080/api/v1/health/detailed
+```
+
+**Lưu ý:** 
+- Tất cả API endpoints yêu cầu authentication nếu API Gateway có cấu hình auth
+- Thay `localhost:8080` bằng domain/IP thực tế nếu deploy trên server
+- Các API này chỉ có sẵn khi zone-service đã khởi động thành công
+
 ## 📁 Cấu trúc thư mục
 
 ```
