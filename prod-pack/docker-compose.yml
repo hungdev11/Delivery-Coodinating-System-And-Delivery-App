@@ -149,6 +149,9 @@ services:
       OSRM_V2_BLOCKING_URL: http://osrm-v2-blocking-only:5000
       OSRM_V2_BASE_URL: http://osrm-v2-base:5000
       PORT: 21503
+    volumes:
+      # Mount raw_data from host to allow adding files without rebuilding image
+      - ./raw_data:/app/raw_data
     depends_on:
       settings-service:
         condition: service_healthy

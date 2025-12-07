@@ -49,9 +49,15 @@ jobs:
           # Copy prod-pack contents to root
           SOURCE_BRANCH="${GITHUB_REF_NAME}"
           git checkout "$SOURCE_BRANCH" -- prod-pack/
-          mv prod-pack/* . 2>/dev/null || true
-          mv prod-pack/.* . 2>/dev/null || true
-          rmdir prod-pack 2>/dev/null || true
+          
+          # Copy all files and directories using find to handle hidden files safely
+          find prod-pack -mindepth 1 -maxdepth 1 ! -name '.git' -exec cp -r {} . \;
+          
+          # Clean up prod-pack directory
+          rm -rf prod-pack
+          
+          # Ensure raw_data directory structure exists (if not already copied)
+          mkdir -p raw_data/{vietnam,poly,extracted,osrm-logic} || true
           
           # Commit and push (skip if no changes)
           git add -A

@@ -1,0 +1,30 @@
+# Raw Data Directory for Zone Service
+
+This directory is mounted to zone-service container at `/app/raw_data`.
+
+## Structure
+
+```
+raw_data/
+├── vietnam/          # Vietnam OSM files (*.osm.pbf)
+│   └── vietnam-*.osm.pbf  # OSM files (auto-detected by service)
+├── poly/             # Polygon files (*.poly)
+│   └── thuduc_cu.poly    # Example polygon file
+├── extracted/        # Extracted OSM data
+│   └── thuduc_complete.osm.pbf
+└── osrm-logic/       # OSRM profile scripts (*.lua)
+    ├── car.lua
+    └── bicycle.lua
+```
+
+## Usage
+
+- Place OSM files in `vietnam/` directory
+- Service automatically detects the latest file by modification date
+- Set `OSM_RAW_DATA_PATH` environment variable to change directory (default: `/app/raw_data/vietnam`)
+
+## Notes
+
+- This directory is mounted as a volume, so you can add/modify files without rebuilding the image
+- Files in this directory persist across container restarts
+- Make sure to create subdirectories before adding files

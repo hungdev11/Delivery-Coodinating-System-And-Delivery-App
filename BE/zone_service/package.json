@@ -27,10 +27,6 @@
     "osrm:restart": "node scripts/osrm-manager.js restart",
     "osrm:status": "node scripts/osrm-manager.js status",
     "osrm:health": "node scripts/osrm-manager.js health",
-    "check:connectivity": "tsx processors/check/check-road-connectivity.ts",
-    "check:nodes": "tsx processors/check/check-node-sharing.ts",
-    "check:segments": "tsx processors/check/debug-segments.ts",
-    "check:all": "tsx processors/check/index.ts",
     "clean": "rimraf dist",
     "prebuild": "npm run clean && npm run prisma:generate"
   },

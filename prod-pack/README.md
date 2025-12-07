@@ -55,7 +55,28 @@ DB_PASSWORD=your-db-password
 KEYCLOAK_URL=http://your-keycloak:8080
 ```
 
-### 2. Chuẩn bị OSRM data (nếu cần routing)
+### 2. Chuẩn bị raw_data cho Zone Service
+
+Zone Service cần thư mục `raw_data` để chứa các file OSM (OpenStreetMap) và polygon data. Thư mục này được mount từ host vào container để bạn có thể thêm file mà không cần rebuild image.
+
+```bash
+# Tạo thư mục raw_data với cấu trúc cơ bản
+mkdir -p raw_data/{vietnam,poly,extracted,osrm-logic}
+
+# Thêm file OSM vào thư mục vietnam (nếu có)
+# Ví dụ: raw_data/vietnam/vietnam-251013.osm.pbf
+
+# Thêm file polygon vào thư mục poly (nếu có)
+# Ví dụ: raw_data/poly/thuduc_cu.poly
+```
+
+**Lưu ý:**
+- Thư mục `raw_data` sẽ được mount vào container tại `/app/raw_data`
+- Bạn có thể thêm/sửa/xóa file trong thư mục này bất cứ lúc nào
+- Service sẽ tự động detect file OSM mới nhất trong `raw_data/vietnam/`
+- Các script trong zone-service sử dụng đường dẫn tương đối `./raw_data` (từ `/app` trong container)
+
+### 3. Chuẩn bị OSRM data (nếu cần routing)
 
 ```bash
 # Tạo thư mục OSRM data
@@ -65,7 +86,7 @@ mkdir -p osrm_data/{osrm-full,osrm-rating-only,osrm-blocking-only,osrm-base}
 # (Xem hướng dẫn tạo OSRM data riêng)
 ```
 
-### 3. Khởi động hệ thống
+### 4. Khởi động hệ thống
 
 ```bash
 # Pull images mới nhất
@@ -81,7 +102,7 @@ docker compose logs -f
 docker compose ps
 ```
 
-### 4. Các lệnh hữu ích
+### 5. Các lệnh hữu ích
 
 ```bash
 # Restart một service
@@ -109,6 +130,11 @@ dss-prod/
 ├── env.local             # Environment template
 ├── .env                  # Your environment config (create from env.local)
 ├── README.md             # This file
+├── raw_data/             # Raw OSM data for zone-service (mounted to container)
+│   ├── vietnam/          # Vietnam OSM files (*.osm.pbf)
+│   ├── poly/             # Polygon files (*.poly)
+│   ├── extracted/        # Extracted OSM data
+│   └── osrm-logic/       # OSRM profile scripts (*.lua)
 └── osrm_data/            # OSRM routing data (optional)
     ├── osrm-full/
     ├── osrm-rating-only/
