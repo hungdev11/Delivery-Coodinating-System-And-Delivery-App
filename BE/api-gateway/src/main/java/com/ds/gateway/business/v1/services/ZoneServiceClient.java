@@ -423,12 +423,12 @@ public class ZoneServiceClient implements IZoneServiceClient {
                 .toFuture();
     }
 
-    // OSRM Data Management endpoints
+    // OSRM Data Management endpoints (V2 - simplified)
     @Override
-    public CompletableFuture<Object> buildOSRMInstance(String instanceId) {
-        log.debug("Building OSRM instance: {}", instanceId);
+    public CompletableFuture<Object> generateV2OSRM() {
+        log.debug("Generating OSRM V2 data (all 4 models) from database");
         return zoneServiceWebClient.post()
-                .uri("/api/v1/osrm/build/{instanceId}", instanceId)
+                .uri("/api/v1/osrm/generate-v2")
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<Object>() {})
                 .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
@@ -436,120 +436,10 @@ public class ZoneServiceClient implements IZoneServiceClient {
     }
 
     @Override
-    public CompletableFuture<Object> buildAllOSRMInstances() {
-        log.debug("Building all OSRM instances");
-        return zoneServiceWebClient.post()
-                .uri("/api/v1/osrm/build-all")
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Object>() {})
-                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
-                .toFuture();
-    }
-
-    @Override
-    public CompletableFuture<Object> startOSRMInstance(String instanceId) {
-        log.debug("Starting OSRM instance: {}", instanceId);
-        return zoneServiceWebClient.post()
-                .uri("/api/v1/osrm/start/{instanceId}", instanceId)
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Object>() {})
-                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
-                .toFuture();
-    }
-
-    @Override
-    public CompletableFuture<Object> stopOSRMInstance(String instanceId) {
-        log.debug("Stopping OSRM instance: {}", instanceId);
-        return zoneServiceWebClient.post()
-                .uri("/api/v1/osrm/stop/{instanceId}", instanceId)
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Object>() {})
-                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
-                .toFuture();
-    }
-
-    @Override
-    public CompletableFuture<Object> rollingRestartOSRM() {
-        log.debug("Performing rolling restart of OSRM instances");
-        return zoneServiceWebClient.post()
-                .uri("/api/v1/osrm/rolling-restart")
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Object>() {})
-                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
-                .toFuture();
-    }
-
-    @Override
-    public CompletableFuture<Object> getOSRMInstanceStatus(String instanceId) {
-        log.debug("Getting OSRM instance status: {}", instanceId);
-        return zoneServiceWebClient.get()
-                .uri("/api/v1/osrm/status/{instanceId}", instanceId)
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Object>() {})
-                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
-                .toFuture();
-    }
-
-    @Override
-    public CompletableFuture<Object> getAllOSRMInstancesStatus() {
-        log.debug("Getting all OSRM instances status");
+    public CompletableFuture<Object> getOSRMStatus() {
+        log.debug("Getting OSRM status");
         return zoneServiceWebClient.get()
                 .uri("/api/v1/osrm/status")
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Object>() {})
-                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
-                .toFuture();
-    }
-
-    @Override
-    public CompletableFuture<Object> getOSRMHealthCheck() {
-        log.debug("Getting OSRM health check");
-        return zoneServiceWebClient.get()
-                .uri("/api/v1/osrm/health")
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Object>() {})
-                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
-                .toFuture();
-    }
-
-    @Override
-    public CompletableFuture<Object> validateOSRMData(String instanceId) {
-        log.debug("Validating OSRM data for instance: {}", instanceId);
-        return zoneServiceWebClient.get()
-                .uri("/api/v1/osrm/validate/{instanceId}", instanceId)
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Object>() {})
-                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
-                .toFuture();
-    }
-
-    @Override
-    public CompletableFuture<Object> getOSRMBuildHistory(String instanceId) {
-        log.debug("Getting OSRM build history for instance: {}", instanceId);
-        return zoneServiceWebClient.get()
-                .uri("/api/v1/osrm/history/{instanceId}", instanceId)
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Object>() {})
-                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
-                .toFuture();
-    }
-
-    @Override
-    public CompletableFuture<Object> getAllOSRMBuildHistory() {
-        log.debug("Getting all OSRM build history");
-        return zoneServiceWebClient.get()
-                .uri("/api/v1/osrm/history")
-                .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<Object>() {})
-                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
-                .toFuture();
-    }
-
-    @Override
-    public CompletableFuture<Object> getOSRMDeploymentStatus() {
-        log.debug("Getting OSRM deployment status");
-        return zoneServiceWebClient.get()
-                .uri("/api/v1/osrm/deployment")
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<Object>() {})
                 .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))

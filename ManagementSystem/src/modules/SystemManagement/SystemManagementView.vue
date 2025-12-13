@@ -10,17 +10,9 @@ import { PageHeader } from '@/common/components'
 import {
   getAllServicesHealth,
   getOSRMStatus,
-  getOSRMHealth,
-  getOSRMDeploymentStatus,
-  buildOSRMInstance,
-  buildAllOSRMInstances,
-  startOSRMInstance,
-  stopOSRMInstance,
-  rollingRestartOSRM,
+  generateV2OSRM,
   type AllServicesHealth,
   type OSRMStatus,
-  type OSRMHealth,
-  type OSRMDeploymentStatus,
 } from './api'
 
 const UCard = resolveComponent('UCard')
@@ -35,8 +27,6 @@ const loading = ref(false)
 const refreshing = ref(false)
 const servicesHealth = ref<AllServicesHealth | null>(null)
 const osrmStatus = ref<OSRMStatus | null>(null)
-const osrmHealth = ref<OSRMHealth | null>(null)
-const deploymentStatus = ref<OSRMDeploymentStatus | null>(null)
 const error = ref<string | null>(null)
 const actionLoading = ref<Record<string, boolean>>({})
 
@@ -79,21 +69,6 @@ const getServiceIcon = (serviceName: string) => {
   return iconMap[serviceName] || 'i-heroicons-server'
 }
 
-const osrmStatusColor = (status: string) => {
-  switch (status?.toUpperCase()) {
-    case 'RUNNING':
-    case 'ACTIVE':
-      return 'green'
-    case 'STOPPED':
-    case 'INACTIVE':
-      return 'red'
-    case 'BUILDING':
-      return 'yellow'
-    default:
-      return 'gray'
-  }
-}
-
 // Methods
 const loadData = async () => {
   loading.value = true
@@ -103,8 +78,6 @@ const loadData = async () => {
     await Promise.all([
       loadServicesHealth(),
       loadOSRMStatus(),
-      loadOSRMHealth(),
-      loadDeploymentStatus(),
     ])
   } catch (e: any) {
     error.value = e.message || 'Failed to load system data'
@@ -132,24 +105,6 @@ const loadOSRMStatus = async () => {
   }
 }
 
-const loadOSRMHealth = async () => {
-  try {
-    const response = await getOSRMHealth()
-    osrmHealth.value = response.result
-  } catch (e: any) {
-    console.error('Failed to load OSRM health:', e)
-  }
-}
-
-const loadDeploymentStatus = async () => {
-  try {
-    const response = await getOSRMDeploymentStatus()
-    deploymentStatus.value = response.result
-  } catch (e: any) {
-    console.error('Failed to load deployment status:', e)
-  }
-}
-
 const refresh = async () => {
   refreshing.value = true
   try {
@@ -159,64 +114,21 @@ const refresh = async () => {
   }
 }
 
-const handleBuild = async (instanceId?: number) => {
-  const key = instanceId ? `build-${instanceId}` : 'build-all'
-  actionLoading.value[key] = true
+const handleGenerateOSRM = async () => {
+  actionLoading.value['generate'] = true
+  error.value = null
 
   try {
-    if (instanceId) {
-      await buildOSRMInstance(instanceId)
-    } else {
-      await buildAllOSRMInstances()
-    }
-    await loadData()
+    await generateV2OSRM()
+    // Wait a bit then refresh status
+    setTimeout(() => {
+      loadOSRMStatus()
+    }, 2000)
   } catch (e: any) {
-    error.value = e.message || 'Failed to build OSRM instance'
-    console.error('Failed to build:', e)
+    error.value = e.message || 'Failed to generate OSRM data'
+    console.error('Failed to generate OSRM:', e)
   } finally {
-    actionLoading.value[key] = false
-  }
-}
-
-const handleStart = async (instanceId: number) => {
-  actionLoading.value[`start-${instanceId}`] = true
-
-  try {
-    await startOSRMInstance(instanceId)
-    await loadData()
-  } catch (e: any) {
-    error.value = e.message || 'Failed to start OSRM instance'
-    console.error('Failed to start:', e)
-  } finally {
-    actionLoading.value[`start-${instanceId}`] = false
-  }
-}
-
-const handleStop = async (instanceId: number) => {
-  actionLoading.value[`stop-${instanceId}`] = true
-
-  try {
-    await stopOSRMInstance(instanceId)
-    await loadData()
-  } catch (e: any) {
-    error.value = e.message || 'Failed to stop OSRM instance'
-    console.error('Failed to stop:', e)
-  } finally {
-    actionLoading.value[`stop-${instanceId}`] = false
-  }
-}
-
-const handleRollingRestart = async () => {
-  actionLoading.value['rolling-restart'] = true
-
-  try {
-    await rollingRestartOSRM()
-    await loadData()
-  } catch (e: any) {
-    error.value = e.message || 'Failed to perform rolling restart'
-    console.error('Failed to rolling restart:', e)
-  } finally {
-    actionLoading.value['rolling-restart'] = false
+    actionLoading.value['generate'] = false
   }
 }
 
@@ -348,67 +260,47 @@ onMounted(() => {
           <div class="flex items-center justify-between">
             <h3 class="text-lg font-semibold">OSRM Data Management</h3>
             <UBadge
-              v-if="osrmHealth"
-              :color="osrmHealth.overallHealthy ? 'green' : 'red'"
+              v-if="osrmStatus"
+              :color="osrmStatus.ready ? 'green' : 'yellow'"
               variant="soft"
             >
-              {{ osrmHealth.overallHealthy ? 'Healthy' : 'Unhealthy' }}
+              {{ osrmStatus.ready ? 'Ready' : 'Incomplete' }}
             </UBadge>
           </div>
         </template>
 
         <div class="space-y-4">
-          <!-- OSRM Instances Status -->
+          <!-- OSRM Models Status -->
           <div v-if="osrmStatus">
-            <h4 class="font-medium mb-3">Instances Status</h4>
+            <h4 class="font-medium mb-3">OSRM Models Status</h4>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div
-                v-for="instance in osrmStatus.instances"
-                :key="instance.id"
+                v-for="model in osrmStatus.models"
+                :key="model.name"
                 class="p-4 border rounded-lg"
+                :class="{
+                  'border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800': model.exists,
+                  'border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800': !model.exists,
+                }"
               >
                 <div class="flex items-center justify-between mb-2">
-                  <span class="font-medium">Instance {{ instance.id }}</span>
+                  <span class="font-medium">{{ model.name }}</span>
                   <UBadge
-                    :color="osrmStatusColor(instance.status)"
+                    :color="model.exists ? 'green' : 'red'"
                     variant="soft"
                   >
-                    {{ instance.status }}
+                    {{ model.exists ? 'Ready' : 'Missing' }}
                   </UBadge>
                 </div>
-                <div v-if="instance.port" class="text-sm text-gray-500">
-                  Port: {{ instance.port }}
+                <div class="text-sm text-gray-500">
+                  Path: {{ model.path }}
                 </div>
-                <div v-if="instance.dataPath" class="text-sm text-gray-500">
-                  Path: {{ instance.dataPath }}
-                </div>
-                <div class="flex gap-2 mt-3">
-                  <UButton
-                    size="sm"
-                    :loading="actionLoading[`start-${instance.id}`]"
-                    @click="handleStart(instance.id)"
-                  >
-                    Start
-                  </UButton>
-                  <UButton
-                    size="sm"
-                    color="red"
-                    variant="soft"
-                    :loading="actionLoading[`stop-${instance.id}`]"
-                    @click="handleStop(instance.id)"
-                  >
-                    Stop
-                  </UButton>
-                  <UButton
-                    size="sm"
-                    color="yellow"
-                    variant="soft"
-                    :loading="actionLoading[`build-${instance.id}`]"
-                    @click="handleBuild(instance.id)"
-                  >
-                    Build
-                  </UButton>
-                </div>
+              </div>
+            </div>
+            
+            <div class="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+              <div class="text-sm text-gray-600 dark:text-gray-400">
+                <strong>Status:</strong> {{ osrmStatus.existingCount }}/{{ osrmStatus.totalModels }} models ready
               </div>
             </div>
           </div>
@@ -418,43 +310,16 @@ onMounted(() => {
             <h4 class="font-medium mb-3">Actions</h4>
             <div class="flex flex-wrap gap-2">
               <UButton
-                :loading="actionLoading['build-all']"
-                @click="handleBuild()"
+                color="primary"
+                :loading="actionLoading['generate']"
+                @click="handleGenerateOSRM"
               >
-                Build All Instances
-              </UButton>
-              <UButton
-                color="blue"
-                :loading="actionLoading['rolling-restart']"
-                @click="handleRollingRestart()"
-              >
-                Rolling Restart
+                <UIcon name="i-heroicons-cog-6-tooth" class="w-4 h-4 mr-2" />
+                Generate OSRM Data (All Models)
               </UButton>
             </div>
-          </div>
-
-          <!-- Deployment Status -->
-          <div v-if="deploymentStatus" class="border-t pt-4">
-            <h4 class="font-medium mb-3">Deployment Status</h4>
-            <div class="space-y-2">
-              <div
-                v-for="instance in deploymentStatus.instances"
-                :key="instance.instanceId"
-                class="p-3 border rounded-lg"
-              >
-                <div class="flex items-center justify-between">
-                  <span class="font-medium">Instance {{ instance.instanceId }}</span>
-                  <UBadge
-                    :color="osrmStatusColor(instance.status)"
-                    variant="soft"
-                  >
-                    {{ instance.status }}
-                  </UBadge>
-                </div>
-                <div v-if="instance.lastBuild" class="text-sm text-gray-500 mt-1">
-                  Last Build: {{ new Date(instance.lastBuild).toLocaleString() }}
-                </div>
-              </div>
+            <div class="mt-2 text-sm text-gray-500">
+              This will generate all 4 OSRM models (osrm-full, osrm-rating-only, osrm-blocking-only, osrm-base) from the current database state.
             </div>
           </div>
         </div>

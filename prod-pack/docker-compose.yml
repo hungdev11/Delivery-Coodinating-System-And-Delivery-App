@@ -152,6 +152,8 @@ services:
     volumes:
       # Mount raw_data from host to allow adding files without rebuilding image
       - ./raw_data:/app/raw_data
+      # Mount osrm_data to allow OSRM data generation
+      - ./osrm_data:/app/osrm_data
     depends_on:
       settings-service:
         condition: service_healthy
@@ -334,7 +336,7 @@ services:
     container_name: dss-nginx-proxy
     restart: unless-stopped
     volumes:
-      - ./prod-pack/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - management-system-dist:/usr/share/nginx/html:ro
     ports:
       - "8080:8080"
@@ -360,8 +362,6 @@ services:
     image: osrm/osrm-backend:latest
     container_name: dss-osrm-v2-full
     restart: on-failure
-    profiles:
-      - osrm-manual
     volumes:
       - ./osrm_data/osrm-full:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
@@ -377,8 +377,6 @@ services:
     image: osrm/osrm-backend:latest
     container_name: dss-osrm-v2-rating-only
     restart: on-failure
-    profiles:
-      - osrm-manual
     volumes:
       - ./osrm_data/osrm-rating-only:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
@@ -394,8 +392,6 @@ services:
     image: osrm/osrm-backend:latest
     container_name: dss-osrm-v2-blocking-only
     restart: on-failure
-    profiles:
-      - osrm-manual
     volumes:
       - ./osrm_data/osrm-blocking-only:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
@@ -411,8 +407,6 @@ services:
     image: osrm/osrm-backend:latest
     container_name: dss-osrm-v2-base
     restart: on-failure
-    profiles:
-      - osrm-manual
     volumes:
       - ./osrm_data/osrm-base:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm

@@ -148,64 +148,31 @@ Sau khi thêm file OSM mới vào `raw_data/vietnam/`, bạn cần build OSRM da
 # Build cho instance 1
 curl -X POST http://localhost:8080/api/v1/osrm/build/1
 
-# Build cho instance 2
-curl -X POST http://localhost:8080/api/v1/osrm/build/2
+# Generate OSRM data từ database (tất cả 4 models)
+curl -X POST http://localhost:8080/api/v1/osrm/generate-v2
 
-# Build cho tất cả instances
-curl -X POST http://localhost:8080/api/v1/osrm/build-all
+# Kiểm tra status của OSRM models
+curl http://localhost:8080/api/v1/osrm/status
 ```
 
-**Lưu ý:** Quá trình build có thể mất vài phút tùy thuộc vào kích thước file OSM.
+**Lưu ý:** 
+- Quá trình generate có thể mất vài phút tùy thuộc vào kích thước database
+- Generate sẽ tạo tất cả 4 models: osrm-full, osrm-rating-only, osrm-blocking-only, osrm-base
+- OSRM containers được quản lý bởi Docker Compose, không cần start/stop thủ công
 
-#### 6.3. Quản lý OSRM Instances
-
-```bash
-# Start instance 1
-curl -X POST http://localhost:8080/api/v1/osrm/start/1
-
-# Stop instance 1
-curl -X POST http://localhost:8080/api/v1/osrm/stop/1
-
-# Rolling restart (stop instance hiện tại, start instance khác)
-curl -X POST http://localhost:8080/api/v1/osrm/rolling-restart
-```
-
-#### 6.4. Validate và History
+#### 6.3. Workflow khuyến nghị khi cập nhật database
 
 ```bash
-# Validate OSRM data của instance 1
-curl http://localhost:8080/api/v1/osrm/validate/1
+# 1. Cập nhật database (thêm roads, ratings, traffic data mới)
 
-# Xem build history của instance 1
-curl http://localhost:8080/api/v1/osrm/history/1
+# 2. Generate OSRM data mới từ database
+curl -X POST http://localhost:8080/api/v1/osrm/generate-v2
 
-# Xem tất cả build history
-curl http://localhost:8080/api/v1/osrm/history
-
-# Xem deployment status
-curl http://localhost:8080/api/v1/osrm/deployment
-```
-
-#### 6.5. Workflow khuyến nghị khi thêm OSM file mới
-
-```bash
-# 1. Thêm file OSM mới vào raw_data/vietnam/
-# Ví dụ: raw_data/vietnam/vietnam-251013.osm.pbf
-
-# 2. Kiểm tra service đang chạy
+# 3. Đợi generate hoàn thành, kiểm tra status
 curl http://localhost:8080/api/v1/osrm/status
 
-# 3. Build OSRM data (chọn instance không đang active)
-curl -X POST http://localhost:8080/api/v1/osrm/build/2
-
-# 4. Đợi build hoàn thành, kiểm tra status
-curl http://localhost:8080/api/v1/osrm/status/2
-
-# 5. Rolling restart để chuyển sang instance mới
-curl -X POST http://localhost:8080/api/v1/osrm/rolling-restart
-
-# 6. Verify instance mới đang chạy
-curl http://localhost:8080/api/v1/osrm/health
+# 4. Restart OSRM containers để load data mới
+docker-compose restart osrm-v2-full osrm-v2-rating-only osrm-v2-blocking-only osrm-v2-base
 ```
 
 #### 6.6. Health Check

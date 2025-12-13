@@ -233,81 +233,21 @@ public class ZoneProxyController {
         return zoneServiceClient.getAddressesByZone(zoneId, params).thenApply(ResponseEntity::ok).join();
     }
 
-    // OSRM Data Management endpoints
-    @PostMapping("/osrm/build/{instanceId}")
-    public ResponseEntity<?> buildOSRMInstance(@PathVariable String instanceId) {
-        log.debug("[api-gateway] [ZoneProxyController.buildOSRMInstance] POST /api/v1/osrm/build/{}", instanceId);
-        return zoneServiceClient.buildOSRMInstance(instanceId).thenApply(ResponseEntity::ok).join();
-    }
-
-    @PostMapping("/osrm/build-all")
-    public ResponseEntity<?> buildAllOSRMInstances() {
-        log.debug("[api-gateway] [ZoneProxyController.buildAllOSRMInstances] POST /api/v1/osrm/build-all");
+    // OSRM Data Management endpoints (V2 - simplified)
+    @PostMapping("/osrm/generate-v2")
+    public ResponseEntity<?> generateV2OSRM() {
+        log.debug("[api-gateway] [ZoneProxyController.generateV2OSRM] POST /api/v1/osrm/generate-v2");
         try {
-            return zoneServiceClient.buildAllOSRMInstances().thenApply(ResponseEntity::ok).join();
+            return zoneServiceClient.generateV2OSRM().thenApply(ResponseEntity::ok).join();
         } catch (Exception e) {
-            log.error("[api-gateway] [ZoneProxyController.buildAllOSRMInstances] Error building OSRM instances", e);
+            log.error("[api-gateway] [ZoneProxyController.generateV2OSRM] Error generating OSRM V2 data", e);
             throw e; // Re-throw to be handled by GlobalExceptionHandler
         }
     }
 
-    @PostMapping("/osrm/start/{instanceId}")
-    public ResponseEntity<?> startOSRMInstance(@PathVariable String instanceId) {
-        log.debug("[api-gateway] [ZoneProxyController.startOSRMInstance] POST /api/v1/osrm/start/{}", instanceId);
-        return zoneServiceClient.startOSRMInstance(instanceId).thenApply(ResponseEntity::ok).join();
-    }
-
-    @PostMapping("/osrm/stop/{instanceId}")
-    public ResponseEntity<?> stopOSRMInstance(@PathVariable String instanceId) {
-        log.debug("[api-gateway] [ZoneProxyController.stopOSRMInstance] POST /api/v1/osrm/stop/{}", instanceId);
-        return zoneServiceClient.stopOSRMInstance(instanceId).thenApply(ResponseEntity::ok).join();
-    }
-
-    @PostMapping("/osrm/rolling-restart")
-    public ResponseEntity<?> rollingRestartOSRM() {
-        log.debug("[api-gateway] [ZoneProxyController.rollingRestartOSRM] POST /api/v1/osrm/rolling-restart");
-        return zoneServiceClient.rollingRestartOSRM().thenApply(ResponseEntity::ok).join();
-    }
-
     @GetMapping("/osrm/status")
-    public ResponseEntity<?> getAllOSRMInstancesStatus() {
-        log.debug("[api-gateway] [ZoneProxyController.getAllOSRMInstancesStatus] GET /api/v1/osrm/status");
-        return zoneServiceClient.getAllOSRMInstancesStatus().thenApply(ResponseEntity::ok).join();
-    }
-
-    @GetMapping("/osrm/status/{instanceId}")
-    public ResponseEntity<?> getOSRMInstanceStatus(@PathVariable String instanceId) {
-        log.debug("[api-gateway] [ZoneProxyController.getOSRMInstanceStatus] GET /api/v1/osrm/status/{}", instanceId);
-        return zoneServiceClient.getOSRMInstanceStatus(instanceId).thenApply(ResponseEntity::ok).join();
-    }
-
-    @GetMapping("/osrm/health")
-    public ResponseEntity<?> getOSRMHealthCheck() {
-        log.debug("[api-gateway] [ZoneProxyController.getOSRMHealthCheck] GET /api/v1/osrm/health");
-        return zoneServiceClient.getOSRMHealthCheck().thenApply(ResponseEntity::ok).join();
-    }
-
-    @GetMapping("/osrm/validate/{instanceId}")
-    public ResponseEntity<?> validateOSRMData(@PathVariable String instanceId) {
-        log.debug("[api-gateway] [ZoneProxyController.validateOSRMData] GET /api/v1/osrm/validate/{}", instanceId);
-        return zoneServiceClient.validateOSRMData(instanceId).thenApply(ResponseEntity::ok).join();
-    }
-
-    @GetMapping("/osrm/history/{instanceId}")
-    public ResponseEntity<?> getOSRMBuildHistory(@PathVariable String instanceId) {
-        log.debug("[api-gateway] [ZoneProxyController.getOSRMBuildHistory] GET /api/v1/osrm/history/{}", instanceId);
-        return zoneServiceClient.getOSRMBuildHistory(instanceId).thenApply(ResponseEntity::ok).join();
-    }
-
-    @GetMapping("/osrm/history")
-    public ResponseEntity<?> getAllOSRMBuildHistory() {
-        log.debug("[api-gateway] [ZoneProxyController.getAllOSRMBuildHistory] GET /api/v1/osrm/history");
-        return zoneServiceClient.getAllOSRMBuildHistory().thenApply(ResponseEntity::ok).join();
-    }
-
-    @GetMapping("/osrm/deployment")
-    public ResponseEntity<?> getOSRMDeploymentStatus() {
-        log.debug("[api-gateway] [ZoneProxyController.getOSRMDeploymentStatus] GET /api/v1/osrm/deployment");
-        return zoneServiceClient.getOSRMDeploymentStatus().thenApply(ResponseEntity::ok).join();
+    public ResponseEntity<?> getOSRMStatus() {
+        log.debug("[api-gateway] [ZoneProxyController.getOSRMStatus] GET /api/v1/osrm/status");
+        return zoneServiceClient.getOSRMStatus().thenApply(ResponseEntity::ok).join();
     }
 }
