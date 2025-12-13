@@ -52,12 +52,10 @@ const MODELS: ModelConfig[] = [
 export class OSRMV2GeneratorService {
   private prisma: PrismaClient;
   private osrmDataPath: string;
-  private rawDataPath: string;
 
   constructor() {
     this.prisma = prisma;
     this.osrmDataPath = process.env.OSRM_DATA_PATH || join(process.cwd(), 'osrm_data');
-    this.rawDataPath = process.env.OSM_RAW_DATA_PATH || join(process.cwd(), 'raw_data');
   }
 
   /**
@@ -493,9 +491,6 @@ return { setup = setup, process_way = process_way, process_node = process_node, 
     const osrmFile = 'network.osrm';
 
     logger.info(`Processing ${config.name}...`);
-
-    // Use Docker to run OSRM tools
-    const dockerVolume = `${dataDir}:/data`;
 
     // Step 1: Extract
     await execAsync(
