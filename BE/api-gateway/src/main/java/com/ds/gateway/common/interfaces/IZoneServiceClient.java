@@ -47,19 +47,9 @@ public interface IZoneServiceClient {
     CompletableFuture<Object> getAddressesBySegment(String segmentId, Map<String, String> queryParams);
     CompletableFuture<Object> getAddressesByZone(String zoneId, Map<String, String> queryParams);
     
-    // OSRM Data Management endpoints
-    CompletableFuture<Object> buildOSRMInstance(String instanceId);
-    CompletableFuture<Object> buildAllOSRMInstances();
-    CompletableFuture<Object> startOSRMInstance(String instanceId);
-    CompletableFuture<Object> stopOSRMInstance(String instanceId);
-    CompletableFuture<Object> rollingRestartOSRM();
-    CompletableFuture<Object> getOSRMInstanceStatus(String instanceId);
-    CompletableFuture<Object> getAllOSRMInstancesStatus();
-    CompletableFuture<Object> getOSRMHealthCheck();
-    CompletableFuture<Object> validateOSRMData(String instanceId);
-    CompletableFuture<Object> getOSRMBuildHistory(String instanceId);
-    CompletableFuture<Object> getAllOSRMBuildHistory();
-    CompletableFuture<Object> getOSRMDeploymentStatus();
+    // OSRM Data Management endpoints (V2 - simplified)
+    CompletableFuture<Object> generateV2OSRM();
+    CompletableFuture<Object> getOSRMStatus();
     
     // Health endpoint
     CompletableFuture<Object> health();

@@ -16,3 +16,5 @@ export type {
   OSRMIntersection,
   OSRMRouteResponse,
 } from './osrm-router.service';
+
+export { OSRMV2GeneratorService } from './osrm-v2-generator.service';
