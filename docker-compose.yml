@@ -143,6 +143,9 @@ services:
       NODE_ENV: production
       ZONE_DB_CONNECTION: mysql://${DB_USERNAME:-root}:${DB_PASSWORD:-root}@${DB_HOST:-127.0.0.1}:${DB_PORT:-3306}/${ZONE_DB_NAME:-ds_zone_service}
       SETTINGS_SERVICE_URL: http://settings-service:21502
+      # OSRM Management System URL (runs on host, configure in .env)
+      # Set OSRM_MANAGEMENT_URL in .env to your domain/IP (e.g., http://osrm.yourdomain.com:21520)
+      OSRM_MANAGEMENT_URL: ${OSRM_MANAGEMENT_URL:-http://localhost:21520}
       # OSRM V2 URLs (Simplified Architecture)
       OSRM_V2_FULL_URL: http://osrm-v2-full:5000
       OSRM_V2_RATING_URL: http://osrm-v2-rating-only:5000
