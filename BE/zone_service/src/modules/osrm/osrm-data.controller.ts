@@ -2,34 +2,42 @@
  * OSRM Data Management Controller
  * 
  * Provides REST API endpoints for:
- * - Generating OSRM V2 data from database (all 4 models)
+ * - Generating OSRM V2 data from database (all 4 models) - delegates to osrm-management-system
+ * - Getting OSRM status - delegates to osrm-management-system
  */
 
 import { Request, Response, NextFunction } from 'express';
 import { BaseResponse } from '../../common/types/restful';
 import { logger } from '../../common/logger';
+import { OSRMManagementClientService } from '../../services/osrm/osrm-management-client.service';
+
+// Singleton instance
+let osrmClient: OSRMManagementClientService | null = null;
+
+function getOSRMClient(): OSRMManagementClientService {
+  if (!osrmClient) {
+    osrmClient = new OSRMManagementClientService();
+  }
+  return osrmClient;
+}
 
 export class OSRMDataController {
   /**
    * Generate OSRM V2 data from database (all 4 models)
    * POST /api/v1/osrm/generate-v2
    * 
-   * This endpoint generates all OSRM models (osrm-full, osrm-rating-only, osrm-blocking-only, osrm-base)
-   * from the current database state. It replaces the old build-all endpoint.
+   * This endpoint delegates to osrm-management-system to generate all OSRM models
+   * (osrm-full, osrm-rating-only, osrm-blocking-only, osrm-base) from the current database state.
    */
   public static async generateV2(_req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      logger.info('Starting OSRM V2 generation via API...');
+      logger.info('Starting OSRM V2 generation via API (delegating to osrm-management-system)...');
       
-      // Import service dynamically to avoid circular dependencies
-      const { OSRMV2GeneratorService } = await import('../../services/osrm/osrm-v2-generator.service');
-      const generator = new OSRMV2GeneratorService();
-      
-      // Run generation (this may take a while)
-      const result = await generator.generateAllModels();
+      const client = getOSRMClient();
+      const result = await client.generateOSRMV2();
       
       if (result.success) {
-        res.json(BaseResponse.success(result, `OSRM V2 generation completed: ${result.models.length} models`));
+        res.json(BaseResponse.success(result, `OSRM V2 generation completed: ${result.models?.length || 0} models`));
       } else {
         res.status(500).json(BaseResponse.error(`OSRM V2 generation failed: ${result.error || 'Unknown error'}`));
       }
@@ -65,34 +73,177 @@ export class OSRMDataController {
         };
       });
       
-      // Query build status from osrm-management-system if available
-      let buildStatus: any = null;
-      const osrmManagementUrl = process.env.OSRM_MANAGEMENT_URL || 'http://localhost:21520';
+      // Query build status and container status from osrm-management-system
+      const client = getOSRMClient();
+      const [buildStatus, containerStatuses] = await Promise.all([
+        client.getBuildStatus(),
+        client.getContainerStatus(),
+      ]);
       
-      try {
-        const response = await fetch(`${osrmManagementUrl}/api/v1/builds/status`);
-        if (response.ok) {
-          const data = await response.json() as { result?: any; [key: string]: any };
-          buildStatus = data.result || data;
-        }
-      } catch (error) {
-        logger.warn('Failed to fetch build status from osrm-management-system', { error });
-        // Continue without build status
-      }
+      // Merge container status with file status
+      const modelsWithStatus = fileStatus.map(model => {
+        const containerStatus = containerStatuses.find(c => c.model === model.name);
+        return {
+          ...model,
+          containerStatus: containerStatus ? {
+            status: containerStatus.status,
+            health: containerStatus.health,
+          } : null,
+        };
+      });
       
       const allExist = fileStatus.every(s => s.exists);
       const existingCount = fileStatus.filter(s => s.exists).length;
       
       res.json(BaseResponse.success({
-        models: fileStatus,
+        models: modelsWithStatus,
         allExist,
         existingCount,
         totalModels: models.length,
         ready: allExist,
         buildStatus, // Include build status from osrm-management-system
+        containerStatuses, // Include container statuses
       }, allExist 
         ? `All ${models.length} OSRM models are ready` 
         : `Only ${existingCount}/${models.length} OSRM models exist`));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Extract complete OSM data
+   * POST /api/v1/osrm/extract/complete
+   * 
+   * Delegates to osrm-management-system
+   */
+  public static async extractComplete(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      logger.info('Extract complete request received (delegating to osrm-management-system)...');
+      
+      const client = getOSRMClient();
+      const result = await client.extractComplete(req.body);
+      
+      if (result.success) {
+        res.json(BaseResponse.success(result, 'Extraction completed successfully'));
+      } else {
+        res.status(500).json(BaseResponse.error(result.error || 'Extraction failed'));
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get container status
+   * GET /api/v1/osrm/containers/status
+   */
+  public static async getContainerStatus(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const client = getOSRMClient();
+      const statuses = await client.getContainerStatus();
+      
+      res.json(BaseResponse.success(statuses, `Retrieved status for ${statuses.length} containers`));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Start OSRM container
+   * POST /api/v1/osrm/containers/:model/start
+   */
+  public static async startContainer(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { model } = req.params;
+      if (!model) {
+        res.status(400).json(BaseResponse.error('Model parameter is required'));
+        return;
+      }
+      
+      const client = getOSRMClient();
+      const result = await client.startContainer(model);
+      
+      if (result.success) {
+        res.json(BaseResponse.success(result, result.message || 'Container started successfully'));
+      } else {
+        res.status(500).json(BaseResponse.error(result.error || 'Failed to start container'));
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Stop OSRM container
+   * POST /api/v1/osrm/containers/:model/stop
+   */
+  public static async stopContainer(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { model } = req.params;
+      if (!model) {
+        res.status(400).json(BaseResponse.error('Model parameter is required'));
+        return;
+      }
+      
+      const client = getOSRMClient();
+      const result = await client.stopContainer(model);
+      
+      if (result.success) {
+        res.json(BaseResponse.success(result, result.message || 'Container stopped successfully'));
+      } else {
+        res.status(500).json(BaseResponse.error(result.error || 'Failed to stop container'));
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Restart OSRM container
+   * POST /api/v1/osrm/containers/:model/restart
+   */
+  public static async restartContainer(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { model } = req.params;
+      if (!model) {
+        res.status(400).json(BaseResponse.error('Model parameter is required'));
+        return;
+      }
+      
+      const client = getOSRMClient();
+      const result = await client.restartContainer(model);
+      
+      if (result.success) {
+        res.json(BaseResponse.success(result, result.message || 'Container restarted successfully'));
+      } else {
+        res.status(500).json(BaseResponse.error(result.error || 'Failed to restart container'));
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Health check for OSRM container
+   * GET /api/v1/osrm/containers/:model/health
+   */
+  public static async healthCheck(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { model } = req.params;
+      if (!model) {
+        res.status(400).json(BaseResponse.error('Model parameter is required'));
+        return;
+      }
+      
+      const client = getOSRMClient();
+      const result = await client.healthCheck(model);
+      
+      if (result.healthy) {
+        res.json(BaseResponse.success(result, result.message || 'Container is healthy'));
+      } else {
+        res.status(503).json(BaseResponse.error(result.message || 'Container is unhealthy'));
+      }
     } catch (error) {
       next(error);
     }

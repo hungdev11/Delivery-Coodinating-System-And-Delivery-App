@@ -11,8 +11,14 @@ import {
   getAllServicesHealth,
   getOSRMStatus,
   generateV2OSRM,
+  extractCompleteOSM,
+  getOSRMContainerStatus,
+  startOSRMContainer,
+  stopOSRMContainer,
+  restartOSRMContainer,
   type AllServicesHealth,
   type OSRMStatus,
+  type ContainerStatus,
 } from './api'
 
 const UCard = resolveComponent('UCard')
@@ -27,6 +33,7 @@ const loading = ref(false)
 const refreshing = ref(false)
 const servicesHealth = ref<AllServicesHealth | null>(null)
 const osrmStatus = ref<OSRMStatus | null>(null)
+const containerStatuses = ref<ContainerStatus[]>([])
 const error = ref<string | null>(null)
 const actionLoading = ref<Record<string, boolean>>({})
 
@@ -78,6 +85,7 @@ const loadData = async () => {
     await Promise.all([
       loadServicesHealth(),
       loadOSRMStatus(),
+      loadContainerStatuses(),
     ])
   } catch (e: any) {
     error.value = e.message || 'Failed to load system data'
@@ -105,6 +113,15 @@ const loadOSRMStatus = async () => {
   }
 }
 
+const loadContainerStatuses = async () => {
+  try {
+    const response = await getOSRMContainerStatus()
+    containerStatuses.value = response.result || []
+  } catch (e: any) {
+    console.error('Failed to load container statuses:', e)
+  }
+}
+
 const refresh = async () => {
   refreshing.value = true
   try {
@@ -123,6 +140,7 @@ const handleGenerateOSRM = async () => {
     // Wait a bit then refresh status
     setTimeout(() => {
       loadOSRMStatus()
+      loadContainerStatuses()
     }, 2000)
   } catch (e: any) {
     error.value = e.message || 'Failed to generate OSRM data'
@@ -130,6 +148,59 @@ const handleGenerateOSRM = async () => {
   } finally {
     actionLoading.value['generate'] = false
   }
+}
+
+const handleExtractComplete = async () => {
+  actionLoading.value['extract'] = true
+  error.value = null
+
+  try {
+    await extractCompleteOSM()
+    // Wait a bit then refresh status
+    setTimeout(() => {
+      loadOSRMStatus()
+    }, 2000)
+  } catch (e: any) {
+    error.value = e.message || 'Failed to extract OSM data'
+    console.error('Failed to extract OSM:', e)
+  } finally {
+    actionLoading.value['extract'] = false
+  }
+}
+
+const handleContainerAction = async (model: string, action: 'start' | 'stop' | 'restart') => {
+  const key = `${action}-${model}`
+  actionLoading.value[key] = true
+  error.value = null
+
+  try {
+    let result
+    switch (action) {
+      case 'start':
+        result = await startOSRMContainer(model)
+        break
+      case 'stop':
+        result = await stopOSRMContainer(model)
+        break
+      case 'restart':
+        result = await restartOSRMContainer(model)
+        break
+    }
+    
+    // Refresh container statuses
+    setTimeout(() => {
+      loadContainerStatuses()
+    }, 1000)
+  } catch (e: any) {
+    error.value = e.message || `Failed to ${action} container`
+    console.error(`Failed to ${action} container:`, e)
+  } finally {
+    actionLoading.value[key] = false
+  }
+}
+
+const getContainerStatus = (modelName: string) => {
+  return containerStatuses.value.find(c => c.model === modelName)
 }
 
 // Lifecycle
@@ -295,6 +366,59 @@ onMounted(() => {
                 <div class="text-sm text-gray-500">
                   Path: {{ model.path }}
                 </div>
+                
+                <!-- Container Status -->
+                <div v-if="getContainerStatus(model.name)" class="mt-2">
+                  <div class="flex items-center gap-2 mb-2">
+                    <UBadge
+                      :color="getContainerStatus(model.name)?.status === 'running' ? 'green' : 'gray'"
+                      variant="soft"
+                      size="sm"
+                    >
+                      {{ getContainerStatus(model.name)?.status || 'unknown' }}
+                    </UBadge>
+                    <div v-if="getContainerStatus(model.name)?.health" class="flex items-center gap-1 text-xs">
+                      <UIcon
+                        :name="getContainerStatus(model.name)?.health?.healthy ? 'i-heroicons-check-circle' : 'i-heroicons-x-circle'"
+                        class="w-3 h-3"
+                        :class="getContainerStatus(model.name)?.health?.healthy ? 'text-green-600' : 'text-red-600'"
+                      />
+                      <span>{{ getContainerStatus(model.name)?.health?.healthy ? 'Healthy' : 'Unhealthy' }}</span>
+                    </div>
+                  </div>
+                  
+                  <!-- Container Actions -->
+                  <div class="flex gap-1 mt-2">
+                    <UButton
+                      v-if="getContainerStatus(model.name)?.status !== 'running'"
+                      size="xs"
+                      color="green"
+                      :loading="actionLoading[`start-${model.name}`]"
+                      @click="handleContainerAction(model.name, 'start')"
+                    >
+                      Start
+                    </UButton>
+                    <UButton
+                      v-if="getContainerStatus(model.name)?.status === 'running'"
+                      size="xs"
+                      color="red"
+                      :loading="actionLoading[`stop-${model.name}`]"
+                      @click="handleContainerAction(model.name, 'stop')"
+                    >
+                      Stop
+                    </UButton>
+                    <UButton
+                      v-if="getContainerStatus(model.name)?.status === 'running'"
+                      size="xs"
+                      color="yellow"
+                      :loading="actionLoading[`restart-${model.name}`]"
+                      @click="handleContainerAction(model.name, 'restart')"
+                    >
+                      Restart
+                    </UButton>
+                  </div>
+                </div>
+                
                 <!-- Build Status -->
                 <div v-if="osrmStatus.buildStatus" class="mt-2 text-xs">
                   <div v-for="build in osrmStatus.buildStatus" :key="build.model">
@@ -330,6 +454,14 @@ onMounted(() => {
             <div class="flex flex-wrap gap-2">
               <UButton
                 color="primary"
+                :loading="actionLoading['extract']"
+                @click="handleExtractComplete"
+              >
+                <UIcon name="i-heroicons-arrow-down-tray" class="w-4 h-4 mr-2" />
+                Extract Complete OSM Data
+              </UButton>
+              <UButton
+                color="primary"
                 :loading="actionLoading['generate']"
                 @click="handleGenerateOSRM"
               >
@@ -338,7 +470,12 @@ onMounted(() => {
               </UButton>
             </div>
             <div class="mt-2 text-sm text-gray-500">
-              This will generate all 4 OSRM models (osrm-full, osrm-rating-only, osrm-blocking-only, osrm-base) from the current database state.
+              <div class="mb-1">
+                <strong>Extract:</strong> Extract complete OSM data (routing + addresses) from source files.
+              </div>
+              <div>
+                <strong>Generate:</strong> Generate all 4 OSRM models (osrm-full, osrm-rating-only, osrm-blocking-only, osrm-base) from the current database state.
+              </div>
             </div>
           </div>
         </div>
