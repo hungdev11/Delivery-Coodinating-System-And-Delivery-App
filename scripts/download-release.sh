@@ -116,6 +116,16 @@ fi
 
 log_info "Extracted directory: $EXTRACTED_DIR"
 
+# Remove dist folder from target directory before merging
+DIST_DIR="${TARGET_DIR}/dist"
+if [ -d "$DIST_DIR" ]; then
+    log_info "Removing old dist folder: $DIST_DIR"
+    rm -rf "$DIST_DIR"
+    log_success "Dist folder removed successfully"
+else
+    log_info "No dist folder found, skipping removal"
+fi
+
 # Merge contents into target directory
 log_info "Merging contents into $TARGET_DIR..."
 

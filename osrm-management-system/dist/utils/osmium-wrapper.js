@@ -207,19 +207,50 @@ class OsmiumWrapper {
             console.log('Stage 1: Extracting routing graph...');
             console.log(`Command: ${extractCmd}`);
         }
-        logger_1.logger.info('Executing Stage 1: Extract routing graph', { extractCmd });
+        // Log current working directory and resolved paths for debugging
+        const cwd = process.cwd();
+        const resolvedInputPbf = (0, path_1.resolve)(inputPbf);
+        const resolvedPolyFile = (0, path_1.resolve)(polyFile);
+        const resolvedOutputPbf = (0, path_1.resolve)(tempRouting);
+        logger_1.logger.info('Executing Stage 1: Extract routing graph', {
+            extractCmd,
+            cwd,
+            resolvedInputPbf,
+            resolvedPolyFile,
+            resolvedOutputPbf
+        });
         try {
-            await execAsync(extractCmd);
+            // Add maxBuffer to handle large outputs and ensure proper error capture
+            const result = await execAsync(extractCmd, {
+                maxBuffer: 100 * 1024 * 1024, // 100MB buffer
+                encoding: 'utf8'
+            });
+            if (result.stdout) {
+                logger_1.logger.info('Stage 1 stdout', { stdout: result.stdout.substring(0, 500) }); // Log first 500 chars
+            }
             logger_1.logger.info('Stage 1 completed successfully');
         }
         catch (error) {
-            logger_1.logger.error('Stage 1 failed', {
+            // Enhanced error logging
+            const errorDetails = {
                 error: error.message,
-                stderr: error.stderr,
-                stdout: error.stdout,
-                extractCmd
-            });
-            throw error;
+                stderr: error.stderr || '(empty)',
+                stdout: error.stdout || '(empty)',
+                code: error.code,
+                signal: error.signal,
+                extractCmd,
+                inputPbf: (0, fs_1.existsSync)(inputPbf) ? 'exists' : 'NOT FOUND',
+                polyFile: (0, fs_1.existsSync)(polyFile) ? 'exists' : 'NOT FOUND',
+                outputDir: (0, fs_1.existsSync)(outputDir) ? 'exists' : 'NOT FOUND'
+            };
+            logger_1.logger.error('Stage 1 failed', errorDetails);
+            // Create more descriptive error message
+            const errorMsg = error.stderr
+                ? `Osmium extract failed: ${error.stderr}`
+                : error.stdout
+                    ? `Osmium extract failed: ${error.stdout}`
+                    : `Osmium extract failed: ${error.message}`;
+            throw new Error(errorMsg);
         }
         // Stage 2: Extract all address nodes
         const tempAddresses = (0, path_1.join)(outputDir, 'temp_addresses.osm.pbf');
@@ -230,17 +261,31 @@ class OsmiumWrapper {
             console.log(`Command: ${addressCmd}`);
         }
         try {
-            await execAsync(addressCmd);
+            const result = await execAsync(addressCmd, {
+                maxBuffer: 100 * 1024 * 1024,
+                encoding: 'utf8'
+            });
+            if (result.stdout) {
+                logger_1.logger.info('Stage 2 stdout', { stdout: result.stdout.substring(0, 500) });
+            }
             logger_1.logger.info('Stage 2 completed successfully');
         }
         catch (error) {
-            logger_1.logger.error('Stage 2 failed', {
+            const errorDetails = {
                 error: error.message,
-                stderr: error.stderr,
-                stdout: error.stdout,
+                stderr: error.stderr || '(empty)',
+                stdout: error.stdout || '(empty)',
+                code: error.code,
+                signal: error.signal,
                 addressCmd
-            });
-            throw error;
+            };
+            logger_1.logger.error('Stage 2 failed', errorDetails);
+            const errorMsg = error.stderr
+                ? `Osmium tags-filter failed: ${error.stderr}`
+                : error.stdout
+                    ? `Osmium tags-filter failed: ${error.stdout}`
+                    : `Osmium tags-filter failed: ${error.message}`;
+            throw new Error(errorMsg);
         }
         // Stage 3: Clip addresses to polygon
         const tempAddressesClipped = (0, path_1.join)(outputDir, 'temp_addresses_clipped.osm.pbf');
@@ -262,17 +307,31 @@ class OsmiumWrapper {
             console.log(`Command: ${clipCmd}`);
         }
         try {
-            await execAsync(clipCmd);
+            const result = await execAsync(clipCmd, {
+                maxBuffer: 100 * 1024 * 1024,
+                encoding: 'utf8'
+            });
+            if (result.stdout) {
+                logger_1.logger.info('Stage 3 stdout', { stdout: result.stdout.substring(0, 500) });
+            }
             logger_1.logger.info('Stage 3 completed successfully');
         }
         catch (error) {
-            logger_1.logger.error('Stage 3 failed', {
+            const errorDetails = {
                 error: error.message,
-                stderr: error.stderr,
-                stdout: error.stdout,
+                stderr: error.stderr || '(empty)',
+                stdout: error.stdout || '(empty)',
+                code: error.code,
+                signal: error.signal,
                 clipCmd
-            });
-            throw error;
+            };
+            logger_1.logger.error('Stage 3 failed', errorDetails);
+            const errorMsg = error.stderr
+                ? `Osmium extract (clip) failed: ${error.stderr}`
+                : error.stdout
+                    ? `Osmium extract (clip) failed: ${error.stdout}`
+                    : `Osmium extract (clip) failed: ${error.message}`;
+            throw new Error(errorMsg);
         }
         // Stage 4: Merge routing + addresses
         const mergeCmd = `osmium merge --overwrite "${tempRouting}" "${tempAddressesClipped}" -o "${outputPbf}"`;
