@@ -116,7 +116,8 @@ fi
 
 log_info "Extracted directory: $EXTRACTED_DIR"
 
-# Remove dist folder from target directory before merging
+# Remove dist folders from target directory before merging
+# 1. Remove main dist folder
 DIST_DIR="${TARGET_DIR}/dist"
 if [ -d "$DIST_DIR" ]; then
     log_info "Removing old dist folder: $DIST_DIR"
@@ -124,6 +125,16 @@ if [ -d "$DIST_DIR" ]; then
     log_success "Dist folder removed successfully"
 else
     log_info "No dist folder found, skipping removal"
+fi
+
+# 2. Remove osrm-management-system dist folder
+OSRM_DIST_DIR="${TARGET_DIR}/osrm-management-system/dist"
+if [ -d "$OSRM_DIST_DIR" ]; then
+    log_info "Removing old osrm-management-system dist folder: $OSRM_DIST_DIR"
+    rm -rf "$OSRM_DIST_DIR"
+    log_success "OSRM Management System dist folder removed successfully"
+else
+    log_info "No osrm-management-system dist folder found, skipping removal"
 fi
 
 # Merge contents into target directory
