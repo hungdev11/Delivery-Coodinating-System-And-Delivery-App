@@ -338,6 +338,10 @@ services:
   # ============================================
   # OSRM V2 Services (Simplified Architecture)
   # ============================================
+  # NOTE: OSRM data builds are MANUAL ONLY via osrm-management-system
+  # These containers only run the OSRM server with pre-built data
+  # To build data: POST http://localhost:21520/api/v1/generate/osrm-v2
+  # To manage containers: Use osrm-management-system API endpoints
 
   # OSRM V2 Full (Rating affects weight, Blocking affects speed)
   osrm-v2-full:
@@ -349,11 +353,11 @@ services:
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
     # Ports removed - only accessible via docker network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/route/v1/driving/106.7718,10.8505;106.8032,10.8623?overview=false || exit 1"]
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
 
   # OSRM V2 Rating Only (User feedback affects weight)
   osrm-v2-rating-only:
@@ -365,11 +369,11 @@ services:
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
     # Ports removed - only accessible via docker network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/route/v1/driving/106.7718,10.8505;106.8032,10.8623?overview=false || exit 1"]
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
 
   # OSRM V2 Blocking Only (Traffic affects speed)
   osrm-v2-blocking-only:
@@ -381,11 +385,11 @@ services:
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
     # Ports removed - only accessible via docker network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/route/v1/driving/106.7718,10.8505;106.8032,10.8623?overview=false || exit 1"]
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
 
   # OSRM V2 Base (VN motorbike optimized, no modifiers)
   osrm-v2-base:
@@ -397,11 +401,11 @@ services:
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
     # Ports removed - only accessible via docker network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/5000' || exit 1"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/route/v1/driving/106.7718,10.8505;106.8032,10.8623?overview=false || exit 1"]
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
 
   # ManagementSystem Frontend Builder - Builds frontend and copies to shared volume
   management-system-builder:

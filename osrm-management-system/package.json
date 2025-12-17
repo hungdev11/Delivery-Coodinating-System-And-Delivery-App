@@ -1,0 +1,44 @@
+{
+  "name": "osrm-management-system",
+  "version": "1.0.0",
+  "description": "OSRM Data Management Service - Independent service for managing OSRM data extraction and generation",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc && tsc-alias",
+    "start": "node dist/index.js",
+    "clean": "rimraf dist",
+    "prisma:generate": "prisma generate",
+    "test:health": "curl http://localhost:21520/api/v1/health",
+    "test:extract": "curl -X POST http://localhost:21520/api/v1/extract/complete -H 'Content-Type: application/json'",
+    "test:generate": "curl -X POST http://localhost:21520/api/v1/generate/osrm-v2 -H 'Content-Type: application/json'"
+  },
+  "keywords": [
+    "osrm",
+    "routing",
+    "data-management"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.10.5",
+    "prisma": "^6.16.3",
+    "rimraf": "^6.0.1",
+    "tsc-alias": "^1.8.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0",
+    "winston": "^3.18.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

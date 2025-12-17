@@ -24,12 +24,31 @@ export interface OSRMModel {
   path: string
 }
 
+export interface OSRMBuildStatus {
+  model: string
+  currentBuild: {
+    buildId: string
+    status: string
+    startedAt: string | null
+  } | null
+  latestReady: {
+    buildId: string
+    completedAt: string
+    outputPath: string
+  } | null
+  latestDeployed: {
+    buildId: string
+    deployedAt: string
+  } | null
+}
+
 export interface OSRMStatus {
   models: OSRMModel[]
   allExist: boolean
   existingCount: number
   totalModels: number
   ready: boolean
+  buildStatus?: OSRMBuildStatus[]
 }
 
 // Health Check APIs

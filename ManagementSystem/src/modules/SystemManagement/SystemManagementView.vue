@@ -295,6 +295,25 @@ onMounted(() => {
                 <div class="text-sm text-gray-500">
                   Path: {{ model.path }}
                 </div>
+                <!-- Build Status -->
+                <div v-if="osrmStatus.buildStatus" class="mt-2 text-xs">
+                  <div v-for="build in osrmStatus.buildStatus" :key="build.model">
+                    <div v-if="build.model === model.name">
+                      <div v-if="build.currentBuild" class="text-yellow-600 dark:text-yellow-400">
+                        <UIcon name="i-heroicons-clock" class="w-3 h-3 inline mr-1" />
+                        Building: {{ build.currentBuild.status }}
+                      </div>
+                      <div v-else-if="build.latestReady" class="text-green-600 dark:text-green-400">
+                        <UIcon name="i-heroicons-check-circle" class="w-3 h-3 inline mr-1" />
+                        Ready to deploy
+                      </div>
+                      <div v-if="build.latestDeployed" class="text-blue-600 dark:text-blue-400 mt-1">
+                        <UIcon name="i-heroicons-rocket-launch" class="w-3 h-3 inline mr-1" />
+                        Deployed
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             

@@ -1,0 +1,74 @@
+### OSRM Management System - API Tests
+### Base URL
+@baseUrl = http://localhost:21520
+@contentType = application/json
+
+### ============================================
+### Health Check
+### ============================================
+GET {{baseUrl}}/api/v1/health
+
+### ============================================
+### Extract Complete OSM Data
+### ============================================
+# Extract with default polygon file
+POST {{baseUrl}}/api/v1/extract/complete
+Content-Type: {{contentType}}
+
+###
+
+# Extract with custom polygon file
+POST {{baseUrl}}/api/v1/extract/complete
+Content-Type: {{contentType}}
+
+{
+  "polyFile": "../BE/zone_service/raw_data/poly/thuduc_cu.poly"
+}
+
+### ============================================
+### Generate OSRM V2 Models
+### ============================================
+# Generate all OSRM V2 models from database
+# Note: This may take a very long time (30 minutes - several hours)
+POST {{baseUrl}}/api/v1/generate/osrm-v2
+Content-Type: {{contentType}}
+
+###
+
+### ============================================
+### OSRM Container Management
+### ============================================
+# Get status of all OSRM containers
+GET {{baseUrl}}/api/v1/osrm/containers/status
+
+###
+
+# Start a specific OSRM container
+# Models: osrm-full, osrm-rating-only, osrm-blocking-only, osrm-base
+POST {{baseUrl}}/api/v1/osrm/containers/osrm-full/start
+Content-Type: {{contentType}}
+
+###
+
+# Stop a specific OSRM container
+POST {{baseUrl}}/api/v1/osrm/containers/osrm-full/stop
+Content-Type: {{contentType}}
+
+###
+
+# Restart a specific OSRM container
+POST {{baseUrl}}/api/v1/osrm/containers/osrm-full/restart
+Content-Type: {{contentType}}
+
+###
+
+# Rebuild a specific OSRM container (stop, remove, recreate)
+POST {{baseUrl}}/api/v1/osrm/containers/osrm-full/rebuild
+Content-Type: {{contentType}}
+
+###
+
+# Health check for a specific OSRM container
+GET {{baseUrl}}/api/v1/osrm/containers/osrm-full/health
+
+###

@@ -42,7 +42,7 @@ export class OSRMDataController {
    * Get OSRM generation status
    * GET /api/v1/osrm/status
    * 
-   * Returns status of OSRM data files (checks if all 4 models exist)
+   * Returns status of OSRM data files and build status from osrm-management-system
    */
   public static async getStatus(_req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -52,7 +52,8 @@ export class OSRMDataController {
       const osrmDataPath = process.env.OSRM_DATA_PATH || join(process.cwd(), 'osrm_data');
       const models = ['osrm-full', 'osrm-rating-only', 'osrm-blocking-only', 'osrm-base'];
       
-      const status = models.map(model => {
+      // Check file existence
+      const fileStatus = models.map(model => {
         const modelPath = join(osrmDataPath, model);
         const osrmFile = join(modelPath, 'network.osrm');
         const exists = existsSync(osrmFile);
@@ -64,15 +65,31 @@ export class OSRMDataController {
         };
       });
       
-      const allExist = status.every(s => s.exists);
-      const existingCount = status.filter(s => s.exists).length;
+      // Query build status from osrm-management-system if available
+      let buildStatus: any = null;
+      const osrmManagementUrl = process.env.OSRM_MANAGEMENT_URL || 'http://localhost:21520';
+      
+      try {
+        const response = await fetch(`${osrmManagementUrl}/api/v1/builds/status`);
+        if (response.ok) {
+          const data = await response.json();
+          buildStatus = data.result || data;
+        }
+      } catch (error) {
+        logger.warn('Failed to fetch build status from osrm-management-system', { error });
+        // Continue without build status
+      }
+      
+      const allExist = fileStatus.every(s => s.exists);
+      const existingCount = fileStatus.filter(s => s.exists).length;
       
       res.json(BaseResponse.success({
-        models: status,
+        models: fileStatus,
         allExist,
         existingCount,
         totalModels: models.length,
         ready: allExist,
+        buildStatus, // Include build status from osrm-management-system
       }, allExist 
         ? `All ${models.length} OSRM models are ready` 
         : `Only ${existingCount}/${models.length} OSRM models exist`));

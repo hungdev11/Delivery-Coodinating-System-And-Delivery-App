@@ -183,7 +183,8 @@ main() {
     exit 0
   else
     log_error "Found $errors issue(s)"
-    log_info "Run ./scripts/build-osrm.sh to fix issues"
+    log_info "Build OSRM data manually via osrm-management-system API"
+    log_info "  curl -X POST http://localhost:21520/api/v1/generate/osrm-v2"
     exit 1
   fi
 }
