@@ -1,6 +1,8 @@
 # OSRM Build and Management Guide
 
-This guide explains how to build and manage OSRM routing data for the production environment.
+## ⚠️ Important: Manual Build Only
+
+**OSRM data builds are NOT automatic.** You must manually trigger builds through the **osrm-management-system** service.
 
 ## Overview
 
@@ -10,141 +12,85 @@ The OSRM system uses 4 different models:
 - **osrm-blocking-only**: Traffic affects speed only
 - **osrm-base**: VN motorbike optimized, no modifiers
 
-## Prerequisites
+## How to Build OSRM Data
 
-1. **osmium-tool**: For extracting OSM data from PBF files
-   - Install: `sudo apt-get install osmium-tool` (Ubuntu/Debian)
-   - Or use Docker fallback (enabled by default)
+### Option 1: Via API (Recommended)
 
-2. **Docker**: Required for OSRM build tools
-   - OSRM tools run in Docker containers
-
-3. **Zone Service**: Must have database with road network data
-   - The generator reads from database to build OSRM data
-
-## First-Time Setup
-
-### Option 1: Build on Production Server (Recommended for Small Data)
-
-If you have the zone-service container running and database accessible:
+Use the osrm-management-system API:
 
 ```bash
-cd prod-pack
-./scripts/build-osrm.sh
+# Extract OSM data first (if needed)
+curl -X POST http://localhost:21520/api/v1/extract/complete
+
+# Generate OSRM V2 models from database
+curl -X POST http://localhost:21520/api/v1/generate/osrm-v2
 ```
 
-This will:
-1. Extract OSM data using Docker (avoids memory issues)
-2. Use zone-service container to generate OSRM data from database
-3. Build all 4 OSRM models
-4. Copy generated data to `prod-pack/osrm_data/`
-5. Copy lib folder to each instance
-6. Start all OSRM containers
+### Option 2: Via ManagementSystem UI
 
-**Note**: The script always uses Docker for osmium to prevent out-of-memory errors. It will automatically try multiple Docker images if one fails.
+1. Navigate to System Management page
+2. Click "Generate OSRM Data (All Models)"
+3. Monitor build status in the UI
 
-### Option 2: Build on Separate Machine (Recommended for Large Data)
-
-For production servers with limited resources, build on a separate machine:
-
-**On Build Machine (with zone_service source code):**
-```bash
-cd BE/zone_service
-npm install
-npm run osrm:generate
-# This creates osrm_data/ with all models
-```
-
-**Transfer to Production:**
-```bash
-# On build machine
-tar -czf osrm_data.tar.gz osrm_data/
-
-# On production server
-cd prod-pack
-./scripts/build-osrm.sh --use-prebuilt /path/to/osrm_data
-```
-
-### Option 3: Use Pre-extracted OSM File
-
-If you already have extracted OSM data (from another machine or previous run):
+### Option 3: Check Build Status
 
 ```bash
-cd prod-pack
-./scripts/build-osrm.sh --extracted-file /path/to/thuduc_complete.osm.pbf
+# Get build status for all models
+curl http://localhost:21520/api/v1/builds/status
+
+# Get build status for specific model
+curl http://localhost:21520/api/v1/builds/status/osrm-full
+
+# Get build history
+curl http://localhost:21520/api/v1/builds/history
 ```
 
-This will:
-- Copy your extracted file to the correct location
-- Verify the file is valid
-- Skip extraction (no memory issues!)
-- Continue with OSRM data generation
+## Build Process
 
-**Benefits:**
-- No memory issues (extraction already done)
-- Fast (just copy and verify)
-- Can extract on powerful machine, use on low-memory server
+1. **Extract OSM Data** (if needed):
+   - Extracts routing graph and addresses from Vietnam PBF file
+   - Uses polygon file to clip to specific area
+   - Output: `raw_data/extracted/thuduc_complete.osm.pbf`
 
-### Option 4: Use Pre-built OSRM Data
+2. **Generate OSRM Models**:
+   - Reads road network data from database
+   - Generates 4 OSRM models
+   - Builds are tracked in `osrm_builds` database table
+   - Status: PENDING → BUILDING → READY → DEPLOYED
 
-If you already have complete OSRM data built:
+3. **Deploy** (after build completes):
+   - Rebuild containers to use new data:
+   ```bash
+   docker-compose -p dss -f docker-compose.yml restart osrm-v2-full
+   docker-compose -p dss -f docker-compose.yml restart osrm-v2-rating-only
+   docker-compose -p dss -f docker-compose.yml restart osrm-v2-blocking-only
+   docker-compose -p dss -f docker-compose.yml restart osrm-v2-base
+   ```
+
+## Container Management
+
+Use osrm-management-system API for container operations:
 
 ```bash
-cd prod-pack
-./scripts/build-osrm.sh --use-prebuilt /path/to/osrm_data
+# Get container status
+curl http://localhost:21520/api/v1/osrm/containers/status
+
+# Start container
+curl -X POST http://localhost:21520/api/v1/osrm/containers/osrm-full/start
+
+# Restart container
+curl -X POST http://localhost:21520/api/v1/osrm/containers/osrm-full/restart
+
+# Rebuild container (after new data)
+curl -X POST http://localhost:21520/api/v1/osrm/containers/osrm-full/rebuild
 ```
 
-## Rebuilding with New Data
+## Notes
 
-When you update the database (new roads, ratings, traffic data), you can regenerate OSRM data:
-
-**Option 1: Via API (Recommended)**
-```bash
-curl -X POST http://localhost:8080/api/v1/osrm/generate-v2
-```
-
-**Option 2: Via Script**
-```bash
-cd prod-pack
-./scripts/build-osrm.sh --skip-extract
-```
-
-This will:
-1. Use zone-service container to generate OSRM data from database
-2. Build all 4 OSRM models
-3. Copy generated data to `prod-pack/osrm_data/`
-4. Start all OSRM containers
-
-**Note:** The old workflow (build individual instances, start/stop, rolling restart) has been removed. Now all 4 models are built together from the database via API endpoint.
-
-## Manual Steps
-
-### Extract OSM Data Only
-
-```bash
-cd prod-pack
-./scripts/build-osrm.sh --skip-start
-```
-
-### Build OSRM Without Starting Containers
-
-```bash
-cd prod-pack
-./scripts/build-osrm.sh --skip-extract --skip-start
-```
-
-### Start OSRM Containers Only
-
-```bash
-cd prod-pack
-docker-compose up -d osrm-v2-full osrm-v2-rating-only osrm-v2-blocking-only osrm-v2-base
-```
-
-### Check OSRM Container Status
-
-```bash
-docker-compose ps osrm-v2-full osrm-v2-rating-only osrm-v2-blocking-only osrm-v2-base
-```
+- **No automatic builds** on container startup
+- Builds run **sequentially** (one at a time per model)
+- Build status is tracked in database (`osrm_builds` table)
+- All operations are manual via API or UI
 
 ### View OSRM Logs
 
@@ -220,14 +166,15 @@ If you're on production and don't have source code:
 
 2. **Option 2**: Use pre-built data
    ```bash
-   ./scripts/build-osrm.sh --use-prebuilt /path/to/osrm_data
+   # Copy pre-built data manually to osrm_data/ directory
    ```
 
 3. **Option 3**: Start zone-service container first
    ```bash
    docker-compose up -d zone-service
    # Wait for it to be healthy
-   ./scripts/build-osrm.sh --skip-extract
+   # Generate OSRM data (skip extract if already done)
+curl -X POST http://localhost:21520/api/v1/generate/osrm-v2
    ```
 
 ### OSRM build fails

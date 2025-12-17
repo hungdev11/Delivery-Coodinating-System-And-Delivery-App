@@ -1,0 +1,263 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("ZONE_DB_CONNECTION")
+}
+
+// Master road information
+model roads {
+  road_id        String   @id @default(uuid())
+  osm_id         String?  @unique
+  name           String
+  name_en        String?
+  road_type      RoadType
+
+  max_speed      Float?
+  avg_speed      Float?
+
+  one_way        Boolean  @default(false)
+  lanes          Int?
+  surface        String?
+
+  geometry       Json?
+
+  zone_id        String?
+
+  road_segments  road_segments[]
+
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  @@index([name])
+  @@index([road_type])
+  @@index([zone_id])
+}
+
+enum RoadType {
+  MOTORWAY
+  TRUNK
+  PRIMARY
+  SECONDARY
+  TERTIARY
+  RESIDENTIAL
+  SERVICE
+  UNCLASSIFIED
+  LIVING_STREET
+  PEDESTRIAN
+  TRACK
+  PATH
+}
+
+// Intersections and junction points
+model road_nodes {
+  node_id               String   @id @default(uuid())
+  osm_id                String?  @unique
+
+  lat                   Float
+  lon                   Float
+
+  node_type             NodeType @default(INTERSECTION)
+
+  zone_id               String?
+
+  segments_from         road_segments[] @relation("SegmentFromNode")
+  segments_to           road_segments[] @relation("SegmentToNode")
+
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@index([lat, lon])
+  @@index([zone_id])
+}
+
+enum NodeType {
+  INTERSECTION
+  TRAFFIC_LIGHT
+  STOP_SIGN
+  ROUNDABOUT
+  ENDPOINT
+  WAYPOINT
+}
+
+// Road segments (arcs) between nodes
+model road_segments {
+  segment_id String  @id @default(uuid())
+  osm_way_id BigInt?
+
+  from_node_id String
+  to_node_id   String
+  from_node    road_nodes @relation("SegmentFromNode", fields: [from_node_id], references: [node_id])
+  to_node      road_nodes @relation("SegmentToNode", fields: [to_node_id], references: [node_id])
+
+  road_id String
+  road    roads  @relation(fields: [road_id], references: [road_id])
+
+  geometry      Json
+  length_meters Float
+
+  name      String
+  road_type RoadType
+  max_speed Float?
+  avg_speed Float?
+  one_way   Boolean  @default(false)
+
+  base_weight    Float
+  current_weight Float
+  delta_weight   Float @default(0)
+
+  zone_id String?
+
+  traffic_conditions traffic_conditions[]
+  user_feedback      user_feedback[]
+
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  weight_updated_at DateTime @default(now())
+
+  @@index([from_node_id])
+  @@index([to_node_id])
+  @@index([road_id])
+  @@index([zone_id])
+  @@index([current_weight])
+  @@index([osm_way_id])
+}
+
+// User feedback
+model user_feedback {
+  feedback_id           String   @id @default(uuid())
+
+  segment_id            String
+  road_segment          road_segments @relation(fields: [segment_id], references: [segment_id])
+
+  user_id               String
+
+  feedback_type         FeedbackType
+  severity              FeedbackSeverity @default(MINOR)
+
+  description           String?
+  suggested_weight_adj  Float?
+
+  status                FeedbackStatus @default(PENDING)
+  reviewed_by           String?
+  reviewed_at           DateTime?
+
+  applied               Boolean  @default(false)
+  applied_at            DateTime?
+  weight_adjustment     Float?
+
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@index([segment_id])
+  @@index([user_id])
+  @@index([status])
+  @@index([created_at])
+}
+
+enum FeedbackType {
+  ROAD_CLOSED
+  CONSTRUCTION
+  ACCIDENT
+  POOR_CONDITION
+  TRAFFIC_ALWAYS_BAD
+  BETTER_ROUTE
+  INCORRECT_INFO
+  OTHER
+}
+
+enum FeedbackSeverity {
+  MINOR
+  MODERATE
+  MAJOR
+  CRITICAL
+}
+
+enum FeedbackStatus {
+  PENDING
+  REVIEWING
+  APPROVED
+  REJECTED
+  RESOLVED
+}
+
+// Traffic conditions
+model traffic_conditions {
+  traffic_condition_id  String   @id @default(uuid())
+
+  segment_id            String
+  road_segment          road_segments @relation(fields: [segment_id], references: [segment_id])
+
+  traffic_level         TrafficLevel @default(NORMAL)
+  congestion_score      Float        @default(0)
+
+  current_speed         Float?
+  speed_ratio           Float?
+
+  weight_multiplier     Float        @default(1)
+
+  source                String       @default("tracking-asia")
+  source_timestamp      DateTime
+
+  created_at            DateTime     @default(now())
+  expires_at            DateTime
+
+  @@unique([segment_id, source])
+  @@index([segment_id])
+  @@index([source_timestamp])
+  @@index([expires_at])
+}
+
+enum TrafficLevel {
+  FREE_FLOW
+  NORMAL
+  SLOW
+  CONGESTED
+  BLOCKED
+}
+
+// OSRM model rebuild tracking
+model osrm_builds {
+  build_id              String   @id @default(uuid())
+
+  // Build information
+  instance_name         String   // Model name: "osrm-full", "osrm-rating-only", etc.
+  build_number          Int      @default(autoincrement()) @unique
+  status                OsrmBuildStatus @default(PENDING)
+
+  // Data snapshot
+  data_snapshot_time    DateTime // When the weight data was captured
+  total_segments        Int
+  avg_weight            Float?
+
+  // Build process
+  started_at            DateTime?
+  completed_at          DateTime?
+  deployed_at           DateTime?
+  error_message         String?
+
+  // File information
+  pbf_file_path         String?
+  osrm_output_path      String?
+  lua_script_version    String?
+
+  // Metadata
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@index([instance_name])
+  @@index([status])
+  @@index([created_at])
+}
+
+enum OsrmBuildStatus {
+  PENDING
+  BUILDING
+  TESTING
+  READY
+  DEPLOYED
+  FAILED
+  DEPRECATED
+}

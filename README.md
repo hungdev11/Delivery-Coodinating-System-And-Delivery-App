@@ -142,7 +142,9 @@ curl http://localhost:8080/api/v1/osrm/status/1
 
 #### 6.2. Build OSRM Data
 
-Sau khi thêm file OSM mới vào `raw_data/vietnam/`, bạn cần build OSRM data:
+⚠️ **Build OSRM data là thao tác thủ công, không tự động.**
+
+Sau khi thêm file OSM mới vào `raw_data/vietnam/`, bạn cần build OSRM data thủ công:
 
 ```bash
 # Build cho instance 1
