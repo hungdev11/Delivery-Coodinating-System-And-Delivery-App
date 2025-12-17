@@ -4,12 +4,23 @@
  */
 
 import * as dotenv from 'dotenv';
+import * as path from 'path';
 import { createApp } from './app';
 import { logger } from './common/logger';
 import { PrismaClient } from '@prisma/client';
 
-// Load .env file
-dotenv.config();
+// Load .env file from the same directory as the compiled code (dist/)
+// In production, .env should be in osrm-management-system/ directory (parent of dist/)
+const envPath = path.resolve(__dirname, '../.env');
+const result = dotenv.config({ path: envPath });
+
+if (result.error) {
+  // Fallback: try current working directory
+  dotenv.config();
+  console.warn(`[WARN] Could not load .env from ${envPath}, trying current directory`);
+} else {
+  console.log(`[INFO] Loaded .env from ${envPath}`);
+}
 
 async function main() {
   try {
