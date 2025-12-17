@@ -5,7 +5,12 @@
  * Prerequisites:
  * - osmium-tool must be installed on the system
  *   Ubuntu/Debian: sudo apt-get install osmium-tool
+ *   Ubuntu 22.04 (manual): See .docs/SETUP.md for manual installation steps
  *   macOS: brew install osmium-tool
+ * 
+ * Version Compatibility:
+ * - Version >= 1.18: Uses modern command format
+ * - Version < 1.18: Uses legacy command format (auto-detected)
  */
 
 import { exec, spawn } from 'child_process';
@@ -25,6 +30,7 @@ export interface OsmiumOptions {
 export class OsmiumWrapper {
 	private verbose: boolean;
 	private version: string | null = null;
+	private versionNumber: number | null = null;
 
 	constructor(verbose: boolean = false) {
 		this.verbose = verbose;
@@ -37,8 +43,17 @@ export class OsmiumWrapper {
 		try {
 			const { stdout } = await execAsync('osmium --version');
 			this.version = stdout.trim();
+			
+			// Extract version number (e.g., "osmium version 1.18.0" -> 1.18)
+			const versionMatch = this.version.match(/version\s+(\d+)\.(\d+)/);
+			if (versionMatch && versionMatch[1] && versionMatch[2]) {
+				const major = parseInt(versionMatch[1], 10);
+				const minor = parseInt(versionMatch[2], 10);
+				this.versionNumber = major + minor / 100; // e.g., 1.18 -> 1.18, 1.17 -> 1.17
+			}
+			
 			if (this.verbose) {
-				console.log(`✓ Osmium found: ${this.version}`);
+				console.log(`✓ Osmium found: ${this.version} (parsed: ${this.versionNumber})`);
 			}
 			return true;
 		} catch (error) {
@@ -51,30 +66,32 @@ export class OsmiumWrapper {
 	}
 
 	/**
-	 * Detect if osmium supports modern strategy flags (1.16+)
-	 * 
-	 * Modern versions use strategy presets:
-	 * - `simple`: Basic bbox clipping (may break ways at boundary)
-	 * - `complete_ways`: Include complete ways + referenced nodes (default for routing)
-	 * - `smart`: Complete ways + related objects (best for complex data)
-	 * 
-	 * Legacy versions use individual flags:
-	 * - `--complete-ways`: Include ways completely
-	 * - `--complete-nodes`: Include all nodes for complete ways
-	 * - `--complete-relations`: Include parent relations
-	 * 
-	 * Both approaches ensure routing graph integrity.
+	 * Get osmium version number (e.g., 1.18, 1.17)
+	 * Returns null if version cannot be determined
 	 */
-	private async supportsStrategyFlag(): Promise<boolean> {
-		try {
-			const { stdout } = await execAsync('osmium extract --help');
-			// Check if help text mentions -s or --strategy
-			return stdout.includes('--strategy') || stdout.includes('-s [');
-		} catch {
-			// Default to modern approach (safer bet in 2024+)
-			return true;
+	private async getVersionNumber(): Promise<number | null> {
+		// If already cached, return it
+		if (this.versionNumber !== null) {
+			return this.versionNumber;
 		}
+
+		// Try to get version
+		try {
+			const { stdout } = await execAsync('osmium --version');
+			const versionMatch = stdout.match(/version\s+(\d+)\.(\d+)/);
+			if (versionMatch && versionMatch[1] && versionMatch[2]) {
+				const major = parseInt(versionMatch[1], 10);
+				const minor = parseInt(versionMatch[2], 10);
+				this.versionNumber = major + minor / 100;
+				return this.versionNumber;
+			}
+		} catch {
+			// Ignore errors
+		}
+
+		return null;
 	}
+
 
 	/**
 	 * Extract specific data types from PBF file
@@ -176,31 +193,25 @@ export class OsmiumWrapper {
 		}
 
 		// Auto-detect osmium version and use appropriate flags
-		const useStrategyFlag = await this.supportsStrategyFlag();
+		const version = await this.getVersionNumber();
+		const useModernFormat = version !== null && version >= 1.18;
 
-		const args: string[] = ['extract', '--polygon', polyFile];
+		const args: string[] = ['extract'];
 
-		if (useStrategyFlag) {
-			// Modern osmium (1.16+) uses strategy presets
-			// -s complete_ways = old --complete-ways --complete-nodes --complete-relations
-			args.push('-s', 'complete_ways');
+		if (useModernFormat) {
+			// Modern osmium (>= 1.18): osmium extract -s complete_ways --overwrite input -o output --polygon poly
+			args.push('-s', 'complete_ways', '--overwrite', inputPbf, '-o', outputPbf, '--polygon', polyFile);
 		} else {
-			// Legacy osmium uses individual flags
-			args.push(
-				'--complete-ways',
-				'--complete-nodes',
-				'--complete-relations'
-			);
+			// Legacy osmium (< 1.18): osmium extract -p poly -s complete_ways -O -o output input
+			args.push('-p', polyFile, '-s', 'complete_ways', '-O', '-o', outputPbf, inputPbf);
 		}
 
-		args.push('--overwrite', '--output', outputPbf, inputPbf);
-
 		if (this.verbose) {
-			const strategy = useStrategyFlag
-				? 'strategy: complete_ways'
-				: 'legacy complete flags';
+			const format = useModernFormat
+				? 'modern format (>= 1.18)'
+				: 'legacy format (< 1.18)';
 			console.log(
-				`Extracting polygon (${strategy}): osmium ${args.join(' ')}`
+				`Extracting polygon (${format}): osmium ${args.join(' ')}`
 			);
 		}
 

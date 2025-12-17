@@ -13,10 +13,45 @@ git clone -b prod --single-branch https://github.com/YOUR_USERNAME/YOUR_REPO.git
 cd dss-prod
 ```
 
-### Cách 2: Download ZIP
+### Cách 2: Download ZIP (Manual)
 
 1. Truy cập: `https://github.com/YOUR_USERNAME/YOUR_REPO/archive/refs/heads/prod.zip`
 2. Giải nén và sử dụng
+
+### Cách 3: Sử dụng script download-release.sh (Recommended)
+
+Script tự động download và merge release vào thư mục `/www/wwwroot/dss`:
+
+```bash
+# 1. Cấp quyền thực thi cho script
+chmod +x scripts/download-release.sh
+
+# 2. Chạy script với URL release
+./scripts/download-release.sh <release-url>
+```
+
+**Ví dụ:**
+
+```bash
+# Download từ GitHub release tag
+./scripts/download-release.sh https://github.com/hungdev11/Delivery-Coodinating-System-And-Delivery-App/archive/refs/tags/v1.1.1.zip
+
+# Download từ branch prod
+./scripts/download-release.sh https://github.com/YOUR_USERNAME/YOUR_REPO/archive/refs/heads/prod.zip
+```
+
+**Lưu ý:**
+- Script sẽ tự động tạo thư mục `/www/wwwroot/dss` nếu chưa có
+- Sử dụng `rsync` hoặc `cp` để merge files (không ghi đè files đã tồn tại)
+- Tự động cleanup temporary files sau khi hoàn thành
+- Cần có `wget` hoặc `curl` và `unzip` để chạy script
+
+**Yêu cầu:**
+```bash
+# Cài đặt unzip nếu chưa có
+sudo apt-get install unzip  # Ubuntu/Debian
+sudo yum install unzip      # CentOS/RHEL
+```
 
 ### Cách 3: Từ main branch
 

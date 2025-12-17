@@ -156,13 +156,33 @@ docker compose version
 
 ### 4. Install osmium-tool
 
-#### Ubuntu/Debian
+#### Ubuntu 22.04 (Manual Installation)
+
+If `apt-get install osmium-tool` doesn't work or installs an incompatible version, use manual installation:
 
 ```bash
+# Download and install boost dependency
+wget http://archive.ubuntu.com/ubuntu/pool/main/b/boost1.65.1/libboost-program-options1.65.1_1.65.1+dfsg-0ubuntu5_amd64.deb
+sudo dpkg -i libboost-program-options1.65.1_1.65.1+dfsg-0ubuntu5_amd64.deb
+
+# Download and install osmium-tool 1.7.1
+wget http://launchpadlibrarian.net/344172654/osmium-tool_1.7.1-1_amd64.deb
+sudo dpkg -i osmium-tool_1.7.1-1_amd64.deb
+
+# Verify installation
+osmium --version  # Should show 1.7.1
+```
+
+**Note:** Version 1.7.1 is compatible with the legacy command format. For newer versions (1.18+), the command syntax changes.
+
+#### Ubuntu/Debian (Standard Installation)
+
+```bash
+sudo apt-get update
 sudo apt-get install -y osmium-tool
 
 # Verify installation
-osmium --version  # Should show 1.14+
+osmium --version  # Should show 1.14+ (or 1.18+ for modern format)
 ```
 
 #### macOS
@@ -177,7 +197,8 @@ osmium --version
 #### Windows (WSL2)
 
 ```bash
-# Inside WSL2
+# Inside WSL2 - use Ubuntu 22 manual installation method above
+# Or try standard apt-get first:
 sudo apt-get install -y osmium-tool
 ```
 
@@ -832,26 +853,55 @@ df -h
 htop
 ```
 
-### Issue 5: "osmium-tool not found"
+### Issue 5: "osmium-tool not found" or "Incompatible version"
 
 **Symptoms:**
 ```
 bash: osmium: command not found
+# Or
+Command failed: osmium extract ...
 ```
 
 **Solutions:**
 
+**For Ubuntu 22.04 (if apt-get doesn't work or installs incompatible version):**
+
 ```bash
-# Ubuntu/Debian
+# Manual installation with specific version (1.7.1)
+# Download and install boost dependency
+wget http://archive.ubuntu.com/ubuntu/pool/main/b/boost1.65.1/libboost-program-options1.65.1_1.65.1+dfsg-0ubuntu5_amd64.deb
+sudo dpkg -i libboost-program-options1.65.1_1.65.1+dfsg-0ubuntu5_amd64.deb
+
+# Download and install osmium-tool 1.7.1
+wget http://launchpadlibrarian.net/344172654/osmium-tool_1.7.1-1_amd64.deb
+sudo dpkg -i osmium-tool_1.7.1-1_amd64.deb
+
+# Verify installation
+osmium --version  # Should show 1.7.1
+```
+
+**For other Ubuntu/Debian versions:**
+
+```bash
 sudo apt-get update
 sudo apt-get install -y osmium-tool
 
-# macOS
+# Verify installation
+osmium --version
+```
+
+**For macOS:**
+
+```bash
 brew install osmium-tool
 
 # Verify installation
 osmium --version
 ```
+
+**Note:** The code automatically detects osmium version and uses the appropriate command format:
+- Version >= 1.18: Modern format with `-s complete_ways --overwrite input -o output --polygon poly`
+- Version < 1.18: Legacy format with `-p poly -s complete_ways -O -o output input`
 
 ### Issue 6: "Port 21503 already in use"
 
