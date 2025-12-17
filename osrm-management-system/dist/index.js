@@ -38,11 +38,22 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const dotenv = __importStar(require("dotenv"));
+const path = __importStar(require("path"));
 const app_1 = require("./app");
 const logger_1 = require("./common/logger");
 const client_1 = require("@prisma/client");
-// Load .env file
-dotenv.config();
+// Load .env file from the same directory as the compiled code (dist/)
+// In production, .env should be in osrm-management-system/ directory (parent of dist/)
+const envPath = path.resolve(__dirname, '../.env');
+const result = dotenv.config({ path: envPath });
+if (result.error) {
+    // Fallback: try current working directory
+    dotenv.config();
+    console.warn(`[WARN] Could not load .env from ${envPath}, trying current directory`);
+}
+else {
+    console.log(`[INFO] Loaded .env from ${envPath}`);
+}
 async function main() {
     try {
         const PORT = parseInt(process.env.PORT || '21520', 10);
