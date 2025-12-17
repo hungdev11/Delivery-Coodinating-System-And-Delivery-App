@@ -49,21 +49,45 @@ curl http://localhost:21520/api/v1/builds/history
 
 ### Install osmium-tool (Required for OSM extraction)
 
-**On Linux (Ubuntu/Debian):**
+**On Ubuntu 22.04 (Manual Installation - Recommended):**
+
+If `apt-get install osmium-tool` doesn't work or installs an incompatible version, use manual installation:
+
+```bash
+# Download and install boost dependency
+wget http://archive.ubuntu.com/ubuntu/pool/main/b/boost1.65.1/libboost-program-options1.65.1_1.65.1+dfsg-0ubuntu5_amd64.deb
+sudo dpkg -i libboost-program-options1.65.1_1.65.1+dfsg-0ubuntu5_amd64.deb
+
+# Download and install osmium-tool 1.7.1
+wget http://launchpadlibrarian.net/344172654/osmium-tool_1.7.1-1_amd64.deb
+sudo dpkg -i osmium-tool_1.7.1-1_amd64.deb
+
+# Verify installation
+osmium --version  # Should show 1.7.1
+```
+
+**On Linux (Ubuntu/Debian - Standard Installation):**
 ```bash
 sudo apt-get update
 sudo apt-get install osmium-tool
 
 # Verify installation
-osmium --version
+osmium --version  # Should show 1.14+ (or 1.18+ for modern format)
 ```
 
 **On macOS:**
 ```bash
 brew install osmium-tool
+
+# Verify installation
+osmium --version
 ```
 
-**Note:** `osmium-tool` is required only if you need to extract OSM data from PBF files. If you already have extracted OSM data, you can skip this step.
+**Note:** 
+- `osmium-tool` is required only if you need to extract OSM data from PBF files. If you already have extracted OSM data, you can skip this step.
+- The code automatically detects osmium version and uses the appropriate command format:
+  - Version >= 1.18: Modern format with `-s complete_ways --overwrite input -o output --polygon poly`
+  - Version < 1.18: Legacy format with `-p poly -s complete_ways -O -o output input`
 
 ## Build Process
 
@@ -147,6 +171,41 @@ export OSMIUM_MEMORY_LIMIT=4g  # Memory limit for osmium Docker container (defau
 ```
 
 ## Troubleshooting
+
+### osmium-tool not found or incompatible version
+
+**Symptoms:**
+```
+bash: osmium: command not found
+# Or
+Command failed: osmium extract ...
+```
+
+**Solution for Ubuntu 22.04:**
+
+```bash
+# Manual installation with specific version (1.7.1)
+wget http://archive.ubuntu.com/ubuntu/pool/main/b/boost1.65.1/libboost-program-options1.65.1_1.65.1+dfsg-0ubuntu5_amd64.deb
+sudo dpkg -i libboost-program-options1.65.1_1.65.1+dfsg-0ubuntu5_amd64.deb
+
+wget http://launchpadlibrarian.net/344172654/osmium-tool_1.7.1-1_amd64.deb
+sudo dpkg -i osmium-tool_1.7.1-1_amd64.deb
+
+# Verify
+osmium --version  # Should show 1.7.1
+```
+
+**Solution for other Ubuntu/Debian versions:**
+
+```bash
+sudo apt-get update
+sudo apt-get install -y osmium-tool
+osmium --version
+```
+
+**Note:** The code automatically detects osmium version and uses the appropriate command format:
+- Version >= 1.18: Modern format
+- Version < 1.18: Legacy format (auto-detected)
 
 ### osmium-tool killed (Out of Memory)
 
