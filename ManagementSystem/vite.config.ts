@@ -74,8 +74,9 @@ export default defineConfig({
         // Set to false to allow manual update control (user can choose when to update)
         skipWaiting: false,
         clientsClaim: false,
-        // Enable navigation preload for better performance
-        navigationPreload: true,
+        // Disable navigation preload to avoid "preloadResponse cancelled" warnings
+        // Navigation preload can cause issues when requests are cancelled before preloadResponse settles
+        navigationPreload: false,
         // Service worker filename
         swDest: 'sw.js',
         // Maximum file size to precache (2MB - increased to handle large MapView CSS file)
