@@ -198,9 +198,10 @@ class OsmiumWrapper {
             logger_1.logger.info('Using modern osmium format (>= 1.18)', { extractCmd });
         }
         else {
-            // Legacy osmium (< 1.18): osmium extract -p poly --complete-ways --complete-nodes --complete-relations --overwrite -o output input
-            extractCmd = `osmium extract -p "${polyFile}" --complete-ways --complete-nodes --complete-relations --overwrite -o "${tempRouting}" "${inputPbf}"`;
-            logger_1.logger.info('Using legacy osmium format (< 1.18)', { extractCmd });
+            // Legacy osmium (< 1.18): Use -s complete_ways (works for 1.7.1+)
+            // Version 1.7.1 doesn't support --complete-ways flags, but supports -s complete_ways
+            extractCmd = `osmium extract -p "${polyFile}" -s complete_ways -O -o "${tempRouting}" "${inputPbf}"`;
+            logger_1.logger.info('Using legacy osmium format (< 1.18) with -s complete_ways', { extractCmd });
         }
         if (this.verbose) {
             console.log('Stage 1: Extracting routing graph...');
