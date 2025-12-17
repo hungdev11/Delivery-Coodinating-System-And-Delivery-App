@@ -11,6 +11,29 @@ Independent service for managing OSRM data extraction and generation.
 
 ## Installation
 
+### Prerequisites
+
+**Required:**
+- Node.js >= 20.0.0
+- MySQL database (zone_service schema)
+- **osmium-tool** (for OSM data extraction)
+
+**Install osmium-tool:**
+
+```bash
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install osmium-tool
+
+# Verify installation
+osmium --version
+```
+
+**Optional (for OSRM generation):**
+- Docker (for running OSRM containers)
+
+### Install Dependencies
+
 ```bash
 npm install
 npm run prisma:generate

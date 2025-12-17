@@ -250,4 +250,60 @@ public class ZoneProxyController {
         log.debug("[api-gateway] [ZoneProxyController.getOSRMStatus] GET /api/v1/osrm/status");
         return zoneServiceClient.getOSRMStatus().thenApply(ResponseEntity::ok).join();
     }
+
+    @PostMapping("/osrm/extract/complete")
+    public ResponseEntity<?> extractCompleteOSRM(@RequestBody Object requestBody) {
+        log.debug("[api-gateway] [ZoneProxyController.extractCompleteOSRM] POST /api/v1/osrm/extract/complete");
+        try {
+            return zoneServiceClient.extractCompleteOSRM(requestBody).thenApply(ResponseEntity::ok).join();
+        } catch (Exception e) {
+            log.error("[api-gateway] [ZoneProxyController.extractCompleteOSRM] Error extracting OSM data", e);
+            throw e;
+        }
+    }
+
+    @GetMapping("/osrm/containers/status")
+    public ResponseEntity<?> getOSRMContainerStatus() {
+        log.debug("[api-gateway] [ZoneProxyController.getOSRMContainerStatus] GET /api/v1/osrm/containers/status");
+        return zoneServiceClient.getOSRMContainerStatus().thenApply(ResponseEntity::ok).join();
+    }
+
+    @PostMapping("/osrm/containers/{model}/start")
+    public ResponseEntity<?> startOSRMContainer(@PathVariable String model) {
+        log.debug("[api-gateway] [ZoneProxyController.startOSRMContainer] POST /api/v1/osrm/containers/{}/start", model);
+        try {
+            return zoneServiceClient.startOSRMContainer(model).thenApply(ResponseEntity::ok).join();
+        } catch (Exception e) {
+            log.error("[api-gateway] [ZoneProxyController.startOSRMContainer] Error starting container: {}", model, e);
+            throw e;
+        }
+    }
+
+    @PostMapping("/osrm/containers/{model}/stop")
+    public ResponseEntity<?> stopOSRMContainer(@PathVariable String model) {
+        log.debug("[api-gateway] [ZoneProxyController.stopOSRMContainer] POST /api/v1/osrm/containers/{}/stop", model);
+        try {
+            return zoneServiceClient.stopOSRMContainer(model).thenApply(ResponseEntity::ok).join();
+        } catch (Exception e) {
+            log.error("[api-gateway] [ZoneProxyController.stopOSRMContainer] Error stopping container: {}", model, e);
+            throw e;
+        }
+    }
+
+    @PostMapping("/osrm/containers/{model}/restart")
+    public ResponseEntity<?> restartOSRMContainer(@PathVariable String model) {
+        log.debug("[api-gateway] [ZoneProxyController.restartOSRMContainer] POST /api/v1/osrm/containers/{}/restart", model);
+        try {
+            return zoneServiceClient.restartOSRMContainer(model).thenApply(ResponseEntity::ok).join();
+        } catch (Exception e) {
+            log.error("[api-gateway] [ZoneProxyController.restartOSRMContainer] Error restarting container: {}", model, e);
+            throw e;
+        }
+    }
+
+    @GetMapping("/osrm/containers/{model}/health")
+    public ResponseEntity<?> getOSRMContainerHealth(@PathVariable String model) {
+        log.debug("[api-gateway] [ZoneProxyController.getOSRMContainerHealth] GET /api/v1/osrm/containers/{}/health", model);
+        return zoneServiceClient.getOSRMContainerHealth(model).thenApply(ResponseEntity::ok).join();
+    }
 }

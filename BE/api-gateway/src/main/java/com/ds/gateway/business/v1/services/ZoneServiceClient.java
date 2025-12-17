@@ -447,6 +447,74 @@ public class ZoneServiceClient implements IZoneServiceClient {
     }
 
     @Override
+    public CompletableFuture<Object> extractCompleteOSRM(Object requestBody) {
+        log.debug("Extracting complete OSM data");
+        return zoneServiceWebClient.post()
+                .uri("/api/v1/osrm/extract/complete")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromValue(requestBody))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getOSRMContainerStatus() {
+        log.debug("Getting OSRM container status");
+        return zoneServiceWebClient.get()
+                .uri("/api/v1/osrm/containers/status")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> startOSRMContainer(String model) {
+        log.debug("Starting OSRM container: {}", model);
+        return zoneServiceWebClient.post()
+                .uri("/api/v1/osrm/containers/" + model + "/start")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> stopOSRMContainer(String model) {
+        log.debug("Stopping OSRM container: {}", model);
+        return zoneServiceWebClient.post()
+                .uri("/api/v1/osrm/containers/" + model + "/stop")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> restartOSRMContainer(String model) {
+        log.debug("Restarting OSRM container: {}", model);
+        return zoneServiceWebClient.post()
+                .uri("/api/v1/osrm/containers/" + model + "/restart")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
+    public CompletableFuture<Object> getOSRMContainerHealth(String model) {
+        log.debug("Getting OSRM container health: {}", model);
+        return zoneServiceWebClient.get()
+                .uri("/api/v1/osrm/containers/" + model + "/health")
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Object>() {})
+                .onErrorMap(ex -> new ServiceUnavailableException("Zone service unavailable: " + ex.getMessage(), ex))
+                .toFuture();
+    }
+
+    @Override
     public CompletableFuture<Object> health() {
         return zoneServiceWebClient.get()
                 .uri("/health")

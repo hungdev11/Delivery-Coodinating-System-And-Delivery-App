@@ -50,6 +50,12 @@ public interface IZoneServiceClient {
     // OSRM Data Management endpoints (V2 - simplified)
     CompletableFuture<Object> generateV2OSRM();
     CompletableFuture<Object> getOSRMStatus();
+    CompletableFuture<Object> extractCompleteOSRM(Object requestBody);
+    CompletableFuture<Object> getOSRMContainerStatus();
+    CompletableFuture<Object> startOSRMContainer(String model);
+    CompletableFuture<Object> stopOSRMContainer(String model);
+    CompletableFuture<Object> restartOSRMContainer(String model);
+    CompletableFuture<Object> getOSRMContainerHealth(String model);
     
     // Health endpoint
     CompletableFuture<Object> health();

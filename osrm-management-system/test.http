@@ -1,6 +1,7 @@
 ### OSRM Management System - API Tests
 ### Base URL
-@baseUrl = http://localhost:21520
+# @baseUrl = http://localhost:21520
+@baseUrl = https://osrmm.phuongy.works
 @contentType = application/json
 
 ### ============================================

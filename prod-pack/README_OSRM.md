@@ -45,6 +45,26 @@ curl http://localhost:21520/api/v1/builds/status/osrm-full
 curl http://localhost:21520/api/v1/builds/history
 ```
 
+## Prerequisites
+
+### Install osmium-tool (Required for OSM extraction)
+
+**On Linux (Ubuntu/Debian):**
+```bash
+sudo apt-get update
+sudo apt-get install osmium-tool
+
+# Verify installation
+osmium --version
+```
+
+**On macOS:**
+```bash
+brew install osmium-tool
+```
+
+**Note:** `osmium-tool` is required only if you need to extract OSM data from PBF files. If you already have extracted OSM data, you can skip this step.
+
 ## Build Process
 
 1. **Extract OSM Data** (if needed):
