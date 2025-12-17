@@ -19,6 +19,7 @@ import {
   type AllServicesHealth,
   type OSRMStatus,
   type ContainerStatus,
+  type OSRMBuildStatus,
 } from './api'
 
 const UCard = resolveComponent('UCard')
@@ -203,6 +204,59 @@ const getContainerStatus = (modelName: string) => {
   return containerStatuses.value.find(c => c.model === modelName)
 }
 
+const getBuildStatus = (modelName: string) => {
+  if (!osrmStatus.value?.buildStatus) return null
+  return osrmStatus.value.buildStatus.find(b => b.model === modelName)
+}
+
+const getBuildStatusColor = (status: string | null | undefined) => {
+  if (!status) return 'gray'
+  switch (status.toUpperCase()) {
+    case 'BUILDING':
+      return 'yellow'
+    case 'READY':
+      return 'green'
+    case 'DEPLOYED':
+      return 'blue'
+    case 'FAILED':
+      return 'red'
+    case 'PENDING':
+      return 'gray'
+    default:
+      return 'gray'
+  }
+}
+
+const getBuildStatusText = (buildStatus: OSRMBuildStatus | null) => {
+  if (!buildStatus) return null
+  
+  if (buildStatus.currentBuild) {
+    return {
+      text: `Building: ${buildStatus.currentBuild.status}`,
+      color: 'yellow',
+      icon: 'i-heroicons-clock'
+    }
+  }
+  
+  if (buildStatus.latestDeployed) {
+    return {
+      text: `Deployed (${new Date(buildStatus.latestDeployed.deployedAt).toLocaleDateString()})`,
+      color: 'blue',
+      icon: 'i-heroicons-rocket-launch'
+    }
+  }
+  
+  if (buildStatus.latestReady) {
+    return {
+      text: `Ready (${new Date(buildStatus.latestReady.completedAt).toLocaleDateString()})`,
+      color: 'green',
+      icon: 'i-heroicons-check-circle'
+    }
+  }
+  
+  return null
+}
+
 // Lifecycle
 onMounted(() => {
   loadData()
@@ -354,7 +408,7 @@ onMounted(() => {
                   'border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800': !model.exists,
                 }"
               >
-                <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center justify-between mb-3">
                   <span class="font-medium">{{ model.name }}</span>
                   <UBadge
                     :color="model.exists ? 'green' : 'red'"
@@ -363,32 +417,62 @@ onMounted(() => {
                     {{ model.exists ? 'Ready' : 'Missing' }}
                   </UBadge>
                 </div>
-                <div class="text-sm text-gray-500">
+                
+                <div class="text-xs text-gray-500 dark:text-gray-400 mb-3">
                   Path: {{ model.path }}
                 </div>
                 
-                <!-- Container Status -->
-                <div v-if="getContainerStatus(model.name)" class="mt-2">
-                  <div class="flex items-center gap-2 mb-2">
-                    <UBadge
-                      :color="getContainerStatus(model.name)?.status === 'running' ? 'green' : 'gray'"
-                      variant="soft"
-                      size="sm"
-                    >
-                      {{ getContainerStatus(model.name)?.status || 'unknown' }}
-                    </UBadge>
-                    <div v-if="getContainerStatus(model.name)?.health" class="flex items-center gap-1 text-xs">
-                      <UIcon
-                        :name="getContainerStatus(model.name)?.health?.healthy ? 'i-heroicons-check-circle' : 'i-heroicons-x-circle'"
-                        class="w-3 h-3"
-                        :class="getContainerStatus(model.name)?.health?.healthy ? 'text-green-600' : 'text-red-600'"
-                      />
-                      <span>{{ getContainerStatus(model.name)?.health?.healthy ? 'Healthy' : 'Unhealthy' }}</span>
+                <!-- Container Status and Build Status - Side by Side -->
+                <div class="space-y-2">
+                  <!-- Container Status Row -->
+                  <div v-if="getContainerStatus(model.name)" class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Container:</span>
+                      <UBadge
+                        :color="getContainerStatus(model.name)?.status === 'running' ? 'green' : 'gray'"
+                        variant="soft"
+                        size="sm"
+                      >
+                        {{ getContainerStatus(model.name)?.status || 'unknown' }}
+                      </UBadge>
+                      <div v-if="getContainerStatus(model.name)?.health" class="flex items-center gap-1 text-xs">
+                        <UIcon
+                          :name="getContainerStatus(model.name)?.health?.healthy ? 'i-heroicons-check-circle' : 'i-heroicons-x-circle'"
+                          class="w-3 h-3"
+                          :class="getContainerStatus(model.name)?.health?.healthy ? 'text-green-600' : 'text-red-600'"
+                        />
+                        <span class="text-gray-600 dark:text-gray-400">{{ getContainerStatus(model.name)?.health?.healthy ? 'Healthy' : 'Unhealthy' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Build Status Row -->
+                  <div v-if="getBuildStatus(model.name)" class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Build:</span>
+                      <template v-if="getBuildStatusText(getBuildStatus(model.name))">
+                        <UBadge
+                          :color="getBuildStatusText(getBuildStatus(model.name))?.color || 'gray'"
+                          variant="soft"
+                          size="sm"
+                        >
+                          <UIcon 
+                            :name="getBuildStatusText(getBuildStatus(model.name))?.icon || 'i-heroicons-information-circle'" 
+                            class="w-3 h-3 mr-1" 
+                          />
+                          {{ getBuildStatusText(getBuildStatus(model.name))?.text }}
+                        </UBadge>
+                      </template>
+                      <template v-else>
+                        <UBadge color="gray" variant="soft" size="sm">
+                          No build data
+                        </UBadge>
+                      </template>
                     </div>
                   </div>
                   
                   <!-- Container Actions -->
-                  <div class="flex gap-1 mt-2">
+                  <div v-if="getContainerStatus(model.name)" class="flex gap-1 pt-2">
                     <UButton
                       v-if="getContainerStatus(model.name)?.status !== 'running'"
                       size="xs"
@@ -416,26 +500,6 @@ onMounted(() => {
                     >
                       Restart
                     </UButton>
-                  </div>
-                </div>
-                
-                <!-- Build Status -->
-                <div v-if="osrmStatus.buildStatus" class="mt-2 text-xs">
-                  <div v-for="build in osrmStatus.buildStatus" :key="build.model">
-                    <div v-if="build.model === model.name">
-                      <div v-if="build.currentBuild" class="text-yellow-600 dark:text-yellow-400">
-                        <UIcon name="i-heroicons-clock" class="w-3 h-3 inline mr-1" />
-                        Building: {{ build.currentBuild.status }}
-                      </div>
-                      <div v-else-if="build.latestReady" class="text-green-600 dark:text-green-400">
-                        <UIcon name="i-heroicons-check-circle" class="w-3 h-3 inline mr-1" />
-                        Ready to deploy
-                      </div>
-                      <div v-if="build.latestDeployed" class="text-blue-600 dark:text-blue-400 mt-1">
-                        <UIcon name="i-heroicons-rocket-launch" class="w-3 h-3 inline mr-1" />
-                        Deployed
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>

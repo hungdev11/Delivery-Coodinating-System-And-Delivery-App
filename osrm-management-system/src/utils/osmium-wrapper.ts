@@ -237,11 +237,17 @@ export class OsmiumWrapper {
       logger.error('Stage 1 failed', errorDetails);
       
       // Create more descriptive error message
-      const errorMsg = error.stderr 
-        ? `Osmium extract failed: ${error.stderr}`
-        : error.stdout
-        ? `Osmium extract failed: ${error.stdout}`
-        : `Osmium extract failed: ${error.message}`;
+      let errorMsg: string;
+      
+      if (error.signal === 'SIGKILL') {
+        errorMsg = 'Osmium extract process was killed (SIGKILL). This usually indicates: 1) Out of memory (OOM), 2) Process timeout, or 3) System resource limit exceeded. Check system memory and consider processing smaller data files.';
+      } else if (error.stderr) {
+        errorMsg = `Osmium extract failed: ${error.stderr}`;
+      } else if (error.stdout) {
+        errorMsg = `Osmium extract failed: ${error.stdout}`;
+      } else {
+        errorMsg = `Osmium extract failed: ${error.message}`;
+      }
       
       throw new Error(errorMsg);
     }
