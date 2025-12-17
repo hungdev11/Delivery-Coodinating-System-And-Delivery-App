@@ -93,12 +93,17 @@ export class BuildTrackerService {
    * Update build status to FAILED
    */
   async markFailed(buildId: string, errorMessage: string): Promise<void> {
+    // Truncate error message to prevent database field overflow (limit to 1000 chars)
+    const truncatedError = errorMessage.length > 1000 
+      ? errorMessage.substring(0, 997) + '...' 
+      : errorMessage;
+    
     await this.prisma.osrm_builds.update({
       where: { build_id: buildId },
       data: {
         status: OsrmBuildStatus.FAILED,
         completed_at: new Date(),
-        error_message: errorMessage,
+        error_message: truncatedError,
       },
     });
     logger.error(`Build ${buildId} marked as FAILED: ${errorMessage}`);
