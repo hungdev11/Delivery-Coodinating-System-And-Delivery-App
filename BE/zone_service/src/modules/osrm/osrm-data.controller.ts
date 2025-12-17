@@ -72,7 +72,7 @@ export class OSRMDataController {
       try {
         const response = await fetch(`${osrmManagementUrl}/api/v1/builds/status`);
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json() as { result?: any; [key: string]: any };
           buildStatus = data.result || data;
         }
       } catch (error) {
