@@ -81,7 +81,8 @@ export interface ExtractCompleteResponse {
 }
 
 export const extractCompleteOSM = async (request?: ExtractCompleteRequest): Promise<BaseResponse<ExtractCompleteResponse>> => {
-  return apiClient.post<BaseResponse<ExtractCompleteResponse>>('/v1/osrm/extract/complete', request)
+  // Always send an object, even if empty, to ensure proper JSON serialization
+  return apiClient.post<BaseResponse<ExtractCompleteResponse>>('/v1/osrm/extract/complete', request || {})
 }
 
 // Container management (delegates to osrm-management-system)
