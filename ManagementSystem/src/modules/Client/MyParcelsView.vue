@@ -8,7 +8,12 @@ import { ref, onMounted, computed, h, resolveComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
-import { getClientReceivedParcels, confirmParcelReceived } from '@/modules/Parcels/api'
+import {
+  getClientReceivedParcels,
+  confirmParcelReceived,
+  reportParcelNotReceived,
+  retractDispute,
+} from '@/modules/Parcels/api'
 import { ParcelDto, type ParcelStatus } from '@/modules/Parcels/model.type'
 import { getCurrentUser } from '@/common/guards/roleGuard.guard'
 import { defineAsyncComponent } from 'vue'
@@ -34,6 +39,8 @@ const page = ref(0)
 const pageSize = ref(10)
 const total = ref(0)
 const confirmingParcelId = ref<string | null>(null)
+const disputingParcelId = ref<string | null>(null)
+const retractingDisputeParcelId = ref<string | null>(null)
 
 const paginationSummary = computed(() => {
   if (total.value === 0) {
@@ -107,6 +114,10 @@ const isConfirming = (parcelId: string) => confirmingParcelId.value === parcelId
 
 const canConfirmParcel = (parcel: ParcelDto) => parcel.status === 'DELIVERED'
 
+const canReportNotReceived = (parcel: ParcelDto) => parcel.status === 'DELIVERED'
+
+const canRetractDispute = (parcel: ParcelDto) => parcel.status === 'DISPUTE'
+
 const handleConfirmReceived = async (parcel: ParcelDto) => {
   if (!canConfirmParcel(parcel)) return
   confirmingParcelId.value = parcel.id
@@ -129,6 +140,52 @@ const handleConfirmReceived = async (parcel: ParcelDto) => {
     })
   } finally {
     confirmingParcelId.value = null
+  }
+}
+
+const handleReportNotReceived = async (parcel: ParcelDto) => {
+  if (!canReportNotReceived(parcel)) return
+  disputingParcelId.value = parcel.id
+  try {
+    await reportParcelNotReceived(parcel.id)
+    toast.add({
+      title: 'Báo cáo đã gửi',
+      description: `Đã báo chưa nhận được đơn hàng ${parcel.code}`,
+      color: 'warning',
+    })
+    await loadParcels()
+  } catch (error) {
+    console.error('Failed to report not received:', error)
+    toast.add({
+      title: 'Error',
+      description: 'Failed to report parcel not received',
+      color: 'error',
+    })
+  } finally {
+    disputingParcelId.value = null
+  }
+}
+
+const handleRetractDispute = async (parcel: ParcelDto) => {
+  if (!canRetractDispute(parcel)) return
+  retractingDisputeParcelId.value = parcel.id
+  try {
+    await retractDispute(parcel.id)
+    toast.add({
+      title: 'Đã xác nhận',
+      description: `Đã xác nhận nhận được đơn hàng ${parcel.code}`,
+      color: 'success',
+    })
+    await loadParcels()
+  } catch (error) {
+    console.error('Failed to retract dispute:', error)
+    toast.add({
+      title: 'Error',
+      description: 'Failed to retract dispute',
+      color: 'error',
+    })
+  } finally {
+    retractingDisputeParcelId.value = null
   }
 }
 
@@ -253,6 +310,8 @@ const columns: TableColumn<ParcelDto>[] = [
     cell: ({ row }) => {
       const parcel = row.original
       const canConfirm = canConfirmParcel(parcel)
+      const canReport = canReportNotReceived(parcel)
+      const canRetract = canRetractDispute(parcel)
       const canChatWithSender = canChat(parcel)
 
       return h('div', { class: 'flex space-x-2' }, [
@@ -273,31 +332,70 @@ const columns: TableColumn<ParcelDto>[] = [
           title: 'Show QR Code',
           onClick: () => openQRModal(parcel),
         }),
-        // Confirm received button
-        h(
-          UButton,
-          {
-            size: 'sm',
-            variant: canConfirm ? 'soft' : 'ghost',
-            color: canConfirm ? 'primary' : 'neutral',
-            disabled: !canConfirm || isConfirming(parcel.id),
-            loading: isConfirming(parcel.id),
-            title: canConfirm
-              ? 'Xác nhận đã nhận hàng'
-              : 'Chỉ có thể xác nhận khi đơn hàng ở trạng thái DELIVERED',
-            onClick: () => handleConfirmReceived(parcel),
-            class: !canConfirm ? 'opacity-50 cursor-not-allowed' : '',
-          },
-          () => {
-            if (isConfirming(parcel.id)) {
-              return 'Đang xác nhận...'
-            }
-            if (!canConfirm) {
-              return 'Chờ giao hàng'
-            }
-            return 'Xác nhận nhận hàng'
-          },
-        ),
+        // Report not received button (for DELIVERED status)
+        canReport &&
+          h(
+            UButton,
+            {
+              size: 'sm',
+              variant: 'soft',
+              color: 'warning',
+              loading: disputingParcelId.value === parcel.id,
+              title: 'Báo chưa nhận được hàng',
+              onClick: () => handleReportNotReceived(parcel),
+            },
+            () => {
+              if (disputingParcelId.value === parcel.id) {
+                return 'Đang gửi...'
+              }
+              return 'Chưa nhận được'
+            },
+          ),
+        // Confirm received button (for DELIVERED status)
+        canConfirm &&
+          h(
+            UButton,
+            {
+              size: 'sm',
+              variant: 'soft',
+              color: 'primary',
+              disabled: !canConfirm || isConfirming(parcel.id),
+              loading: isConfirming(parcel.id),
+              title: canConfirm
+                ? 'Xác nhận đã nhận hàng'
+                : 'Chỉ có thể xác nhận khi đơn hàng ở trạng thái DELIVERED',
+              onClick: () => handleConfirmReceived(parcel),
+              class: !canConfirm ? 'opacity-50 cursor-not-allowed' : '',
+            },
+            () => {
+              if (isConfirming(parcel.id)) {
+                return 'Đang xác nhận...'
+              }
+              if (!canConfirm) {
+                return 'Chờ giao hàng'
+              }
+              return 'Đã nhận hàng'
+            },
+          ),
+        // Retract dispute button (for DISPUTE status)
+        canRetract &&
+          h(
+            UButton,
+            {
+              size: 'sm',
+              variant: 'soft',
+              color: 'success',
+              loading: retractingDisputeParcelId.value === parcel.id,
+              title: 'Tôi đã nhận được hàng',
+              onClick: () => handleRetractDispute(parcel),
+            },
+            () => {
+              if (retractingDisputeParcelId.value === parcel.id) {
+                return 'Đang xử lý...'
+              }
+              return 'Đã nhận được hàng'
+            },
+          ),
       ])
     },
   },

@@ -16,4 +16,10 @@ public interface IParcelServiceClient {
     ResponseEntity<?> changeParcelStatus(UUID parcelId, String event);
     ResponseEntity<?> deleteParcel(UUID parcelId);
     ResponseEntity<?> confirmParcel(UUID parcelId, Object request);
+    
+    // Dispute handling methods
+    ResponseEntity<?> disputeParcel(UUID parcelId);
+    ResponseEntity<?> retractDispute(UUID parcelId);
+    ResponseEntity<?> resolveDisputeAsMisunderstanding(UUID parcelId);
+    ResponseEntity<?> resolveDisputeAsFault(UUID parcelId);
 }

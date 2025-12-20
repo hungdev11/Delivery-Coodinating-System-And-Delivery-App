@@ -34,6 +34,13 @@ public interface InteractiveProposalRepository extends JpaRepository<Interactive
     @Query("SELECT p FROM InteractiveProposal p JOIN FETCH p.conversation WHERE p.id = :id")
     Optional<InteractiveProposal> findByIdWithConversation(@Param("id") UUID id);
     
+    /**
+     * Find proposals by data containing a specific string fragment and status.
+     * Used for finding proposals by correlation ID stored in the data field.
+     */
+    @Query("SELECT p FROM InteractiveProposal p WHERE p.data LIKE CONCAT('%', :dataFragment, '%') AND p.status = :status")
+    List<InteractiveProposal> findByDataContainingAndStatus(@Param("dataFragment") String dataFragment, @Param("status") ProposalStatus status);
+    
     // Bạn có thể thêm các hàm tìm kiếm khác ở đây, ví dụ:
     // Page<InteractiveProposal> findByConversationId(UUID conversationId, Pageable pageable);
 }

@@ -37,3 +37,5 @@ build/
 cloudflared/*
 !cloudflared/.gitkeep
 !cloudflared/config.yml.example
+
+api-test.http

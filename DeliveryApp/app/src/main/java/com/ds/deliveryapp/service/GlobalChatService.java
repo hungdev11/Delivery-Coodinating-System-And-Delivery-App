@@ -479,6 +479,19 @@ public class GlobalChatService implements ChatWebSocketListener {
         for (ProposalListener listener : proposalListeners) {
             listener.onProposalReceived(message);
         }
+
+        // Auto-show popup for specific proposal types
+        if (message.getProposal() != null) {
+            String proposalType = message.getProposal().getType();
+            
+            // Show DisputeAppealDialog for DISPUTE_APPEAL type
+            if ("DISPUTE_APPEAL".equals(proposalType)) {
+                showDisputeAppealDialog(message);
+            } else {
+                // Show generic ProposalPopupDialog for other types
+                showProposalPopup(message);
+            }
+        }
     }
 
     private void notifyUnreadCountChanged() {

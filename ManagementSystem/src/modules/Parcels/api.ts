@@ -51,6 +51,42 @@ export const confirmParcelReceived = async (
 }
 
 /**
+ * Report parcel not received (create dispute)
+ */
+export const reportParcelNotReceived = async (parcelId: string): Promise<GetParcelResponse> => {
+  return apiClient.put<GetParcelResponse, null>(`/v1/parcels/dispute/${parcelId}`, null)
+}
+
+/**
+ * Retract dispute (customer confirms received after dispute)
+ */
+export const retractDispute = async (parcelId: string): Promise<GetParcelResponse> => {
+  return apiClient.put<GetParcelResponse, null>(`/v1/parcels/dispute/${parcelId}/retract`, null)
+}
+
+/**
+ * Admin resolve dispute as misunderstanding
+ */
+export const resolveDisputeAsMisunderstanding = async (
+  parcelId: string,
+): Promise<GetParcelResponse> => {
+  return apiClient.put<GetParcelResponse, null>(
+    `/v1/parcels/resolve-dispute/misunderstanding/${parcelId}`,
+    null,
+  )
+}
+
+/**
+ * Admin resolve dispute as shipper fault
+ */
+export const resolveDisputeAsFault = async (parcelId: string): Promise<GetParcelResponse> => {
+  return apiClient.put<GetParcelResponse, null>(
+    `/v1/parcels/resolve-dispute/fault/${parcelId}`,
+    null,
+  )
+}
+
+/**
  * Get parcel by ID
  */
 export const getParcelById = async (id: string): Promise<GetParcelResponse> => {
