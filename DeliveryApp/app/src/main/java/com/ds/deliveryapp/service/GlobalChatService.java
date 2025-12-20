@@ -9,6 +9,8 @@ import com.ds.deliveryapp.clients.req.ProposalUpdateDTO;
 import com.ds.deliveryapp.clients.res.Message;
 import com.ds.deliveryapp.clients.res.UpdateNotification;
 import com.ds.deliveryapp.configs.ServerConfigManager;
+import com.ds.deliveryapp.dialog.DisputeAppealDialog;
+import com.ds.deliveryapp.dialog.ProposalPopupDialog;
 import com.ds.deliveryapp.utils.ChatWebSocketListener;
 import com.ds.deliveryapp.utils.ChatWebSocketManager;
 import com.ds.deliveryapp.enums.ContentType;
@@ -492,6 +494,48 @@ public class GlobalChatService implements ChatWebSocketListener {
                 showProposalPopup(message);
             }
         }
+    }
+
+    /**
+     * Show DisputeAppealDialog for DISPUTE_APPEAL proposal type
+     */
+    private void showDisputeAppealDialog(Message message) {
+        if (context == null) {
+            Log.w(TAG, "Cannot show DisputeAppealDialog: context is null");
+            return;
+        }
+        
+        // Show dialog on main thread
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+            try {
+                DisputeAppealDialog dialog = new DisputeAppealDialog(context, message);
+                dialog.show();
+                Log.d(TAG, "Showing DisputeAppealDialog for message: " + message.getId());
+            } catch (Exception e) {
+                Log.e(TAG, "Error showing DisputeAppealDialog", e);
+            }
+        });
+    }
+
+    /**
+     * Show generic ProposalPopupDialog for other proposal types
+     */
+    private void showProposalPopup(Message message) {
+        if (context == null) {
+            Log.w(TAG, "Cannot show ProposalPopupDialog: context is null");
+            return;
+        }
+        
+        // Show dialog on main thread
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+            try {
+                ProposalPopupDialog dialog = new ProposalPopupDialog(context, message);
+                dialog.show();
+                Log.d(TAG, "Showing ProposalPopupDialog for message: " + message.getId());
+            } catch (Exception e) {
+                Log.e(TAG, "Error showing ProposalPopupDialog", e);
+            }
+        });
     }
 
     private void notifyUnreadCountChanged() {
