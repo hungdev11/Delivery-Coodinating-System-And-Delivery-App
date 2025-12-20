@@ -138,6 +138,16 @@ public class ParcelService implements IParcelService{
             publishParcelSucceededNotification(saved, null, null); // Auto timeout - no confirmedBy
         }
         
+        // Publish update notification for DISPUTE status
+        if (nextStatus == ParcelStatus.DISPUTE) {
+            publishParcelStatusNotification(saved, "DISPUTE");
+        }
+        
+        // Publish update notification for LOST status
+        if (nextStatus == ParcelStatus.LOST) {
+            publishParcelStatusNotification(saved, "LOST");
+        }
+        
         return saved;
     }
     
@@ -190,6 +200,54 @@ public class ParcelService implements IParcelService{
                     parcel.getId(), confirmedBy);
         } catch (Exception e) {
             log.error("[parcel-service] [ParcelService.publishParcelSucceededNotification] Failed to publish update notification for parcel {}", 
+                    parcel.getId(), e);
+            // Don't throw - notification failure shouldn't break the transaction
+        }
+    }
+    
+    /**
+     * Publish update notification for parcel status changes (DISPUTE, LOST, etc.)
+     */
+    private void publishParcelStatusNotification(Parcel parcel, String status) {
+        try {
+            Map<String, Object> data = new HashMap<>();
+            data.put("parcelId", parcel.getId().toString());
+            data.put("parcelCode", parcel.getCode());
+            data.put("status", status);
+            data.put("receiverId", parcel.getReceiverId() != null ? parcel.getReceiverId().toString() : null);
+            data.put("senderId", parcel.getSenderId() != null ? parcel.getSenderId().toString() : null);
+            
+            // Try to get deliveryManId from Session Service
+            try {
+                AssignmentInfo assignmentInfo = assignmentService.getOrFetch(parcel.getId());
+                if (assignmentInfo != null && assignmentInfo.getDeliveryManId() != null) {
+                    data.put("deliveryManId", assignmentInfo.getDeliveryManId());
+                }
+            } catch (Exception e) {
+                log.debug("[parcel-service] [ParcelService.publishParcelStatusNotification] Could not get deliveryManId from Session Service", e);
+            }
+            
+            // Create UpdateNotificationDTO as Map
+            Map<String, Object> updateNotification = new HashMap<>();
+            updateNotification.put("id", UUID.randomUUID().toString());
+            updateNotification.put("userId", parcel.getReceiverId() != null ? parcel.getReceiverId().toString() : "");
+            updateNotification.put("updateType", "PARCEL_UPDATE");
+            updateNotification.put("entityType", "PARCEL");
+            updateNotification.put("entityId", parcel.getId().toString());
+            updateNotification.put("action", "STATUS_CHANGED");
+            updateNotification.put("data", data);
+            updateNotification.put("timestamp", LocalDateTime.now().toString());
+            updateNotification.put("message", String.format("Đơn hàng %s đã chuyển sang trạng thái %s", 
+                    parcel.getCode() != null ? parcel.getCode() : parcel.getId(), status));
+            updateNotification.put("clientType", "ALL");
+            
+            // Publish to update-notifications topic
+            kafkaTemplate.send("update-notifications", parcel.getId().toString(), updateNotification);
+            
+            log.debug("[parcel-service] [ParcelService.publishParcelStatusNotification] Published parcel {} status notification: {}", 
+                    parcel.getId(), status);
+        } catch (Exception e) {
+            log.error("[parcel-service] [ParcelService.publishParcelStatusNotification] Failed to publish update notification for parcel {}", 
                     parcel.getId(), e);
             // Don't throw - notification failure shouldn't break the transaction
         }

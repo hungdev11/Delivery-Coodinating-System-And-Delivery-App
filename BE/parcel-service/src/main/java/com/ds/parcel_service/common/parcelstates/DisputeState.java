@@ -8,6 +8,8 @@ public class DisputeState implements IParcelState{
     @Override
     public ParcelStatus handleTransition(ParcelEvent event) {
         return switch(event) {
+            case CUSTOMER_RETRACT_DISPUTE:
+                yield ParcelStatus.SUCCEEDED;
             case MISSUNDERSTANDING_DISPUTE:
                 yield ParcelStatus.SUCCEEDED;
             case FAULT_DISPUTE:

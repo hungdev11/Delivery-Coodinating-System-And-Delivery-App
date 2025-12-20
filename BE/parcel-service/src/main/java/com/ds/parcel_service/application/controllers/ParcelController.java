@@ -192,6 +192,13 @@ public class ParcelController {
         return ResponseEntity.ok(BaseResponse.success(response));
     }
 
+    @PutMapping("/dispute/{parcelId}/retract")
+    public ResponseEntity<BaseResponse<ParcelResponse>> retractDispute(@PathVariable UUID parcelId) {
+        log.debug("Customer retracting dispute for parcel {}", parcelId);
+        ParcelResponse response = parcelService.changeParcelStatus(parcelId, ParcelEvent.CUSTOMER_RETRACT_DISPUTE);
+        return ResponseEntity.ok(BaseResponse.success(response));
+    }
+
     @PostMapping("/bulk")
     ResponseEntity<BaseResponse<Map<String, ParcelResponse>>> fetchParcelsBulk(@RequestBody List<UUID> parcelIds) {
         return ResponseEntity.ok(BaseResponse.success(parcelService.fetchParcelsBulk(parcelIds)));

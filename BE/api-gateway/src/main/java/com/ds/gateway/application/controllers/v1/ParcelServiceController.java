@@ -63,4 +63,26 @@ public class ParcelServiceController {
     public ResponseEntity<?> deleteParcel(@PathVariable UUID parcelId) {
         return parcelServiceClient.deleteParcel(parcelId);
     }
+
+    // --- DISPUTE HANDLING ENDPOINTS ---
+
+    @PutMapping("/dispute/{parcelId}")
+    public ResponseEntity<?> disputeParcel(@PathVariable UUID parcelId) {
+        return parcelServiceClient.disputeParcel(parcelId);
+    }
+
+    @PutMapping("/dispute/{parcelId}/retract")
+    public ResponseEntity<?> retractDispute(@PathVariable UUID parcelId) {
+        return parcelServiceClient.retractDispute(parcelId);
+    }
+
+    @PutMapping("/resolve-dispute/misunderstanding/{parcelId}")
+    public ResponseEntity<?> resolveDisputeAsMisunderstanding(@PathVariable UUID parcelId) {
+        return parcelServiceClient.resolveDisputeAsMisunderstanding(parcelId);
+    }
+
+    @PutMapping("/resolve-dispute/fault/{parcelId}")
+    public ResponseEntity<?> resolveDisputeAsFault(@PathVariable UUID parcelId) {
+        return parcelServiceClient.resolveDisputeAsFault(parcelId);
+    }
 }

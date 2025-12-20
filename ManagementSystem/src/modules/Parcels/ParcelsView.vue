@@ -45,6 +45,9 @@ const LazyParcelDeleteModal = defineAsyncComponent(
   () => import('./components/ParcelDeleteModal.vue'),
 )
 const LazyParcelQRModal = defineAsyncComponent(() => import('./components/ParcelQRModal.vue'))
+const LazyParcelDetailModal = defineAsyncComponent(
+  () => import('./components/ParcelDetailModal.vue'),
+)
 const UCheckbox = resolveComponent('UCheckbox')
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
@@ -676,6 +679,17 @@ const openQRModal = async (parcel: ParcelDto) => {
   const modal = overlay.create(LazyParcelQRModal)
   const instance = modal.open({ parcelId: parcel.id, parcelCode: parcel.code })
   await instance.result
+}
+
+/**
+ * Open parcel detail modal
+ */
+const openDetailModal = async (parcel: ParcelDto) => {
+  const modal = overlay.create(LazyParcelDetailModal)
+  const instance = modal.open({ parcel })
+  await instance.result
+  // Reload parcels after modal closes (in case dispute was resolved)
+  loadParcels()
 }
 
 /**

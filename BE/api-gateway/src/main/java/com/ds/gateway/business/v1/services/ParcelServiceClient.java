@@ -175,6 +175,66 @@ public class ParcelServiceClient implements IParcelServiceClient {
         }
     }
 
+    @Override
+    public ResponseEntity<?> disputeParcel(UUID parcelId) {
+        try {
+            Object response = parcelServiceWebClient.put()
+                    .uri("/api/v1/parcels/dispute/{parcelId}", parcelId)
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("[api-gateway] [ParcelServiceClient.disputeParcel] Error during request", e);
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
+    @Override
+    public ResponseEntity<?> retractDispute(UUID parcelId) {
+        try {
+            Object response = parcelServiceWebClient.put()
+                    .uri("/api/v1/parcels/dispute/{parcelId}/retract", parcelId)
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("[api-gateway] [ParcelServiceClient.retractDispute] Error during request", e);
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
+    @Override
+    public ResponseEntity<?> resolveDisputeAsMisunderstanding(UUID parcelId) {
+        try {
+            Object response = parcelServiceWebClient.put()
+                    .uri("/api/v1/parcels/resolve-dispute/misunderstanding/{parcelId}", parcelId)
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("[api-gateway] [ParcelServiceClient.resolveDisputeAsMisunderstanding] Error during request", e);
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
+    @Override
+    public ResponseEntity<?> resolveDisputeAsFault(UUID parcelId) {
+        try {
+            Object response = parcelServiceWebClient.put()
+                    .uri("/api/v1/parcels/resolve-dispute/fault/{parcelId}", parcelId)
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("[api-gateway] [ParcelServiceClient.resolveDisputeAsFault] Error during request", e);
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
     private Object executeGet(String url) {
         try {
             return parcelServiceWebClient.get()

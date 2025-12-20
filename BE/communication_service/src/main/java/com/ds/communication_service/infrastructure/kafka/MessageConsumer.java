@@ -10,6 +10,7 @@ import com.ds.communication_service.business.v1.services.AssignmentNotificationS
 import com.ds.communication_service.business.v1.services.PostponeNotificationService;
 import com.ds.communication_service.business.v1.services.SessionCompletionNotificationService;
 import com.ds.communication_service.business.v1.services.ParcelSucceededNotificationService;
+import com.ds.communication_service.business.v1.services.DisputeNotificationService;
 import com.ds.communication_service.infrastructure.kafka.dto.AssignmentCompletedEvent;
 import com.ds.communication_service.infrastructure.kafka.dto.ParcelPostponedEvent;
 import com.ds.communication_service.infrastructure.kafka.dto.SessionCompletedEvent;
@@ -45,6 +46,7 @@ public class MessageConsumer {
     private final PostponeNotificationService postponeNotificationService;
     private final SessionCompletionNotificationService sessionCompletionNotificationService;
     private final ParcelSucceededNotificationService parcelSucceededNotificationService;
+    private final DisputeNotificationService disputeNotificationService;
     private final ConversationRepository conversationRepository;
     private final ObjectMapper objectMapper;
 
@@ -480,6 +482,54 @@ public class MessageConsumer {
                     } catch (Exception e) {
                         log.error("[communication-service] [MessageConsumer.consumeUpdateNotification] Error handling parcel succeeded event", e);
                         // Continue with normal update notification forwarding
+                    }
+                }
+                
+                // Handle DISPUTE status - send admin notification and create shipper proposal
+                if ("DISPUTE".equals(status)) {
+                    try {
+                        String parcelId = updateNotification.getEntityId();
+                        String parcelCode = updateNotification.getData().get("parcelCode") != null 
+                                ? updateNotification.getData().get("parcelCode").toString() 
+                                : null;
+                        String receiverId = updateNotification.getData().get("receiverId") != null 
+                                ? updateNotification.getData().get("receiverId").toString() 
+                                : null;
+                        String senderId = updateNotification.getData().get("senderId") != null 
+                                ? updateNotification.getData().get("senderId").toString() 
+                                : null;
+                        String deliveryManId = updateNotification.getData().get("deliveryManId") != null 
+                                ? updateNotification.getData().get("deliveryManId").toString() 
+                                : null;
+                        
+                        LocalDateTime disputedAt = updateNotification.getTimestamp() != null 
+                                ? updateNotification.getTimestamp() 
+                                : LocalDateTime.now();
+                        
+                        // Handle dispute
+                        disputeNotificationService.handleParcelDispute(
+                                parcelId,
+                                parcelCode,
+                                receiverId,
+                                senderId,
+                                deliveryManId,
+                                disputedAt
+                        );
+                        
+                        log.debug("[communication-service] [MessageConsumer.consumeUpdateNotification] Handled parcel dispute event: parcelId={}", parcelId);
+                    } catch (Exception e) {
+                        log.error("[communication-service] [MessageConsumer.consumeUpdateNotification] Error handling parcel dispute event", e);
+                    }
+                }
+                
+                // Handle retract (SUCCEEDED after DISPUTE) - cancel proposals
+                if ("SUCCEEDED".equals(status) && updateNotification.getData().get("retracted") != null) {
+                    try {
+                        String parcelId = updateNotification.getEntityId();
+                        disputeNotificationService.cancelDisputeProposals(parcelId);
+                        log.debug("[communication-service] [MessageConsumer.consumeUpdateNotification] Cancelled dispute proposals for parcel {}", parcelId);
+                    } catch (Exception e) {
+                        log.error("[communication-service] [MessageConsumer.consumeUpdateNotification] Error cancelling dispute proposals", e);
                     }
                 }
             }
