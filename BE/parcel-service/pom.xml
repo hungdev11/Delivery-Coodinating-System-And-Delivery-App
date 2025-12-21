@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.ds</groupId>
 	<artifactId>parcel-service</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.2.0</version>
 	<name>parcel-service</name>
 	<description>Demo project for Spring Boot</description>
 	<url/>

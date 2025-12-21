@@ -40,14 +40,13 @@ spring:
             value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
             properties:
                 'enable.idempotence': true
-            transaction-id-prefix: parcel-tx-
+            # transaction-id-prefix removed - not using transactions
         template:
             default-topic: parcel-status-request
         listener:
             ack-mode: manual
             missing-topics-fatal: false
-        properties:
-            'isolation.level': read_committed
+        # Removed isolation.level - not using transactions
 
 logging:
     pattern:

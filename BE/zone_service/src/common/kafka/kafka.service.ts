@@ -65,8 +65,11 @@ class KafkaService {
 
   /**
    * Send a message to a Kafka topic (non-blocking)
+   * @param topic Kafka topic name
+   * @param message Message payload (will be JSON stringified)
+   * @param key Optional message key (for partitioning)
    */
-  public async sendMessage(topic: string, message: any): Promise<void> {
+  public async sendMessage(topic: string, message: any, key?: string): Promise<void> {
     if (!this.producer || !this.isConnected) {
       logger.warn('Kafka producer is not connected, message will be skipped', { topic, message });
       return;
@@ -75,17 +78,20 @@ class KafkaService {
     // Run in background without blocking
     setImmediate(async () => {
       try {
+        const messageEntry: { key?: string; value: string } = {
+          value: JSON.stringify(message),
+        };
+        if (key) {
+          messageEntry.key = key;
+        }
+        
         await this.producer!.send({
           topic,
-          messages: [
-            {
-              value: JSON.stringify(message),
-            },
-          ],
+          messages: [messageEntry],
         });
-        logger.debug('Message sent to Kafka', { topic });
+        logger.debug('Message sent to Kafka', { topic, key });
       } catch (error) {
-        logger.error('Failed to send message to Kafka', { topic, error });
+        logger.error('Failed to send message to Kafka', { topic, key, error });
       }
     });
   }

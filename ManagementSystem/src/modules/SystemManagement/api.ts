@@ -5,16 +5,25 @@ const apiClient = new AxiosHttpClient(import.meta.env.VITE_API_URL)
 
 export interface ServiceHealth {
   status: string
+  lastUpdate?: string
   timestamp?: string
+  version?: string
+  isDown?: boolean
+  metadata?: {
+    hostname?: string
+    timestamp_millis?: number
+    pid?: string | number
+  }
   error?: string
   [key: string]: any
 }
 
 export interface AllServicesHealth {
-  overallStatus: string
+  overallStatus?: string
   services: Record<string, ServiceHealth>
-  healthyCount: number
-  totalCount: number
+  healthyCount?: number
+  totalServices: number
+  totalCount?: number
   timestamp: string
 }
 
@@ -56,7 +65,13 @@ export const getApiGatewayHealth = async (): Promise<BaseResponse<ServiceHealth>
   return apiClient.get<BaseResponse<ServiceHealth>>('/v1/health')
 }
 
+// V2 Health Monitoring API - Uses Kafka-based real-time monitoring
 export const getAllServicesHealth = async (): Promise<BaseResponse<AllServicesHealth>> => {
+  return apiClient.get<BaseResponse<AllServicesHealth>>('/v1/health-monitoring/status')
+}
+
+// Legacy V1 API (deprecated - kept for backward compatibility)
+export const getAllServicesHealthLegacy = async (): Promise<BaseResponse<AllServicesHealth>> => {
   return apiClient.get<BaseResponse<AllServicesHealth>>('/v1/health/all')
 }
 

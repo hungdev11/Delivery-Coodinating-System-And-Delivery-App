@@ -106,7 +106,7 @@ public class ConfigController {
         }
         
         // Add other public config if needed
-        config.put("version", "1.0.0");
+        config.put("version", "1.2.0");
         
         return ResponseEntity.ok(BaseResponse.success(config, "Public configuration"));
     }

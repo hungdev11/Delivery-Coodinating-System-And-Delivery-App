@@ -17,11 +17,6 @@ FROM eclipse-temurin:22-jre-jammy
 ARG GITHUB_REPOSITORY=""
 LABEL org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
 
-# Install wget for health checks
-RUN apt-get update -qq && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wget && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 COPY --from=build /app/target/*.jar api-gateway.jar

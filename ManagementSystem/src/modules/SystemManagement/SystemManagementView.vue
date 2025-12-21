@@ -41,7 +41,17 @@ const actionLoading = ref<Record<string, boolean>>({})
 // Computed
 const overallStatus = computed(() => {
   if (!servicesHealth.value) return 'UNKNOWN'
-  return servicesHealth.value.overallStatus
+  
+  // Calculate overall status from services
+  const services = servicesHealth.value.services
+  if (!services || Object.keys(services).length === 0) return 'UNKNOWN'
+  
+  const allUp = Object.values(services).every(s => s.status === 'UP' && !s.isDown)
+  const someDown = Object.values(services).some(s => s.status === 'DOWN' || s.isDown)
+  
+  if (allUp) return 'UP'
+  if (someDown) return 'DEGRADED'
+  return 'DEGRADED'
 })
 
 const statusColor = (status: string) => {
@@ -348,9 +358,21 @@ onMounted(() => {
               </UBadge>
             </div>
 
-            <div v-if="health.timestamp" class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            <div v-if="health.lastUpdate || health.timestamp" class="text-xs text-gray-500 dark:text-gray-400 mb-2">
               <UIcon name="i-heroicons-clock" class="w-3 h-3 inline mr-1" />
-              {{ new Date(health.timestamp).toLocaleString() }}
+              {{ new Date(health.lastUpdate || health.timestamp).toLocaleString() }}
+            </div>
+            
+            <!-- Metadata info -->
+            <div v-if="health.metadata" class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+              <div v-if="health.metadata.hostname" class="flex items-center gap-1">
+                <UIcon name="i-heroicons-server" class="w-3 h-3 inline" />
+                {{ health.metadata.hostname?.substring(0, 12) }}
+              </div>
+              <div v-if="health.version" class="flex items-center gap-1">
+                <UIcon name="i-heroicons-code-bracket" class="w-3 h-3 inline" />
+                v{{ health.version }}
+              </div>
             </div>
 
             <div v-if="health.error" class="text-xs text-red-600 dark:text-red-400 mt-2 p-2 bg-red-100 dark:bg-red-900/20 rounded">
@@ -374,7 +396,12 @@ onMounted(() => {
 
         <template #footer>
           <div class="text-sm text-gray-500">
-            Healthy: {{ servicesHealth?.healthyCount }}/{{ servicesHealth?.totalCount }}
+            <span v-if="servicesHealth">
+              Services: {{ Object.values(servicesHealth.services).filter(s => s.status === 'UP' && !s.isDown).length }}/{{ servicesHealth.totalServices || Object.keys(servicesHealth.services).length }} UP
+            </span>
+            <span v-if="servicesHealth?.timestamp" class="ml-4">
+              Last Check: {{ new Date(servicesHealth.timestamp).toLocaleTimeString() }}
+            </span>
           </div>
         </template>
       </UCard>

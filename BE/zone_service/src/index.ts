@@ -12,6 +12,7 @@ import { prisma, PrismaClientSingleton } from './common/database/prisma.client';
 import { kafkaService } from './common/kafka/kafka.service';
 import { checkSettingsService } from './common/startup/settings-check';
 import { initializeSettings } from './common/startup/settings-init';
+import { healthHeartbeatPublisher } from './common/health/health-heartbeat-publisher';
 
 // Export all common modules
 export * from './common';
@@ -70,11 +71,24 @@ async function bootstrap() {
     logger.info('Step 5: Starting Express server...');
     const app = createApp();
 
-    const server = app.listen(config.server.port, '0.0.0.0', () => {
+    const server = app.listen(config.server.port, '0.0.0.0', async () => {
       logger.info(`✅ Zone Service initialized successfully`);
       logger.info(`⚡ Server running on port ${config.server.port}`);
       logger.info(`🔗 Health check: http://localhost:${config.server.port}/health`);
       logger.info(`🔗 API endpoint: http://localhost:${config.server.port}/api/v1`);
+
+      // Step 6: Start health heartbeat publisher (after server is ready)
+      if (config.kafka.brokers.length > 0 && kafkaService.getConnectionStatus()) {
+        logger.info('Step 6: Starting health heartbeat publisher...');
+        try {
+          await healthHeartbeatPublisher.start();
+          logger.info('✓ Health heartbeat publisher started');
+        } catch (error) {
+          logger.warn('⚠ Health heartbeat publisher failed to start (service will continue)', { error });
+        }
+      } else {
+        logger.info('Step 6: Kafka not available, skipping health heartbeat publisher');
+      }
     });
 
     // Graceful shutdown handling
@@ -88,6 +102,12 @@ async function bootstrap() {
         // Disconnect from database
         await PrismaClientSingleton.disconnect();
         logger.info('Database disconnected');
+
+        // Stop health heartbeat publisher
+        if (healthHeartbeatPublisher.isActive()) {
+          healthHeartbeatPublisher.stop();
+          logger.info('Health heartbeat publisher stopped');
+        }
 
         // Disconnect from Kafka
         if (kafkaService.getConnectionStatus()) {

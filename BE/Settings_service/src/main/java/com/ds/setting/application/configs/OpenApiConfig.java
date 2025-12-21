@@ -17,7 +17,7 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Settings Service API")
                         .description("System-wide settings and configuration management")
-                        .version("1.0.0"));
+                        .version("1.2.0"));
     }
 }
 

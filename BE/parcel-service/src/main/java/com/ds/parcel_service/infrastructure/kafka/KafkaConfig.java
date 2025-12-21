@@ -36,6 +36,8 @@ public class KafkaConfig {
     private String groupId;
 
     public static final String TOPIC_PARCEL_STATUS_REQUEST = "parcel-status-request";
+    public static final String TOPIC_AUDIT_EVENTS = "audit-events";
+    public static final String TOPIC_AUDIT_EVENTS_DLQ = "audit-events-dlq";
     // TOPIC_PARCEL_STATUS_CHANGED removed (not used currently)
 
     @Bean
@@ -48,10 +50,8 @@ public class KafkaConfig {
         config.put(ProducerConfig.RETRIES_CONFIG, 3);
         // enable idempotence for safer producer
         config.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
-        DefaultKafkaProducerFactory<String, Object> pf = new DefaultKafkaProducerFactory<>(config);
-        // enable transactions for exactly-once semantics
-        pf.setTransactionIdPrefix("parcel-tx-");
-        return pf;
+        // NO transaction-id-prefix - keep it simple like user-service
+        return new DefaultKafkaProducerFactory<>(config);
     }
 
     @Bean
@@ -158,6 +158,26 @@ public class KafkaConfig {
                 .partitions(6)
                 .replicas(1)
                 .config("retention.ms", "259200000")
+                .build();
+    }
+
+    @Bean
+    public NewTopic auditEventsTopic() {
+        return TopicBuilder.name(TOPIC_AUDIT_EVENTS)
+                .partitions(3) // Partition by userId or resourceType
+                .replicas(1)
+                .config("retention.ms", "2592000000") // 30 days
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+
+    @Bean
+    public NewTopic auditEventsDlqTopic() {
+        return TopicBuilder.name(TOPIC_AUDIT_EVENTS_DLQ)
+                .partitions(1)
+                .replicas(1)
+                .config("retention.ms", "7776000000") // 90 days (longer retention for failed events)
+                .config("cleanup.policy", "delete")
                 .build();
     }
 }

@@ -1,6 +1,6 @@
 {
   "name": "zone_service",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Zone Service - Microservice for zone and location management",
   "main": "dist/index.js",
   "scripts": {

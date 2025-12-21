@@ -29,6 +29,13 @@ spring:
         cache-names:
             - settings
             - settingsByGroup
+    kafka:
+        bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+        producer:
+            key-serializer: org.apache.kafka.common.serialization.StringSerializer
+            value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+            properties:
+                'enable.idempotence': true
 
 # Settings Service Configuration
 settings:

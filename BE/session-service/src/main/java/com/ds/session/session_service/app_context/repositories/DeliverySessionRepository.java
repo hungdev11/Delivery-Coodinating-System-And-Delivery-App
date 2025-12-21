@@ -38,4 +38,13 @@ public interface DeliverySessionRepository extends JpaRepository<DeliverySession
             SessionStatus status,
             LocalDateTime startTime,
             LocalDateTime endTime);
+    
+    /**
+     * Find sessions by start time range and status
+     * Used for auto-close scheduler to find sessions that need to be closed
+     */
+    List<DeliverySession> findByStartTimeBetweenAndStatusIn(
+            LocalDateTime startTimeStart,
+            LocalDateTime startTimeEnd,
+            List<SessionStatus> statuses);
 }

@@ -42,6 +42,8 @@ public class KafkaConfig {
     public static final String TOPIC_PARCEL_POSTPONED = "parcel-postponed";
     // Topic for session completed events (consumed by communication-service)
     public static final String TOPIC_SESSION_COMPLETED = "session-completed";
+    public static final String TOPIC_AUDIT_EVENTS = "audit-events";
+    public static final String TOPIC_AUDIT_EVENTS_DLQ = "audit-events-dlq";
     // TOPIC_PARCEL_STATUS_CHANGED constant removed (not used currently)
 
     @Bean
@@ -62,10 +64,8 @@ public class KafkaConfig {
         config.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 33554432);
         config.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip");
 
-        DefaultKafkaProducerFactory<String, Object> pf = new DefaultKafkaProducerFactory<>(config);
-        // enable transactional producer for exactly-once semantics
-        pf.setTransactionIdPrefix("session-tx-");
-        return pf;
+        // NO transaction-id-prefix - keep it simple like user-service
+        return new DefaultKafkaProducerFactory<>(config);
     }
 
     @Bean
@@ -161,6 +161,26 @@ public class KafkaConfig {
                 .partitions(3) // partition by sessionId for ordering
                 .replicas(1)
                 .config("retention.ms", "259200000") // 3 days
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+
+    @Bean
+    public NewTopic auditEventsTopic() {
+        return TopicBuilder.name(TOPIC_AUDIT_EVENTS)
+                .partitions(3) // Partition by userId or resourceType
+                .replicas(1)
+                .config("retention.ms", "2592000000") // 30 days
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+
+    @Bean
+    public NewTopic auditEventsDlqTopic() {
+        return TopicBuilder.name(TOPIC_AUDIT_EVENTS_DLQ)
+                .partitions(1)
+                .replicas(1)
+                .config("retention.ms", "7776000000") // 90 days (longer retention for failed events)
                 .config("cleanup.policy", "delete")
                 .build();
     }

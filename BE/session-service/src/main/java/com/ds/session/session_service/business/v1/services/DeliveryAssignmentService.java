@@ -805,8 +805,12 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         try {
             if (!shouldMoveToEnd) {
                 // Only update parcel status if not moving to end
-                ParcelResponse parcelResponse = parcelServiceClient.changeParcelStatus(assignment.getParcelId(),
-                        ParcelEvent.POSTPONE);
+                // Use Kafka event instead of direct API call
+                parcelEventPublisher.publish(assignment.getParcelId(), ParcelEvent.POSTPONE);
+                log.debug("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] Published POSTPONE event for parcel {}", assignment.getParcelId());
+                
+                // Fetch parcel info (status will be updated asynchronously by Kafka consumer in parcel-service)
+                ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(assignment.getParcelId());
                 if (parcelResponse != null) {
                     parcel = parcelMapper.toParcelInfo(parcelResponse);
                     receiverName = parcel != null ? parcel.getReceiverName() : null;
@@ -1057,15 +1061,19 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     }
 
     private ParcelInfo updateParcelStatusAndMap(UUID parcelId, ParcelEvent event) {
-        // If you still want synchronous confirmation, you can optionally call
-        // parcelServiceClient here as fallback
+        // Use Kafka event instead of direct API call
         try {
-            ParcelResponse response = parcelServiceClient.changeParcelStatus(parcelId.toString(), event);
-            log.debug("[session-service] [DeliveryAssignmentService.updateParcelStatusAndMap] parcel status (sync fallback): {}, event: {}", response.getStatus(), event);
-            return parcelMapper.toParcelInfo(response);
+            parcelEventPublisher.publish(parcelId.toString(), event);
+            log.debug("[session-service] [DeliveryAssignmentService.updateParcelStatusAndMap] Published {} event for parcel {}", event, parcelId);
+            
+            // Fetch parcel info (status will be updated asynchronously by Kafka consumer in parcel-service)
+            ParcelResponse response = parcelServiceClient.fetchParcelResponse(parcelId.toString());
+            if (response != null) {
+                return parcelMapper.toParcelInfo(response);
+            }
+            return null;
         } catch (Exception ex) {
-            log.debug("[session-service] [DeliveryAssignmentService.updateParcelStatusAndMap] Parcel service sync fallback failed for parcel {}: {}. Returning null for parcel info.", parcelId,
-                    ex.getMessage());
+            log.error("[session-service] [DeliveryAssignmentService.updateParcelStatusAndMap] Failed to publish event or fetch parcel info for parcel {}: {}", parcelId, ex.getMessage());
             return null;
         }
     }

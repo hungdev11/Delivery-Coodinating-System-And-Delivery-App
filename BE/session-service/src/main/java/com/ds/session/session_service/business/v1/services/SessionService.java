@@ -333,10 +333,11 @@ public class SessionService implements ISessionService {
         for (DeliveryAssignment task : delayedTasks) {
             try {
                 // END_SESSION event will change parcel from DELAYED to IN_WAREHOUSE
-                parcelApiClient.changeParcelStatus(task.getParcelId(), ParcelEvent.END_SESSION);
-                log.debug("[session-service] [SessionService.completeSession] Parcel {} returned to IN_WAREHOUSE from DELAYED", task.getParcelId());
+                // Use Kafka event instead of direct API call
+                parcelEventPublisher.publish(task.getParcelId(), ParcelEvent.END_SESSION);
+                log.debug("[session-service] [SessionService.completeSession] Published END_SESSION event for parcel {} to return to IN_WAREHOUSE from DELAYED", task.getParcelId());
             } catch (Exception e) {
-                log.error("Failed to call Parcel-Service for parcel {}: {}", task.getParcelId(), e.getMessage());
+                log.error("Failed to publish END_SESSION event for parcel {}: {}", task.getParcelId(), e.getMessage());
             }
         }
         
@@ -435,11 +436,12 @@ public class SessionService implements ISessionService {
 
             // Notify Parcel-Service: parcel should be delayed (POSTPONE event)
             // This will change parcel status from ON_ROUTE to DELAYED
+            // Use Kafka event instead of direct API call
             try {
-                parcelApiClient.changeParcelStatus(task.getParcelId(), ParcelEvent.POSTPONE);
-                log.debug("[session-service] [SessionService.failSession] Parcel {} set to DELAYED due to session failure", task.getParcelId());
+                parcelEventPublisher.publish(task.getParcelId(), ParcelEvent.POSTPONE);
+                log.debug("[session-service] [SessionService.failSession] Published POSTPONE event for parcel {} to set to DELAYED due to session failure", task.getParcelId());
             } catch (Exception e) {
-                log.error("[session-service] [SessionService.failSession] Failed to call Parcel-Service for parcel {}", task.getParcelId(), e);
+                log.error("[session-service] [SessionService.failSession] Failed to publish POSTPONE event for parcel {}", task.getParcelId(), e);
             }
         }
         

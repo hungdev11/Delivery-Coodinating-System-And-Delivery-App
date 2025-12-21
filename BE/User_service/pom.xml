@@ -11,7 +11,7 @@
 	</parent>
 	<groupId>com.ds</groupId>
 	<artifactId>user</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.2.0</version>
 	<name>user</name>
 	<description>User Service for Delivery System</description>
 	<url />

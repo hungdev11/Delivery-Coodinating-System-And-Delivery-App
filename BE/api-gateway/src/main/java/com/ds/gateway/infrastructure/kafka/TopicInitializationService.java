@@ -123,6 +123,21 @@ public class TopicInitializationService {
             } else {
                 log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Topic already exists: {}", KafkaConfig.TOPIC_AUDIT_EVENTS_DLQ);
             }
+            
+            // Health status topic - 10 partitions (one per service, with buffer)
+            if (!existingTopics.contains(KafkaConfig.TOPIC_HEALTH_STATUS)) {
+                topicsToCreate.add(new NewTopic(
+                    KafkaConfig.TOPIC_HEALTH_STATUS,
+                    10, // partitions (one per service + buffer)
+                    (short) 1 // replicas
+                ).configs(Map.of(
+                    "retention.ms", "600000", // 10 minutes (short retention for heartbeat messages)
+                    "cleanup.policy", "delete"
+                )));
+                log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Will create topic: {}", KafkaConfig.TOPIC_HEALTH_STATUS);
+            } else {
+                log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Topic already exists: {}", KafkaConfig.TOPIC_HEALTH_STATUS);
+            }
 
             if (!topicsToCreate.isEmpty()) {
                 log.debug("[api-gateway] [TopicInitializationService.createTopicsIfNotExist] Creating {} Kafka topics...", topicsToCreate.size());

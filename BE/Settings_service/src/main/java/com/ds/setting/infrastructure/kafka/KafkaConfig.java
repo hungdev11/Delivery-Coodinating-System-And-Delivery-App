@@ -1,4 +1,4 @@
-package com.ds.user.infrastructure.kafka;
+package com.ds.setting.infrastructure.kafka;
 
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -19,8 +19,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Kafka configuration for User Service
- * Publishes user events (created, updated, deleted) for snapshot synchronization
+ * Kafka configuration for Settings Service
  */
 @Configuration
 public class KafkaConfig {
@@ -29,7 +28,7 @@ public class KafkaConfig {
     private String bootstrapServers;
 
     // Topic names
-    public static final String TOPIC_USER_EVENTS = "user-events";
+    public static final String TOPIC_HEALTH_STATUS = "health-status";
     public static final String TOPIC_AUDIT_EVENTS = "audit-events";
     public static final String TOPIC_AUDIT_EVENTS_DLQ = "audit-events-dlq";
 
@@ -48,7 +47,6 @@ public class KafkaConfig {
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         
         // Create JsonSerializer without type information
-        // Each service has its own DTO class, so we don't include class name in JSON
         JsonSerializer<Object> jsonSerializer = new JsonSerializer<>(objectMapper);
         jsonSerializer.setAddTypeInfo(false);
         config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, jsonSerializer.getClass());
@@ -81,9 +79,9 @@ public class KafkaConfig {
      * Topic is created automatically if it doesn't exist
      */
     @Bean
-    public NewTopic userEventsTopic() {
-        return TopicBuilder.name(TOPIC_USER_EVENTS)
-                .partitions(3) // Partition by userId
+    public NewTopic healthStatusTopic() {
+        return TopicBuilder.name(TOPIC_HEALTH_STATUS)
+                .partitions(3) // Partition by service name
                 .replicas(1)
                 .config("retention.ms", "604800000") // 7 days
                 .config("cleanup.policy", "delete")
