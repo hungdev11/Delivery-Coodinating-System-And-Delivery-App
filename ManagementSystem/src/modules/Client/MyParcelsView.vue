@@ -4,7 +4,7 @@
  * Client view for managing their own parcels (as receiver)
  */
 
-import { ref, onMounted, computed, h, resolveComponent } from 'vue'
+import { ref, onMounted, computed, h, resolveComponent, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
@@ -19,6 +19,14 @@ import { getCurrentUser } from '@/common/guards/roleGuard.guard'
 import { defineAsyncComponent } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 import { useConversations } from '@/modules/Communication/composables'
+import type { TabsItem } from '@nuxt/ui'
+import type {
+  FilterGroupItemV2,
+  FilterConditionItemV2,
+  FilterOperatorItemV2,
+  FilterItemV2,
+} from '@/common/types/filter-v2'
+import { FilterItemType } from '@/common/types/filter-v2'
 
 const PageHeader = defineAsyncComponent(() => import('@/common/components/PageHeader.vue'))
 const LazyParcelQRModal = defineAsyncComponent(
@@ -33,14 +41,39 @@ const overlay = useOverlay()
 const currentUser = getCurrentUser()
 const { findOrCreateConversation } = useConversations()
 
-const parcels = ref<ParcelDto[]>([])
-const loading = ref(false)
-const page = ref(0)
+// Tab state - mỗi tab có state riêng
+type TabState = {
+  parcels: ParcelDto[]
+  loading: boolean
+  page: number
+  total: number
+}
+
+const tabStates = ref<Record<string, TabState>>({
+  pending: { parcels: [], loading: false, page: 0, total: 0 },
+  delivering: { parcels: [], loading: false, page: 0, total: 0 },
+  'need-confirm': { parcels: [], loading: false, page: 0, total: 0 },
+  delivered: { parcels: [], loading: false, page: 0, total: 0 },
+  cancelled: { parcels: [], loading: false, page: 0, total: 0 },
+})
+
 const pageSize = ref(10)
-const total = ref(0)
 const confirmingParcelId = ref<string | null>(null)
 const disputingParcelId = ref<string | null>(null)
 const retractingDisputeParcelId = ref<string | null>(null)
+const activeTab = ref<string | number>('pending')
+
+// Computed để lấy state của tab hiện tại
+const currentTabState = computed(() => {
+  const tabKey = String(activeTab.value)
+  const state = tabStates.value[tabKey] || tabStates.value.pending
+  return state || { parcels: [], loading: false, page: 0, total: 0 }
+})
+
+const parcels = computed(() => currentTabState.value.parcels)
+const loading = computed(() => currentTabState.value.loading)
+const page = computed(() => currentTabState.value.page)
+const total = computed(() => currentTabState.value.total)
 
 const paginationSummary = computed(() => {
   if (total.value === 0) {
@@ -51,14 +84,134 @@ const paginationSummary = computed(() => {
   return { start, end }
 })
 
-const loadParcels = async () => {
+/**
+ * Get status filter for tab
+ */
+const getStatusFilterForTab = (tab: string | number) => {
+  switch (tab) {
+    case 'pending':
+      return ['IN_WAREHOUSE']
+    case 'delivering':
+      return ['ON_ROUTE']
+    case 'need-confirm':
+      return ['DELIVERED', 'DISPUTE']
+    case 'delivered':
+      return ['SUCCEEDED']
+    case 'cancelled':
+      return ['FAILED']
+    default:
+      return undefined
+  }
+}
+
+/**
+ * Tab items configuration with computed badges
+ */
+const tabItems = computed<TabsItem[]>(() => [
+  {
+    label: 'Đơn chờ giao',
+    icon: 'i-heroicons-clock',
+    value: 'pending',
+    badge: tabStates.value.pending.total || undefined,
+  },
+  {
+    label: 'Đơn đang giao',
+    icon: 'i-heroicons-truck',
+    value: 'delivering',
+    badge: tabStates.value.delivering.total || undefined,
+  },
+  {
+    label: 'Đơn cần xác nhận',
+    icon: 'i-heroicons-check-circle',
+    value: 'need-confirm',
+    badge: tabStates.value['need-confirm'].total || undefined,
+  },
+  {
+    label: 'Đơn đã giao',
+    icon: 'i-heroicons-check-badge',
+    value: 'delivered',
+    badge: tabStates.value.delivered.total || undefined,
+  },
+  {
+    label: 'Đơn đã huỷ',
+    icon: 'i-heroicons-x-circle',
+    value: 'cancelled',
+    badge: tabStates.value.cancelled.total || undefined,
+  },
+])
+
+/**
+ * Build filter for a tab
+ */
+const buildFilterForTab = (tab: string | number): FilterGroupItemV2 | undefined => {
+  const statusFilter = getStatusFilterForTab(tab)
+  if (!statusFilter || statusFilter.length === 0) return undefined
+
+  if (statusFilter.length === 1) {
+    // Single status - use EQUALS
+    const condition: FilterConditionItemV2 = {
+      type: FilterItemType.CONDITION,
+      field: 'status',
+      operator: 'EQUALS',
+      value: statusFilter[0],
+      caseSensitive: false,
+    }
+    return {
+      type: FilterItemType.GROUP,
+      items: [condition],
+    }
+  } else {
+    // Multiple statuses - use nested group with OR operator
+    const nestedItems: FilterItemV2[] = []
+    statusFilter.forEach((status, index) => {
+      if (index > 0) {
+        // Add OR operator before each condition except the first
+        const operator: FilterOperatorItemV2 = {
+          type: FilterItemType.OPERATOR,
+          value: 'OR',
+        }
+        nestedItems.push(operator)
+      }
+      const condition: FilterConditionItemV2 = {
+        type: FilterItemType.CONDITION,
+        field: 'status',
+        operator: 'EQUALS',
+        value: status,
+        caseSensitive: false,
+      }
+      nestedItems.push(condition)
+    })
+
+    // Wrap in nested group
+    const nestedGroup: FilterGroupItemV2 = {
+      type: FilterItemType.GROUP,
+      items: nestedItems,
+    }
+
+    // Wrap nested group in outer group
+    return {
+      type: FilterItemType.GROUP,
+      items: [nestedGroup],
+    }
+  }
+}
+
+/**
+ * Load count for a specific tab (without loading data)
+ */
+const loadTabCount = async (tabKey: string | number) => {
   if (!currentUser?.id) return
 
-  loading.value = true
+  const tabKeyStr = String(tabKey)
+  const tabState = tabStates.value[tabKeyStr]
+  if (!tabState) return
+
   try {
+    const filters = buildFilterForTab(tabKey)
     const response = await getClientReceivedParcels({
-      page: page.value,
-      size: pageSize.value,
+      page: 0,
+      size: 1, // Only need total, not data
+      filters,
       sorts: [
         {
           field: 'createdAt',
@@ -68,8 +221,55 @@ const loadParcels = async () => {
     })
 
     if (response.result) {
-      parcels.value = response.result.data.map((p) => new ParcelDto(p))
-      total.value = response.result.page.totalElements
+      tabState.total = response.result.page.totalElements
+    }
+  } catch (error) {
+    console.error(`Failed to load count for tab ${tabKey}:`, error)
+  }
+}
+
+/**
+ * Load counts for all tabs
+ */
+const loadAllTabCounts = async () => {
+  if (!currentUser?.id) return
+
+  // Load all tab counts in parallel
+  const tabKeys = ['pending', 'delivering', 'need-confirm', 'delivered', 'cancelled']
+  await Promise.all(tabKeys.map((tabKey) => loadTabCount(tabKey)))
+}
+
+/**
+ * Load parcels for a specific tab
+ */
+const loadParcels = async (tabKey?: string | number) => {
+  if (!currentUser?.id) return
+
+  const targetTab = tabKey || activeTab.value
+  const tabKeyStr = String(targetTab)
+  const tabState = tabStates.value[tabKeyStr]
+
+  if (!tabState) return
+
+  tabState.loading = true
+  try {
+    const filters = buildFilterForTab(targetTab)
+
+    const response = await getClientReceivedParcels({
+      page: tabState.page,
+      size: pageSize.value,
+      filters,
+      sorts: [
+        {
+          field: 'createdAt',
+          direction: 'desc',
+        },
+      ],
+    })
+
+    if (response.result) {
+      tabState.parcels = response.result.data.map((p) => new ParcelDto(p))
+      tabState.total = response.result.page.totalElements
     }
   } catch (error) {
     console.error('Failed to load parcels:', error)
@@ -79,7 +279,7 @@ const loadParcels = async () => {
       color: 'error',
     })
   } finally {
-    loading.value = false
+    tabState.loading = false
   }
 }
 
@@ -105,10 +305,22 @@ const getStatusColor = (status: ParcelStatus) => {
 }
 
 const handlePageChange = (newPage: number) => {
-  if (newPage === page.value) return
-  page.value = Math.max(newPage, 0)
-  loadParcels()
+  const tabKeyStr = String(activeTab.value)
+  const tabState = tabStates.value[tabKeyStr]
+  if (!tabState || newPage === tabState.page) return
+  tabState.page = Math.max(newPage, 0)
+  loadParcels(activeTab.value)
 }
+
+// Watch for tab changes to load data
+watch(activeTab, (newTab) => {
+  const tabKeyStr = String(newTab)
+  const tabState = tabStates.value[tabKeyStr]
+  // Only load if tab has no data yet
+  if (tabState && (!tabState.parcels || tabState.parcels.length === 0) && !tabState.loading) {
+    loadParcels(newTab)
+  }
+})
 
 const isConfirming = (parcelId: string) => confirmingParcelId.value === parcelId
 
@@ -130,7 +342,9 @@ const handleConfirmReceived = async (parcel: ParcelDto) => {
       description: `Parcel ${parcel.code} marked as received`,
       color: 'success',
     })
-    await loadParcels()
+    await loadParcels(activeTab.value)
+    // Refresh counts for all tabs after status change
+    await loadAllTabCounts()
   } catch (error) {
     console.error('Failed to confirm parcel:', error)
     toast.add({
@@ -153,7 +367,9 @@ const handleReportNotReceived = async (parcel: ParcelDto) => {
       description: `Đã báo chưa nhận được đơn hàng ${parcel.code}`,
       color: 'warning',
     })
-    await loadParcels()
+    await loadParcels(activeTab.value)
+    // Refresh counts for all tabs after status change
+    await loadAllTabCounts()
   } catch (error) {
     console.error('Failed to report not received:', error)
     toast.add({
@@ -176,7 +392,9 @@ const handleRetractDispute = async (parcel: ParcelDto) => {
       description: `Đã xác nhận nhận được đơn hàng ${parcel.code}`,
       color: 'success',
     })
-    await loadParcels()
+    await loadParcels(activeTab.value)
+    // Refresh counts for all tabs after status change
+    await loadAllTabCounts()
   } catch (error) {
     console.error('Failed to retract dispute:', error)
     toast.add({
@@ -401,8 +619,11 @@ const columns: TableColumn<ParcelDto>[] = [
   },
 ]
 
-onMounted(() => {
-  loadParcels()
+onMounted(async () => {
+  // Load counts for all tabs first
+  await loadAllTabCounts()
+  // Then load data for active tab
+  await loadParcels(activeTab.value)
 })
 </script>
 
@@ -423,6 +644,20 @@ onMounted(() => {
       </template>
     </PageHeader>
 
+    <div class="space-y-4">
+      <!-- Tabs for filtering parcels by status -->
+      <UTabs
+        v-model="activeTab"
+        :items="tabItems"
+        class="w-full"
+        :ui="{
+          list: 'overflow-x-auto whitespace-nowrap',
+          trigger: 'min-w-[200px]',
+          indicator: 'min-w-[200px]',
+          root: 'w-full',
+        }"
+      >
+        <template #content>
     <div class="space-y-4">
       <!-- Desktop Table View -->
       <div class="hidden md:block">
@@ -447,6 +682,15 @@ onMounted(() => {
         <template v-if="loading">
           <USkeleton v-for="i in 3" :key="i" class="h-40 w-full rounded-lg" />
         </template>
+              <template v-else-if="parcels.length === 0">
+                <div class="text-center py-12">
+                  <UIcon name="i-heroicons-cube" class="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    Chưa có đơn hàng
+                  </h3>
+                  <p class="text-gray-500">Không có đơn hàng nào trong danh mục này</p>
+                </div>
+              </template>
         <template v-else>
           <UCard v-for="parcel in parcels" :key="parcel.id" class="overflow-hidden">
             <div class="space-y-3">
@@ -464,7 +708,9 @@ onMounted(() => {
               <div class="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <span class="text-gray-500">Người gửi:</span>
-                  <p class="font-medium text-gray-900 truncate">{{ parcel.senderName || 'N/A' }}</p>
+                        <p class="font-medium text-gray-900 truncate">
+                          {{ parcel.senderName || 'N/A' }}
+                        </p>
                 </div>
                 <div>
                   <span class="text-gray-500">Loại:</span>
@@ -506,14 +752,59 @@ onMounted(() => {
                 >
                   QR
                 </UButton>
-                <!-- Note: Confirm received button is hidden on mobile/Android as confirmation is handled in Android app -->
+                      <!-- Confirm received button (for DELIVERED status) -->
+                      <UButton
+                        v-if="canConfirmParcel(parcel)"
+                        size="xs"
+                        variant="soft"
+                        color="primary"
+                        :loading="isConfirming(parcel.id)"
+                        :disabled="isConfirming(parcel.id)"
+                        @click="handleConfirmReceived(parcel)"
+                      >
+                        {{ isConfirming(parcel.id) ? 'Đang xác nhận...' : 'Đã nhận hàng' }}
+                      </UButton>
+                      <!-- Report not received button (for DELIVERED status) -->
+                      <UButton
+                        v-if="canReportNotReceived(parcel)"
+                        size="xs"
+                        variant="soft"
+                        color="warning"
+                        :loading="disputingParcelId === parcel.id"
+                        @click="handleReportNotReceived(parcel)"
+                      >
+                        {{
+                          disputingParcelId === parcel.id ? 'Đang gửi...' : 'Chưa nhận được'
+                        }}
+                      </UButton>
+                      <!-- Retract dispute button (for DISPUTE status) -->
+                      <UButton
+                        v-if="canRetractDispute(parcel)"
+                        size="xs"
+                        variant="soft"
+                        color="success"
+                        :loading="retractingDisputeParcelId === parcel.id"
+                        @click="handleRetractDispute(parcel)"
+                      >
+                        {{
+                          retractingDisputeParcelId === parcel.id
+                            ? 'Đang xử lý...'
+                            : 'Đã nhận được hàng'
+                        }}
+                      </UButton>
               </div>
             </div>
           </UCard>
         </template>
       </div>
+          </div>
+        </template>
+      </UTabs>
 
-      <div v-if="!loading && parcels.length === 0" class="text-center py-12">
+      <div
+        v-if="!loading && parcels.length === 0"
+        class="text-center py-12"
+      >
         <UIcon name="i-heroicons-cube" class="w-16 h-16 text-gray-400 mx-auto mb-4" />
         <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
           Chưa có đơn hàng

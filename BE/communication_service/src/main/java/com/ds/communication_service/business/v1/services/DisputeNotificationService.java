@@ -169,8 +169,15 @@ public class DisputeNotificationService {
 
             // Send via WebSocket
             MessageResponse messageResponse = toDto(savedMessage);
+            
+            // Send to shipper (recipient of proposal)
             messagingTemplate.convertAndSendToUser(deliveryManId, "/queue/messages", messageResponse);
+            log.debug("[communication-service] [DisputeNotificationService.createShipperAppealProposal] Sent DISPUTE_APPEAL message to shipper {} via WebSocket", deliveryManId);
+            
+            // Send to client (proposer) - they should see the message in chat
             messagingTemplate.convertAndSendToUser(receiverId, "/queue/messages", messageResponse);
+            log.info("[communication-service] [DisputeNotificationService.createShipperAppealProposal] Sent DISPUTE_APPEAL message to client {} via WebSocket. MessageId: {}, ConversationId: {}", 
+                    receiverId, savedMessage.getId(), conversation.getId());
 
             log.debug("[communication-service] [DisputeNotificationService.createShipperAppealProposal] Created proposal {} for shipper {}", savedProposal.getId(), deliveryManId);
 

@@ -13,6 +13,7 @@ import com.ds.deliveryapp.R;
 import com.ds.deliveryapp.enums.ParcelStatus;
 import com.ds.deliveryapp.model.Parcel;
 import com.ds.deliveryapp.utils.FormaterUtil;
+import com.ds.deliveryapp.utils.StatusMapper;
 import java.time.format.DateTimeFormatter;
 
 import java.util.ArrayList;
@@ -74,9 +75,9 @@ public class ParcelAdapter extends RecyclerView.Adapter<ParcelAdapter.ViewHolder
             textParcelDestination.setText("Đến: " + parcel.getTargetDestination());
             textParcelDate.setText("Ngày tạo: " + FormaterUtil.formatDateTime(parcel.getCreatedAt()));
 
-            // Xử lý trạng thái (text)
+            // Xử lý trạng thái (text) - map to Vietnamese
             if (parcel.getStatus() != null) {
-                textParcelStatus.setText(parcel.getStatus().name());
+                textParcelStatus.setText(StatusMapper.mapParcelStatus(parcel.getStatus()));
                 // Set màu cho chữ (hoặc background)
                 textParcelStatus.setTextColor(
                         ContextCompat.getColor(context, getStatusColor(parcel.getStatus()))
@@ -136,4 +137,3 @@ public class ParcelAdapter extends RecyclerView.Adapter<ParcelAdapter.ViewHolder
         return parcelList != null ? parcelList.size() : 0;
     }
 }
-

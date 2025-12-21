@@ -79,4 +79,17 @@ public class SessionController {
         log.debug("[api-gateway] [SessionController.getActiveSession] Getting active session for delivery man {}", deliveryManId);
         return sessionServiceClient.getActiveSession(deliveryManId);
     }
+
+    /**
+     * Lấy tất cả sessions của một shipper.
+     * Có thể exclude một parcelId cụ thể (dùng khi cần lấy sessions khác ngoài
+     * session hiện tại chứa parcel này).
+     */
+    @GetMapping("/drivers/{deliveryManId}/sessions")
+    public ResponseEntity<?> getAllSessionsForDeliveryMan(
+            @PathVariable String deliveryManId,
+            @RequestParam(required = false) String excludeParcelId) {
+        log.debug("[api-gateway] [SessionController.getAllSessionsForDeliveryMan] Getting all sessions for delivery man {} (excludeParcelId: {})", deliveryManId, excludeParcelId);
+        return sessionServiceClient.getAllSessionsForDeliveryMan(deliveryManId, excludeParcelId);
+    }
 }

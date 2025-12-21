@@ -10,6 +10,9 @@ public class InWarehouseState implements IParcelState{
         return switch(event) {
             case SCAN_QR:
                 yield ParcelStatus.ON_ROUTE;
+            case CUSTOMER_CONFIRM_NOT_RECEIVED:
+                // Allow admin to set dispute from any status (client may contact admin directly)
+                yield ParcelStatus.DISPUTE;
             default:
                 throw new IllegalStateException("Invalid event at " + getParcelStatus().name() + ": " + event.name());
         };

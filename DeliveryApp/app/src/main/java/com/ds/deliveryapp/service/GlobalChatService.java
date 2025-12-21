@@ -486,9 +486,20 @@ public class GlobalChatService implements ChatWebSocketListener {
         if (message.getProposal() != null) {
             String proposalType = message.getProposal().getType();
             
-            // Show DisputeAppealDialog for DISPUTE_APPEAL type
+            // Show DisputeAppealDialog for DISPUTE_APPEAL type (only for shipper/recipient)
             if ("DISPUTE_APPEAL".equals(proposalType)) {
-                showDisputeAppealDialog(message);
+                // Only show dialog if current user is the recipient (shipper can appeal)
+                // For proposer (client), it's just a notification - show in chat only
+                String currentUserId = authManager.getUserId();
+                if (currentUserId != null && currentUserId.equals(message.getProposal().getRecipientId())) {
+                    showDisputeAppealDialog(message);
+                } else {
+                    // For proposer, just show as notification (no popup)
+                    Log.d(TAG, "DISPUTE_APPEAL proposal for proposer - showing in chat only");
+                }
+            } else if ("STATUS_CHANGE_NOTIFICATION".equals(proposalType)) {
+                // STATUS_CHANGE_NOTIFICATION is read-only - show as notification popup
+                showStatusChangeNotification(message);
             } else {
                 // Show generic ProposalPopupDialog for other types
                 showProposalPopup(message);
@@ -513,6 +524,29 @@ public class GlobalChatService implements ChatWebSocketListener {
                 Log.d(TAG, "Showing DisputeAppealDialog for message: " + message.getId());
             } catch (Exception e) {
                 Log.e(TAG, "Error showing DisputeAppealDialog", e);
+            }
+        });
+    }
+
+    /**
+     * Show status change notification (read-only)
+     */
+    private void showStatusChangeNotification(Message message) {
+        if (context == null) {
+            Log.w(TAG, "Cannot show StatusChangeNotification: context is null");
+            return;
+        }
+        
+        // Show dialog on main thread
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+            try {
+                ProposalPopupDialog dialog = new ProposalPopupDialog(context, message);
+                // Mark as read-only notification
+                dialog.setReadOnly(true);
+                dialog.show();
+                Log.d(TAG, "Showing StatusChangeNotification for message: " + message.getId());
+            } catch (Exception e) {
+                Log.e(TAG, "Error showing StatusChangeNotification", e);
             }
         });
     }

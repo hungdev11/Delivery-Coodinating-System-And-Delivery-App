@@ -18,8 +18,8 @@ import {
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
 import { useParcels } from './composables'
 import { useParcelExport } from './composables/useParcelExport'
-import type { ParcelDto, ParcelStatus } from './model.type'
-import { seedParcels, type SeedParcelsRequest } from './api'
+import { ParcelDto, type ParcelStatus, type ParcelEvent } from './model.type'
+import { seedParcels, type SeedParcelsRequest, changeParcelStatus } from './api'
 import UserSelect from '@/common/components/UserSelect.vue'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { useTemplateRef } from 'vue'
@@ -34,7 +34,18 @@ import { useRouter } from 'vue-router'
 import { getCurrentUser } from '@/common/guards/roleGuard.guard'
 import { useGlobalChat, type GlobalChatListener } from '../Communication/composables'
 import { useConversations } from '../Communication/composables'
+import { useProposals } from '../Communication/composables'
 import { onUnmounted } from 'vue'
+import type { TabsItem } from '@nuxt/ui'
+import type {
+  FilterGroupItemV2,
+  FilterConditionItemV2,
+  FilterOperatorItemV2,
+  FilterItemV2,
+} from '@/common/types/filter-v2'
+import { FilterItemType } from '@/common/types/filter-v2'
+import { getParcelsV2 } from './api'
+import { convertV1ToV2Filter } from '@/common/utils/filter-v2-converter'
 
 // Dynamic imports to avoid TypeScript issues
 const PageHeader = defineAsyncComponent(() => import('../../common/components/PageHeader.vue'))
@@ -45,9 +56,12 @@ const LazyParcelDeleteModal = defineAsyncComponent(
   () => import('./components/ParcelDeleteModal.vue'),
 )
 const LazyParcelQRModal = defineAsyncComponent(() => import('./components/ParcelQRModal.vue'))
-const LazyParcelDetailModal = defineAsyncComponent(
-  () => import('./components/ParcelDetailModal.vue'),
+const LazyChangeStatusModal = defineAsyncComponent(
+  () => import('./components/ChangeStatusModal.vue'),
 )
+// const LazyParcelDetailModal = defineAsyncComponent(
+//   () => import('./components/ParcelDetailModal.vue'),
+// )
 const UCheckbox = resolveComponent('UCheckbox')
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
@@ -59,6 +73,7 @@ const toast = useToast()
 const router = useRouter()
 const currentUser = getCurrentUser()
 const { findOrCreateConversation } = useConversations()
+const { create: createProposalRequest } = useProposals()
 
 // Global chat service for update notifications
 const globalChat = useGlobalChat()
@@ -86,7 +101,9 @@ const updateNotificationListener: GlobalChatListener = {
       })
 
       // Refresh parcel list to clear in-progress parcels
-      loadParcels()
+        loadParcelsForTab(activeTab.value)
+        // Refresh counts for all tabs after status change
+        loadAllTabCounts()
     }
 
     // Handle PARCEL_UPDATE notifications
@@ -101,7 +118,9 @@ const updateNotificationListener: GlobalChatListener = {
         })
 
         // Refresh parcel list
-        loadParcels()
+        loadParcelsForTab(activeTab.value)
+        // Refresh counts for all tabs after status change
+        loadAllTabCounts()
       }
     }
   },
@@ -119,32 +138,62 @@ const seedForm = ref<SeedParcelsRequest>({
   clientId: undefined,
 })
 
-// Composables
+// Tab state - mỗi tab có state riêng
+type TabState = {
+  parcels: ParcelDto[]
+  loading: boolean
+  page: number
+  total: number
+}
+
+const tabStates = ref<Record<string, TabState>>({
+  all: { parcels: [], loading: false, page: 0, total: 0 },
+  pending: { parcels: [], loading: false, page: 0, total: 0 },
+  delivering: { parcels: [], loading: false, page: 0, total: 0 },
+  'need-confirm': { parcels: [], loading: false, page: 0, total: 0 },
+  delivered: { parcels: [], loading: false, page: 0, total: 0 },
+  cancelled: { parcels: [], loading: false, page: 0, total: 0 },
+})
+
+// Composables - dùng để tạo filters và sorts
 const {
-  parcels,
-  loading,
-  page,
   pageSize,
-  total,
-  filters,
+  filters: baseFilters,
   sorts,
-  loadParcels,
   create,
   update,
   remove,
   bulkDelete,
   handleSearch,
-  updateFilters,
+  updateFilters: baseUpdateFilters,
   updateSorts,
-  clearFilters,
+  clearFilters: baseClearFilters,
   getFilterableColumns,
-  handlePageChange,
 } = useParcels()
+
+// Computed để lấy state của tab hiện tại
+const activeTab = ref<string | number>('all')
+const currentTabState = computed(() => {
+  const tabKey = String(activeTab.value)
+  return tabStates.value[tabKey] || tabStates.value.all
+})
+
+const parcels = computed(() => currentTabState.value.parcels)
+const loading = computed(() => currentTabState.value.loading)
+const page = computed(() => currentTabState.value.page)
+const total = computed(() => currentTabState.value.total)
+
+// Computed filters for helper functions
+const filters = computed(() => baseFilters.value)
 
 // Handle page change from UPagination (1-indexed) to API (0-indexed)
 const handlePaginationChange = (newPage: number) => {
+  const tabKeyStr = String(activeTab.value)
+  const tabState = tabStates.value[tabKeyStr]
+  if (!tabState) return
   // UPagination uses 1-indexed pages, convert to 0-indexed for API
-  handlePageChange(Math.max(newPage - 1, 0))
+  tabState.page = Math.max(newPage - 1, 0)
+  loadParcelsForTab(activeTab.value)
 }
 
 // Table state
@@ -257,7 +306,7 @@ const handleAdvancedFilterClear = () => {
     delete columnFiltersState[key]
   })
   activeFilters.value = []
-  clearFilters()
+  baseClearFilters()
   showAdvancedFilters.value = false
 }
 
@@ -283,11 +332,11 @@ const applyCombinedFilters = () => {
   }
 
   if (combinedConditions.length === 0) {
-    clearFilters()
+    baseClearFilters()
     return
   }
 
-  updateFilters({
+  baseUpdateFilters({
     logic: 'AND',
     conditions: combinedConditions,
   })
@@ -353,6 +402,11 @@ const columns: TableColumn<ParcelDto>[] = [
         {
           items: [
             [
+              {
+                label: 'Change status',
+                icon: 'i-heroicons-arrow-path',
+                onClick: () => openChangeStatusModal(parcel),
+              },
               {
                 label: 'Chat with receiver',
                 icon: 'i-heroicons-chat-bubble-left-right',
@@ -683,13 +737,124 @@ const openQRModal = async (parcel: ParcelDto) => {
 
 /**
  * Open parcel detail modal
+ * Note: Currently not used, but kept for future use
  */
-const openDetailModal = async (parcel: ParcelDto) => {
-  const modal = overlay.create(LazyParcelDetailModal)
+// const openDetailModal = async (parcel: ParcelDto) => {
+//   const modal = overlay.create(LazyParcelDetailModal)
+//   const instance = modal.open({ parcel })
+//   await instance.result
+//   // Reload parcels after modal closes (in case dispute was resolved)
+//   loadParcelsForTab(activeTab.value)
+// }
+
+/**
+ * Open change status modal
+ */
+const openChangeStatusModal = async (parcel: ParcelDto) => {
+  const modal = overlay.create(LazyChangeStatusModal)
   const instance = modal.open({ parcel })
-  await instance.result
-  // Reload parcels after modal closes (in case dispute was resolved)
-  loadParcels()
+  const result = await instance.result
+
+  if (result) {
+    await handleChangeStatus(parcel, result.event, result.notifyClient)
+  }
+}
+
+/**
+ * Handle change status and create proposal if needed
+ */
+const handleChangeStatus = async (
+  parcel: ParcelDto,
+  event: ParcelEvent,
+  notifyClient: boolean,
+) => {
+  try {
+    // Change status
+    await changeParcelStatus(parcel.id, event)
+
+    toast.add({
+      title: 'Success',
+      description: `Đã đổi trạng thái đơn hàng ${parcel.code}`,
+      color: 'success',
+    })
+
+    // Create proposal to notify client if requested
+    if (notifyClient && parcel.receiverId && currentUser?.id) {
+      try {
+        // Find or create conversation between admin and client
+        const conversation = await findOrCreateConversation(currentUser.id, parcel.receiverId)
+
+        if (conversation && conversation.conversationId) {
+          // Get result status
+          const getResultStatus = (event: ParcelEvent): ParcelStatus => {
+            switch (event) {
+              case 'DELIVERY_SUCCESSFUL':
+                return 'DELIVERED'
+              case 'CUSTOMER_RECEIVED':
+                return 'SUCCEEDED'
+              case 'CUSTOMER_CONFIRM_NOT_RECEIVED':
+                return 'DISPUTE'
+              case 'CUSTOMER_REJECT':
+                return 'FAILED'
+              case 'MISSUNDERSTANDING_DISPUTE':
+                return 'SUCCEEDED'
+              case 'FAULT_DISPUTE':
+                return 'LOST'
+              default:
+                return parcel.status
+            }
+          }
+
+          const newStatus = getResultStatus(event)
+
+          // Create proposal data
+          const proposalData = {
+            parcelId: parcel.id,
+            parcelCode: parcel.code,
+            oldStatus: parcel.status,
+            newStatus: newStatus,
+            event: event,
+            title: `Đơn hàng ${parcel.code} đã được cập nhật trạng thái`,
+            content: `Đơn hàng ${parcel.code} đã được chuyển từ ${parcel.status} sang ${newStatus}`,
+          }
+
+          // Get current user roles
+          const userRoles = currentUser.roles || ['ADMIN']
+
+          // Create proposal
+          await createProposalRequest({
+            conversationId: conversation.conversationId,
+            recipientId: parcel.receiverId,
+            type: 'STATUS_CHANGE_NOTIFICATION',
+            data: JSON.stringify(proposalData),
+            fallbackContent: `Đơn hàng ${parcel.code} đã được cập nhật trạng thái: ${parcel.status} → ${newStatus}`,
+            senderId: currentUser.id,
+            senderRoles: userRoles,
+          })
+
+          toast.add({
+            title: 'Success',
+            description: `Đã gửi thông báo cho khách hàng`,
+            color: 'success',
+          })
+        }
+      } catch (error) {
+        console.error('Failed to create proposal notification:', error)
+        // Don't show error to user - status change succeeded
+      }
+    }
+
+    // Reload parcels
+    await loadParcelsForTab(activeTab.value)
+    await loadAllTabCounts()
+  } catch (error) {
+    console.error('Failed to change status:', error)
+    toast.add({
+      title: 'Error',
+      description: 'Failed to change parcel status',
+      color: 'error',
+    })
+  }
 }
 
 /**
@@ -764,7 +929,9 @@ const handleSeedParcels = async () => {
         clientId: undefined,
       }
       // Reload parcels
-      await loadParcels()
+        await loadParcelsForTab(activeTab.value)
+        // Refresh counts for all tabs after creating parcels
+        await loadAllTabCounts()
     } else {
       toast.add({
         title: 'Error',
@@ -899,7 +1066,10 @@ const getOperatorLabel = (operator: string): string => {
 // Register update notification listener
 onMounted(async () => {
   globalChat.addListener(updateNotificationListener)
-  await loadParcels()
+  // Load counts for all tabs first
+  await loadAllTabCounts()
+  // Then load data for active tab
+  await loadParcelsForTab(activeTab.value)
 })
 
 // Cleanup: remove listener on unmount
@@ -965,6 +1135,299 @@ watch(
   },
   { deep: true },
 )
+
+/**
+ * Get status filter for tab
+ */
+const getStatusFilterForTab = (tab: string | number) => {
+  switch (tab) {
+    case 'pending':
+      return ['IN_WAREHOUSE']
+    case 'delivering':
+      return ['ON_ROUTE']
+    case 'need-confirm':
+      return ['DELIVERED', 'DISPUTE']
+    case 'delivered':
+      return ['SUCCEEDED']
+    case 'cancelled':
+      return ['FAILED']
+    default:
+      return undefined
+  }
+}
+
+/**
+ * Build status filter group for a tab
+ */
+const buildStatusFilterGroup = (tab: string | number): FilterGroupItemV2 | undefined => {
+  const statusFilter = getStatusFilterForTab(tab)
+  if (!statusFilter || statusFilter.length === 0) return undefined
+
+  if (statusFilter.length === 1) {
+    // Single status - use EQUALS
+    const condition: FilterConditionItemV2 = {
+      type: FilterItemType.CONDITION,
+      field: 'status',
+      operator: 'EQUALS',
+      value: statusFilter[0],
+      caseSensitive: false,
+    }
+    return {
+      type: FilterItemType.GROUP,
+      items: [condition],
+    }
+  } else {
+    // Multiple statuses - use nested group with OR operator
+    const nestedItems: FilterItemV2[] = []
+    statusFilter.forEach((status, index) => {
+      if (index > 0) {
+        // Add OR operator before each condition except the first
+        const operator: FilterOperatorItemV2 = {
+          type: FilterItemType.OPERATOR,
+          value: 'OR',
+        }
+        nestedItems.push(operator)
+      }
+      const condition: FilterConditionItemV2 = {
+        type: FilterItemType.CONDITION,
+        field: 'status',
+        operator: 'EQUALS',
+        value: status,
+        caseSensitive: false,
+      }
+      nestedItems.push(condition)
+    })
+
+    // Wrap in nested group
+    const nestedGroup: FilterGroupItemV2 = {
+      type: FilterItemType.GROUP,
+      items: nestedItems,
+    }
+
+    // Wrap nested group in outer group
+    return {
+      type: FilterItemType.GROUP,
+      items: [nestedGroup],
+    }
+  }
+}
+
+/**
+ * Load count for a specific tab (without loading data)
+ */
+const loadTabCount = async (tabKey: string | number) => {
+  const tabKeyStr = String(tabKey)
+  const tabState = tabStates.value[tabKeyStr]
+  if (!tabState) return
+
+  try {
+    const statusFilterGroup = buildStatusFilterGroup(tabKey)
+
+    // Convert existing V1 filters to V2 format
+    let existingV2Filter: FilterGroupItemV2 | undefined = undefined
+    if (baseFilters.value && baseFilters.value.conditions && baseFilters.value.conditions.length > 0) {
+      existingV2Filter = convertV1ToV2Filter(baseFilters.value)
+    }
+
+    // Merge status filter with existing filters
+    let filtersToSend: FilterGroupItemV2 | undefined = undefined
+
+    if (statusFilterGroup || existingV2Filter) {
+      const allItems: FilterItemV2[] = []
+
+      // Add status filter group
+      if (statusFilterGroup) {
+        allItems.push(statusFilterGroup)
+      }
+
+      // Add existing filter items with AND operator if both exist
+      if (existingV2Filter && existingV2Filter.items && existingV2Filter.items.length > 0) {
+        if (statusFilterGroup) {
+          // Add AND operator between status filter and existing filters
+          const operator: FilterOperatorItemV2 = {
+            type: FilterItemType.OPERATOR,
+            value: 'AND',
+          }
+          allItems.push(operator)
+        }
+        allItems.push(...existingV2Filter.items)
+      }
+
+      if (allItems.length > 0) {
+        filtersToSend = {
+          type: FilterItemType.GROUP,
+          items: allItems,
+        }
+      }
+    }
+
+    const params = {
+      filters: filtersToSend,
+      sorts: sorts.value.length > 0 ? sorts.value : undefined,
+      page: 0,
+      size: 1, // Only need total, not data
+      search: searchValue.value || undefined,
+    }
+
+    const response = await getParcelsV2(params)
+
+    if (response.result) {
+      tabState.total = response.result.page.totalElements
+    }
+  } catch (error) {
+    console.error(`Failed to load count for tab ${tabKey}:`, error)
+  }
+}
+
+/**
+ * Load counts for all tabs
+ */
+const loadAllTabCounts = async () => {
+  // Load all tab counts in parallel
+  const tabKeys = ['all', 'pending', 'delivering', 'need-confirm', 'delivered', 'cancelled']
+  await Promise.all(tabKeys.map((tabKey) => loadTabCount(tabKey)))
+}
+
+/**
+ * Load parcels for a specific tab
+ */
+const loadParcelsForTab = async (tabKey?: string | number) => {
+  const targetTab = tabKey || activeTab.value
+  const tabKeyStr = String(targetTab)
+  const tabState = tabStates.value[tabKeyStr]
+
+  if (!tabState) return
+
+  tabState.loading = true
+  try {
+    const statusFilterGroup = buildStatusFilterGroup(targetTab)
+
+    // Convert existing V1 filters to V2 format
+    let existingV2Filter: FilterGroupItemV2 | undefined = undefined
+    if (baseFilters.value && baseFilters.value.conditions && baseFilters.value.conditions.length > 0) {
+      existingV2Filter = convertV1ToV2Filter(baseFilters.value)
+    }
+
+    // Merge status filter with existing filters
+    let filtersToSend: FilterGroupItemV2 | undefined = undefined
+
+    if (statusFilterGroup || existingV2Filter) {
+      const allItems: FilterItemV2[] = []
+
+      // Add status filter group
+      if (statusFilterGroup) {
+        allItems.push(statusFilterGroup)
+      }
+
+      // Add existing filter items with AND operator if both exist
+      if (existingV2Filter && existingV2Filter.items && existingV2Filter.items.length > 0) {
+        if (statusFilterGroup) {
+          // Add AND operator between status filter and existing filters
+          const operator: FilterOperatorItemV2 = {
+            type: FilterItemType.OPERATOR,
+            value: 'AND',
+          }
+          allItems.push(operator)
+        }
+        allItems.push(...existingV2Filter.items)
+      }
+
+      if (allItems.length > 0) {
+        filtersToSend = {
+          type: FilterItemType.GROUP,
+          items: allItems,
+        }
+      }
+    }
+
+    const params = {
+      filters: filtersToSend,
+      sorts: sorts.value.length > 0 ? sorts.value : undefined,
+      page: tabState.page,
+      size: pageSize.value,
+      search: searchValue.value || undefined,
+    }
+
+    const response = await getParcelsV2(params)
+
+    if (response.result) {
+      tabState.parcels = response.result.data.map((p) => new ParcelDto(p))
+      tabState.total = response.result.page.totalElements
+    }
+  } catch (error) {
+    console.error('Failed to load parcels:', error)
+    toast.add({
+      title: 'Error',
+      description: 'Failed to load parcels',
+      color: 'error',
+    })
+  } finally {
+    tabState.loading = false
+  }
+}
+
+// Watch for tab changes to load data
+watch(activeTab, (newTab) => {
+  const tabKeyStr = String(newTab)
+  const tabState = tabStates.value[tabKeyStr]
+  // Only load if tab has no data yet
+  if (tabState && tabState.parcels.length === 0 && !tabState.loading) {
+    loadParcelsForTab(newTab)
+  }
+})
+
+// Watch for search/filter changes to reload current tab
+watch([searchValue, baseFilters, sorts], () => {
+  // Reset page to 0 when filters change
+  const tabKeyStr = String(activeTab.value)
+  const tabState = tabStates.value[tabKeyStr]
+  if (tabState) {
+    tabState.page = 0
+    loadParcelsForTab(activeTab.value)
+  }
+}, { deep: true })
+
+/**
+ * Tab items configuration with computed badges
+ */
+const tabItems = computed<TabsItem[]>(() => [
+  {
+    label: 'Tất cả',
+    icon: 'i-heroicons-squares-2x2',
+    value: 'all',
+    badge: tabStates.value.all.total || undefined,
+  },
+  {
+    label: 'Đơn chờ giao',
+    icon: 'i-heroicons-clock',
+    value: 'pending',
+    badge: tabStates.value.pending.total || undefined,
+  },
+  {
+    label: 'Đơn đang giao',
+    icon: 'i-heroicons-truck',
+    value: 'delivering',
+    badge: tabStates.value.delivering.total || undefined,
+  },
+  {
+    label: 'Đơn cần xác nhận',
+    icon: 'i-heroicons-check-circle',
+    value: 'need-confirm',
+    badge: tabStates.value['need-confirm'].total || undefined,
+  },
+  {
+    label: 'Đơn đã giao',
+    icon: 'i-heroicons-check-badge',
+    value: 'delivered',
+    badge: tabStates.value.delivered.total || undefined,
+  },
+  {
+    label: 'Đơn đã huỷ',
+    icon: 'i-heroicons-x-circle',
+    value: 'cancelled',
+    badge: tabStates.value.cancelled.total || undefined,
+  },
+])
 </script>
 
 <template>
@@ -1011,6 +1474,20 @@ watch(
       @open-advanced-filters="showAdvancedFilters = true"
     />
 
+    <!-- Tabs for filtering parcels by status -->
+    <UTabs
+      v-model="activeTab"
+      :items="tabItems"
+      class="w-full"
+      :ui="{
+        list: 'overflow-x-auto whitespace-nowrap',
+        trigger: 'min-w-[200px]',
+        indicator: 'min-w-[200px]',
+        root: 'w-full',
+      }"
+    >
+      <template #content>
+        <div class="space-y-4">
     <!-- Desktop Table View -->
     <div class="hidden md:block">
       <UCard>
@@ -1055,7 +1532,7 @@ watch(
               >
                 Add Parcel
               </UButton>
-              <UButton v-else variant="soft" @click="clearFilters"> Clear Filters </UButton>
+                    <UButton v-else variant="soft" @click="handleAdvancedFilterClear"> Clear Filters </UButton>
             </div>
           </div>
         </template>
@@ -1091,7 +1568,7 @@ watch(
               >
                 Add Parcel
               </UButton>
-              <UButton v-else variant="soft" @click="clearFilters"> Clear Filters </UButton>
+              <UButton v-else variant="soft" @click="handleAdvancedFilterClear"> Clear Filters </UButton>
             </div>
           </div>
         </UCard>
@@ -1164,6 +1641,9 @@ watch(
         </UCard>
       </template>
     </div>
+        </div>
+      </template>
+    </UTabs>
 
     <!-- Pagination -->
     <div

@@ -9,6 +9,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.ds.deliveryapp.R;
 import com.ds.deliveryapp.model.DeliveryAssignment;
 import com.ds.deliveryapp.utils.FormaterUtil;
+import com.ds.deliveryapp.utils.StatusMapper;
 
 import java.math.BigDecimal;
 import java.text.NumberFormat;
@@ -81,7 +82,16 @@ public class TasksAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
         taskHolder.tvDeliveryLocation.setText(task.getDeliveryLocation());
         // Giả định bạn có phương thức helper để định dạng tiền tệ và khoảng cách
         taskHolder.tvParcelValue.setText(FormaterUtil.formatCurrency(task.getValue()));
-        taskHolder.tvStatus.setText(task.getStatus() != null ? mapStatus(task.getStatus().toUpperCase()) : "MỚI");
+        // Map status to Vietnamese - try parcel status first, then assignment status
+        String statusText = "MỚI";
+        if (task.getStatus() != null) {
+            statusText = StatusMapper.mapParcelStatus(task.getStatus());
+            // If parcel status mapping didn't work (returned same value), try assignment status
+            if (statusText.equals(task.getStatus())) {
+                statusText = StatusMapper.mapAssignmentStatus(task.getStatus());
+            }
+        }
+        taskHolder.tvStatus.setText(statusText);
 
         taskHolder.itemView.setOnClickListener(v -> {
             if (listener != null) listener.onTaskClick(task);
@@ -136,12 +146,4 @@ public class TasksAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
         }
     }
 
-    private String mapStatus (String status) {
-        return switch (status) {
-            case "IN_PROGRESS" -> "ĐANG XỬ LÝ";
-            case "COMPLETED" -> "ĐÃ HOÀN THÀNH";
-            case "FAILED" -> "THẤT BẠI";
-            default -> throw new IllegalStateException("Unexpected value: " + status);
-        };
-    }
 }

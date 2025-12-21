@@ -78,11 +78,11 @@ export function useConversations() {
         if (includeMessages) {
           const { useChatStore } = await import('@/stores/chatStore')
           const chatStore = useChatStore()
-          
+
           conversationsArray.forEach((conv) => {
             // Update conversation metadata in store
             chatStore.setConversation(conv)
-            
+
             // Add messages to store if included
             if (conv.messages && conv.messages.length > 0) {
               // Messages come sorted DESC (newest first) from backend

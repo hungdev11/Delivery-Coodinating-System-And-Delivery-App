@@ -174,7 +174,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 ((ProposalSentViewHolder) holder).bind(message);
                 break;
             case VIEW_TYPE_PROPOSAL_RECEIVED:
-                ((ProposalReceiverViewHolder) holder).bind(message, mRecipientAvatarUrl, mListener, mGson);
+                ((ProposalReceiverViewHolder) holder).bind(message, mRecipientAvatarUrl, mListener, mGson, currentUserId);
                 break;
             case VIEW_TYPE_DELIVERY_COMPLETED:
                 ((DeliveryCompletedViewHolder) holder).bind(message, mDeliveryConfirmListener, mGson);
@@ -564,8 +564,48 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             dynamicUiContainer = itemView.findViewById(R.id.dynamic_ui_container);
         }
 
-        public void bind(Message message, String avatarUrl, OnProposalActionListener listener, Gson gson) {
-            tvMessageContent.setText(message.getContent());
+        public void bind(Message message, String avatarUrl, OnProposalActionListener listener, Gson gson, String currentUserId) {
+            // Display proposal data in key-value format for DISPUTE_APPEAL and STATUS_CHANGE_NOTIFICATION
+            String proposalType = message.getProposal() != null ? message.getProposal().getType() : "";
+            if (("DISPUTE_APPEAL".equals(proposalType) || "STATUS_CHANGE_NOTIFICATION".equals(proposalType)) 
+                    && message.getProposal() != null && message.getProposal().getData() != null) {
+                try {
+                    JsonObject dataObj = gson.fromJson(message.getProposal().getData(), JsonObject.class);
+                    if (dataObj != null) {
+                        StringBuilder contentBuilder = new StringBuilder();
+                        // Display key-value pairs like web
+                        for (String key : dataObj.keySet()) {
+                            String value = "";
+                            try {
+                                if (dataObj.get(key).isJsonPrimitive()) {
+                                    value = dataObj.get(key).getAsString();
+                                } else {
+                                    value = dataObj.get(key).toString();
+                                }
+                            } catch (Exception e) {
+                                value = dataObj.get(key).toString();
+                            }
+                            if (contentBuilder.length() > 0) {
+                                contentBuilder.append("\n");
+                            }
+                            contentBuilder.append(key).append(": ").append(value);
+                        }
+                        if (contentBuilder.length() > 0) {
+                            tvMessageContent.setText(contentBuilder.toString());
+                        } else {
+                            tvMessageContent.setText(message.getContent());
+                        }
+                    } else {
+                        tvMessageContent.setText(message.getContent());
+                    }
+                } catch (Exception e) {
+                    Log.e("ProposalViewHolder", "Error parsing proposal data", e);
+                    tvMessageContent.setText(message.getContent());
+                }
+            } else {
+                tvMessageContent.setText(message.getContent());
+            }
+            
             ivPartnerAvatar.setImageResource(R.drawable.ic_person);
             // (Thêm Glide/Picasso)
 
@@ -575,7 +615,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             // Xóa UI động cũ trước khi bind
             dynamicUiContainer.removeAllViews();
 
-            if ("PENDING".equals(proposal.getStatus())) {
+            // Check if this is a read-only notification
+            boolean isReadOnly = "STATUS_CHANGE_NOTIFICATION".equals(proposalType) 
+                    || ("DISPUTE_APPEAL".equals(proposalType) && currentUserId != null && currentUserId.equals(proposal.getProposerId() != null ? proposal.getProposerId().toString() : null));
+            
+            if ("PENDING".equals(proposal.getStatus()) && !isReadOnly) {
                 // Đang chờ -> Ẩn status, render UI động
                 tvStatus.setVisibility(View.GONE);
                 tvResultData.setVisibility(View.GONE);
@@ -608,6 +652,56 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                     default:
                         renderAcceptDecline(proposal, listener);
                         break;
+                }
+            } else if (isReadOnly || !"PENDING".equals(proposal.getStatus())) {
+                // Read-only notification or already responded - show status and result
+                tvStatus.setVisibility(View.VISIBLE);
+                tvResultData.setVisibility(View.VISIBLE);
+                dynamicUiContainer.setVisibility(View.GONE);
+                
+                // Set status text
+                tvStatus.setText("Trạng thái: " + proposal.getStatus());
+                
+                // For STATUS_CHANGE_NOTIFICATION and DISPUTE_APPEAL, show key-value format like web
+                if ("STATUS_CHANGE_NOTIFICATION".equals(proposalType) || "DISPUTE_APPEAL".equals(proposalType)) {
+                    try {
+                        JsonObject dataObj = gson.fromJson(proposal.getData(), JsonObject.class);
+                        if (dataObj != null) {
+                            StringBuilder info = new StringBuilder();
+                            // Iterate through all keys in the JSON object (like web does)
+                            for (String key : dataObj.keySet()) {
+                                String value = "";
+                                try {
+                                    if (dataObj.get(key).isJsonPrimitive()) {
+                                        value = dataObj.get(key).getAsString();
+                                    } else {
+                                        value = dataObj.get(key).toString();
+                                    }
+                                } catch (Exception e) {
+                                    value = dataObj.get(key).toString();
+                                }
+                                // Format: "key: value" (like web)
+                                info.append(key).append(": ").append(value);
+                                if (info.length() > 0 && !key.equals(dataObj.keySet().toArray()[dataObj.size() - 1])) {
+                                    info.append("\n");
+                                }
+                            }
+                            if (info.length() > 0) {
+                                tvResultData.setText(info.toString());
+                            } else {
+                                tvResultData.setText("Thông báo");
+                            }
+                        } else {
+                            tvResultData.setText("Thông báo");
+                        }
+                    } catch (Exception e) {
+                        Log.e("ProposalViewHolder", "Error parsing proposal data for " + proposalType, e);
+                        tvResultData.setText("Thông báo");
+                    }
+                } else if (proposal.getResultData() != null) {
+                    tvResultData.setText("Kết quả: " + proposal.getResultData());
+                } else {
+                    tvResultData.setText("");
                 }
 
             } else {

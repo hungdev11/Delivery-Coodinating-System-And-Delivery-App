@@ -90,11 +90,11 @@ public class ParcelService implements IParcelService{
     //Validate state transition path
     private boolean isTransitionValid(ParcelStatus current, ParcelStatus next) {
         return switch (current) {
-            case IN_WAREHOUSE -> next == ParcelStatus.ON_ROUTE;
-            case ON_ROUTE -> next == ParcelStatus.DELIVERED || next == ParcelStatus.FAILED || next == ParcelStatus.DELAYED;
+            case IN_WAREHOUSE -> next == ParcelStatus.ON_ROUTE || next == ParcelStatus.DISPUTE; // Allow admin to set dispute
+            case ON_ROUTE -> next == ParcelStatus.DELIVERED || next == ParcelStatus.FAILED || next == ParcelStatus.DELAYED || next == ParcelStatus.DISPUTE; // Allow admin to set dispute
             case DELIVERED -> next == ParcelStatus.SUCCEEDED || next == ParcelStatus.FAILED || next == ParcelStatus.DISPUTE;
             case DISPUTE -> next == ParcelStatus.SUCCEEDED || next == ParcelStatus.LOST;
-            case DELAYED -> next == ParcelStatus.IN_WAREHOUSE;
+            case DELAYED -> next == ParcelStatus.IN_WAREHOUSE || next == ParcelStatus.DISPUTE; // Allow admin to set dispute
             case FAILED, SUCCEEDED, LOST -> false; // Last state
             default -> false;
         };
