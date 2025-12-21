@@ -132,13 +132,19 @@ const getBorderColor = computed(() => {
 
     <!-- Proposal Data Display -->
     <div v-if="proposal.data" class="text-xs text-gray-500 mb-2">
-      <pre class="whitespace-pre-wrap break-words">{{
+      <div v-if="proposal.type === 'DISPUTE_APPEAL' || proposal.type === 'STATUS_CHANGE_NOTIFICATION'">
+        <div v-for="(value, key) in parseProposalData(proposal.data)" :key="key" class="mb-1">
+          <span class="font-medium">{{ key }}:</span>
+          <span class="ml-1">{{ value }}</span>
+        </div>
+      </div>
+      <pre v-else class="whitespace-pre-wrap break-words">{{
         JSON.stringify(parseProposalData(proposal.data), null, 2)
       }}</pre>
     </div>
 
     <!-- Proposal Response Buttons -->
-    <div v-if="canRespond" class="flex space-x-2 mt-3">
+    <div v-if="canRespond || (proposal.type === 'DISPUTE_APPEAL' && proposal.proposerId === currentUserId)" class="flex space-x-2 mt-3">
       <!-- ACCEPT_DECLINE action type -->
       <UButton
         v-if="proposal.actionType === 'ACCEPT_DECLINE'"
@@ -167,6 +173,29 @@ const getBorderColor = computed(() => {
       >
         Xác nhận đã nhận đơn
       </UButton>
+
+      <!-- DISPUTE_APPEAL type - Shipper can appeal with evidence (only if recipient) -->
+      <UButton
+        v-if="proposal.type === 'DISPUTE_APPEAL' && proposal.recipientId === currentUserId"
+        size="xs"
+        color="primary"
+        @click="handleResponse('APPEALED')"
+      >
+        Kháng cáo với bằng chứng
+      </UButton>
+
+      <!-- DISPUTE_APPEAL type - Client view (read-only info) -->
+      <div
+        v-if="proposal.type === 'DISPUTE_APPEAL' && proposal.proposerId === currentUserId"
+        class="text-xs text-gray-500 italic"
+      >
+        Bạn đã tạo tranh chấp. Shipper có thể kháng cáo với bằng chứng.
+      </div>
+
+      <!-- STATUS_CHANGE_NOTIFICATION type - Read-only notification -->
+      <div v-if="proposal.type === 'STATUS_CHANGE_NOTIFICATION'" class="text-xs text-gray-500 italic">
+        Đây là thông báo, không cần phản hồi
+      </div>
     </div>
 
     <!-- Affected Parcels Display (if proposal has sessionId) -->

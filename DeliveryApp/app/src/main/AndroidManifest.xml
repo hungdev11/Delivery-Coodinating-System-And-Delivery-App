@@ -66,6 +66,14 @@
         <activity
             android:name=".SessionQRScanActivity"
             android:exported="false" />
+        <activity
+            android:name=".SessionListActivity"
+            android:exported="false"
+            android:label="Quản lý phiên" />
+        <activity
+            android:name=".SessionDetailActivity"
+            android:exported="false"
+            android:label="Chi tiết phiên" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

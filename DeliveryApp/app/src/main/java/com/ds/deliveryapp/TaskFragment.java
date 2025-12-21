@@ -376,7 +376,12 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
 
             popup.setOnMenuItemClickListener(item -> {
                 int itemId = item.getItemId();
-                if (itemId == R.id.menu_complete_session) {
+                if (itemId == R.id.menu_manage_sessions) {
+                    // Navigate to session list
+                    android.content.Intent intent = new android.content.Intent(getContext(), SessionListActivity.class);
+                    startActivity(intent);
+                    return true;
+                } else if (itemId == R.id.menu_complete_session) {
                     showCompleteSessionDialog();
                     return true;
                 } else if (itemId == R.id.menu_fail_session) {

@@ -34,6 +34,7 @@ public class ProposalPopupDialog extends Dialog {
     private Message proposalMessage;
     private GlobalChatService globalChatService;
     private Gson gson = new Gson();
+    private boolean isReadOnly = false; // For STATUS_CHANGE_NOTIFICATION and read-only proposals
 
     public ProposalPopupDialog(@NonNull Context context, Message proposalMessage) {
         super(context);
@@ -146,40 +147,81 @@ public class ProposalPopupDialog extends Dialog {
         }
         tvSenderTime.setText(senderTimeText);
 
-        // Setup action buttons based on proposal type
-        String actionType = proposal.getActionType();
-        if (actionType == null) {
-            actionType = "ACCEPT_DECLINE";
-        }
+        // Check if this is a read-only notification (STATUS_CHANGE_NOTIFICATION)
+        String proposalType = proposal.getType();
+        if (isReadOnly || "STATUS_CHANGE_NOTIFICATION".equals(proposalType)) {
+            // Read-only notification - hide action buttons, show only dismiss
+            btnAccept.setVisibility(View.GONE);
+            btnDecline.setVisibility(View.GONE);
+            btnDismiss.setText("Đã hiểu");
+            
+            // Enhance content display for STATUS_CHANGE_NOTIFICATION
+            if ("STATUS_CHANGE_NOTIFICATION".equals(proposalType)) {
+                try {
+                    JsonObject dataObj = gson.fromJson(proposal.getData(), JsonObject.class);
+                    if (dataObj != null) {
+                        StringBuilder enhancedContent = new StringBuilder();
+                        if (dataObj.has("parcelCode")) {
+                            enhancedContent.append("Đơn hàng: ").append(dataObj.get("parcelCode").getAsString()).append("\n");
+                        }
+                        if (dataObj.has("oldStatus") && dataObj.has("newStatus")) {
+                            enhancedContent.append("Trạng thái: ")
+                                    .append(dataObj.get("oldStatus").getAsString())
+                                    .append(" → ")
+                                    .append(dataObj.get("newStatus").getAsString());
+                        }
+                        if (enhancedContent.length() > 0) {
+                            tvContent.setText(enhancedContent.toString());
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error parsing STATUS_CHANGE_NOTIFICATION data", e);
+                }
+            }
+        } else {
+            // Setup action buttons based on proposal type
+            String actionType = proposal.getActionType();
+            if (actionType == null) {
+                actionType = "ACCEPT_DECLINE";
+            }
 
-        switch (actionType) {
-            case "ACCEPT_DECLINE":
-                btnAccept.setVisibility(View.VISIBLE);
-                btnDecline.setVisibility(View.VISIBLE);
-                btnAccept.setOnClickListener(v -> handleProposalAction("ACCEPT"));
-                btnDecline.setOnClickListener(v -> handleProposalAction("DECLINE"));
-                break;
-            case "TEXT_INPUT":
-                // For text input proposals, show input field (can be enhanced)
-                btnAccept.setText("Xác nhận");
-                btnAccept.setVisibility(View.VISIBLE);
-                btnDecline.setVisibility(View.GONE);
-                btnAccept.setOnClickListener(v -> handleProposalAction("CONFIRM"));
-                break;
-            default:
-                btnAccept.setVisibility(View.VISIBLE);
-                btnDecline.setVisibility(View.GONE);
-                btnAccept.setOnClickListener(v -> handleProposalAction("ACCEPT"));
+            switch (actionType) {
+                case "ACCEPT_DECLINE":
+                    btnAccept.setVisibility(View.VISIBLE);
+                    btnDecline.setVisibility(View.VISIBLE);
+                    btnAccept.setOnClickListener(v -> handleProposalAction("ACCEPT"));
+                    btnDecline.setOnClickListener(v -> handleProposalAction("DECLINE"));
+                    break;
+                case "TEXT_INPUT":
+                    // For text input proposals, show input field (can be enhanced)
+                    btnAccept.setText("Xác nhận");
+                    btnAccept.setVisibility(View.VISIBLE);
+                    btnDecline.setVisibility(View.GONE);
+                    btnAccept.setOnClickListener(v -> handleProposalAction("CONFIRM"));
+                    break;
+                default:
+                    btnAccept.setVisibility(View.VISIBLE);
+                    btnDecline.setVisibility(View.GONE);
+                    btnAccept.setOnClickListener(v -> handleProposalAction("ACCEPT"));
+            }
         }
 
         btnDismiss.setOnClickListener(v -> dismiss());
 
-        // Auto-dismiss after 30 seconds
+        // Auto-dismiss after 30 seconds (or 10 seconds for read-only notifications)
+        int dismissDelay = isReadOnly || "STATUS_CHANGE_NOTIFICATION".equals(proposalType) ? 10000 : 30000;
         getWindow().getDecorView().postDelayed(() -> {
             if (isShowing()) {
                 dismiss();
             }
-        }, 30000);
+        }, dismissDelay);
+    }
+
+    /**
+     * Set read-only mode (for notifications that don't require response)
+     */
+    public void setReadOnly(boolean readOnly) {
+        this.isReadOnly = readOnly;
     }
 
     private void handleProposalAction(String action) {

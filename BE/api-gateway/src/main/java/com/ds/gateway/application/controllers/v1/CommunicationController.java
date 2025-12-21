@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
+import jakarta.servlet.http.HttpServletRequest;
 
 import com.ds.gateway.annotations.AuthRequired;
 import com.ds.gateway.application.security.UserContext;
@@ -59,12 +60,23 @@ public class CommunicationController {
 
     /**
      * Get conversations for a user (BASIC - direct proxy)
+     * Forwards query parameters (includeMessages, messageLimit) to communication service
      */
     @GetMapping("/conversations/user/{userId}")
     @AuthRequired
-    public ResponseEntity<?> getMyConversations(@PathVariable String userId) {
+    public ResponseEntity<?> getMyConversations(
+            @PathVariable String userId,
+            HttpServletRequest request) {
         log.debug("[api-gateway] [CommunicationController.getMyConversations] GET /api/v1/conversations/user/{} - Proxying to Communication Service", userId);
-        return proxyCommunication(HttpMethod.GET, "/api/v1/conversations/user/" + userId, null);
+        
+        // Build path with query parameters
+        String path = "/api/v1/conversations/user/" + userId;
+        String queryString = request.getQueryString();
+        if (queryString != null && !queryString.isEmpty()) {
+            path += "?" + queryString;
+        }
+        
+        return proxyCommunication(HttpMethod.GET, path, null);
     }
 
     /**
@@ -304,7 +316,7 @@ public class CommunicationController {
         ProxyLogContext context = proxyRequestLogger.start(method, COMMUNICATION_SERVICE, url, body);
         try {
             ResponseEntity<Object> response = proxyHttpClient.exchange(method, url, body, Object.class);
-            proxyRequestLogger.success(context, response.getStatusCodeValue());
+            proxyRequestLogger.success(context, response.getStatusCode().value());
             return response;
         } catch (ResourceAccessException e) {
             proxyRequestLogger.failure(context, 502, e.getMessage(), e);

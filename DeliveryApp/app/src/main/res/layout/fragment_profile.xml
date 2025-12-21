@@ -38,6 +38,21 @@
         android:paddingStart="16dp"
         android:paddingEnd="16dp" />
 
+    <!-- Session Management Button -->
+    <Button
+        android:id="@+id/btnManageSessions"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:layout_marginTop="16dp"
+        android:backgroundTint="#F97316"
+        android:text="📦 Quản lý phiên"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:drawableStart="@android:drawable/ic_menu_view"
+        android:drawablePadding="8dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp" />
+
     <Button
         android:id="@+id/btnLogout"
         android:layout_width="match_parent"

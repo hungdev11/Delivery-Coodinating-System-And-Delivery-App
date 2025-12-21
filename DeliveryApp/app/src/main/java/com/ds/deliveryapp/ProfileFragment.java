@@ -20,9 +20,11 @@ public class ProfileFragment extends Fragment {
 
         Button btnLogout = view.findViewById(R.id.btnLogout);
         Button btnMessages = view.findViewById(R.id.btnMessages);
+        Button btnManageSessions = view.findViewById(R.id.btnManageSessions);
 
         btnLogout.setOnClickListener(v -> handleLogout());
         btnMessages.setOnClickListener(v -> openMessagesActivity());
+        btnManageSessions.setOnClickListener(v -> openSessionListActivity());
 
         return view;
     }
@@ -31,6 +33,13 @@ public class ProfileFragment extends Fragment {
         if (getContext() == null) return;
         
         Intent intent = new Intent(getContext(), ConversationsListActivity.class);
+        startActivity(intent);
+    }
+
+    private void openSessionListActivity() {
+        if (getContext() == null) return;
+        
+        Intent intent = new Intent(getContext(), SessionListActivity.class);
         startActivity(intent);
     }
 

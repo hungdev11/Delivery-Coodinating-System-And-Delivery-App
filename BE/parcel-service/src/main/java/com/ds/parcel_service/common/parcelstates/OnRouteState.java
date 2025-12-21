@@ -15,6 +15,9 @@ public class OnRouteState implements IParcelState{
             case CAN_NOT_DELIVERY:
             case CUSTOMER_REJECT:
                 yield ParcelStatus.FAILED;
+            case CUSTOMER_CONFIRM_NOT_RECEIVED:
+                // Allow admin to set dispute from any status (client may contact admin directly)
+                yield ParcelStatus.DISPUTE;
             default:
                 throw new IllegalStateException("Invalid event at " + getParcelStatus().name() + ": " + event.name());
         };

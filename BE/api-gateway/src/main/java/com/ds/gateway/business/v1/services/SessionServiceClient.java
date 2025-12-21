@@ -338,4 +338,15 @@ public class SessionServiceClient implements ISessionServiceClient {
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
         }
     }
+
+    @Override
+    public ResponseEntity<?> getAllSessionsForDeliveryMan(String deliveryManId, String excludeParcelId) {
+        String uri = UriComponentsBuilder
+                .fromPath("/api/v1/sessions/drivers/{id}/sessions")
+                .queryParamIfPresent("excludeParcelId", Optional.ofNullable(excludeParcelId))
+                .build(deliveryManId)
+                .toString();
+        log.debug("[api-gateway] [SessionServiceClient.getAllSessionsForDeliveryMan] WebClient: GET -> {}", uri);
+        return callGet(uri);
+    }
 }

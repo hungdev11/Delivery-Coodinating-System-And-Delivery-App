@@ -88,8 +88,11 @@ export interface SortConfig {
 // QUERY PAYLOAD
 // ============================================================================
 
+// Import FilterGroupItemV2 for type union (avoid circular dependency)
+import type { FilterGroupItemV2 } from './filter-v2'
+
 export interface QueryPayload {
-  filters?: FilterGroup
+  filters?: FilterGroup | FilterGroupItemV2 // Support both V1 FilterGroup and V2 FilterGroupItemV2
   sorts?: SortConfig[]
   page?: number
   size?: number

@@ -155,6 +155,16 @@ public interface SessionClient {
     Call<BaseResponse<DeliverySession>> getActiveSession(@Path("deliveryManId") String deliveryManId);
     
     /**
+     * Lấy tất cả sessions của một shipper.
+     * Ánh xạ tới: SessionController.getAllSessionsForDeliveryMan
+     */
+    @GET("/api/v1/sessions/drivers/{deliveryManId}/sessions")
+    Call<BaseResponse<java.util.List<DeliverySession>>> getAllSessionsForDeliveryMan(
+            @Path("deliveryManId") String deliveryManId,
+            @Query("excludeParcelId") String excludeParcelId
+    );
+    
+    /**
      * Transfer a parcel from current shipper to another shipper
      * Only allows transferring ON_ROUTE parcels
      */

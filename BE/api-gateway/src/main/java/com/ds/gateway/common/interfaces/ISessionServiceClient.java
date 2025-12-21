@@ -49,4 +49,9 @@ public interface ISessionServiceClient {
      * Get active session (CREATED or IN_PROGRESS) for a delivery man
      */
     ResponseEntity<?> getActiveSession(String deliveryManId);
+    
+    /**
+     * Get all sessions for a delivery man
+     */
+    ResponseEntity<?> getAllSessionsForDeliveryMan(String deliveryManId, String excludeParcelId);
 }
