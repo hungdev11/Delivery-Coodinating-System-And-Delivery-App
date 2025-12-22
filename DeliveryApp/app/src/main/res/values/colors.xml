@@ -29,4 +29,17 @@
     <!-- Màu Đỏ (Thất bại/Lỗi: FAILED, DISPUTE, LOST) -->
     <color name="status_failed">#FFD32F2F</color>
 
+    <!-- Màu nền nhạt cho Session Items theo trạng thái -->
+    <!-- CREATED: Vàng/Cam nhạt -->
+    <color name="session_bg_created">#33FFA000</color>
+    
+    <!-- IN_PROGRESS: Xanh dương nhạt -->
+    <color name="session_bg_in_progress">#331976D2</color>
+    
+    <!-- COMPLETED: Xanh lá nhạt -->
+    <color name="session_bg_completed">#332E7D32</color>
+    
+    <!-- FAILED: Đỏ nhạt -->
+    <color name="session_bg_failed">#33D32F2F</color>
+
 </resources>

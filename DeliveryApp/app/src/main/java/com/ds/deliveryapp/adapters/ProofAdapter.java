@@ -45,9 +45,10 @@ public class ProofAdapter extends RecyclerView.Adapter<ProofAdapter.ProofViewHol
     public void onBindViewHolder(@NonNull ProofViewHolder holder, int position) {
         DeliveryProof proof = proofs.get(position);
         
-        // Load thumbnail
+        // Load thumbnail - use thumbnail URL for videos, original URL for images
+        String thumbnailUrl = proof.getThumbnailUrl();
         Glide.with(context)
-                .load(proof.getMediaUrl())
+                .load(thumbnailUrl)
                 .placeholder(R.drawable.ic_image_placeholder)
                 .error(R.drawable.ic_image_error)
                 .into(holder.imgThumbnail);

@@ -331,12 +331,17 @@ public class ProofActivity extends AppCompatActivity {
                     public void onComplete(List<String> successfulUrls) {
                         runOnUiThread(() -> {
                             progressDialog.dismiss();
-                            Log.d(TAG, "Uploaded URLs: " + successfulUrls);
+                            Log.d(TAG, "Uploaded URLs count: " + (successfulUrls != null ? successfulUrls.size() : 0));
+                            if (successfulUrls != null) {
+                                for (int i = 0; i < successfulUrls.size(); i++) {
+                                    Log.d(TAG, "Uploaded URL[" + i + "]: " + successfulUrls.get(i));
+                                }
+                            }
 
                             if (successfulUrls == null || successfulUrls.isEmpty()) {
                                 Toast.makeText(ProofActivity.this, "Upload thất bại", Toast.LENGTH_SHORT).show();
-            return;
-        }
+                                return;
+                            }
 
                             submitCompletionRequest(successfulUrls);
                         });

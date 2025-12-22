@@ -42,7 +42,7 @@ import retrofit2.Response;
 
 public class TaskDetailActivity extends AppCompatActivity implements TaskActionHandler.TaskUpdateListener{
     private TextView tvParcelCode, tvStatus, tvReceiverName, tvDeliveryLocation;
-    private Button btnCallReceiver, btnMainAction, btnFailAction, btnChatReceiver;
+    private Button btnCallReceiver, btnMainAction, btnFailAction, btnChatReceiver, btnReturnToWarehouse;
     private TextView tvParcelValue;
 
     private static final int REQUEST_CODE_PROOF = 9001; // Mã request mới
@@ -101,6 +101,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         btnFailAction = findViewById(R.id.btn_fail_action);
         btnMainAction = findViewById(R.id.btn_main_action);
         btnChatReceiver = findViewById(R.id.btn_chat_receiver_detail);
+        btnReturnToWarehouse = findViewById(R.id.btn_return_to_warehouse);
         tvDeliveryType = findViewById(R.id.tv_delivery_type);
         tvWeight = findViewById(R.id.tv_weight);
         tvParcelId = findViewById(R.id.tv_parcel_id);
@@ -161,6 +162,27 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
             }
         }
         updateMainActionButton(task.getStatus());
+        updateReturnToWarehouseButton(task);
+    }
+    
+    private void updateReturnToWarehouseButton(DeliveryAssignment task) {
+        if (btnReturnToWarehouse == null) return;
+        
+        // Show button only for FAILED or DELAYED tasks
+        if ("FAILED".equals(task.getStatus()) || "DELAYED".equals(task.getStatus())) {
+            btnReturnToWarehouse.setVisibility(VISIBLE);
+            btnReturnToWarehouse.setOnClickListener(v -> {
+                if (task.getAssignmentId() != null && !task.getAssignmentId().isEmpty()) {
+                    Intent intent = new Intent(this, ReturnToWarehouseActivity.class);
+                    intent.putExtra(ReturnToWarehouseActivity.EXTRA_ASSIGNMENT_ID, task.getAssignmentId());
+                    startActivityForResult(intent, 9002);
+                } else {
+                    Toast.makeText(this, "Không tìm thấy thông tin đơn hàng", Toast.LENGTH_SHORT).show();
+                }
+            });
+        } else {
+            btnReturnToWarehouse.setVisibility(GONE);
+        }
     }
 
     private void updateMainActionButton(String status) {
@@ -265,8 +287,17 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        // CHUYỂN TIẾP KẾT QUẢ CHO HANDLER XỬ LÝ
-        if (actionHandler != null) {
+        if (requestCode == 9002 && resultCode == RESULT_OK) {
+            // ReturnToWarehouseActivity completed successfully
+            Toast.makeText(this, "Đã xác nhận trả hàng về kho!", Toast.LENGTH_SHORT).show();
+            // Reload proofs to show RETURNED proof
+            if (currentTask != null) {
+                loadProofs(currentTask.getAssignmentId());
+            }
+            // Hide return button if proof exists
+            updateReturnToWarehouseButton(currentTask);
+        } else if (actionHandler != null) {
+            // CHUYỂN TIẾP KẾT QUẢ CHO HANDLER XỬ LÝ
             actionHandler.processProofResult(requestCode, resultCode, data);
         }
     }

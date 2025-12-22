@@ -59,6 +59,9 @@
             android:name=".ProofActivity"
             android:exported="false" />
         <activity
+            android:name=".ReturnToWarehouseActivity"
+            android:exported="false" />
+        <activity
             android:name=".QrScanActivity"
             android:exported="false" />
         <activity

@@ -24,6 +24,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.google.android.material.snackbar.Snackbar;
 
+import com.ds.deliveryapp.ReturnToWarehouseActivity;
 import com.ds.deliveryapp.adapter.TasksAdapter;
 import com.ds.deliveryapp.clients.SessionClient;
 import com.ds.deliveryapp.clients.req.SessionFailRequest;
@@ -33,6 +34,7 @@ import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.clients.res.UpdateNotification;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.DeliveryAssignment;
+import com.ds.deliveryapp.model.DeliveryProof;
 import com.ds.deliveryapp.service.GlobalChatService;
 import com.ds.deliveryapp.utils.SessionManager;
 
@@ -234,6 +236,10 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             // Transfer parcel accepted successfully
             Toast.makeText(getContext(), "Đã nhận đơn chuyển giao thành công.", Toast.LENGTH_SHORT).show();
             resetAndFetchTasks();
+        } else if (requestCode == 9002 && resultCode == getActivity().RESULT_OK) {
+            // ReturnToWarehouseActivity completed successfully
+            Toast.makeText(getContext(), "Đã xác nhận trả hàng về kho!", Toast.LENGTH_SHORT).show();
+            resetAndFetchTasks();
         }
     }
 
@@ -433,6 +439,94 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     }
 
     private void showCompleteSessionDialog() {
+        // Check if there are FAILED/DELAYED tasks without RETURNED proofs
+        checkReturnedProofsBeforeComplete();
+    }
+    
+    private void checkReturnedProofsBeforeComplete() {
+        // Filter FAILED and DELAYED tasks
+        List<DeliveryAssignment> failedOrDelayedTasks = new ArrayList<>();
+        for (DeliveryAssignment task : tasks) {
+            if ("FAILED".equals(task.getStatus()) || "DELAYED".equals(task.getStatus())) {
+                failedOrDelayedTasks.add(task);
+            }
+        }
+        
+        if (failedOrDelayedTasks.isEmpty()) {
+            // No failed/delayed tasks, proceed with completion
+            showCompleteConfirmationDialog();
+            return;
+        }
+        
+        // Check proofs for each failed/delayed task
+        checkProofsForTasks(failedOrDelayedTasks, 0);
+    }
+    
+    private void checkProofsForTasks(List<DeliveryAssignment> tasksToCheck, int index) {
+        if (index >= tasksToCheck.size()) {
+            // All tasks checked, proceed with completion
+            showCompleteConfirmationDialog();
+            return;
+        }
+        
+        DeliveryAssignment task = tasksToCheck.get(index);
+        if (task.getAssignmentId() == null || task.getAssignmentId().isEmpty()) {
+            // Skip if no assignmentId
+            checkProofsForTasks(tasksToCheck, index + 1);
+            return;
+        }
+        
+        SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
+        service.getProofsByAssignment(task.getAssignmentId()).enqueue(new retrofit2.Callback<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>>() {
+            @Override
+            public void onResponse(retrofit2.Call<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> call, 
+                                 retrofit2.Response<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
+                    List<com.ds.deliveryapp.model.DeliveryProof> proofs = response.body().getResult();
+                    boolean hasReturnedProof = false;
+                    for (com.ds.deliveryapp.model.DeliveryProof proof : proofs) {
+                        if ("RETURNED".equals(proof.getType())) {
+                            hasReturnedProof = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!hasReturnedProof) {
+                        // Found a task without RETURNED proof
+                        showReturnToWarehouseRequiredDialog(task);
+                        return;
+                    }
+                }
+                
+                // Check next task
+                checkProofsForTasks(tasksToCheck, index + 1);
+            }
+            
+            @Override
+            public void onFailure(retrofit2.Call<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> call, Throwable t) {
+                Log.e(TAG, "Failed to check proofs for task " + task.getAssignmentId(), t);
+                // On error, continue checking next task
+                checkProofsForTasks(tasksToCheck, index + 1);
+            }
+        });
+    }
+    
+    private void showReturnToWarehouseRequiredDialog(DeliveryAssignment task) {
+        new AlertDialog.Builder(getContext())
+                .setTitle("Chưa xác nhận trả hàng về kho")
+                .setMessage("Đơn hàng " + task.getParcelCode() + " chưa có bằng chứng trả về kho.\nVui lòng quét lại đơn hàng để xác nhận đã trả về kho trước khi kết thúc phiên.")
+                .setPositiveButton("Xác nhận về kho", (dialog, which) -> {
+                    // Open ReturnToWarehouseActivity
+                    Intent intent = new Intent(getContext(), ReturnToWarehouseActivity.class);
+                    intent.putExtra(ReturnToWarehouseActivity.EXTRA_ASSIGNMENT_ID, task.getAssignmentId());
+                    startActivityForResult(intent, 9002); // Different request code
+                })
+                .setNegativeButton("Hủy", null)
+                .setCancelable(false)
+                .show();
+    }
+    
+    private void showCompleteConfirmationDialog() {
         new AlertDialog.Builder(getContext())
                 .setTitle("Hoàn tất phiên")
                 .setMessage("Bạn có chắc chắn muốn kết thúc ca làm việc (phiên) này?")

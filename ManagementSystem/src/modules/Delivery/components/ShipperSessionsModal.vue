@@ -7,7 +7,7 @@
 
 import { onMounted, computed, ref, h, resolveComponent } from 'vue'
 import { useRouter } from 'vue-router'
-import { getDeliverySessions } from '../api'
+import { getDeliverySessions, getActiveSessionForDeliveryMan } from '../api'
 import type { DeliveryManDto, DeliverySessionDto } from '../model.type'
 import type { FilterGroup } from '@/common/types/filter'
 import type { TableColumn } from '@nuxt/ui'
@@ -26,10 +26,26 @@ const router = useRouter()
 const sessions = ref<DeliverySessionDto[]>([])
 const sessionsLoading = ref(false)
 const showInactive = ref(false)
+const activeSessionId = ref<string | null>(null)
 
-onMounted(() => {
-  loadAllSessions()
+onMounted(async () => {
+  await loadActiveSession()
+  await loadAllSessions()
 })
+
+const loadActiveSession = async () => {
+  try {
+    // Get active session for this shipper
+    const response = await getActiveSessionForDeliveryMan(props.shipper.userId)
+    if (response.result?.id) {
+      activeSessionId.value = response.result.id
+    }
+  } catch (error) {
+    // If no active session, that's fine - just log it
+    console.debug('No active session found for shipper:', props.shipper.userId)
+    activeSessionId.value = null
+  }
+}
 
 const loadAllSessions = async () => {
   sessionsLoading.value = true
@@ -127,17 +143,31 @@ const columns: TableColumn<DeliverySessionDto>[] = [
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const status = row.original.status
+      const session = row.original
+      const status = session.status
+      const isActive = activeSessionId.value === session.id
       const color = status === 'COMPLETED' ? 'success' : status === 'FAILED' ? 'error' : 'warning'
-      return h(
-        UBadge,
-        {
-          variant: 'soft',
-          color,
-          class: 'capitalize',
-        },
-        () => status.toLowerCase(),
-      )
+      return h('div', { class: 'flex items-center gap-2' }, [
+        h(
+          UBadge,
+          {
+            variant: 'soft',
+            color,
+            class: 'capitalize',
+          },
+          () => status.toLowerCase(),
+        ),
+        isActive &&
+          h(
+            UBadge,
+            {
+              variant: 'solid',
+              color: 'primary',
+              class: 'text-xs',
+            },
+            () => 'ACTIVE',
+          ),
+      ])
     },
   },
   {
@@ -175,8 +205,8 @@ const columns: TableColumn<DeliverySessionDto>[] = [
     :description="`Total sessions: ${totalSessions}`"
     :close="{ onClick: handleClose }"
     :ui="{
-      content: 'min-w-[100vh] md:min-w-none sm:min-w-none sm:max-w-md md:max-w-lg',
-      footer: 'justify-end',
+      content: 'min-w-[100vh] w-full md:min-w-none sm:min-w-none sm:max-w-md md:max-w-lg',
+      footer: 'justify-end w-full',
     }"
   >
     <template #body>

@@ -41,7 +41,9 @@ import okio.Source;
 public class CloudinaryService {
     private static final String TAG = "CloudinaryService";
 
-    private static final String CLOUDINARY_UPLOAD_URL = "https://api.cloudinary.com/v1_1/df8ula2bv/image/upload";
+    private static final String CLOUDINARY_BASE_URL = "https://api.cloudinary.com/v1_1/df8ula2bv";
+    private static final String CLOUDINARY_IMAGE_UPLOAD_URL = CLOUDINARY_BASE_URL + "/image/upload";
+    private static final String CLOUDINARY_VIDEO_UPLOAD_URL = CLOUDINARY_BASE_URL + "/video/upload";
     private static final String CLOUDINARY_UPLOAD_PRESET = "proof_med";
 
     private static CloudinaryService instance;
@@ -115,10 +117,15 @@ public class CloudinaryService {
                 
                 // Detect MIME type to call appropriate function
                 String mimeType = context.getContentResolver().getType(uri);
+                Log.d(TAG, "Processing media - MIME type: " + mimeType + ", URI: " + uri);
                 if (mimeType != null && mimeType.startsWith("video/")) {
+                    Log.d(TAG, "Detected video, uploading to video endpoint...");
                     url = uploadSingleVideoSync(context, uri, fileHash);
+                    Log.d(TAG, "Video upload result: " + (url != null ? "SUCCESS - " + url : "FAILED"));
                 } else {
+                    Log.d(TAG, "Detected image, uploading to image endpoint...");
                     url = uploadSingleImageSync(context, uri, fileHash);
+                    Log.d(TAG, "Image upload result: " + (url != null ? "SUCCESS - " + url : "FAILED"));
                 }
                 
                 if (url != null) {
@@ -210,7 +217,7 @@ public class CloudinaryService {
                     .build();
 
             Request request = new Request.Builder()
-                    .url(CLOUDINARY_UPLOAD_URL)
+                    .url(CLOUDINARY_IMAGE_UPLOAD_URL)
                     .post(requestBody)
                     .build();
 
@@ -219,10 +226,13 @@ public class CloudinaryService {
                     String responseBody = response.body().string();
                     JsonObject jsonResponse = gson.fromJson(responseBody, JsonObject.class);
                     if (jsonResponse.has("secure_url")) {
-                        return jsonResponse.get("secure_url").getAsString();
+                        String imageUrl = jsonResponse.get("secure_url").getAsString();
+                        Log.d(TAG, "Image uploaded successfully: " + imageUrl);
+                        return imageUrl;
                     }
                 } else {
-                    Log.e(TAG, "Image upload failed: " + response.code());
+                    String errorBody = response.body() != null ? response.body().string() : "No error body";
+                    Log.e(TAG, "Image upload failed: " + response.code() + ", body: " + errorBody);
                 }
             }
         } catch (Exception e) {
@@ -282,7 +292,7 @@ public class CloudinaryService {
                     .build();
 
             Request request = new Request.Builder()
-                    .url(CLOUDINARY_UPLOAD_URL)
+                    .url(CLOUDINARY_VIDEO_UPLOAD_URL)
                     .post(requestBody)
                     .build();
 
@@ -291,10 +301,13 @@ public class CloudinaryService {
                     String responseBody = response.body().string();
                     JsonObject jsonResponse = gson.fromJson(responseBody, JsonObject.class);
                     if (jsonResponse.has("secure_url")) {
-                        return jsonResponse.get("secure_url").getAsString();
+                        String videoUrl = jsonResponse.get("secure_url").getAsString();
+                        Log.d(TAG, "Video uploaded successfully: " + videoUrl);
+                        return videoUrl;
                     }
                 } else {
-                    Log.e(TAG, "Video upload failed: " + response.code());
+                    String errorBody = response.body() != null ? response.body().string() : "No error body";
+                    Log.e(TAG, "Video upload failed: " + response.code() + ", body: " + errorBody);
                 }
             }
         } catch (Exception e) {

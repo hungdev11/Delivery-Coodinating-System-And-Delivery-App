@@ -221,4 +221,13 @@ public interface SessionClient {
     Call<BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> getProofsByAssignment(
             @Path("assignmentId") String assignmentId
     );
+    
+    /**
+     * Return parcel to warehouse (for FAILED/DELAYED assignments)
+     */
+    @POST("/api/v1/assignments/{assignmentId}/return-to-warehouse")
+    Call<BaseResponse<DeliveryAssignment>> returnToWarehouse(
+            @Path("assignmentId") String assignmentId,
+            @Body CompleteTaskRequest request
+    );
 }
