@@ -5,6 +5,7 @@
  * A searchable select component for selecting users by ID or name
  * Supports seed ID (allows direct ID input)
  * Uses USelectMenu for search functionality
+ * Client-side filtering for better performance
  */
 
 import { ref, computed, watch, onMounted } from 'vue'
@@ -37,8 +38,9 @@ const emit = defineEmits<{
 
 const toast = useToast()
 const searchQuery = ref('')
-const users = ref<UserDto[]>([])
+const allUsers = ref<UserDto[]>([]) // All loaded users for client-side filtering
 const loading = ref(false)
+const initialLoading = ref(false) // Loading state for initial data fetch
 const selectedUser = ref<UserDto | null>(null)
 const selectedId = ref<string | undefined>(props.modelValue)
 
@@ -49,7 +51,7 @@ watch(
     if (newValue !== selectedId.value) {
       selectedId.value = newValue
       if (newValue) {
-        loadUserById(newValue)
+        findUserById(newValue)
       } else {
         selectedUser.value = null
       }
@@ -68,9 +70,55 @@ watch(selectedUser, (user) => {
   }
 })
 
+/**
+ * Client-side filter users based on search query
+ */
+const filteredUsers = computed(() => {
+  if (!searchQuery.value || searchQuery.value.length < 2) {
+    return allUsers.value
+  }
+
+  const query = searchQuery.value.toLowerCase().trim()
+
+  return allUsers.value.filter((user) => {
+    // Search in ID
+    if (user.id.toLowerCase().includes(query)) {
+      return true
+    }
+
+    // Search in username
+    if (user.username?.toLowerCase().includes(query)) {
+      return true
+    }
+
+    // Search in full name
+    const fullName = user.fullName?.toLowerCase() || ''
+    if (fullName.includes(query)) {
+      return true
+    }
+
+    // Search in first name
+    if (user.firstName?.toLowerCase().includes(query)) {
+      return true
+    }
+
+    // Search in last name
+    if (user.lastName?.toLowerCase().includes(query)) {
+      return true
+    }
+
+    // Search in email
+    if (user.email?.toLowerCase().includes(query)) {
+      return true
+    }
+
+    return false
+  })
+})
+
 // Computed options for USelectMenu
 const userOptions = computed(() => {
-  const options = users.value.map((user) => ({
+  const options = filteredUsers.value.map((user) => ({
     label: `${user.fullName} (${user.username})`,
     value: user.id,
     user: user as UserDto,
@@ -86,7 +134,7 @@ const userOptions = computed(() => {
   if (
     props.allowSeedId &&
     selectedId.value &&
-    !users.value.find((u) => u.id === selectedId.value)
+    !allUsers.value.find((u) => u.id === selectedId.value)
   ) {
     options.unshift({
       label: `ID: ${selectedId.value}`,
@@ -110,94 +158,93 @@ const selectedOption = computed(() => {
 })
 
 /**
- * Load users with search query
+ * Load all users for client-side filtering
  */
-const loadUsers = async (query: string) => {
-  if (!query || query.length < 2) {
-    users.value = []
-    return
-  }
-
-  loading.value = true
+const loadAllUsers = async () => {
+  initialLoading.value = true
   try {
-    // Build search filter - search by ID (exact or partial), username, firstName, lastName
     const filters: FilterGroup = createEmptyFilterGroup()
-
-    // Check if query is a UUID (full or partial)
-    const isIdQuery =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query) ||
-      /^[0-9a-f-]+$/i.test(query)
-
-    if (isIdQuery && props.allowSeedId) {
-      // Search by ID
-      filters.conditions.push({
-        field: 'id',
-        operator: 'contains',
-        value: query,
-      })
-    } else {
-      // Search by username - simplified to single field search
-      // TODO: Support OR search across multiple fields (username, firstName, lastName)
-      filters.conditions.push({
-        field: 'username',
-        operator: 'contains',
-        value: query,
-      })
-    }
-
     const params = {
       filters,
       page: 0,
-      size: 20, // Limit results for better UX
+      size: 1000, // Load up to 1000 users for client-side filtering
     }
 
     const response = await getUsers(params)
 
     if (response.result) {
-      users.value = response.result.data.map((u) => new UserDto(u))
+      allUsers.value = response.result.data.map((u) => new UserDto(u))
 
-      // If query matches an ID exactly, try to load that user
-      if (props.allowSeedId && isIdQuery && users.value.length === 0) {
-        try {
-          await loadUserById(query)
-        } catch {
-          // Ignore if user not found
+      // If there are more users, load additional pages
+      const totalPages = response.result.page.totalPages
+      if (totalPages > 1) {
+        const additionalPromises = []
+        for (let page = 1; page < totalPages && page < 10; page++) {
+          // Limit to 10 pages max (10,000 users) to avoid performance issues
+          additionalPromises.push(
+            getUsers({
+              filters,
+              page,
+              size: 1000,
+            }),
+          )
         }
+
+        const additionalResponses = await Promise.all(additionalPromises)
+        additionalResponses.forEach((resp) => {
+          if (resp.result) {
+            const additionalUsers = resp.result.data.map((u) => new UserDto(u))
+            allUsers.value.push(...additionalUsers)
+          }
+        })
+      }
+
+      // If modelValue is set, try to find the user
+      if (props.modelValue) {
+        findUserById(props.modelValue)
       }
     }
   } catch (error) {
-    console.error('Failed to search users:', error)
+    console.error('Failed to load users:', error)
     toast.add({
       title: 'Error',
-      description: 'Failed to search users',
+      description: 'Failed to load users',
       color: 'error',
     })
   } finally {
-    loading.value = false
+    initialLoading.value = false
   }
 }
 
 /**
- * Load user by ID
+ * Find user by ID in loaded users or load it if not found
  */
-const loadUserById = async (id: string) => {
-  try {
-    const { getUserById } = await import('@/modules/Users/api')
-    const response = await getUserById(id)
+const findUserById = async (id: string) => {
+  // First, try to find in already loaded users
+  const foundUser = allUsers.value.find((u) => u.id === id)
+  if (foundUser) {
+    selectedUser.value = foundUser
+    return
+  }
 
-    if (response.result) {
-      const user = new UserDto(response.result)
-      selectedUser.value = user
+  // If not found and allowSeedId is true, try to load from API
+  if (props.allowSeedId) {
+    try {
+      const { getUserById } = await import('@/modules/Users/api')
+      const response = await getUserById(id)
 
-      // Add to users list if not already there
-      if (!users.value.find((u) => u.id === user.id)) {
-        users.value.unshift(user)
+      if (response.result) {
+        const user = new UserDto(response.result)
+        selectedUser.value = user
+
+        // Add to users list if not already there
+        if (!allUsers.value.find((u) => u.id === user.id)) {
+          allUsers.value.unshift(user)
+        }
       }
-    }
-  } catch (error) {
-    console.error('Failed to load user by ID:', error)
-    // If user not found, keep the ID as-is (for seed mode)
-    if (props.allowSeedId) {
+    } catch (error) {
+      console.error('Failed to load user by ID:', error)
+      // If user not found, keep the ID as-is (for seed mode)
       selectedUser.value = null
     }
   }
@@ -205,22 +252,24 @@ const loadUserById = async (id: string) => {
 
 /**
  * Handle search in USelectMenu
- * USelectMenu triggers search when user types
+ * Client-side filtering - no API call needed
  */
 const handleSearch = (query: string) => {
   searchQuery.value = query
-  if (query && query.length >= 2) {
-    loadUsers(query)
-  } else if (!query) {
-    users.value = []
-  }
+  // No API call - filtering is done in computed property
 }
 
 /**
  * Handle selection change
  */
-const handleSelectionChange = (value: string | undefined) => {
-  if (!value) {
+const handleSelectionChange = (value: unknown) => {
+  // USelectMenu passes the option object, extract value if needed
+  const selectedValue =
+    typeof value === 'object' && value !== null && 'value' in value
+      ? (value as { value: string }).value
+      : (value as string | undefined)
+
+  if (!selectedValue) {
     selectedUser.value = null
     selectedId.value = undefined
     emit('update:modelValue', undefined)
@@ -228,22 +277,20 @@ const handleSelectionChange = (value: string | undefined) => {
   }
 
   // Find user in list
-  const user = users.value.find((u) => u.id === value)
+  const user = allUsers.value.find((u) => u.id === selectedValue)
   if (user) {
     selectedUser.value = user
   } else if (props.allowSeedId) {
     // Allow raw ID selection
-    selectedId.value = value
+    selectedId.value = selectedValue
     selectedUser.value = null
-    emit('update:modelValue', value)
+    emit('update:modelValue', selectedValue)
   }
 }
 
-// Load user on mount if modelValue is set
+// Load all users on mount
 onMounted(() => {
-  if (props.modelValue) {
-    loadUserById(props.modelValue)
-  }
+  loadAllUsers()
 })
 </script>
 
@@ -251,9 +298,9 @@ onMounted(() => {
   <UFormField :label="label" :name="`user-select-${label.toLowerCase().replace(/\s+/g, '-')}`">
     <USelectMenu
       :model-value="selectedOption"
-      :options="userOptions"
+      :items="userOptions"
       :placeholder="placeholder"
-      :loading="loading"
+      :loading="initialLoading || loading"
       :disabled="disabled"
       searchable
       :searchable-placeholder="'Search by ID or name...'"
@@ -261,30 +308,6 @@ onMounted(() => {
       @update:model-value="handleSelectionChange"
       @update:search="handleSearch"
       class="w-full"
-    >
-      <template #leading="{ option }">
-        <UAvatar
-          v-if="option"
-          v-bind="option.avatar"
-          :size="'2xs'"
-          :alt="option.avatar?.alt || option.label"
-        />
-      </template>
-      <template #label>
-        <span v-if="selectedOption">{{ selectedOption.label }}</span>
-        <span v-else class="text-gray-500">{{ placeholder }}</span>
-      </template>
-      <template #option="{ option }">
-        <div class="flex items-center gap-2">
-          <UAvatar v-bind="option.avatar" :size="'2xs'" :alt="option.avatar?.alt || option.label" />
-          <div class="flex flex-col">
-            <span class="text-sm font-medium">{{ option.label }}</span>
-            <span v-if="option.description" class="text-xs text-gray-500">{{
-              option.description
-            }}</span>
-          </div>
-        </div>
-      </template>
-    </USelectMenu>
+    />
   </UFormField>
 </template>
