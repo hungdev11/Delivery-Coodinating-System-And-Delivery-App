@@ -18,7 +18,9 @@ import type {
   GetDeliverySessionDetailResponse,
   UpdateAssignmentStatusRequestPayload,
   DeliveryAssignmentTaskResponse,
+  DeliverySessionDto,
 } from './model.type'
+import type { IApiResponse } from '@/common/types'
 
 const apiClient = new AxiosHttpClient(import.meta.env.VITE_API_URL)
 
@@ -94,8 +96,8 @@ export const getDeliverySessionsForClient = async (
 
 export const getDeliverySessionDetail = async (
   sessionId: string,
-): Promise<GetDeliverySessionDetailResponse> => {
-  return apiClient.get<GetDeliverySessionDetailResponse>(
+): Promise<IApiResponse<DeliverySessionDto>> => {
+  return apiClient.get<IApiResponse<DeliverySessionDto>>(
     `/v1/delivery-sessions/${sessionId}/with-assignments`,
   )
 }
@@ -113,26 +115,33 @@ export interface EnrichedSessionResponse {
   completedTasks: number
   failedTasks: number
   deliveryMan?: {
-    id: string
+    id?: string
+    name?: string
     displayName?: string
     email?: string
     phone?: string
+    vehicleType?: string
+    capacityKg?: number
   }
   assignments?: Array<{
     id: string
-    sessionId: string
+    sessionId?: string
     parcelId: string
     status: string
-    failReason?: string
+    failReason?: string | null
     scanedAt?: string
     updatedAt?: string
     parcelInfo?: {
-      id: string
-      code: string
+      id?: string
+      code?: string
       targetDestination?: string
       value?: number
       deliveryType?: string
       receiverName?: string
+      receiverPhoneNumber?: string | null
+      weight?: number
+      lat?: number
+      lon?: number
     }
     proofs?: Array<{
       id: string
@@ -221,7 +230,7 @@ export const getAssignmentHistoryForDeliveryMan = async (
  */
 export const getActiveSessionForDeliveryMan = async (
   deliveryManId: string,
-): Promise<GetDeliverySessionDetailResponse> => {
+): Promise<IApiResponse<DeliverySessionDto>> => {
   return apiClient.get<GetDeliverySessionDetailResponse>(
     `/v1/sessions/drivers/${deliveryManId}/active`,
   )
@@ -273,6 +282,14 @@ export interface DeliveryProofDto {
   mediaUrl: string
   confirmedBy: string
   createdAt: string
+}
+
+export const getProofsByAssignment = async (
+  assignmentId: string,
+): Promise<{ result: DeliveryProofDto[] }> => {
+  return apiClient.get<{ result: DeliveryProofDto[] }>(
+    `/v1/delivery-proofs/assignments/${assignmentId}`,
+  )
 }
 
 export const getProofsByParcel = async (

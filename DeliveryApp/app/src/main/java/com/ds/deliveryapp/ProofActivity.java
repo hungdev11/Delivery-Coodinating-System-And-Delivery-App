@@ -340,8 +340,8 @@ public class ProofActivity extends AppCompatActivity {
 
                             if (successfulUrls == null || successfulUrls.isEmpty()) {
                                 Toast.makeText(ProofActivity.this, "Upload thất bại", Toast.LENGTH_SHORT).show();
-                                return;
-                            }
+            return;
+        }
 
                             submitCompletionRequest(successfulUrls);
                         });

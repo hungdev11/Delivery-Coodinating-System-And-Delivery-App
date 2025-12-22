@@ -16,6 +16,7 @@ import {
 import { DeliverySessionDto, DeliveryAssignmentDto } from '../model.type'
 import type { DeliveryAssignmentTask, AssignmentStatus } from '../model.type'
 import type { DemoRouteResponseData } from '@/modules/Zones/routing.type'
+import type { ParcelDto } from '@/modules/Parcels/model.type'
 
 export interface SessionRouteResult {
   code: string
@@ -40,6 +41,7 @@ export function useDeliverySessions() {
     completedAt?: string
     failReason?: string | null
     scanedAt?: string
+    parcelInfo?: Partial<ParcelDto>
   }
 
   const normalizeAssignment = (assignment: RawAssignment): DeliveryAssignmentDto => {
@@ -59,6 +61,7 @@ export function useDeliverySessions() {
       failReason: assignment.failReason ?? null,
       scanedAt: assignment.scanedAt ?? assignment.createdAt ?? '',
       updatedAt: assignment.updatedAt ?? assignment.completedAt ?? assignment.createdAt ?? '',
+      parcelInfo: assignment.parcelInfo,
     } as DeliveryAssignmentDto)
   }
 
@@ -88,6 +91,7 @@ export function useDeliverySessions() {
     const normalized = new DeliverySessionDto({
       id: sessionIdValue,
       deliveryManId,
+      deliveryMan: data.deliveryMan,
       status: data.status ?? data.sessionStatus ?? 'IN_PROGRESS',
       startTime: data.startTime ?? data.createdAt,
       endTime: data.endTime,

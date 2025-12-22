@@ -6,6 +6,8 @@
 
 import type { IApiResponse } from '@/common/types'
 import type { FilterCondition, FilterGroup, SortConfig } from '@/common/types/filter'
+import type { ParcelDto } from '../Parcels/model.type'
+import type { UserDto } from '../Users/model.type'
 
 /**
  * Core enums
@@ -98,7 +100,7 @@ export class DeliveryAssignmentDto {
   failReason?: string | null
   scanedAt: string
   updatedAt: string
-
+  parcelInfo?: Partial<ParcelDto>
   constructor(data: DeliveryAssignmentDto) {
     this.id = data.id
     this.parcelId = data.parcelId
@@ -106,6 +108,7 @@ export class DeliveryAssignmentDto {
     this.failReason = data.failReason
     this.scanedAt = data.scanedAt
     this.updatedAt = data.updatedAt
+    this.parcelInfo = data.parcelInfo
   }
 
   get isCompleted(): boolean {
@@ -130,7 +133,7 @@ export class DeliverySessionDto {
   completedTasks: number
   failedTasks: number
   assignments?: DeliveryAssignmentDto[]
-
+  deliveryMan?: any
   constructor(data: DeliverySessionDto) {
     this.id = data.id
     this.deliveryManId = data.deliveryManId
@@ -141,6 +144,7 @@ export class DeliverySessionDto {
     this.completedTasks = data.completedTasks
     this.failedTasks = data.failedTasks
     this.assignments = data.assignments?.map((assignment) => new DeliveryAssignmentDto(assignment))
+    this.deliveryMan = data.deliveryMan
   }
 
   get isActive(): boolean {
@@ -154,7 +158,6 @@ export interface PagedDeliverySessionResponse {
 }
 
 export type GetDeliverySessionsResponse = IApiResponse<PagedDeliverySessionResponse>
-export type GetDeliverySessionDetailResponse = IApiResponse<DeliverySessionDto>
 
 /**
  * Session detail extras

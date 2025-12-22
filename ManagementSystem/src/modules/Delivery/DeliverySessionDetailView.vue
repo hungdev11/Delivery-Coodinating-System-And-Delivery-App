@@ -5,9 +5,10 @@
  * Shows session summary, assignments, and map visualization for a delivery session
  */
 
-import { defineAsyncComponent, ref, computed, onMounted } from 'vue'
+import { defineAsyncComponent, ref, computed, onMounted, h, resolveComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
+import type { TableColumn } from '@nuxt/ui'
 // Lazy load MapView to reduce initial bundle size
 const MapView = defineAsyncComponent(() => import('@/common/components/MapView.vue'))
 const LazyParcelProofModal = defineAsyncComponent(
@@ -23,12 +24,14 @@ import {
 } from '@/modules/Zones/utils/routingHelper'
 import { useDeliverySessions } from './composables'
 import type { DeliveryAssignmentDto, DeliverySessionDto } from './model.type'
-import { getDeliverySessions, getEnrichedSessionDetail, type EnrichedSessionResponse } from './api'
+import { getDeliverySessions, getProofsByAssignment, type DeliveryProofDto } from './api'
 import { getUserRoles } from '@/common/guards/roleGuard.guard'
 import type { FilterGroup } from '@/common/types/filter'
 import type { RouteSummary, VisitOrder, Route } from '@/modules/Zones/routing.type'
 
 const PageHeader = defineAsyncComponent(() => import('@/common/components/PageHeader.vue'))
+const UButton = resolveComponent('UButton')
+const UBadge = resolveComponent('UBadge')
 
 const route = useRoute()
 const router = useRouter()
@@ -38,8 +41,8 @@ const { loadSessionById, loadSessionRoute } = useDeliverySessions()
 const sessionId = computed(() => route.params.sessionId as string)
 
 const session = ref<DeliverySessionDto | null>(null)
-const enrichedSession = ref<EnrichedSessionResponse | null>(null)
 const loading = ref(true)
+const proofsMap = ref<Map<string, DeliveryProofDto[]>>(new Map())
 const routeLoading = ref(true)
 const mapRoutes = ref<RouteData[]>([])
 const mapMarkers = ref<MapMarker[]>([])
@@ -61,23 +64,44 @@ const isAdmin = computed(() => {
 const loadSession = async () => {
   loading.value = true
   try {
-    // Try to load enriched session first
-    const enrichedResponse = await getEnrichedSessionDetail(sessionId.value)
-    if (enrichedResponse.result) {
-      enrichedSession.value = enrichedResponse.result
-      // Also load basic session for compatibility
-      session.value = await loadSessionById(sessionId.value)
-    } else {
-      // Fallback to basic session
-      session.value = await loadSessionById(sessionId.value)
-    }
-  } catch (error) {
-    console.error('Failed to load enriched session, falling back to basic:', error)
-    // Fallback to basic session
+    // Load session with assignments (includes deliveryMan and parcelInfo)
     session.value = await loadSessionById(sessionId.value)
+    console.log(session.value);
+
+    // Load proofs for each assignment
+    if (session.value?.assignments && session.value.assignments.length > 0) {
+      await loadProofsForAssignments(session.value.assignments)
+    }
+
+    console.debug('[DeliverySessionDetailView] Session loaded:', {
+      hasDeliveryMan: !!session.value?.deliveryMan,
+      deliveryMan: session.value?.deliveryMan,
+      assignmentsCount: session.value?.assignments?.length,
+    })
+  } catch (error) {
+    console.error('Failed to load session:', error)
   } finally {
     loading.value = false
   }
+}
+
+/**
+ * Load proofs for all assignments in parallel
+ */
+const loadProofsForAssignments = async (assignments: DeliveryAssignmentDto[]) => {
+  const proofPromises = assignments.map(async (assignment) => {
+    try {
+      const response = await getProofsByAssignment(assignment.id)
+      if (response.result) {
+        proofsMap.value.set(assignment.id, response.result)
+      }
+    } catch (error) {
+      console.debug(`Failed to load proofs for assignment ${assignment.id}:`, error)
+      proofsMap.value.set(assignment.id, [])
+    }
+  })
+
+  await Promise.all(proofPromises)
 }
 
 const loadRoute = async () => {
@@ -158,26 +182,39 @@ type EnrichedAssignment = DeliveryAssignmentDto & {
 }
 
 const assignments = computed<EnrichedAssignment[]>(() => {
-  // Use enriched assignments if available, otherwise fallback to basic
-  if (enrichedSession.value?.assignments) {
-    return enrichedSession.value.assignments.map((a) => ({
+  if (!session.value?.assignments || session.value.assignments.length === 0) {
+    return []
+  }
+
+  return session.value.assignments.map((a) => {
+    // Get proofs from map
+    const proofs = proofsMap.value.get(a.id) || []
+
+    // Map assignment with enriched data from parcelInfo (already included in response)
+    const mappedAssignment: EnrichedAssignment = {
       id: a.id,
       parcelId: a.parcelId,
       status: a.status as any,
       failReason: a.failReason,
       scanedAt: a.scanedAt || '',
       updatedAt: a.updatedAt || '',
-      // Map enriched data
-      parcelCode: a.parcelInfo?.code,
-      deliveryLocation: a.parcelInfo?.targetDestination,
-      value: a.parcelInfo?.value,
-      deliveryType: a.parcelInfo?.deliveryType,
-      receiverName: a.parcelInfo?.receiverName,
-      // Map proofs
-      proofs: a.proofs || [],
-    })) as unknown as EnrichedAssignment[]
-  }
-  return (session.value?.assignments ?? []) as unknown as EnrichedAssignment[]
+      // Map enriched data from parcelInfo
+      parcelCode: (a as any).parcelInfo?.code,
+      deliveryLocation: (a as any).parcelInfo?.targetDestination,
+      value: (a as any).parcelInfo?.value,
+      deliveryType: (a as any).parcelInfo?.deliveryType,
+      receiverName: (a as any).parcelInfo?.receiverName,
+      // Map proofs from loaded data
+      proofs: proofs.map((p) => ({
+        id: p.id,
+        type: p.type,
+        mediaUrl: p.mediaUrl,
+        createdAt: p.createdAt,
+      })),
+    }
+
+    return mappedAssignment
+  })
 })
 
 const statusColor = computed(() => {
@@ -275,9 +312,9 @@ const getSessionTitle = () => {
  * Get session description with shipper info
  */
 const getSessionDescription = () => {
-  if (enrichedSession.value?.deliveryMan) {
-    const dm = enrichedSession.value.deliveryMan
-    return `Shipper: ${dm.displayName || 'N/A'}${dm.phone ? ` | ${dm.phone}` : ''}${dm.email ? ` | ${dm.email}` : ''}`
+  if (session.value?.deliveryMan) {
+    const dm = session.value.deliveryMan as any
+    return `Shipper: ${dm.name || dm.displayName || 'N/A'}${dm.phone ? ` | ${dm.phone}` : ''}${dm.email ? ` | ${dm.email}` : ''}`
   }
   return 'Detailed view of shipper\'s delivery session'
 }
@@ -309,6 +346,121 @@ const getAssignmentReceiverName = (assignment: DeliveryAssignmentDto) => {
 const getAssignmentDeliveryLocation = (assignment: DeliveryAssignmentDto) => {
   return (assignment as unknown as EnrichedAssignment).deliveryLocation
 }
+
+/**
+ * Format date for display
+ */
+const formatDate = (value?: string | null) => {
+  if (!value) return '—'
+  return new Intl.DateTimeFormat('vi-VN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
+}
+
+/**
+ * Table columns configuration for assignments
+ */
+const assignmentColumns: TableColumn<EnrichedAssignment>[] = [
+  {
+    accessorKey: 'parcelCode',
+    header: 'Mã đơn',
+    cell: ({ row }) => {
+      const code = getAssignmentParcelCode(row.original) || row.original.parcelId
+      return h('span', { class: 'font-mono text-sm' }, code || '—')
+    },
+  },
+  {
+    accessorKey: 'receiverName',
+    header: 'Người nhận',
+    cell: ({ row }) => {
+      const name = getAssignmentReceiverName(row.original)
+      return h('span', name || '—')
+    },
+  },
+  {
+    accessorKey: 'deliveryLocation',
+    header: 'Địa chỉ giao',
+    cell: ({ row }) => {
+      const location = getAssignmentDeliveryLocation(row.original)
+      return h(
+        'span',
+        {
+          class: 'max-w-xs truncate block',
+          title: location || undefined,
+        },
+        location || '—',
+      )
+    },
+  },
+  {
+    accessorKey: 'status',
+    header: 'Trạng thái',
+    cell: ({ row }) => {
+      const status = row.original.status
+      const color =
+        status === 'COMPLETED' ? 'success' : status === 'FAILED' ? 'error' : 'warning'
+      return h(
+        UBadge,
+        {
+          variant: 'soft',
+          color,
+          class: 'capitalize',
+        },
+        () => status.toLowerCase(),
+      )
+    },
+  },
+  {
+    accessorKey: 'scanedAt',
+    header: 'Thời gian scan',
+    cell: ({ row }) => {
+      return h('span', formatDate(row.original.scanedAt))
+    },
+  },
+  {
+    accessorKey: 'updatedAt',
+    header: 'Thời gian giao',
+    cell: ({ row }) => {
+      return h('span', formatDate(row.original.updatedAt))
+    },
+  },
+  {
+    accessorKey: 'proofs',
+    header: 'Bằng chứng',
+    cell: ({ row }) => {
+      const proofs = getAssignmentProofs(row.original)
+      if (proofs.length > 0) {
+        return h('div', { class: 'flex items-center gap-1' }, [
+          h(
+            UBadge,
+            {
+              variant: 'soft',
+              color: 'success',
+              size: 'xs',
+            },
+            () => proofs.length.toString(),
+          ),
+          h(
+            UButton,
+            {
+              icon: 'i-heroicons-photo',
+              size: 'xs',
+              variant: 'ghost',
+              class: 'cursor-pointer hover:text-primary',
+              onClick: () =>
+                openProofModal(
+                  row.original.parcelId,
+                  getAssignmentParcelCode(row.original),
+                ),
+            },
+          ),
+        ])
+      }
+      return h('span', { class: 'text-gray-400' }, '—')
+    },
+  },
+]
 </script>
 
 <template>
@@ -335,7 +487,7 @@ const getAssignmentDeliveryLocation = (assignment: DeliveryAssignmentDto) => {
 
       <template v-else>
         <!-- Shipper Information Card -->
-        <UCard v-if="enrichedSession?.deliveryMan">
+        <UCard v-if="session?.deliveryMan">
           <template #header>
             <div class="flex items-center justify-between">
               <h3 class="text-lg font-semibold">Thông tin Shipper</h3>
@@ -347,7 +499,11 @@ const getAssignmentDeliveryLocation = (assignment: DeliveryAssignmentDto) => {
               <div class="flex-1">
                 <div class="text-sm text-gray-500 mb-1">Tên</div>
                 <div class="font-medium text-gray-900 dark:text-gray-100">
-                  {{ enrichedSession.deliveryMan.displayName || 'N/A' }}
+                  {{
+                    session.deliveryMan.name ||
+                    session.deliveryMan.displayName ||
+                    'N/A'
+                  }}
                 </div>
               </div>
             </div>
@@ -355,18 +511,32 @@ const getAssignmentDeliveryLocation = (assignment: DeliveryAssignmentDto) => {
               <div>
                 <div class="text-sm text-gray-500 mb-1">Số điện thoại</div>
                 <div class="font-medium text-gray-900 dark:text-gray-100">
-                  {{ enrichedSession.deliveryMan.phone || '—' }}
+                  {{ (session.deliveryMan as any)?.phone || '—' }}
                 </div>
               </div>
               <div>
                 <div class="text-sm text-gray-500 mb-1">Email</div>
                 <div class="font-medium text-gray-900 dark:text-gray-100">
-                  {{ enrichedSession.deliveryMan.email || '—' }}
+                  {{ (session.deliveryMan as any)?.email || '—' }}
                 </div>
               </div>
             </div>
-            <div v-if="enrichedSession.deliveryMan.id" class="text-xs text-gray-400">
-              ID: {{ enrichedSession.deliveryMan.id }}
+            <div v-if="(session.deliveryMan as any)?.vehicleType" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div class="text-sm text-gray-500 mb-1">Loại xe</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100">
+                  {{ (session.deliveryMan as any).vehicleType }}
+                </div>
+              </div>
+              <div v-if="(session.deliveryMan as any).capacityKg">
+                <div class="text-sm text-gray-500 mb-1">Tải trọng</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100">
+                  {{ (session.deliveryMan as any).capacityKg }} kg
+                </div>
+              </div>
+            </div>
+            <div v-if="session?.deliveryManId" class="text-xs text-gray-400">
+              ID: {{ session.deliveryManId }}
             </div>
           </div>
         </UCard>
@@ -504,67 +674,13 @@ const getAssignmentDeliveryLocation = (assignment: DeliveryAssignmentDto) => {
 
           <UTable
             :data="assignments"
-            :columns="[
-              { accessorKey: 'parcelCode', header: 'Mã đơn' },
-              { accessorKey: 'receiverName', header: 'Người nhận' },
-              { accessorKey: 'deliveryLocation', header: 'Địa chỉ giao' },
-              { accessorKey: 'status', header: 'Trạng thái' },
-              { accessorKey: 'scanedAt', header: 'Thời gian scan' },
-              { accessorKey: 'updatedAt', header: 'Thời gian giao' },
-              { accessorKey: 'proofs', header: 'Bằng chứng' },
-            ]"
+            :columns="assignmentColumns"
             :ui="{
               empty: 'text-center py-12',
               root: 'h-[50vh]',
               thead: 'sticky top-0 bg-white dark:bg-gray-800',
             }"
-          >
-            <template #cell(status)="{ row }">
-              <UBadge
-                :color="
-                  row.original.status === 'COMPLETED'
-                    ? 'success'
-                    : row.original.status === 'FAILED'
-                      ? 'error'
-                      : 'warning'
-                "
-                variant="soft"
-                class="capitalize"
-              >
-                {{ row.original.status.toLowerCase() }}
-              </UBadge>
-            </template>
-            <template #cell(parcelCode)="{ row }">
-              {{ getAssignmentParcelCode(row.original) || row.original.parcelId || '—' }}
-            </template>
-            <template #cell(receiverName)="{ row }">
-              {{ getAssignmentReceiverName(row.original) || '—' }}
-            </template>
-            <template #cell(deliveryLocation)="{ row }">
-              <span class="max-w-xs truncate block" :title="getAssignmentDeliveryLocation(row.original)">
-                {{ getAssignmentDeliveryLocation(row.original) || '—' }}
-              </span>
-            </template>
-            <template #cell(scanedAt)="{ row }">
-              {{ row.original.scanedAt ? new Date(row.original.scanedAt).toLocaleString('vi-VN') : '—' }}
-            </template>
-            <template #cell(updatedAt)="{ row }">
-              {{ row.original.updatedAt ? new Date(row.original.updatedAt).toLocaleString('vi-VN') : '—' }}
-            </template>
-            <template #cell(proofs)="{ row }">
-              <div v-if="getAssignmentProofs(row.original).length > 0" class="flex items-center gap-1">
-                <UBadge variant="soft" color="success" size="xs">
-                  {{ getAssignmentProofs(row.original).length }}
-                </UBadge>
-                <UIcon
-                  name="i-heroicons-photo"
-                  class="w-4 h-4 text-gray-500 cursor-pointer hover:text-primary"
-                  @click="openProofModal(row.original.parcelId, getAssignmentParcelCode(row.original))"
-                />
-              </div>
-              <span v-else class="text-gray-400">—</span>
-            </template>
-          </UTable>
+          />
         </UCard>
 
         <!-- Other Sessions (Admin Only) -->

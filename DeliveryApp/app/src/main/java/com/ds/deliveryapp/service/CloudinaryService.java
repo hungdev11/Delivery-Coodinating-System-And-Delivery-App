@@ -197,7 +197,7 @@ public class CloudinaryService {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         prefs.edit().putString(PREF_HASH_PREFIX + hash, url).apply();
     }
-    
+
     /**
      * Hàm xử lý upload 1 ảnh (Chạy blocking - nên gọi trong worker thread)
      */

@@ -552,7 +552,7 @@ const columns: TableColumn<ParcelDto>[] = [
       const canChatWithSender = canChat(parcel)
 
       const canViewProofsForParcel = canViewProofs(parcel)
-      
+
       return h('div', { class: 'flex space-x-2' }, [
         // Chat with sender button
         h(UButton, {
@@ -579,7 +579,7 @@ const columns: TableColumn<ParcelDto>[] = [
             variant: 'ghost',
             title: 'Xem ảnh/video đơn hàng',
             onClick: () => openProofModal(parcel),
-          }),
+        }),
         // Report not received button (for DELIVERED status)
         canReport &&
           h(
