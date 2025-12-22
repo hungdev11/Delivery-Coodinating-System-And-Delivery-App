@@ -8,22 +8,36 @@ import static com.ds.deliveryapp.utils.FormaterUtil.formatWeight;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.cardview.widget.CardView;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.ds.deliveryapp.adapters.ProofAdapter;
+import com.ds.deliveryapp.clients.SessionClient;
+import com.ds.deliveryapp.configs.RetrofitClient;
+import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.enums.DeliveryType;
 import com.ds.deliveryapp.model.DeliveryAssignment;
+import com.ds.deliveryapp.model.DeliveryProof;
 import com.ds.deliveryapp.utils.FormaterUtil;
 import com.ds.deliveryapp.utils.TaskActionHandler;
 
 import java.util.ArrayList;
+import java.util.List;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 
 public class TaskDetailActivity extends AppCompatActivity implements TaskActionHandler.TaskUpdateListener{
@@ -37,9 +51,17 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
     private TextView tvDeliveryType, tvWeight, tvParcelId;
     private TextView tvCreatedAt, tvCompletedAt, tvFailReason;
     private LinearLayout layoutCompletedAt, layoutFailReason;
+    
+    // Proofs section
+    private CardView cardProofs;
+    private RecyclerView recyclerProofs;
+    private TextView tvProofsLoading, tvProofsEmpty;
+    private ProofAdapter proofAdapter;
+    
     private DeliveryAssignment currentTask;
     private TaskActionHandler actionHandler;
     private String sessionStatus; // CREATED, IN_PROGRESS, etc.
+    private SessionClient sessionClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,6 +80,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
                 displayData(currentTask);
                 setupEventListeners(currentTask);
                 updateButtonsBasedOnSessionStatus();
+                loadProofs(currentTask.getAssignmentId());
             } else {
                 Toast.makeText(this, "Lỗi tải dữ liệu chi tiết.", Toast.LENGTH_LONG).show();
                 finish();
@@ -88,6 +111,20 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         layoutFailReason = findViewById(R.id.layout_fail_reason);
         layoutCompletedAt.setVisibility(GONE);
         layoutFailReason.setVisibility(GONE);
+        
+        // Proofs section
+        cardProofs = findViewById(R.id.card_proofs);
+        recyclerProofs = findViewById(R.id.recycler_proofs);
+        tvProofsLoading = findViewById(R.id.tv_proofs_loading);
+        tvProofsEmpty = findViewById(R.id.tv_proofs_empty);
+        
+        // Setup RecyclerView for proofs
+        proofAdapter = new ProofAdapter(this);
+        recyclerProofs.setLayoutManager(new GridLayoutManager(this, 3));
+        recyclerProofs.setAdapter(proofAdapter);
+        
+        // Initialize API client
+        sessionClient = RetrofitClient.getRetrofitInstance(this).create(SessionClient.class);
     }
 
     private void displayData(DeliveryAssignment task) {
@@ -246,6 +283,48 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
 //    }
 
 
+    private void loadProofs(String assignmentId) {
+        if (assignmentId == null || assignmentId.isEmpty()) {
+            return;
+        }
+
+        // Show loading
+        cardProofs.setVisibility(View.VISIBLE);
+        tvProofsLoading.setVisibility(View.VISIBLE);
+        tvProofsEmpty.setVisibility(View.GONE);
+        recyclerProofs.setVisibility(View.GONE);
+
+        sessionClient.getProofsByAssignment(assignmentId).enqueue(new Callback<BaseResponse<List<DeliveryProof>>>() {
+            @Override
+            public void onResponse(Call<BaseResponse<List<DeliveryProof>>> call, Response<BaseResponse<List<DeliveryProof>>> response) {
+                tvProofsLoading.setVisibility(View.GONE);
+                
+                if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
+                    List<DeliveryProof> proofs = response.body().getResult();
+                    
+                    if (proofs.isEmpty()) {
+                        tvProofsEmpty.setVisibility(View.VISIBLE);
+                        recyclerProofs.setVisibility(View.GONE);
+                    } else {
+                        tvProofsEmpty.setVisibility(View.GONE);
+                        recyclerProofs.setVisibility(View.VISIBLE);
+                        proofAdapter.setProofs(proofs);
+                    }
+                } else {
+                    // Hide card if failed to load
+                    cardProofs.setVisibility(View.GONE);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<BaseResponse<List<DeliveryProof>>> call, Throwable t) {
+                tvProofsLoading.setVisibility(View.GONE);
+                // Hide card if failed to load
+                cardProofs.setVisibility(View.GONE);
+            }
+        });
+    }
+
     @Override
     public void onStatusUpdated(String newStatus) {
         currentTask.setStatus(newStatus);
@@ -260,6 +339,12 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         displayData(currentTask);
 
         Toast.makeText(this, "Đã cập nhật: " + newStatus, Toast.LENGTH_SHORT).show();
+        
+        // Reload proofs if status changed to COMPLETED
+        if ("COMPLETED".equals(newStatus)) {
+            loadProofs(currentTask.getAssignmentId());
+        }
+        
         finish();
     }
 }

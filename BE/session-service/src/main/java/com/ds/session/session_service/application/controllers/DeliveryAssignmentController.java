@@ -100,20 +100,40 @@ public class DeliveryAssignmentController {
         return ResponseEntity.ok(BaseResponse.success(response));
     }
 
-    // /**
-    //  * API shipper gọi khi giao HÀNG THÀNH CÔNG một task.
-    //  */
-    // @PostMapping("/drivers/{deliveryManId}/parcels/{parcelId}/complete")
-    // public ResponseEntity<BaseResponse<DeliveryAssignmentResponse>> completeTask(
-    //         @PathVariable UUID deliveryManId,
-    //         @PathVariable UUID parcelId,
-    //         @RequestPart("routeInfo") @Valid RouteInfo routeInfo,
-    //         @RequestPart("files") List<MultipartFile> files
-    //     ) {
-    //     log.debug("Shipper {} completing task for parcel {}", deliveryManId, parcelId);
-    //     DeliveryAssignmentResponse response = assignmentService.completeTask(parcelId, deliveryManId, routeInfo, files);
-    //     return ResponseEntity.ok(BaseResponse.success(response));
-    // }
+    /**
+     * API shipper gọi khi giao HÀNG THÀNH CÔNG một task.
+     * Accepts CompleteTaskRequest with routeInfo and proofImageUrls.
+     * 
+     * @deprecated Use completeTaskByAssignmentId instead for better performance
+     */
+    @PostMapping("/drivers/{deliveryManId}/parcels/{parcelId}/complete")
+    public ResponseEntity<BaseResponse<DeliveryAssignmentResponse>> completeTask(
+            @PathVariable UUID deliveryManId,
+            @PathVariable UUID parcelId,
+            @Valid @RequestBody CompleteTaskRequest request) {
+        log.debug("Shipper {} completing task for parcel {} with proof images: {}", deliveryManId, parcelId, request.getProofImageUrls());
+        DeliveryAssignmentResponse response = assignmentService.completeTask(
+                parcelId,
+                deliveryManId,
+                request);
+        return ResponseEntity.ok(BaseResponse.success(response));
+    }
+
+    /**
+     * API shipper gọi khi giao HÀNG THÀNH CÔNG một task bằng assignmentId.
+     * Hiệu quả hơn vì không cần query tìm assignment.
+     * Accepts CompleteTaskRequest with routeInfo and proofImageUrls.
+     */
+    @PostMapping("/{assignmentId}/complete")
+    public ResponseEntity<BaseResponse<DeliveryAssignmentResponse>> completeTaskByAssignmentId(
+            @PathVariable UUID assignmentId,
+            @Valid @RequestBody CompleteTaskRequest request) {
+        log.debug("Completing assignment {} with proof images: {}", assignmentId, request.getProofImageUrls());
+        DeliveryAssignmentResponse response = assignmentService.completeTaskByAssignmentId(
+                assignmentId,
+                request);
+        return ResponseEntity.ok(BaseResponse.success(response));
+    }
 
     /**
      * API shipper gọi khi GIAO HÀNG THẤT BẠI một task.
@@ -145,6 +165,22 @@ public class DeliveryAssignmentController {
                 deliveryManId,
                 "Khách từ chối nhận",
                 new RouteInfo());
+        return ResponseEntity.ok(BaseResponse.success(response));
+    }
+
+    /**
+     * API shipper gọi khi trả hàng về kho (cho các đơn FAILED hoặc DELAYED).
+     * Upload proofs với type RETURNED, không thay đổi assignment status.
+     */
+    @PostMapping("/{assignmentId}/return-to-warehouse")
+    public ResponseEntity<BaseResponse<DeliveryAssignmentResponse>> returnToWarehouse(
+            @PathVariable UUID assignmentId,
+            @Valid @RequestBody CompleteTaskRequest request) {
+        log.debug("Recording return to warehouse for assignment {} with {} proof(s)", 
+                assignmentId, request.getProofImageUrls() != null ? request.getProofImageUrls().size() : 0);
+        DeliveryAssignmentResponse response = assignmentService.returnToWarehouse(
+                assignmentId,
+                request);
         return ResponseEntity.ok(BaseResponse.success(response));
     }
 

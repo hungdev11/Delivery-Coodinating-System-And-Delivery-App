@@ -158,6 +158,16 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                         DeliverySession session = baseResponse.getResult();
                         activeSessionId = session.getId() != null ? session.getId().toString() : null;
                         activeSessionStatus = session.getStatus() != null ? session.getStatus() : "UNKNOWN";
+                        
+                        // If session is COMPLETED or FAILED, navigate to dashboard
+                        if ("COMPLETED".equals(activeSessionStatus) || "FAILED".equals(activeSessionStatus)) {
+                            Log.d(TAG, "Session is " + activeSessionStatus + ", navigating to dashboard");
+                            activeSessionId = null;
+                            activeSessionStatus = null;
+                            navigateToDashboard();
+                            return;
+                        }
+                        
                         Log.d(TAG, "Active session found: " + activeSessionId + ", Status: " + activeSessionStatus);
                         resetAndFetchTasks();
                     } else {
@@ -166,17 +176,17 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                         navigateToDashboard();
                     }
                 } else {
-                    // Error - try to fetch tasks anyway
+                    // Error - navigate to dashboard
                     Log.w(TAG, "Error checking active session: " + response.code());
-                    resetAndFetchTasks();
+                    navigateToDashboard();
                 }
             }
 
             @Override
             public void onFailure(Call<BaseResponse<DeliverySession>> call, Throwable t) {
                 Log.e(TAG, "Network error checking active session: " + t.getMessage());
-                // On error, try to fetch tasks anyway
-                resetAndFetchTasks();
+                // On error, navigate to dashboard
+                navigateToDashboard();
             }
         });
     }
@@ -232,8 +242,13 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         
         // Need activeSessionId to fetch tasks by sessionId
         if (activeSessionId == null) {
-            Log.w(TAG, "No active session ID. Checking for active session first...");
-            checkActiveSession();
+            Log.w(TAG, "No active session ID. Cannot fetch tasks.");
+            // Don't call checkActiveSession again to avoid infinite loop
+            // Show empty state instead
+            if (tvEmptyState != null) {
+                tvEmptyState.setVisibility(View.VISIBLE);
+                tvEmptyState.setText("Chưa có phiên làm việc.");
+            }
             return;
         }
 
@@ -300,10 +315,27 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     }
 
                     if (tasks.isEmpty() && page == 0) {
-                        // No tasks - check if there's an active session
+                        // No tasks - mark as last page to prevent infinite loading
+                        isLastPage = true;
+                        
+                        // Check if there's an active session
                         if (activeSessionId != null) {
-                            // Active session exists but no tasks - show empty state
-                            checkForCreatedSession();
+                            // Active session exists but no tasks - show appropriate UI
+                            if ("IN_PROGRESS".equals(activeSessionStatus)) {
+                                // Session is IN_PROGRESS but all tasks are done
+                                // Show button to complete session
+                                if (tvEmptyState != null) {
+                                    tvEmptyState.setVisibility(View.VISIBLE);
+                                    tvEmptyState.setText("Tất cả đơn hàng đã hoàn tất!\nVui lòng kết thúc phiên để hoàn thành ca làm việc.");
+                                }
+                                // Show session menu to allow manual completion
+                                if (btnSessionMenu != null) {
+                                    btnSessionMenu.setVisibility(View.VISIBLE);
+                                }
+                            } else {
+                                // CREATED session with no tasks yet
+                                checkForCreatedSession();
+                            }
                         } else {
                             // No active session - navigate to dashboard
                             navigateToDashboard();
@@ -589,11 +621,22 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                         if ("COMPLETED".equals(activeSessionStatus) || "FAILED".equals(activeSessionStatus)) {
                             Log.d(TAG, "Session " + activeSessionId + " is " + activeSessionStatus + ". Navigating to dashboard.");
                             showLightNotification("Phiên giao hàng đã kết thúc");
+                            activeSessionId = null;
+                            activeSessionStatus = null;
                             navigateToDashboard();
                             return;
                         }
                         
                         updateUIForSessionStatus();
+                        
+                        // Check if all tasks are complete for IN_PROGRESS session
+                        if ("IN_PROGRESS".equals(activeSessionStatus) && tasks.isEmpty()) {
+                            // Show message to complete session
+                            if (tvEmptyState != null) {
+                                tvEmptyState.setVisibility(View.VISIBLE);
+                                tvEmptyState.setText("Tất cả đơn hàng đã hoàn tất!\nVui lòng kết thúc phiên để hoàn thành ca làm việc.");
+                            }
+                        }
                     }
                 }
             }

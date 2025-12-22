@@ -34,6 +34,16 @@ public interface SessionClient {
             @Body CompleteTaskRequest request
     );
 
+    /**
+     * Complete task by assignmentId - more efficient endpoint
+     * Prefer this endpoint when assignmentId is available
+     */
+    @POST("/api/v1/assignments/{assignmentId}/complete")
+    Call<BaseResponse<DeliveryAssignment>> completeTaskByAssignmentId(
+            @Path("assignmentId") String assignmentId,
+            @Body CompleteTaskRequest request
+    );
+
     @GET("/api/v1/sessions/list-must-return-warehouse/{sessionId}")
     Call<BaseResponse<List<DeliveryAssignment>>> listMustReturnToWarehouse(@Path("sessionId") String sessionId);
 
@@ -202,5 +212,13 @@ public interface SessionClient {
     Call<BaseResponse<DeliveryAssignment>> acceptTransferredParcel(
             @Path("deliveryManId") String deliveryManId,
             @Body com.ds.deliveryapp.clients.req.AcceptTransferredParcelRequest request
+    );
+    
+    /**
+     * Get delivery proofs by assignment ID
+     */
+    @GET("/api/v1/delivery-proofs/assignments/{assignmentId}")
+    Call<BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> getProofsByAssignment(
+            @Path("assignmentId") String assignmentId
     );
 }

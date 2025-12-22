@@ -11,10 +11,17 @@ import androidx.annotation.NonNull;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
+import android.content.Context;
+import android.content.SharedPreferences;
+
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -27,6 +34,9 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okio.BufferedSink;
+import okio.Okio;
+import okio.Source;
 
 public class CloudinaryService {
     private static final String TAG = "CloudinaryService";
@@ -35,6 +45,9 @@ public class CloudinaryService {
     private static final String CLOUDINARY_UPLOAD_PRESET = "proof_med";
 
     private static CloudinaryService instance;
+    private static final String PREFS_NAME = "cloudinary_uploads";
+    private static final String PREF_HASH_PREFIX = "hash_";
+    
     private final OkHttpClient client;
     private final Gson gson;
     private final ExecutorService executorService;
@@ -61,7 +74,7 @@ public class CloudinaryService {
     }
 
     /**
-     * Upload danh sách ảnh
+     * Upload danh sách ảnh/video
      */
     public void uploadImages(Context context, List<Uri> uris, OnBatchUploadCallback callback) {
         if (uris == null || uris.isEmpty()) {
@@ -78,8 +91,41 @@ public class CloudinaryService {
 
         for (Uri uri : uris) {
             executorService.execute(() -> {
-                String url = uploadSingleImageSync(context, uri);
+                String url = null;
+                
+                // Check if file hash already exists in cache
+                String fileHash = calculateFileHash(context, uri);
+                if (fileHash != null) {
+                    url = getCachedUrl(context, fileHash);
+                    if (url != null) {
+                        Log.d(TAG, "Reusing cached URL for hash: " + fileHash.substring(0, 8) + "...");
+                        uploadedUrls.add(url);
+                        if (processedCount.incrementAndGet() == totalImages) {
+                            mainHandler.post(() -> {
+                                if (!uploadedUrls.isEmpty() || errors.isEmpty()) {
+                                    callback.onComplete(new ArrayList<>(uploadedUrls));
+                                } else {
+                                    callback.onError("Không thể upload ảnh nào. Vui lòng thử lại.");
+                                }
+                            });
+                        }
+                        return; // Skip upload, use cached URL
+                    }
+                }
+                
+                // Detect MIME type to call appropriate function
+                String mimeType = context.getContentResolver().getType(uri);
+                if (mimeType != null && mimeType.startsWith("video/")) {
+                    url = uploadSingleVideoSync(context, uri, fileHash);
+                } else {
+                    url = uploadSingleImageSync(context, uri, fileHash);
+                }
+                
                 if (url != null) {
+                    // Cache the URL with hash
+                    if (fileHash != null) {
+                        cacheUrl(context, fileHash, url);
+                    }
                     uploadedUrls.add(url);
                 } else {
                     errors.add("Failed to upload: " + uri.toString());
@@ -101,18 +147,65 @@ public class CloudinaryService {
     }
 
     /**
+     * Tính hash MD5 của file để kiểm tra trùng lặp
+     */
+    private String calculateFileHash(Context context, Uri uri) {
+        try {
+            File file = getFileFromUri(context, uri);
+            if (file == null || !file.exists()) return null;
+            
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            try (FileInputStream fis = new FileInputStream(file)) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = fis.read(buffer)) != -1) {
+                    md.update(buffer, 0, bytesRead);
+                }
+            }
+            
+            byte[] hashBytes = md.digest();
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hashBytes) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException | IOException e) {
+            Log.e(TAG, "Error calculating file hash", e);
+            return null;
+        }
+    }
+    
+    /**
+     * Lấy URL đã cache từ hash
+     */
+    private String getCachedUrl(Context context, String hash) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        return prefs.getString(PREF_HASH_PREFIX + hash, null);
+    }
+    
+    /**
+     * Cache URL với hash
+     */
+    private void cacheUrl(Context context, String hash, String url) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(PREF_HASH_PREFIX + hash, url).apply();
+    }
+    
+    /**
      * Hàm xử lý upload 1 ảnh (Chạy blocking - nên gọi trong worker thread)
      */
-    private String uploadSingleImageSync(Context context, Uri uri) {
+    private String uploadSingleImageSync(Context context, Uri uri, String fileHash) {
         File imageFile = null;
         try {
             imageFile = getFileFromUri(context, uri);
             if (imageFile == null) return null;
 
+            MediaType mediaType = MediaType.parse("image/*");
+            RequestBody fileRequestBody = RequestBody.create(imageFile, mediaType);
+
             RequestBody requestBody = new MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
-                    .addFormDataPart("file", imageFile.getName(),
-                            RequestBody.create(imageFile, MediaType.parse("image/*")))
+                    .addFormDataPart("file", imageFile.getName(), fileRequestBody)
                     .addFormDataPart("upload_preset", CLOUDINARY_UPLOAD_PRESET)
                     .build();
 
@@ -129,7 +222,7 @@ public class CloudinaryService {
                         return jsonResponse.get("secure_url").getAsString();
                     }
                 } else {
-                    Log.e(TAG, "Upload failed: " + response.code());
+                    Log.e(TAG, "Image upload failed: " + response.code());
                 }
             }
         } catch (Exception e) {
@@ -139,6 +232,78 @@ public class CloudinaryService {
             if (imageFile != null && imageFile.exists()) {
                 try {
                     boolean deleted = imageFile.delete();
+                    if (!deleted) Log.w(TAG, "Could not delete temp file");
+                } catch (Exception ignored) {}
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Hàm xử lý upload 1 video (Chạy blocking - nên gọi trong worker thread)
+     * Sử dụng custom RequestBody để tránh lỗi content-length mismatch
+     */
+    private String uploadSingleVideoSync(Context context, Uri uri, String fileHash) {
+        File videoFile = null;
+        try {
+            videoFile = getFileFromUri(context, uri);
+            if (videoFile == null) return null;
+
+            // Create final reference for use in inner class
+            final File finalVideoFile = videoFile;
+            MediaType mediaType = MediaType.parse("video/*");
+            
+            // For videos, use a custom RequestBody that streams the file
+            // to avoid content-length calculation issues
+            RequestBody fileRequestBody = new RequestBody() {
+                @Override
+                public MediaType contentType() {
+                    return mediaType;
+                }
+
+                @Override
+                public long contentLength() throws IOException {
+                    return finalVideoFile.length();
+                }
+
+                @Override
+                public void writeTo(BufferedSink sink) throws IOException {
+                    try (java.io.FileInputStream fis = new java.io.FileInputStream(finalVideoFile);
+                         Source source = Okio.source(fis)) {
+                        sink.writeAll(source);
+                    }
+                }
+            };
+
+            RequestBody requestBody = new MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("file", videoFile.getName(), fileRequestBody)
+                    .addFormDataPart("upload_preset", CLOUDINARY_UPLOAD_PRESET)
+                    .build();
+
+            Request request = new Request.Builder()
+                    .url(CLOUDINARY_UPLOAD_URL)
+                    .post(requestBody)
+                    .build();
+
+            try (Response response = client.newCall(request).execute()) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String responseBody = response.body().string();
+                    JsonObject jsonResponse = gson.fromJson(responseBody, JsonObject.class);
+                    if (jsonResponse.has("secure_url")) {
+                        return jsonResponse.get("secure_url").getAsString();
+                    }
+                } else {
+                    Log.e(TAG, "Video upload failed: " + response.code());
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Exception uploading video", e);
+        } finally {
+            // Dọn dẹp file tạm
+            if (videoFile != null && videoFile.exists()) {
+                try {
+                    boolean deleted = videoFile.delete();
                     if (!deleted) Log.w(TAG, "Could not delete temp file");
                 } catch (Exception ignored) {}
             }

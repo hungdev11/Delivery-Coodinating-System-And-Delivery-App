@@ -9,8 +9,8 @@
     <color name="colorPrimary">#FFF97316</color>
     <!-- Darker primary: Orange 600 (#EA580C) -->
     <color name="colorPrimaryDark">#FFEA580C</color>
-    <!-- Secondary: Brown/Amber dựa trên #78350F -->
-    <color name="colorAccent">#FF78350F</color>
+    <!-- Secondary: Brown/Amber nhạt hơn (dựa trên #78350F nhưng sáng hơn) -->
+    <color name="colorAccent">#FFB8860B</color>
 
     <!-- Màu chữ mặc định (thường là màu xám đậm) -->
     <color name="default_text_color">#FF333333</color>

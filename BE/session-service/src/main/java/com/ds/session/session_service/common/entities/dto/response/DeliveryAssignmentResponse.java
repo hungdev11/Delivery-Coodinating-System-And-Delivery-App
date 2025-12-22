@@ -17,6 +17,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class DeliveryAssignmentResponse {
+    private String assignmentId; // ID của assignment - quan trọng để client có thể dùng trực tiếp
     private String sessionId;
     private String parcelId;
     private String parcelCode;
@@ -42,6 +43,7 @@ public class DeliveryAssignmentResponse {
         if (parcel == null) {
             // Return response with minimal information when parcel is not available
             return DeliveryAssignmentResponse.builder()
+                    .assignmentId(assignment.getId().toString())
                     .parcelId(assignment.getParcelId())
                     .parcelCode(null)
                     .deliveryType(null)
@@ -64,6 +66,7 @@ public class DeliveryAssignmentResponse {
         }
         
         return DeliveryAssignmentResponse.builder()
+                .assignmentId(assignment.getId().toString())
                 .parcelId(assignment.getParcelId())
                 .parcelCode(parcel.getCode()) 
                 .deliveryType(parcel.getDeliveryType())

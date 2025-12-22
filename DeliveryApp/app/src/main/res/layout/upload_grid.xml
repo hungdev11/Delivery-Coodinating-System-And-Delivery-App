@@ -24,7 +24,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Vui lòng chụp 2 ảnh xác nhận"
+            android:text="Vui lòng thêm ít nhất 1 ảnh/video bằng chứng"
             android:textColor="#757575"
             android:layout_marginBottom="20dp"/>
 
@@ -49,12 +49,13 @@
             android:id="@+id/btnConfirmProof"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:text="XÁC NHẬN và TIẾP TỤC"
+            android:text="GỬI VÀ XÁC NHẬN"
             android:textSize="16sp"
             android:textStyle="bold"
             android:layout_marginTop="32dp"
             android:backgroundTint="#2196F3"
-            android:textColor="#FFFFFF"/>
+            android:textColor="#FFFFFF"
+            android:enabled="false"/>
 
         <Button
             android:id="@+id/btnCancelProof"

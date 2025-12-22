@@ -86,6 +86,14 @@ public class TaskActionHandler {
 
     private void openProofActivity() {
         Intent intent = new Intent(activity, ProofActivity.class);
+        // Prefer assignmentId if available, otherwise fallback to parcelId + driverId
+        if (pendingTask.getAssignmentId() != null && !pendingTask.getAssignmentId().isEmpty()) {
+            intent.putExtra(ProofActivity.EXTRA_ASSIGNMENT_ID, pendingTask.getAssignmentId());
+        } else {
+            intent.putExtra(ProofActivity.EXTRA_PARCEL_ID, pendingTask.getParcelId());
+            intent.putExtra(ProofActivity.EXTRA_DRIVER_ID, driverId);
+        }
+        
         if (fragment != null) {
             fragment.startActivityForResult(intent, REQUEST_CODE_PROOF);
         } else {
@@ -95,14 +103,13 @@ public class TaskActionHandler {
 
     // --- PROCESS RESULT ---
     public void processProofResult(int requestCode, int resultCode, @Nullable Intent data) {
-        if (requestCode == REQUEST_CODE_PROOF && resultCode == Activity.RESULT_OK && data != null) {
-            ArrayList<String> imagePaths = data.getStringArrayListExtra(ProofActivity.EXTRA_RESULT_IMAGES);
-            if (imagePaths != null && !imagePaths.isEmpty()) {
-                // Thay vì gọi submitCompletionRequest ngay, ta gọi upload lên Cloudinary trước
-                uploadImagesToCloudinaryThenSubmit(imagePaths);
-            } else {
-                Toast.makeText(activity, "Không nhận được ảnh bằng chứng.", Toast.LENGTH_SHORT).show();
+        if (requestCode == REQUEST_CODE_PROOF && resultCode == Activity.RESULT_OK) {
+            // ProofActivity now handles upload and submit internally
+            // Just notify listener that task was completed
+            if (listener != null) {
+                listener.onStatusUpdated("COMPLETED");
             }
+            pendingTask = null;
         }
     }
 

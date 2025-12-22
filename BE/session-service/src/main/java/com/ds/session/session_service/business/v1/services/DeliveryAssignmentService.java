@@ -81,19 +81,35 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             throw new IllegalArgumentException("Maximum 6 proof images allowed");
         }
 
+        // Ensure assignment is managed - reload to get fresh entity
+        DeliveryAssignment managedAssignment = deliveryAssignmentRepository.findById(assignment.getId())
+            .orElseThrow(() -> new IllegalStateException("Assignment not found: " + assignment.getId()));
+
+        // Get deliveryManId from session (ensure session is loaded)
+        String deliveryManId = managedAssignment.getSession().getDeliveryManId();
+
+        // Persist proofs directly to ensure assignment_id is set correctly
         for (String url : imageUrls) {
             DeliveryProof proof = DeliveryProof.builder()
                 .type(type)
                 .mediaUrl(url)
                 .mediaPublicId(UUID.randomUUID().toString())
-                .confirmedBy(assignment.getSession().getDeliveryManId())
+                .confirmedBy(deliveryManId)
                 .createdAt(LocalDateTime.now())
                 .build();
 
-            assignment.addProof(proof);
+            // Set assignment BEFORE persisting - this is critical!
+            proof.setAssignment(managedAssignment);
+            
+            // Persist proof directly to ensure assignment_id is set
+            deliveryProofRepository.save(proof);
+            
+            // Also add to collection to maintain bidirectional relationship
+            managedAssignment.getProofs().add(proof);
         }
 
-        deliveryAssignmentRepository.save(assignment);
+        // Save the managed assignment to update updatedAt timestamp
+        deliveryAssignmentRepository.save(managedAssignment);
     }
 
     @Override
@@ -118,6 +134,68 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 ParcelEvent.DELIVERY_SUCCESSFUL,
                 null
         );
+    }
+
+    @Override
+    public DeliveryAssignmentResponse completeTaskByAssignmentId(UUID assignmentId, CompleteTaskRequest request) {
+        DeliveryAssignment assignment = deliveryAssignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new ResourceNotFound("Assignment not found: " + assignmentId));
+        
+        // Validate assignment is in progress
+        if (assignment.getStatus() != AssignmentStatus.IN_PROGRESS) {
+            throw new IllegalStateException("Assignment is not in IN_PROGRESS status. Current status: " + assignment.getStatus());
+        }
+
+        uploadProof(assignment, ProofType.DELIVERED, request.getProofImageUrls());
+
+        // Get parcelId and deliveryManId from assignment
+        UUID parcelId = UUID.fromString(assignment.getParcelId());
+        UUID deliveryManId = UUID.fromString(assignment.getSession().getDeliveryManId());
+
+        return updateTaskState(
+                parcelId,
+                deliveryManId,
+                request.getRouteInfo(),
+                AssignmentStatus.COMPLETED,
+                ParcelEvent.DELIVERY_SUCCESSFUL,
+                null
+        );
+    }
+
+    @Override
+    public DeliveryAssignmentResponse returnToWarehouse(UUID assignmentId, CompleteTaskRequest request) {
+        DeliveryAssignment assignment = deliveryAssignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new ResourceNotFound("Assignment not found: " + assignmentId));
+        
+        // Validate assignment is FAILED or DELAYED (only these need to return to warehouse)
+        if (assignment.getStatus() != AssignmentStatus.FAILED && 
+            assignment.getStatus() != AssignmentStatus.DELAYED) {
+            throw new IllegalStateException("Only FAILED or DELAYED assignments can be returned to warehouse. Current status: " + assignment.getStatus());
+        }
+
+        // Upload proofs with type RETURNED
+        uploadProof(assignment, ProofType.RETURNED, request.getProofImageUrls());
+
+        // Get parcel info for response (don't update parcel status - keep it as is)
+        UUID parcelId = UUID.fromString(assignment.getParcelId());
+        ParcelInfo parcel = null;
+        String receiverName = null;
+        
+        try {
+            ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(parcelId.toString());
+            if (parcelResponse != null) {
+                parcel = parcelMapper.toParcelInfo(parcelResponse);
+                receiverName = parcel != null ? parcel.getReceiverName() : null;
+            }
+        } catch (Exception e) {
+            log.debug("[session-service] [DeliveryAssignmentService.returnToWarehouse] Failed to fetch parcel info for parcel {}: {}", parcelId, e.getMessage());
+            // Continue without parcel info - response will have null parcel info
+        }
+
+        log.debug("Recorded return to warehouse for assignment {}, parcel {}", assignmentId, parcelId);
+        
+        // Return response without changing assignment status
+        return DeliveryAssignmentResponse.from(assignment, parcel, assignment.getSession(), null, receiverName);
     }
 
     @Override
