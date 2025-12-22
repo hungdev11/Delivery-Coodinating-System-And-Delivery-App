@@ -37,7 +37,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
                 app:cardCornerRadius="8dp"
-                app:cardElevation="2dp">
+                app:cardElevation="2dp"
+                app:cardBackgroundColor="#3378350F">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -60,7 +61,7 @@
                         android:layout_height="wrap_content"
                         android:text="Session ID: --"
                         android:textSize="14sp"
-                        android:textColor="@android:color/darker_gray"
+                        android:textColor="@android:color/black"
                         android:layout_marginBottom="8dp" />
 
                     <TextView
@@ -69,7 +70,7 @@
                         android:layout_height="wrap_content"
                         android:text="Status: --"
                         android:textSize="14sp"
-                        android:textColor="@android:color/darker_gray"
+                        android:textColor="@android:color/black"
                         android:layout_marginBottom="8dp" />
 
                     <TextView
@@ -78,7 +79,7 @@
                         android:layout_height="wrap_content"
                         android:text="Bắt đầu: --"
                         android:textSize="14sp"
-                        android:textColor="@android:color/darker_gray"
+                        android:textColor="@android:color/black"
                         android:layout_marginBottom="8dp" />
 
                     <TextView
@@ -87,7 +88,7 @@
                         android:layout_height="wrap_content"
                         android:text="Kết thúc: --"
                         android:textSize="14sp"
-                        android:textColor="@android:color/darker_gray"
+                        android:textColor="@android:color/black"
                         android:layout_marginBottom="8dp" />
 
                     <LinearLayout
@@ -102,7 +103,7 @@
                             android:layout_weight="1"
                             android:text="Tổng: 0"
                             android:textSize="14sp"
-                            android:textColor="@android:color/darker_gray" />
+                            android:textColor="@android:color/black" />
 
                         <TextView
                             android:id="@+id/tv_completed_tasks"

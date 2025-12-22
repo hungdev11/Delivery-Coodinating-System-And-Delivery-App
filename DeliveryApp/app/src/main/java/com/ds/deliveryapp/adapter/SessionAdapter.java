@@ -11,6 +11,7 @@ import com.ds.deliveryapp.R;
 import com.ds.deliveryapp.clients.res.DeliverySession;
 import com.ds.deliveryapp.utils.StatusMapper;
 import com.ds.deliveryapp.utils.FormaterUtil;
+import com.google.android.material.card.MaterialCardView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -56,6 +57,7 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.ViewHold
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
+        MaterialCardView cardView;
         TextView tvSessionId;
         TextView tvSessionStatus;
         TextView tvStartTime;
@@ -66,6 +68,7 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.ViewHold
 
         ViewHolder(@NonNull View itemView) {
             super(itemView);
+            cardView = (MaterialCardView) itemView;
             tvSessionId = itemView.findViewById(R.id.tv_session_id);
             tvSessionStatus = itemView.findViewById(R.id.tv_session_status);
             tvStartTime = itemView.findViewById(R.id.tv_start_time);
@@ -87,7 +90,7 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.ViewHold
             String statusText = StatusMapper.mapSessionStatus(session.getStatus());
             tvSessionStatus.setText(statusText);
             
-            // Set status background color
+            // Set status background color for status badge
             int statusColor = R.color.status_pending;
             if ("COMPLETED".equalsIgnoreCase(session.getStatus())) {
                 statusColor = R.color.status_success;
@@ -98,6 +101,24 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.ViewHold
             }
             tvSessionStatus.setBackgroundColor(
                     ContextCompat.getColor(itemView.getContext(), statusColor)
+            );
+            
+            // Set card background color based on session status (light colors)
+            int cardBgColor = R.color.session_bg_created; // Default for CREATED
+            String sessionStatus = session.getStatus();
+            if (sessionStatus != null) {
+                if ("COMPLETED".equalsIgnoreCase(sessionStatus)) {
+                    cardBgColor = R.color.session_bg_completed;
+                } else if ("FAILED".equalsIgnoreCase(sessionStatus)) {
+                    cardBgColor = R.color.session_bg_failed;
+                } else if ("IN_PROGRESS".equalsIgnoreCase(sessionStatus)) {
+                    cardBgColor = R.color.session_bg_in_progress;
+                } else if ("CREATED".equalsIgnoreCase(sessionStatus)) {
+                    cardBgColor = R.color.session_bg_created;
+                }
+            }
+            cardView.setCardBackgroundColor(
+                    ContextCompat.getColor(itemView.getContext(), cardBgColor)
             );
 
             // Start time

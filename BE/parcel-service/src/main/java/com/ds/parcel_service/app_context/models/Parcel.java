@@ -95,6 +95,10 @@ public class Parcel {
     @Column(name = "is_delayed", nullable = false)
     @Builder.Default
     private Boolean isDelayed = false;
+
+    @Column(name = "is_fail", nullable = false)
+    @Builder.Default
+    private Boolean isFail = false;
     
     // When parcel should be available for routing again
     @Column(name = "delayed_until")

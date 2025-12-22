@@ -18,7 +18,10 @@ ARG GITHUB_REPOSITORY=""
 LABEL org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
 
 # Install wget for health checks
-RUN apt-get update -qq && \
+# Some environments block plain HTTP access to Ubuntu mirrors, which breaks apt
+# with "does not have a Release file". Switch sources to HTTPS before updating.
+RUN sed -i 's|http://|https://|g' /etc/apt/sources.list && \
+    apt-get update -qq && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wget && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 

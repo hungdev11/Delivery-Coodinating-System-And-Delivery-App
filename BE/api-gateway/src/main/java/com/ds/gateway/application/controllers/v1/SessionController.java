@@ -1,6 +1,9 @@
 package com.ds.gateway.application.controllers.v1;
 
+import com.ds.gateway.common.entities.dto.common.BaseResponse;
+import com.ds.gateway.common.entities.dto.session.EnrichedSessionResponse;
 import com.ds.gateway.common.interfaces.ISessionServiceClient;
+import com.ds.gateway.business.v1.services.SessionEnrichmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +12,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/api/v1/sessions")
@@ -18,6 +22,7 @@ import java.util.UUID;
 public class SessionController {
 
     private final ISessionServiceClient sessionServiceClient;
+    private final SessionEnrichmentService sessionEnrichmentService;
 
     @PostMapping("/drivers/{deliveryManId}/accept-parcel")
     public ResponseEntity<?> acceptParcelToSession(
@@ -30,6 +35,28 @@ public class SessionController {
     @GetMapping("/{sessionId}")
     public ResponseEntity<?> getSessionById(@PathVariable UUID sessionId) {
         return sessionServiceClient.getSessionById(sessionId);
+    }
+
+    /**
+     * Get enriched session with full assignment details including parcel info and proofs
+     * This endpoint aggregates data from session-service, parcel-service, and delivery-proofs
+     */
+    @GetMapping("/{sessionId}/enriched")
+    public ResponseEntity<BaseResponse<EnrichedSessionResponse>> getEnrichedSessionById(@PathVariable UUID sessionId) {
+        log.debug("[api-gateway] [SessionController.getEnrichedSessionById] GET /api/v1/sessions/{}/enriched", sessionId);
+        try {
+            CompletableFuture<EnrichedSessionResponse> future = sessionEnrichmentService.getEnrichedSession(sessionId);
+            EnrichedSessionResponse enrichedSession = future.join();
+            
+            if (enrichedSession == null) {
+                return ResponseEntity.ok(BaseResponse.error("Session not found or failed to enrich"));
+            }
+            
+            return ResponseEntity.ok(BaseResponse.success(enrichedSession));
+        } catch (Exception e) {
+            log.error("[api-gateway] [SessionController.getEnrichedSessionById] Error enriching session {}", sessionId, e);
+            return ResponseEntity.ok(BaseResponse.error("Failed to enrich session: " + e.getMessage()));
+        }
     }
 
     @PostMapping("/{sessionId}/complete")

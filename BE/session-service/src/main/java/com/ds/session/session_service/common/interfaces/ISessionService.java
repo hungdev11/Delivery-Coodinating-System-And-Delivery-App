@@ -1,5 +1,6 @@
 package com.ds.session.session_service.common.interfaces;
 
+import java.util.List;
 import java.util.UUID;
 
 import com.ds.session.session_service.common.entities.dto.common.PagedData;
@@ -100,4 +101,6 @@ public interface ISessionService {
      */
     AssignmentResponse acceptTransferredParcel(String toDeliveryManId,
         com.ds.session.session_service.common.entities.dto.request.AcceptTransferredParcelRequest request);
+
+    List<AssignmentResponse> listAssignmentsMustReturnWarehouse(String sessionId);
 }

@@ -1,5 +1,6 @@
 package com.ds.deliveryapp.clients;
 
+import com.ds.deliveryapp.clients.req.CompleteTaskRequest;
 import com.ds.deliveryapp.clients.req.ScanParcelRequest;
 import com.ds.deliveryapp.clients.req.SessionFailRequest;
 import com.ds.deliveryapp.clients.req.TaskFailRequest;
@@ -8,18 +9,44 @@ import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.DeliverySession;
 import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.clients.res.ShipperInfo;
+import com.ds.deliveryapp.clients.res.UploadResult;
 import com.ds.deliveryapp.model.DeliveryAssignment;
 
 import java.util.List;
 
+import okhttp3.MultipartBody;
+import okhttp3.RequestBody;
 import retrofit2.Call;
 import retrofit2.http.Body;
 import retrofit2.http.GET;
+import retrofit2.http.Multipart;
 import retrofit2.http.POST;
+import retrofit2.http.Part;
 import retrofit2.http.Path;
 import retrofit2.http.Query;
 
 public interface SessionClient {
+
+    @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/complete-with-urls")
+    Call<BaseResponse<DeliveryAssignment>> completeTaskWithUrls(
+            @Path("deliveryManId") String deliveryManId,
+            @Path("parcelId") String parcelId,
+            @Body CompleteTaskRequest request
+    );
+
+    /**
+     * Complete task by assignmentId - more efficient endpoint
+     * Prefer this endpoint when assignmentId is available
+     */
+    @POST("/api/v1/assignments/{assignmentId}/complete")
+    Call<BaseResponse<DeliveryAssignment>> completeTaskByAssignmentId(
+            @Path("assignmentId") String assignmentId,
+            @Body CompleteTaskRequest request
+    );
+
+    @GET("/api/v1/sessions/list-must-return-warehouse/{sessionId}")
+    Call<BaseResponse<List<DeliveryAssignment>>> listMustReturnToWarehouse(@Path("sessionId") String sessionId);
+
     /**
      * API Quét-để-thêm-task (Scan-to-add).
      * Ánh xạ tới: SessionController.acceptParcelToSession
@@ -99,11 +126,15 @@ public interface SessionClient {
      * Shipper báo giao hàng THÀNH CÔNG.
      * Ánh xạ tới: DeliveryAssignmentController.completeTask
      */
+    @Multipart
     @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/complete")
     Call<BaseResponse<DeliveryAssignment>> completeTask(
             @Path("deliveryManId") String deliveryManId,
             @Path("parcelId") String parcelId,
-            @Body RouteInfo routeInfo
+            // JSON Object phải được gửi như một Part
+            @Part("routeInfo") RequestBody routeInfo,
+            // Danh sách file
+            @Part List<MultipartBody.Part> files
     );
 
     /**
@@ -181,5 +212,22 @@ public interface SessionClient {
     Call<BaseResponse<DeliveryAssignment>> acceptTransferredParcel(
             @Path("deliveryManId") String deliveryManId,
             @Body com.ds.deliveryapp.clients.req.AcceptTransferredParcelRequest request
+    );
+    
+    /**
+     * Get delivery proofs by assignment ID
+     */
+    @GET("/api/v1/delivery-proofs/assignments/{assignmentId}")
+    Call<BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> getProofsByAssignment(
+            @Path("assignmentId") String assignmentId
+    );
+    
+    /**
+     * Return parcel to warehouse (for FAILED/DELAYED assignments)
+     */
+    @POST("/api/v1/assignments/{assignmentId}/return-to-warehouse")
+    Call<BaseResponse<DeliveryAssignment>> returnToWarehouse(
+            @Path("assignmentId") String assignmentId,
+            @Body CompleteTaskRequest request
     );
 }

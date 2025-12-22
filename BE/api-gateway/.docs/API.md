@@ -56,15 +56,45 @@ Proxies requests to the Parcel Service.
 *   `PUT /change-status/{parcelId}`: Change a parcel's status.
 *   ...
 
-## 5. Session Service API (`/api/v1/session`)
+## 5. Session Service API (`/api/v1/sessions`)
 
 Proxies requests to the Session Service, which manages delivery tasks.
 
-*   `POST /tasks/{parcelId}/accept`: Accept a delivery task.
-*   `POST /tasks/{taskId}/complete`: Mark a task as complete.
-*   `POST /tasks/{taskId}/fail`: Mark a task as failed.
-*   `GET /delivery-man/{deliveryManId}/tasks`: Get tasks for a delivery person.
-*   ...
+### Basic Endpoints (Direct Proxy)
+*   `GET /sessions/{sessionId}`: Get basic session information (proxied directly to session-service)
+*   `POST /sessions/drivers/{deliveryManId}/accept-parcel`: Accept a parcel to session
+*   `POST /sessions/{sessionId}/complete`: Complete a session
+*   `POST /sessions/{sessionId}/fail`: Fail a session
+*   `POST /sessions`: Create session batch
+*   `POST /sessions/drivers/{deliveryManId}/prepare`: Create prepared session (CREATED status)
+*   `POST /sessions/{sessionId}/start`: Start session (CREATED -> IN_PROGRESS)
+*   `GET /sessions/drivers/{deliveryManId}/active`: Get active session for delivery man
+*   `GET /sessions/drivers/{deliveryManId}/sessions`: Get all sessions for delivery man
+
+### Enriched Endpoint (Aggregated)
+*   `GET /sessions/{sessionId}/enriched`: Get enriched session with full assignment details
+    - **Aggregates data from**: session-service, parcel-service, delivery-proofs
+    - **Includes**: 
+      - Full shipper information (name, vehicle, phone, email)
+      - Complete parcel information for each assignment (receiver, location, value, weight, coordinates)
+      - All delivery proofs (images/videos) for each assignment
+    - **Use case**: When you need complete session details in a single API call
+
+### Assignment Endpoints (`/api/v1/assignments`)
+
+*   `GET /assignments/session/delivery-man/{deliveryManId}/tasks/today`: Get daily tasks
+*   `GET /assignments/session/delivery-man/{deliveryManId}/tasks`: Get task history
+*   `POST /assignments/drivers/{deliveryManId}/parcels/{parcelId}/complete`: Complete task
+*   `POST /assignments/{assignmentId}/complete`: Complete task by assignmentId (preferred)
+*   `POST /assignments/drivers/{deliveryManId}/parcels/{parcelId}/fail`: Fail task
+*   `POST /assignments/drivers/{deliveryManId}/parcels/{parcelId}/refuse`: Refuse task
+*   `POST /assignments/drivers/{deliveryManId}/parcels/{parcelId}/postpone`: Postpone task
+*   `GET /assignments/current-shipper/parcels/{parcelId}`: Get current shipper
+
+### Delivery Proof Endpoints (`/api/v1/delivery-proofs`)
+
+*   `GET /delivery-proofs/assignments/{assignmentId}`: Get all proofs for a specific assignment
+*   `GET /delivery-proofs/parcels/{parcelId}`: Get all proofs for a specific parcel (from all assignments)
 
 ## 6. Settings Service API (`/api/v1/settings`)
 

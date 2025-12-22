@@ -8,34 +8,60 @@ import static com.ds.deliveryapp.utils.FormaterUtil.formatWeight;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.cardview.widget.CardView;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.ds.deliveryapp.adapters.ProofAdapter;
+import com.ds.deliveryapp.clients.SessionClient;
+import com.ds.deliveryapp.configs.RetrofitClient;
+import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.enums.DeliveryType;
 import com.ds.deliveryapp.model.DeliveryAssignment;
+import com.ds.deliveryapp.model.DeliveryProof;
 import com.ds.deliveryapp.utils.FormaterUtil;
 import com.ds.deliveryapp.utils.TaskActionHandler;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 
 public class TaskDetailActivity extends AppCompatActivity implements TaskActionHandler.TaskUpdateListener{
     private TextView tvParcelCode, tvStatus, tvReceiverName, tvDeliveryLocation;
-    private Button btnCallReceiver, btnMainAction, btnFailAction, btnChatReceiver;
+    private Button btnCallReceiver, btnMainAction, btnFailAction, btnChatReceiver, btnReturnToWarehouse;
     private TextView tvParcelValue;
+
+    private static final int REQUEST_CODE_PROOF = 9001; // Mã request mới
 
     // View từ card_details_and_route_info.xml (included)
     private TextView tvDeliveryType, tvWeight, tvParcelId;
     private TextView tvCreatedAt, tvCompletedAt, tvFailReason;
     private LinearLayout layoutCompletedAt, layoutFailReason;
+    
+    // Proofs section
+    private CardView cardProofs;
+    private RecyclerView recyclerProofs;
+    private TextView tvProofsLoading, tvProofsEmpty;
+    private ProofAdapter proofAdapter;
+    
     private DeliveryAssignment currentTask;
     private TaskActionHandler actionHandler;
     private String sessionStatus; // CREATED, IN_PROGRESS, etc.
+    private SessionClient sessionClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +80,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
                 displayData(currentTask);
                 setupEventListeners(currentTask);
                 updateButtonsBasedOnSessionStatus();
+                loadProofs(currentTask.getAssignmentId());
             } else {
                 Toast.makeText(this, "Lỗi tải dữ liệu chi tiết.", Toast.LENGTH_LONG).show();
                 finish();
@@ -74,6 +101,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         btnFailAction = findViewById(R.id.btn_fail_action);
         btnMainAction = findViewById(R.id.btn_main_action);
         btnChatReceiver = findViewById(R.id.btn_chat_receiver_detail);
+        btnReturnToWarehouse = findViewById(R.id.btn_return_to_warehouse);
         tvDeliveryType = findViewById(R.id.tv_delivery_type);
         tvWeight = findViewById(R.id.tv_weight);
         tvParcelId = findViewById(R.id.tv_parcel_id);
@@ -84,6 +112,20 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         layoutFailReason = findViewById(R.id.layout_fail_reason);
         layoutCompletedAt.setVisibility(GONE);
         layoutFailReason.setVisibility(GONE);
+        
+        // Proofs section
+        cardProofs = findViewById(R.id.card_proofs);
+        recyclerProofs = findViewById(R.id.recycler_proofs);
+        tvProofsLoading = findViewById(R.id.tv_proofs_loading);
+        tvProofsEmpty = findViewById(R.id.tv_proofs_empty);
+        
+        // Setup RecyclerView for proofs
+        proofAdapter = new ProofAdapter(this);
+        recyclerProofs.setLayoutManager(new GridLayoutManager(this, 3));
+        recyclerProofs.setAdapter(proofAdapter);
+        
+        // Initialize API client
+        sessionClient = RetrofitClient.getRetrofitInstance(this).create(SessionClient.class);
     }
 
     private void displayData(DeliveryAssignment task) {
@@ -120,6 +162,27 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
             }
         }
         updateMainActionButton(task.getStatus());
+        updateReturnToWarehouseButton(task);
+    }
+    
+    private void updateReturnToWarehouseButton(DeliveryAssignment task) {
+        if (btnReturnToWarehouse == null) return;
+        
+        // Show button only for FAILED or DELAYED tasks
+        if ("FAILED".equals(task.getStatus()) || "DELAYED".equals(task.getStatus())) {
+            btnReturnToWarehouse.setVisibility(VISIBLE);
+            btnReturnToWarehouse.setOnClickListener(v -> {
+                if (task.getAssignmentId() != null && !task.getAssignmentId().isEmpty()) {
+                    Intent intent = new Intent(this, ReturnToWarehouseActivity.class);
+                    intent.putExtra(ReturnToWarehouseActivity.EXTRA_ASSIGNMENT_ID, task.getAssignmentId());
+                    startActivityForResult(intent, 9002);
+                } else {
+                    Toast.makeText(this, "Không tìm thấy thông tin đơn hàng", Toast.LENGTH_SHORT).show();
+                }
+            });
+        } else {
+            btnReturnToWarehouse.setVisibility(GONE);
+        }
     }
 
     private void updateMainActionButton(String status) {
@@ -190,7 +253,10 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         if (btnMainAction != null) {
             btnMainAction.setOnClickListener(v -> {
                 if (currentTask != null && btnMainAction.isEnabled()) {
-                    actionHandler.startCompletionFlow(currentTask);
+                    if ("IN_PROGRESS".equals(task.getStatus())) {
+                        actionHandler.completeTaskWithProof(currentTask);
+                    } else {
+                    }
                 }
             });
         }
@@ -217,28 +283,78 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         });
     }
 
-    /**
-     * Xử lý kết quả trả về từ Camera Intent
-     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == TaskActionHandler.REQUEST_IMAGE_CAPTURE) {
-            actionHandler.handleActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == 9002 && resultCode == RESULT_OK) {
+            // ReturnToWarehouseActivity completed successfully
+            Toast.makeText(this, "Đã xác nhận trả hàng về kho!", Toast.LENGTH_SHORT).show();
+            // Reload proofs to show RETURNED proof
+            if (currentTask != null) {
+                loadProofs(currentTask.getAssignmentId());
+            }
+            // Hide return button if proof exists
+            updateReturnToWarehouseButton(currentTask);
+        } else if (actionHandler != null) {
+            // CHUYỂN TIẾP KẾT QUẢ CHO HANDLER XỬ LÝ
+            actionHandler.processProofResult(requestCode, resultCode, data);
         }
     }
 
-    /**
-     * Xử lý kết quả trả về từ HỎI QUYỀN
-     */
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == TaskActionHandler.REQUEST_CAMERA_PERMISSION) {
-            actionHandler.handlePermissionResult(requestCode, permissions, grantResults);
-        }
-    }
+//    /**
+//     * Xử lý kết quả trả về từ HỎI QUYỀN
+//     */
+//    @Override
+//    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+//        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+//        if (requestCode == TaskActionHandler.REQUEST_CAMERA_PERMISSION) {
+//            actionHandler.handlePermissionResult(requestCode, permissions, grantResults);
+//        }
+//    }
 
+
+    private void loadProofs(String assignmentId) {
+        if (assignmentId == null || assignmentId.isEmpty()) {
+            return;
+        }
+
+        // Show loading
+        cardProofs.setVisibility(View.VISIBLE);
+        tvProofsLoading.setVisibility(View.VISIBLE);
+        tvProofsEmpty.setVisibility(View.GONE);
+        recyclerProofs.setVisibility(View.GONE);
+
+        sessionClient.getProofsByAssignment(assignmentId).enqueue(new Callback<BaseResponse<List<DeliveryProof>>>() {
+            @Override
+            public void onResponse(Call<BaseResponse<List<DeliveryProof>>> call, Response<BaseResponse<List<DeliveryProof>>> response) {
+                tvProofsLoading.setVisibility(View.GONE);
+                
+                if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
+                    List<DeliveryProof> proofs = response.body().getResult();
+                    
+                    if (proofs.isEmpty()) {
+                        tvProofsEmpty.setVisibility(View.VISIBLE);
+                        recyclerProofs.setVisibility(View.GONE);
+                    } else {
+                        tvProofsEmpty.setVisibility(View.GONE);
+                        recyclerProofs.setVisibility(View.VISIBLE);
+                        proofAdapter.setProofs(proofs);
+                    }
+                } else {
+                    // Hide card if failed to load
+                    cardProofs.setVisibility(View.GONE);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<BaseResponse<List<DeliveryProof>>> call, Throwable t) {
+                tvProofsLoading.setVisibility(View.GONE);
+                // Hide card if failed to load
+                cardProofs.setVisibility(View.GONE);
+            }
+        });
+    }
 
     @Override
     public void onStatusUpdated(String newStatus) {
@@ -254,6 +370,12 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         displayData(currentTask);
 
         Toast.makeText(this, "Đã cập nhật: " + newStatus, Toast.LENGTH_SHORT).show();
+        
+        // Reload proofs if status changed to COMPLETED
+        if ("COMPLETED".equals(newStatus)) {
+            loadProofs(currentTask.getAssignmentId());
+        }
+        
         finish();
     }
 }

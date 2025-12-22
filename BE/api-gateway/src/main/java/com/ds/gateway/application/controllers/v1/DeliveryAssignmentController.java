@@ -61,6 +61,35 @@ public class DeliveryAssignmentController {
         return assignmentClient.completeTask(deliveryManId, parcelId, routeInfo);
     }
 
+    @PostMapping("/drivers/{deliveryManId}/parcels/{parcelId}/complete-with-urls")
+    public ResponseEntity<?> completeTaskWithUrls(@PathVariable UUID deliveryManId,
+                                                   @PathVariable UUID parcelId,
+                                                   @Valid @RequestBody Object request) {
+        log.debug("[api-gateway] [DeliveryAssignmentController.completeTaskWithUrls] POST /api/v1/assignments/drivers/{}/parcels/{}/complete-with-urls", deliveryManId, parcelId);
+        // Both endpoints do the same thing - accept CompleteTaskRequest with routeInfo and proofImageUrls
+        return assignmentClient.completeTask(deliveryManId, parcelId, request);
+    }
+
+    /**
+     * Complete task by assignmentId - more efficient endpoint
+     */
+    @PostMapping("/{assignmentId}/complete")
+    public ResponseEntity<?> completeTaskByAssignmentId(@PathVariable UUID assignmentId,
+                                                        @Valid @RequestBody Object request) {
+        log.debug("[api-gateway] [DeliveryAssignmentController.completeTaskByAssignmentId] POST /api/v1/assignments/{}/complete", assignmentId);
+        return assignmentClient.completeTaskByAssignmentId(assignmentId, request);
+    }
+
+    /**
+     * Record return to warehouse for FAILED/DELAYED assignments
+     */
+    @PostMapping("/{assignmentId}/return-to-warehouse")
+    public ResponseEntity<?> returnToWarehouse(@PathVariable UUID assignmentId,
+                                               @Valid @RequestBody Object request) {
+        log.debug("[api-gateway] [DeliveryAssignmentController.returnToWarehouse] POST /api/v1/assignments/{}/return-to-warehouse", assignmentId);
+        return assignmentClient.returnToWarehouse(assignmentId, request);
+    }
+
     @PostMapping("/drivers/{deliveryManId}/parcels/{parcelId}/fail")
     public ResponseEntity<?> failTask(@PathVariable UUID deliveryManId,
                                       @PathVariable UUID parcelId,

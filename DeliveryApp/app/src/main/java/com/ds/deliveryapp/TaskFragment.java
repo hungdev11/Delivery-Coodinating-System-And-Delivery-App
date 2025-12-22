@@ -24,6 +24,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.google.android.material.snackbar.Snackbar;
 
+import com.ds.deliveryapp.ReturnToWarehouseActivity;
 import com.ds.deliveryapp.adapter.TasksAdapter;
 import com.ds.deliveryapp.clients.SessionClient;
 import com.ds.deliveryapp.clients.req.SessionFailRequest;
@@ -33,6 +34,7 @@ import com.ds.deliveryapp.clients.res.PageResponse;
 import com.ds.deliveryapp.clients.res.UpdateNotification;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.DeliveryAssignment;
+import com.ds.deliveryapp.model.DeliveryProof;
 import com.ds.deliveryapp.service.GlobalChatService;
 import com.ds.deliveryapp.utils.SessionManager;
 
@@ -158,6 +160,16 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                         DeliverySession session = baseResponse.getResult();
                         activeSessionId = session.getId() != null ? session.getId().toString() : null;
                         activeSessionStatus = session.getStatus() != null ? session.getStatus() : "UNKNOWN";
+                        
+                        // If session is COMPLETED or FAILED, navigate to dashboard
+                        if ("COMPLETED".equals(activeSessionStatus) || "FAILED".equals(activeSessionStatus)) {
+                            Log.d(TAG, "Session is " + activeSessionStatus + ", navigating to dashboard");
+                            activeSessionId = null;
+                            activeSessionStatus = null;
+                            navigateToDashboard();
+                            return;
+                        }
+                        
                         Log.d(TAG, "Active session found: " + activeSessionId + ", Status: " + activeSessionStatus);
                         resetAndFetchTasks();
                     } else {
@@ -166,17 +178,17 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                         navigateToDashboard();
                     }
                 } else {
-                    // Error - try to fetch tasks anyway
+                    // Error - navigate to dashboard
                     Log.w(TAG, "Error checking active session: " + response.code());
-                    resetAndFetchTasks();
+                    navigateToDashboard();
                 }
             }
 
             @Override
             public void onFailure(Call<BaseResponse<DeliverySession>> call, Throwable t) {
                 Log.e(TAG, "Network error checking active session: " + t.getMessage());
-                // On error, try to fetch tasks anyway
-                resetAndFetchTasks();
+                // On error, navigate to dashboard
+                navigateToDashboard();
             }
         });
     }
@@ -224,6 +236,10 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             // Transfer parcel accepted successfully
             Toast.makeText(getContext(), "Đã nhận đơn chuyển giao thành công.", Toast.LENGTH_SHORT).show();
             resetAndFetchTasks();
+        } else if (requestCode == 9002 && resultCode == getActivity().RESULT_OK) {
+            // ReturnToWarehouseActivity completed successfully
+            Toast.makeText(getContext(), "Đã xác nhận trả hàng về kho!", Toast.LENGTH_SHORT).show();
+            resetAndFetchTasks();
         }
     }
 
@@ -232,8 +248,13 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         
         // Need activeSessionId to fetch tasks by sessionId
         if (activeSessionId == null) {
-            Log.w(TAG, "No active session ID. Checking for active session first...");
-            checkActiveSession();
+            Log.w(TAG, "No active session ID. Cannot fetch tasks.");
+            // Don't call checkActiveSession again to avoid infinite loop
+            // Show empty state instead
+            if (tvEmptyState != null) {
+                tvEmptyState.setVisibility(View.VISIBLE);
+                tvEmptyState.setText("Chưa có phiên làm việc.");
+            }
             return;
         }
 
@@ -300,10 +321,27 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     }
 
                     if (tasks.isEmpty() && page == 0) {
-                        // No tasks - check if there's an active session
+                        // No tasks - mark as last page to prevent infinite loading
+                        isLastPage = true;
+                        
+                        // Check if there's an active session
                         if (activeSessionId != null) {
-                            // Active session exists but no tasks - show empty state
-                            checkForCreatedSession();
+                            // Active session exists but no tasks - show appropriate UI
+                            if ("IN_PROGRESS".equals(activeSessionStatus)) {
+                                // Session is IN_PROGRESS but all tasks are done
+                                // Show button to complete session
+                                if (tvEmptyState != null) {
+                                    tvEmptyState.setVisibility(View.VISIBLE);
+                                    tvEmptyState.setText("Tất cả đơn hàng đã hoàn tất!\nVui lòng kết thúc phiên để hoàn thành ca làm việc.");
+                                }
+                                // Show session menu to allow manual completion
+                                if (btnSessionMenu != null) {
+                                    btnSessionMenu.setVisibility(View.VISIBLE);
+                                }
+                            } else {
+                                // CREATED session with no tasks yet
+                                checkForCreatedSession();
+                            }
                         } else {
                             // No active session - navigate to dashboard
                             navigateToDashboard();
@@ -401,6 +439,94 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     }
 
     private void showCompleteSessionDialog() {
+        // Check if there are FAILED/DELAYED tasks without RETURNED proofs
+        checkReturnedProofsBeforeComplete();
+    }
+    
+    private void checkReturnedProofsBeforeComplete() {
+        // Filter FAILED and DELAYED tasks
+        List<DeliveryAssignment> failedOrDelayedTasks = new ArrayList<>();
+        for (DeliveryAssignment task : tasks) {
+            if ("FAILED".equals(task.getStatus()) || "DELAYED".equals(task.getStatus())) {
+                failedOrDelayedTasks.add(task);
+            }
+        }
+        
+        if (failedOrDelayedTasks.isEmpty()) {
+            // No failed/delayed tasks, proceed with completion
+            showCompleteConfirmationDialog();
+            return;
+        }
+        
+        // Check proofs for each failed/delayed task
+        checkProofsForTasks(failedOrDelayedTasks, 0);
+    }
+    
+    private void checkProofsForTasks(List<DeliveryAssignment> tasksToCheck, int index) {
+        if (index >= tasksToCheck.size()) {
+            // All tasks checked, proceed with completion
+            showCompleteConfirmationDialog();
+            return;
+        }
+        
+        DeliveryAssignment task = tasksToCheck.get(index);
+        if (task.getAssignmentId() == null || task.getAssignmentId().isEmpty()) {
+            // Skip if no assignmentId
+            checkProofsForTasks(tasksToCheck, index + 1);
+            return;
+        }
+        
+        SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
+        service.getProofsByAssignment(task.getAssignmentId()).enqueue(new retrofit2.Callback<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>>() {
+            @Override
+            public void onResponse(retrofit2.Call<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> call, 
+                                 retrofit2.Response<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
+                    List<com.ds.deliveryapp.model.DeliveryProof> proofs = response.body().getResult();
+                    boolean hasReturnedProof = false;
+                    for (com.ds.deliveryapp.model.DeliveryProof proof : proofs) {
+                        if ("RETURNED".equals(proof.getType())) {
+                            hasReturnedProof = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!hasReturnedProof) {
+                        // Found a task without RETURNED proof
+                        showReturnToWarehouseRequiredDialog(task);
+                        return;
+                    }
+                }
+                
+                // Check next task
+                checkProofsForTasks(tasksToCheck, index + 1);
+            }
+            
+            @Override
+            public void onFailure(retrofit2.Call<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> call, Throwable t) {
+                Log.e(TAG, "Failed to check proofs for task " + task.getAssignmentId(), t);
+                // On error, continue checking next task
+                checkProofsForTasks(tasksToCheck, index + 1);
+            }
+        });
+    }
+    
+    private void showReturnToWarehouseRequiredDialog(DeliveryAssignment task) {
+        new AlertDialog.Builder(getContext())
+                .setTitle("Chưa xác nhận trả hàng về kho")
+                .setMessage("Đơn hàng " + task.getParcelCode() + " chưa có bằng chứng trả về kho.\nVui lòng quét lại đơn hàng để xác nhận đã trả về kho trước khi kết thúc phiên.")
+                .setPositiveButton("Xác nhận về kho", (dialog, which) -> {
+                    // Open ReturnToWarehouseActivity
+                    Intent intent = new Intent(getContext(), ReturnToWarehouseActivity.class);
+                    intent.putExtra(ReturnToWarehouseActivity.EXTRA_ASSIGNMENT_ID, task.getAssignmentId());
+                    startActivityForResult(intent, 9002); // Different request code
+                })
+                .setNegativeButton("Hủy", null)
+                .setCancelable(false)
+                .show();
+    }
+    
+    private void showCompleteConfirmationDialog() {
         new AlertDialog.Builder(getContext())
                 .setTitle("Hoàn tất phiên")
                 .setMessage("Bạn có chắc chắn muốn kết thúc ca làm việc (phiên) này?")
@@ -589,11 +715,22 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                         if ("COMPLETED".equals(activeSessionStatus) || "FAILED".equals(activeSessionStatus)) {
                             Log.d(TAG, "Session " + activeSessionId + " is " + activeSessionStatus + ". Navigating to dashboard.");
                             showLightNotification("Phiên giao hàng đã kết thúc");
+                            activeSessionId = null;
+                            activeSessionStatus = null;
                             navigateToDashboard();
                             return;
                         }
                         
                         updateUIForSessionStatus();
+                        
+                        // Check if all tasks are complete for IN_PROGRESS session
+                        if ("IN_PROGRESS".equals(activeSessionStatus) && tasks.isEmpty()) {
+                            // Show message to complete session
+                            if (tvEmptyState != null) {
+                                tvEmptyState.setVisibility(View.VISIBLE);
+                                tvEmptyState.setText("Tất cả đơn hàng đã hoàn tất!\nVui lòng kết thúc phiên để hoàn thành ca làm việc.");
+                            }
+                        }
                     }
                 }
             }

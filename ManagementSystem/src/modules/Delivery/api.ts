@@ -18,7 +18,9 @@ import type {
   GetDeliverySessionDetailResponse,
   UpdateAssignmentStatusRequestPayload,
   DeliveryAssignmentTaskResponse,
+  DeliverySessionDto,
 } from './model.type'
+import type { IApiResponse } from '@/common/types'
 
 const apiClient = new AxiosHttpClient(import.meta.env.VITE_API_URL)
 
@@ -94,9 +96,67 @@ export const getDeliverySessionsForClient = async (
 
 export const getDeliverySessionDetail = async (
   sessionId: string,
-): Promise<GetDeliverySessionDetailResponse> => {
-  return apiClient.get<GetDeliverySessionDetailResponse>(
+): Promise<IApiResponse<DeliverySessionDto>> => {
+  return apiClient.get<IApiResponse<DeliverySessionDto>>(
     `/v1/delivery-sessions/${sessionId}/with-assignments`,
+  )
+}
+
+/**
+ * Get enriched session detail with shipper info, parcel details, and proofs
+ */
+export interface EnrichedSessionResponse {
+  id: string
+  deliveryManId: string
+  status: string
+  startTime?: string
+  endTime?: string
+  totalTasks: number
+  completedTasks: number
+  failedTasks: number
+  deliveryMan?: {
+    id?: string
+    name?: string
+    displayName?: string
+    email?: string
+    phone?: string
+    vehicleType?: string
+    capacityKg?: number
+  }
+  assignments?: Array<{
+    id: string
+    sessionId?: string
+    parcelId: string
+    status: string
+    failReason?: string | null
+    scanedAt?: string
+    updatedAt?: string
+    parcelInfo?: {
+      id?: string
+      code?: string
+      targetDestination?: string
+      value?: number
+      deliveryType?: string
+      receiverName?: string
+      receiverPhoneNumber?: string | null
+      weight?: number
+      lat?: number
+      lon?: number
+    }
+    proofs?: Array<{
+      id: string
+      type: string
+      mediaUrl: string
+      createdAt: string
+    }>
+  }>
+}
+
+export const getEnrichedSessionDetail = async (
+  sessionId: string,
+): Promise<{ result: EnrichedSessionResponse }> => {
+  return apiClient.get<{ result: EnrichedSessionResponse }>(
+    `/v1/sessions/${sessionId}/enriched`,
   )
 }
 
@@ -170,7 +230,7 @@ export const getAssignmentHistoryForDeliveryMan = async (
  */
 export const getActiveSessionForDeliveryMan = async (
   deliveryManId: string,
-): Promise<GetDeliverySessionDetailResponse> => {
+): Promise<IApiResponse<DeliverySessionDto>> => {
   return apiClient.get<GetDeliverySessionDetailResponse>(
     `/v1/sessions/drivers/${deliveryManId}/active`,
   )
@@ -210,5 +270,32 @@ export const getAssignmentsBySessionId = async (
         size: params.size ?? 100,
       },
     },
+  )
+}
+
+/**
+ * Get delivery proofs by parcel ID
+ */
+export interface DeliveryProofDto {
+  id: string
+  type: 'DELIVERED' | 'RETURNED'
+  mediaUrl: string
+  confirmedBy: string
+  createdAt: string
+}
+
+export const getProofsByAssignment = async (
+  assignmentId: string,
+): Promise<{ result: DeliveryProofDto[] }> => {
+  return apiClient.get<{ result: DeliveryProofDto[] }>(
+    `/v1/delivery-proofs/assignments/${assignmentId}`,
+  )
+}
+
+export const getProofsByParcel = async (
+  parcelId: string,
+): Promise<{ result: DeliveryProofDto[] }> => {
+  return apiClient.get<{ result: DeliveryProofDto[] }>(
+    `/v1/delivery-proofs/parcels/${parcelId}`,
   )
 }

@@ -4,7 +4,7 @@
  * Allows admin to view parcel details and resolve disputes
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, defineAsyncComponent } from 'vue'
 import type { ParcelDto } from '../model.type'
 import {
   resolveDisputeAsMisunderstanding,
@@ -14,6 +14,11 @@ import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { useConversations } from '@/modules/Communication/composables'
 import { useRouter } from 'vue-router'
 import { getCurrentUser } from '@/common/guards/roleGuard.guard'
+import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
+
+const LazyParcelProofModal = defineAsyncComponent(
+  () => import('./ParcelProofModal.vue'),
+)
 
 interface Props {
   parcel: ParcelDto
@@ -28,9 +33,20 @@ const emit = defineEmits<{
 const toast = useToast()
 const router = useRouter()
 const currentUser = getCurrentUser()
+const overlay = useOverlay()
 const { findOrCreateConversation } = useConversations()
 
 const resolvingAs = ref<'MISUNDERSTANDING' | 'FAULT' | null>(null)
+
+const canViewProofs = computed(() => {
+  return ['DELIVERED', 'SUCCEEDED', 'DISPUTE'].includes(props.parcel.status)
+})
+
+const openProofModal = async () => {
+  const modal = overlay.create(LazyParcelProofModal)
+  const instance = modal.open({ parcelId: props.parcel.id, parcelCode: props.parcel.code })
+  await instance.result
+}
 
 const isDispute = computed(() => props.parcel.status === 'DISPUTE')
 
@@ -227,12 +243,41 @@ const getStatusColor = (status: string) => {
     </div>
 
     <!-- Chat with client (for non-dispute parcels) -->
-    <div v-else-if="parcel.receiverId" class="border-t pt-4">
+    <div v-else-if="parcel.receiverId" class="border-t pt-4 space-y-3">
       <UButton color="primary" variant="outline" block @click="handleChatWithClient">
         <template #leading>
           <UIcon name="i-heroicons-chat-bubble-left-right" />
         </template>
         Chat với khách hàng
+      </UButton>
+      
+      <!-- View proofs button (for DELIVERED, SUCCEEDED, DISPUTE) -->
+      <UButton
+        v-if="canViewProofs"
+        color="secondary"
+        variant="outline"
+        block
+        @click="openProofModal"
+      >
+        <template #leading>
+          <UIcon name="i-heroicons-photo" />
+        </template>
+        Ảnh/video đơn hàng
+      </UButton>
+    </div>
+    
+    <!-- View proofs button (for dispute parcels) -->
+    <div v-if="isDispute && canViewProofs" class="border-t pt-4">
+      <UButton
+        color="secondary"
+        variant="outline"
+        block
+        @click="openProofModal"
+      >
+        <template #leading>
+          <UIcon name="i-heroicons-photo" />
+        </template>
+        Ảnh/video đơn hàng
       </UButton>
     </div>
 

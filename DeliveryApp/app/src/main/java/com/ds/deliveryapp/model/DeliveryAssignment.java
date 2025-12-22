@@ -18,6 +18,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Getter
 public class DeliveryAssignment implements Serializable {
+    private String assignmentId; // ID của assignment - dùng để complete task hiệu quả hơn
     private String sessionId;
     private String parcelId;
     private String parcelCode;

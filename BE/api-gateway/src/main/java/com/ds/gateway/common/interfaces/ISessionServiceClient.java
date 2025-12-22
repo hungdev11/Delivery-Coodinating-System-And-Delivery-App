@@ -19,6 +19,8 @@ public interface ISessionServiceClient {
                                       String completedAtStart, String completedAtEnd,
                                       int page, int size);
     ResponseEntity<?> completeTask(UUID deliveryManId, UUID parcelId, Object routeInfo);
+    ResponseEntity<?> completeTaskByAssignmentId(UUID assignmentId, Object request);
+    ResponseEntity<?> returnToWarehouse(UUID assignmentId, Object request);
     ResponseEntity<?> failTask(UUID deliveryManId, UUID parcelId, Object taskFailRequest);
     ResponseEntity<?> refuseTask(UUID deliveryManId, UUID parcelId);
     ResponseEntity<?> postponeTask(UUID deliveryManId, UUID parcelId, String addInfo);
@@ -54,4 +56,15 @@ public interface ISessionServiceClient {
      * Get all sessions for a delivery man
      */
     ResponseEntity<?> getAllSessionsForDeliveryMan(String deliveryManId, String excludeParcelId);
+    
+    /**
+     * Get all proofs for a specific assignment
+     */
+    ResponseEntity<?> getProofsByAssignment(UUID assignmentId);
+    
+    /**
+     * Get all proofs for a specific parcel
+     * Returns proofs from all assignments of that parcel
+     */
+    ResponseEntity<?> getProofsByParcel(String parcelId);
 }

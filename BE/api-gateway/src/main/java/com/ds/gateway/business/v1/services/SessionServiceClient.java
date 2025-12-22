@@ -159,6 +159,20 @@ public class SessionServiceClient implements ISessionServiceClient {
     }
 
     @Override
+    public ResponseEntity<?> completeTaskByAssignmentId(UUID assignmentId, Object request) {
+        String uri = String.format("/api/v1/assignments/%s/complete", assignmentId);
+        log.debug("[api-gateway] [SessionServiceClient.completeTaskByAssignmentId] POST -> {}", uri);
+        return callPost(uri, request);
+    }
+
+    @Override
+    public ResponseEntity<?> returnToWarehouse(UUID assignmentId, Object request) {
+        String uri = String.format("/api/v1/assignments/%s/return-to-warehouse", assignmentId);
+        log.debug("[api-gateway] [SessionServiceClient.returnToWarehouse] POST -> {}", uri);
+        return callPost(uri, request);
+    }
+
+    @Override
     public ResponseEntity<?> failTask(UUID deliveryManId, UUID parcelId, Object taskFailRequest) {
         String uri = String.format("/api/v1/assignments/drivers/%s/parcels/%s/fail", deliveryManId, parcelId);
         return callPost(uri, taskFailRequest);
@@ -347,6 +361,20 @@ public class SessionServiceClient implements ISessionServiceClient {
                 .build(deliveryManId)
                 .toString();
         log.debug("[api-gateway] [SessionServiceClient.getAllSessionsForDeliveryMan] WebClient: GET -> {}", uri);
+        return callGet(uri);
+    }
+
+    @Override
+    public ResponseEntity<?> getProofsByAssignment(UUID assignmentId) {
+        String uri = String.format("/api/v1/delivery-proofs/assignments/%s", assignmentId);
+        log.debug("[api-gateway] [SessionServiceClient.getProofsByAssignment] WebClient: GET -> {}", uri);
+        return callGet(uri);
+    }
+
+    @Override
+    public ResponseEntity<?> getProofsByParcel(String parcelId) {
+        String uri = String.format("/api/v1/delivery-proofs/parcels/%s", parcelId);
+        log.debug("[api-gateway] [SessionServiceClient.getProofsByParcel] WebClient: GET -> {}", uri);
         return callGet(uri);
     }
 }

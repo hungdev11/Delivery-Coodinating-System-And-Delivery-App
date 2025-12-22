@@ -4,12 +4,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.web.multipart.MultipartFile;
+
+import com.ds.session.session_service.common.entities.dto.request.CompleteTaskRequest;
 import com.ds.session.session_service.common.entities.dto.request.PagingRequestV0;
 import com.ds.session.session_service.common.entities.dto.request.PagingRequestV2;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.response.DeliveryAssignmentResponse;
-import com.ds.session.session_service.common.entities.dto.response.PageResponse;
 import com.ds.session.session_service.common.entities.dto.response.LatestAssignmentResponse;
+import com.ds.session.session_service.common.entities.dto.response.PageResponse;
 import com.ds.session.session_service.common.entities.dto.response.ShipperInfo;
 
 /**
@@ -17,7 +20,24 @@ import com.ds.session.session_service.common.entities.dto.response.ShipperInfo;
  */
 public interface IDeliveryAssignmentService {
     
-    DeliveryAssignmentResponse completeTask(UUID parcelId, UUID deliveryManId, RouteInfo routeInfo);
+    DeliveryAssignmentResponse completeTask(UUID parcelId, UUID deliveryManId, CompleteTaskRequest request);
+    
+    /**
+     * Complete task by assignmentId directly - more efficient than using parcelId + driverId
+     * @param assignmentId The assignment ID to complete
+     * @param request Complete task request with routeInfo and proofImageUrls
+     * @return Updated assignment response
+     */
+    DeliveryAssignmentResponse completeTaskByAssignmentId(UUID assignmentId, CompleteTaskRequest request);
+    
+    /**
+     * Record return to warehouse for FAILED or DELAYED assignments.
+     * Uploads proofs with type RETURNED without changing assignment status.
+     * @param assignmentId The assignment ID to record return for
+     * @param request Request with proofImageUrls
+     * @return Updated assignment response
+     */
+    DeliveryAssignmentResponse returnToWarehouse(UUID assignmentId, CompleteTaskRequest request);
     
     DeliveryAssignmentResponse deliveryFailed(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
     

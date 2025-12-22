@@ -2,6 +2,8 @@ package com.ds.session.session_service.app_context.models;
 
 import java.sql.Types;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import org.hibernate.annotations.JdbcTypeCode;
@@ -10,6 +12,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.ds.session.session_service.common.enums.AssignmentStatus;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -21,6 +24,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn; // Thêm import
 import jakarta.persistence.ManyToOne; // Thêm import
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
@@ -81,4 +85,17 @@ public class DeliveryAssignment {
     @LastModifiedDate
     @Column(nullable = false)
     private LocalDateTime updatedAt;
+
+    @OneToMany(
+        mappedBy = "assignment",
+        fetch = FetchType.LAZY,
+        cascade = CascadeType.PERSIST
+    )
+    private List<DeliveryProof> proofs = new ArrayList<>();
+
+    // helper method (rất quan trọng)
+    public void addProof(DeliveryProof proof) {
+        proofs.add(proof);
+        proof.setAssignment(this);
+    }
 }

@@ -32,6 +32,9 @@ const PageHeader = defineAsyncComponent(() => import('@/common/components/PageHe
 const LazyParcelQRModal = defineAsyncComponent(
   () => import('@/modules/Parcels/components/ParcelQRModal.vue'),
 )
+const LazyParcelProofModal = defineAsyncComponent(
+  () => import('@/modules/Parcels/components/ParcelProofModal.vue'),
+)
 
 const UButton = resolveComponent('UButton')
 
@@ -417,6 +420,22 @@ const openQRModal = async (parcel: ParcelDto) => {
 }
 
 /**
+ * Check if can view proofs (for DELIVERED, SUCCEEDED, DISPUTE statuses)
+ */
+const canViewProofs = (parcel: ParcelDto) => {
+  return ['DELIVERED', 'SUCCEEDED', 'DISPUTE'].includes(parcel.status)
+}
+
+/**
+ * Open proof modal
+ */
+const openProofModal = async (parcel: ParcelDto) => {
+  const modal = overlay.create(LazyParcelProofModal)
+  const instance = modal.open({ parcelId: parcel.id, parcelCode: parcel.code })
+  await instance.result
+}
+
+/**
  * Open chat with sender
  */
 const openChat = async (parcel: ParcelDto) => {
@@ -532,6 +551,8 @@ const columns: TableColumn<ParcelDto>[] = [
       const canRetract = canRetractDispute(parcel)
       const canChatWithSender = canChat(parcel)
 
+      const canViewProofsForParcel = canViewProofs(parcel)
+
       return h('div', { class: 'flex space-x-2' }, [
         // Chat with sender button
         h(UButton, {
@@ -549,6 +570,15 @@ const columns: TableColumn<ParcelDto>[] = [
           variant: 'ghost',
           title: 'Show QR Code',
           onClick: () => openQRModal(parcel),
+        }),
+        // View proofs button (for DELIVERED, SUCCEEDED, DISPUTE)
+        canViewProofsForParcel &&
+          h(UButton, {
+            icon: 'i-heroicons-photo',
+            size: 'sm',
+            variant: 'ghost',
+            title: 'Xem ảnh/video đơn hàng',
+            onClick: () => openProofModal(parcel),
         }),
         // Report not received button (for DELIVERED status)
         canReport &&

@@ -9,8 +9,8 @@
     <color name="colorPrimary">#FFF97316</color>
     <!-- Darker primary: Orange 600 (#EA580C) -->
     <color name="colorPrimaryDark">#FFEA580C</color>
-    <!-- Secondary: Brown/Amber dựa trên #78350F -->
-    <color name="colorAccent">#FF78350F</color>
+    <!-- Secondary: Brown/Amber nhạt hơn (dựa trên #78350F nhưng sáng hơn) -->
+    <color name="colorAccent">#FFB8860B</color>
 
     <!-- Màu chữ mặc định (thường là màu xám đậm) -->
     <color name="default_text_color">#FF333333</color>
@@ -28,5 +28,18 @@
 
     <!-- Màu Đỏ (Thất bại/Lỗi: FAILED, DISPUTE, LOST) -->
     <color name="status_failed">#FFD32F2F</color>
+
+    <!-- Màu nền nhạt cho Session Items theo trạng thái -->
+    <!-- CREATED: Vàng/Cam nhạt -->
+    <color name="session_bg_created">#33FFA000</color>
+    
+    <!-- IN_PROGRESS: Xanh dương nhạt -->
+    <color name="session_bg_in_progress">#331976D2</color>
+    
+    <!-- COMPLETED: Xanh lá nhạt -->
+    <color name="session_bg_completed">#332E7D32</color>
+    
+    <!-- FAILED: Đỏ nhạt -->
+    <color name="session_bg_failed">#33D32F2F</color>
 
 </resources>

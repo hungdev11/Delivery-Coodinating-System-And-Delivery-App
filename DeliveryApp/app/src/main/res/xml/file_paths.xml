@@ -9,4 +9,10 @@
     <external-files-path
         name="my_images"
         path="Pictures" />
+    <!--
+      Thư mục cho video tạm thời
+    -->
+    <external-files-path
+        name="my_videos"
+        path="Movies" />
 </paths>

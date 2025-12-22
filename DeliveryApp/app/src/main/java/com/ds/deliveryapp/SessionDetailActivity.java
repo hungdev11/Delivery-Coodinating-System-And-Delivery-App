@@ -1,5 +1,6 @@
 package com.ds.deliveryapp;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -198,8 +199,11 @@ public class SessionDetailActivity extends AppCompatActivity implements TasksAda
 
     @Override
     public void onTaskClick(DeliveryAssignment task) {
-        // Navigate to task/parcel detail if needed
-        // For now, just show a toast
-        Toast.makeText(this, "Đơn hàng: " + task.getParcelCode(), Toast.LENGTH_SHORT).show();
+        // Navigate to task detail activity
+        Intent intent = new Intent(this, TaskDetailActivity.class);
+        intent.putExtra("TASK_DETAIL", task);
+        // Get session status from the session details if available
+        intent.putExtra("SESSION_STATUS", "COMPLETED"); // Default, can be improved
+        startActivity(intent);
     }
 }

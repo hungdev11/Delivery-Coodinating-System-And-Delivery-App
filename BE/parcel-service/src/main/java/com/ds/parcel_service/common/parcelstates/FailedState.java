@@ -7,7 +7,12 @@ public class FailedState implements IParcelState{
 
     @Override
     public ParcelStatus handleTransition(ParcelEvent event) {
-        throw new IllegalStateException("Can not transition to any state from final state :" + getParcelStatus() );
+        return switch(event) {
+            case END_SESSION:
+                yield ParcelStatus.IN_WAREHOUSE;
+            default:
+                throw new IllegalStateException("Invalid event at " + getParcelStatus().name() + ": " + event.name());
+        };
     }
 
     @Override
