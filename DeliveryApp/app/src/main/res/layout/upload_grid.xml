@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="#FFFFFF">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:gravity="center_horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Bằng chứng giao hàng"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="#333333"
+            android:layout_marginBottom="8dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Vui lòng chụp 2 ảnh xác nhận"
+            android:textColor="#757575"
+            android:layout_marginBottom="20dp"/>
+
+        <LinearLayout
+            android:id="@+id/layoutImagesContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="3"
+            android:baselineAligned="false">
+
+            <include layout="@layout/item_proof_slot" android:id="@+id/slot1"/>
+            <include layout="@layout/item_proof_slot" android:id="@+id/slot2"/>
+            <include layout="@layout/item_proof_slot" android:id="@+id/slot3"/>
+            <include layout="@layout/item_proof_slot" android:id="@+id/slot4"/>
+            <include layout="@layout/item_proof_slot" android:id="@+id/slot5"/>
+            <include layout="@layout/item_proof_slot" android:id="@+id/slot6"/>
+
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnConfirmProof"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="XÁC NHẬN và TIẾP TỤC"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="32dp"
+            android:backgroundTint="#2196F3"
+            android:textColor="#FFFFFF"/>
+
+        <Button
+            android:id="@+id/btnCancelProof"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Hủy bỏ"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:textColor="#F44336"/>
+
+    </LinearLayout>
+</ScrollView>

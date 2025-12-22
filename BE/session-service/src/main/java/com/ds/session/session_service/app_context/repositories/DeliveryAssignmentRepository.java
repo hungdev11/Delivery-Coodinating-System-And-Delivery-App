@@ -30,6 +30,8 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
      */
     List<DeliveryAssignment> findBySession_IdAndStatus(UUID sessionId, AssignmentStatus status);
 
+    List<DeliveryAssignment> findBySession_IdAndStatusIn(UUID sessionId, List<AssignmentStatus> statusList);
+
     /**
      * Tìm một assignment (task) dựa trên session_id và parcel_id.
      * (Dùng để kiểm tra xem đơn hàng đã được quét vào phiên này chưa)
@@ -90,4 +92,6 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
      */
     @Query("SELECT COUNT(da) FROM DeliveryAssignment da WHERE da.session.id = :sessionId AND da.status IN ('CREATED', 'IN_PROGRESS')")
     long countPendingTasksBySessionId(UUID sessionId);
+
+    List<DeliveryAssignment> findAllByParcelId(String parcelId);
 }

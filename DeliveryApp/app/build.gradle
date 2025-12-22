@@ -79,4 +79,7 @@ dependencies {
 
     // SwipeRefreshLayout for pull-to-refresh in ConversationsListActivity
     implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0"
+
+    implementation 'androidx.gridlayout:gridlayout:1.0.0'
+    implementation 'androidx.cardview:cardview:1.0.0'
 }

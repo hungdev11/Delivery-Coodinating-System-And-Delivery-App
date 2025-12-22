@@ -19,43 +19,25 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
 import com.ds.deliveryapp.R;
 import com.ds.deliveryapp.clients.res.InteractiveProposal;
 import com.ds.deliveryapp.clients.res.Message;
+import com.ds.deliveryapp.service.CloudinaryService; // Import Service mới
 import com.ds.deliveryapp.service.GlobalChatService;
 import com.ds.deliveryapp.utils.ChatWebSocketManager;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
-import okhttp3.MediaType;
-import okhttp3.MultipartBody;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-
-/**
- * Dialog for DISPUTE_APPEAL proposal type
- * Allows shipper to appeal with text message and photo evidence
- * Photos are uploaded to Cloudinary and URLs are sent in response
- */
 public class DisputeAppealDialog extends Dialog {
     private static final String TAG = "DisputeAppealDialog";
     private static final int PICK_IMAGE_REQUEST = 1001;
-    private static final String CLOUDINARY_UPLOAD_URL = "https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/image/upload";
-    private static final String CLOUDINARY_UPLOAD_PRESET = "YOUR_UPLOAD_PRESET"; // Set this in Cloudinary dashboard (unsigned)
 
     private Message proposalMessage;
     private GlobalChatService globalChatService;
@@ -70,7 +52,6 @@ public class DisputeAppealDialog extends Dialog {
     private TextView tvParcelInfo;
 
     private List<Uri> selectedImageUris = new ArrayList<>();
-    private List<String> uploadedImageUrls = new ArrayList<>();
 
     public DisputeAppealDialog(@NonNull Context context, Message proposalMessage) {
         super(context);
@@ -106,14 +87,27 @@ public class DisputeAppealDialog extends Dialog {
         progressBar = findViewById(R.id.progress_bar);
         tvParcelInfo = findViewById(R.id.tv_parcel_info);
 
-        // Parse parcel info from proposal data
+        displayProposalInfo();
+
+        btnSelectImages.setOnClickListener(v -> openImagePicker());
+        btnSubmitAppeal.setOnClickListener(v -> submitAppeal());
+        btnCancel.setOnClickListener(v -> dismiss());
+
+        progressBar.setVisibility(View.GONE);
+    }
+
+    private void displayProposalInfo() {
         try {
             InteractiveProposal proposal = proposalMessage.getProposal();
-            JsonObject dataObj = gson.fromJson(proposal.getData(), JsonObject.class);
-            if (dataObj != null && dataObj.has("parcelCode")) {
-                String parcelCode = dataObj.get("parcelCode").getAsString();
-                String reason = dataObj.has("reason") ? dataObj.get("reason").getAsString() : "Khách hàng báo chưa nhận được hàng";
-                tvParcelInfo.setText("Đơn hàng: " + parcelCode + "\n" + reason);
+            if (proposal.getData() != null) {
+                JsonObject dataObj = gson.fromJson(proposal.getData(), JsonObject.class);
+                if (dataObj != null && dataObj.has("parcelCode")) {
+                    String parcelCode = dataObj.get("parcelCode").getAsString();
+                    String reason = dataObj.has("reason") ? dataObj.get("reason").getAsString() : "Khách hàng khiếu nại";
+                    tvParcelInfo.setText("Đơn hàng: " + parcelCode + "\n" + reason);
+                } else {
+                    tvParcelInfo.setText(proposalMessage.getContent());
+                }
             } else {
                 tvParcelInfo.setText(proposalMessage.getContent());
             }
@@ -121,12 +115,6 @@ public class DisputeAppealDialog extends Dialog {
             Log.e(TAG, "Error parsing proposal data", e);
             tvParcelInfo.setText(proposalMessage.getContent());
         }
-
-        btnSelectImages.setOnClickListener(v -> openImagePicker());
-        btnSubmitAppeal.setOnClickListener(v -> submitAppeal());
-        btnCancel.setOnClickListener(v -> dismiss());
-
-        progressBar.setVisibility(View.GONE);
     }
 
     private void openImagePicker() {
@@ -142,7 +130,6 @@ public class DisputeAppealDialog extends Dialog {
         selectedImageUris.clear();
         selectedImageUris.addAll(uris);
 
-        // Update UI to show selected images
         layoutSelectedImages.removeAllViews();
         for (Uri uri : uris) {
             ImageView imageView = new ImageView(getContext());
@@ -163,125 +150,35 @@ public class DisputeAppealDialog extends Dialog {
         String message = etAppealMessage.getText().toString().trim();
 
         if (message.isEmpty() && selectedImageUris.isEmpty()) {
-            Toast.makeText(getContext(), "Vui lòng nhập tin nhắn hoặc chọn ảnh bằng chứng", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), "Vui lòng nhập nội dung hoặc ảnh bằng chứng", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Disable UI while uploading
         setUIEnabled(false);
         progressBar.setVisibility(View.VISIBLE);
 
-        // Upload images to Cloudinary first, then submit appeal with URLs
-        if (!selectedImageUris.isEmpty()) {
-            uploadImagesToCloudinary();
-        } else {
-            // No images, submit immediately
-            submitAppealWithUrls(message, new ArrayList<>());
-        }
-    }
-
-    private void uploadImagesToCloudinary() {
-        uploadedImageUrls.clear();
-
-        // Upload images sequentially (could be parallelized for better performance)
-        new Thread(() -> {
-            for (int i = 0; i < selectedImageUris.size(); i++) {
-                Uri uri = selectedImageUris.get(i);
-                try {
-                    String url = uploadImageToCloudinary(uri);
-                    if (url != null) {
-                        uploadedImageUrls.add(url);
-                    }
-                } catch (Exception e) {
-                    Log.e(TAG, "Error uploading image " + i, e);
-                }
+        // Gọi Service Upload
+        CloudinaryService.getInstance().uploadImages(getContext(), selectedImageUris, new CloudinaryService.OnBatchUploadCallback() {
+            @Override
+            public void onComplete(List<String> successfulUrls) {
+                // Upload xong (có URL hoặc list rỗng nếu không chọn ảnh), tiến hành gửi tin nhắn
+                submitAppealWithUrls(message, successfulUrls);
             }
 
-            // All uploads done (or failed), submit appeal
-            if (getContext() instanceof Activity) {
-                ((Activity) getContext()).runOnUiThread(() -> {
-                    String message = etAppealMessage.getText().toString().trim();
-                    submitAppealWithUrls(message, uploadedImageUrls);
-                });
+            @Override
+            public void onError(String message) {
+                setUIEnabled(true);
+                progressBar.setVisibility(View.GONE);
+                Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
             }
-        }).start();
-    }
-
-    @Nullable
-    private String uploadImageToCloudinary(Uri imageUri) {
-        try {
-            // Convert URI to File
-            File imageFile = getFileFromUri(imageUri);
-            if (imageFile == null) {
-                Log.e(TAG, "Failed to convert URI to file");
-                return null;
-            }
-
-            // Create multipart request
-            OkHttpClient client = new OkHttpClient();
-            RequestBody requestBody = new MultipartBody.Builder()
-                    .setType(MultipartBody.FORM)
-                    .addFormDataPart("file", imageFile.getName(),
-                            RequestBody.create(imageFile, MediaType.parse("image/*")))
-                    .addFormDataPart("upload_preset", CLOUDINARY_UPLOAD_PRESET)
-                    .build();
-
-            Request request = new Request.Builder()
-                    .url(CLOUDINARY_UPLOAD_URL)
-                    .post(requestBody)
-                    .build();
-
-            Response response = client.newCall(request).execute();
-            if (response.isSuccessful() && response.body() != null) {
-                String responseBody = response.body().string();
-                JsonObject jsonResponse = gson.fromJson(responseBody, JsonObject.class);
-                if (jsonResponse.has("secure_url")) {
-                    return jsonResponse.get("secure_url").getAsString();
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error uploading to Cloudinary", e);
-        }
-        return null;
-    }
-
-    @Nullable
-    private File getFileFromUri(Uri uri) {
-        try {
-            Context context = getContext();
-            InputStream inputStream = context.getContentResolver().openInputStream(uri);
-            if (inputStream == null) return null;
-
-            File tempFile = new File(context.getCacheDir(), "temp_image_" + System.currentTimeMillis() + ".jpg");
-            OutputStream outputStream = new FileOutputStream(tempFile);
-
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, bytesRead);
-            }
-
-            inputStream.close();
-            outputStream.close();
-
-            return tempFile;
-        } catch (Exception e) {
-            Log.e(TAG, "Error converting URI to file", e);
-            return null;
-        }
+        });
     }
 
     private void submitAppealWithUrls(String message, List<String> imageUrls) {
-        if (proposalMessage == null || proposalMessage.getProposal() == null) {
-            setUIEnabled(true);
-            progressBar.setVisibility(View.GONE);
-            dismiss();
-            return;
-        }
+        if (proposalMessage == null || proposalMessage.getProposal() == null) return;
 
         String proposalId = proposalMessage.getProposal().getId().toString();
 
-        // Create resultData JSON with message and image URLs
         JsonObject resultData = new JsonObject();
         resultData.addProperty("message", message);
 
@@ -292,33 +189,30 @@ public class DisputeAppealDialog extends Dialog {
         resultData.add("imageUrls", urlsArray);
         resultData.addProperty("status", "ACCEPTED");
 
-        String resultDataString = resultData.toString();
-
-        // Send via WebSocket
         try {
             ChatWebSocketManager webSocketManager = globalChatService.getWebSocketManager();
-
             if (webSocketManager != null && webSocketManager.isConnected()) {
-                java.util.Map<String, Object> data = new java.util.HashMap<>();
+                Map<String, Object> data = new HashMap<>();
                 data.put("proposalId", proposalId);
                 data.put("action", "ACCEPT");
-                data.put("resultData", resultDataString);
-                webSocketManager.sendQuickAction(proposalId, "ACCEPT", data);
-                Log.d(TAG, "Sent dispute appeal: " + resultDataString);
+                data.put("resultData", resultData.toString());
 
+                webSocketManager.sendQuickAction(proposalId, "ACCEPT", data);
                 Toast.makeText(getContext(), "Đã gửi kháng cáo thành công", Toast.LENGTH_SHORT).show();
+                dismiss();
             } else {
-                Log.e(TAG, "Cannot send appeal: WebSocket not connected");
-                Toast.makeText(getContext(), "Lỗi: Không thể kết nối", Toast.LENGTH_SHORT).show();
+                handleError("Không thể kết nối đến máy chủ chat");
             }
         } catch (Exception e) {
-            Log.e(TAG, "Error sending appeal", e);
-            Toast.makeText(getContext(), "Lỗi: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            handleError("Lỗi gửi dữ liệu: " + e.getMessage());
         }
+    }
 
+    private void handleError(String msg) {
+        Log.e(TAG, msg);
+        Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show();
         setUIEnabled(true);
         progressBar.setVisibility(View.GONE);
-        dismiss();
     }
 
     private void setUIEnabled(boolean enabled) {

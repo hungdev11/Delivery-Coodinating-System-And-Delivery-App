@@ -79,7 +79,7 @@ public class TaskListDialogFragment extends BottomSheetDialogFragment implements
 
         btnCompleteTask.setOnClickListener(v -> {
             if (selectedAssignment != null) {
-                actionHandler.startCompletionFlow(selectedAssignment);
+                actionHandler.completeTaskWithProof(selectedAssignment);
             }
         });
 
@@ -137,22 +137,22 @@ public class TaskListDialogFragment extends BottomSheetDialogFragment implements
         }
     }
 
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        Log.d("DialogFragment", "onActivityResult - Request Code: " + requestCode + ", Result Code: " + resultCode);
-        super.onActivityResult(requestCode, resultCode, data);
-        if (actionHandler != null) {
-            actionHandler.handleActivityResult(requestCode, resultCode, data);
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (actionHandler != null) {
-            actionHandler.handlePermissionResult(requestCode, permissions, grantResults);
-        }
-    }
+//    @Override
+//    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+//        Log.d("DialogFragment", "onActivityResult - Request Code: " + requestCode + ", Result Code: " + resultCode);
+//        super.onActivityResult(requestCode, resultCode, data);
+//        if (actionHandler != null) {
+//            actionHandler.handleActivityResult(requestCode, resultCode, data);
+//        }
+//    }
+//
+//    @Override
+//    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+//        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+//        if (actionHandler != null) {
+//            actionHandler.handlePermissionResult(requestCode, permissions, grantResults);
+//        }
+//    }
 
     public interface OnTaskSelectedListener {
         void onTaskSelected(DeliveryAssignment task);

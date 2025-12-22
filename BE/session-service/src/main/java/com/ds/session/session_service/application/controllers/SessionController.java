@@ -1,5 +1,6 @@
 package com.ds.session.session_service.application.controllers;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -11,8 +12,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.ds.session.session_service.common.entities.dto.common.BaseResponse;
 import com.ds.session.session_service.common.entities.dto.request.CalculateDeliveryTimeRequest;
@@ -28,6 +29,7 @@ import com.ds.session.session_service.common.interfaces.IDeliveryAssignmentServi
 import com.ds.session.session_service.common.interfaces.ISessionService;
 
 import jakarta.validation.Valid;
+import jakarta.websocket.server.PathParam;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -214,5 +216,11 @@ public class SessionController {
                 request.getSourceSessionId());
         AssignmentResponse response = sessionService.acceptTransferredParcel(deliveryManId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(response));
+    }
+
+    @GetMapping("/list-must-return-warehouse/{sessionId}")
+    public ResponseEntity<BaseResponse<List<AssignmentResponse>>> listMustReturnToWarehouse(
+            @PathVariable("sessionId") String sessionId) {
+        return ResponseEntity.ok(BaseResponse.success(sessionService.listAssignmentsMustReturnWarehouse(sessionId)));
     }
 }

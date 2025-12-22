@@ -23,11 +23,15 @@ import com.ds.deliveryapp.model.DeliveryAssignment;
 import com.ds.deliveryapp.utils.FormaterUtil;
 import com.ds.deliveryapp.utils.TaskActionHandler;
 
+import java.util.ArrayList;
+
 
 public class TaskDetailActivity extends AppCompatActivity implements TaskActionHandler.TaskUpdateListener{
     private TextView tvParcelCode, tvStatus, tvReceiverName, tvDeliveryLocation;
     private Button btnCallReceiver, btnMainAction, btnFailAction, btnChatReceiver;
     private TextView tvParcelValue;
+
+    private static final int REQUEST_CODE_PROOF = 9001; // Mã request mới
 
     // View từ card_details_and_route_info.xml (included)
     private TextView tvDeliveryType, tvWeight, tvParcelId;
@@ -190,7 +194,10 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         if (btnMainAction != null) {
             btnMainAction.setOnClickListener(v -> {
                 if (currentTask != null && btnMainAction.isEnabled()) {
-                    actionHandler.startCompletionFlow(currentTask);
+                    if ("IN_PROGRESS".equals(task.getStatus())) {
+                        actionHandler.completeTaskWithProof(currentTask);
+                    } else {
+                    }
                 }
             });
         }
@@ -217,27 +224,26 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         });
     }
 
-    /**
-     * Xử lý kết quả trả về từ Camera Intent
-     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == TaskActionHandler.REQUEST_IMAGE_CAPTURE) {
-            actionHandler.handleActivityResult(requestCode, resultCode, data);
+
+        // CHUYỂN TIẾP KẾT QUẢ CHO HANDLER XỬ LÝ
+        if (actionHandler != null) {
+            actionHandler.processProofResult(requestCode, resultCode, data);
         }
     }
 
-    /**
-     * Xử lý kết quả trả về từ HỎI QUYỀN
-     */
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == TaskActionHandler.REQUEST_CAMERA_PERMISSION) {
-            actionHandler.handlePermissionResult(requestCode, permissions, grantResults);
-        }
-    }
+//    /**
+//     * Xử lý kết quả trả về từ HỎI QUYỀN
+//     */
+//    @Override
+//    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+//        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+//        if (requestCode == TaskActionHandler.REQUEST_CAMERA_PERMISSION) {
+//            actionHandler.handlePermissionResult(requestCode, permissions, grantResults);
+//        }
+//    }
 
 
     @Override
