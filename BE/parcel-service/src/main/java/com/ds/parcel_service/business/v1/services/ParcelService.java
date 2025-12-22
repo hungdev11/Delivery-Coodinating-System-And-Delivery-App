@@ -95,7 +95,8 @@ public class ParcelService implements IParcelService{
             case DELIVERED -> next == ParcelStatus.SUCCEEDED || next == ParcelStatus.FAILED || next == ParcelStatus.DISPUTE;
             case DISPUTE -> next == ParcelStatus.SUCCEEDED || next == ParcelStatus.LOST;
             case DELAYED -> next == ParcelStatus.IN_WAREHOUSE || next == ParcelStatus.DISPUTE; // Allow admin to set dispute
-            case FAILED, SUCCEEDED, LOST -> false; // Last state
+            case FAILED -> next == ParcelStatus.IN_WAREHOUSE; 
+            case SUCCEEDED, LOST -> false; // Last state
             default -> false;
         };
     }
@@ -128,6 +129,11 @@ public class ParcelService implements IParcelService{
         // mark delivered for background job works
         if (nextStatus == ParcelStatus.DELIVERED) {
             parcel.setDeliveredAt(LocalDateTime.now());
+        }
+
+        // mark as it failed when moving back to IN_WAREHOUSE from FAILED distinguishes from normal return
+        if (currentStatus == ParcelStatus.FAILED && nextStatus == ParcelStatus.IN_WAREHOUSE) {
+            parcel.setIsFail(true);
         }
         
         parcel.setStatus(nextStatus);
