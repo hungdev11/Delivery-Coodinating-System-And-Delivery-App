@@ -186,6 +186,20 @@
         android:elevation="8dp">
 
         <Button
+            android:id="@+id/btn_return_to_warehouse"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:layout_weight="1"
+            android:layout_marginBottom="90dp"
+            android:text="XÁC NHẬN TRẢ VỀ KHO"
+            android:backgroundTint="#FFB8860B"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:padding="12dp"
+            android:visibility="gone"/>
+
+        <Button
             android:id="@+id/btn_fail_action"
             android:layout_width="0dp"
             android:layout_weight="1"
@@ -209,20 +223,7 @@
             android:padding="12dp"/>
 
     </LinearLayout>
-    
+
     <!-- Return to Warehouse Button (shown only for FAILED/DELAYED tasks) -->
-    <Button
-        android:id="@+id/btn_return_to_warehouse"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:layout_margin="16dp"
-        android:layout_marginBottom="90dp"
-        android:text="XÁC NHẬN TRẢ VỀ KHO"
-        android:backgroundTint="#FFB8860B"
-        android:textColor="@android:color/white"
-        android:textSize="16sp"
-        android:padding="12dp"
-        android:visibility="gone"/>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

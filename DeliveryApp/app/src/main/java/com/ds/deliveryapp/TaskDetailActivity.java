@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -51,17 +52,20 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
     private TextView tvDeliveryType, tvWeight, tvParcelId;
     private TextView tvCreatedAt, tvCompletedAt, tvFailReason;
     private LinearLayout layoutCompletedAt, layoutFailReason;
-    
+
     // Proofs section
     private CardView cardProofs;
     private RecyclerView recyclerProofs;
     private TextView tvProofsLoading, tvProofsEmpty;
     private ProofAdapter proofAdapter;
-    
+
     private DeliveryAssignment currentTask;
     private TaskActionHandler actionHandler;
     private String sessionStatus; // CREATED, IN_PROGRESS, etc.
     private SessionClient sessionClient;
+
+    private boolean hasUnfinishedTasks;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,6 +78,8 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         if (intent != null && intent.hasExtra("TASK_DETAIL")) {
             currentTask = (DeliveryAssignment) intent.getSerializableExtra("TASK_DETAIL");
             sessionStatus = intent.getStringExtra("SESSION_STATUS");
+            hasUnfinishedTasks = getIntent()
+                    .getBooleanExtra("HAS_UNFINISHED_TASKS", false);
 
             if (currentTask != null) {
                 actionHandler = new TaskActionHandler(this, this);
@@ -112,18 +118,18 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         layoutFailReason = findViewById(R.id.layout_fail_reason);
         layoutCompletedAt.setVisibility(GONE);
         layoutFailReason.setVisibility(GONE);
-        
+
         // Proofs section
         cardProofs = findViewById(R.id.card_proofs);
         recyclerProofs = findViewById(R.id.recycler_proofs);
         tvProofsLoading = findViewById(R.id.tv_proofs_loading);
         tvProofsEmpty = findViewById(R.id.tv_proofs_empty);
-        
+
         // Setup RecyclerView for proofs
         proofAdapter = new ProofAdapter(this);
         recyclerProofs.setLayoutManager(new GridLayoutManager(this, 3));
         recyclerProofs.setAdapter(proofAdapter);
-        
+
         // Initialize API client
         sessionClient = RetrofitClient.getRetrofitInstance(this).create(SessionClient.class);
     }
@@ -163,27 +169,48 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         }
         updateMainActionButton(task.getStatus());
         updateReturnToWarehouseButton(task);
+
+        updateBottomButtonsByTaskStatus(task);
     }
-    
+
     private void updateReturnToWarehouseButton(DeliveryAssignment task) {
         if (btnReturnToWarehouse == null) return;
-        
-        // Show button only for FAILED or DELAYED tasks
-        if ("FAILED".equals(task.getStatus()) || "DELAYED".equals(task.getStatus())) {
-            btnReturnToWarehouse.setVisibility(VISIBLE);
-            btnReturnToWarehouse.setOnClickListener(v -> {
-                if (task.getAssignmentId() != null && !task.getAssignmentId().isEmpty()) {
-                    Intent intent = new Intent(this, ReturnToWarehouseActivity.class);
-                    intent.putExtra(ReturnToWarehouseActivity.EXTRA_ASSIGNMENT_ID, task.getAssignmentId());
-                    startActivityForResult(intent, 9002);
-                } else {
-                    Toast.makeText(this, "Không tìm thấy thông tin đơn hàng", Toast.LENGTH_SHORT).show();
-                }
-            });
-        } else {
+
+        boolean isReturnState =
+                "FAILED".equals(task.getStatus())
+                        || "DELAYED".equals(task.getStatus());
+
+        if (!isReturnState) {
             btnReturnToWarehouse.setVisibility(GONE);
+            return;
         }
+
+        btnReturnToWarehouse.setVisibility(VISIBLE);
+
+        btnReturnToWarehouse.setOnClickListener(v -> {
+
+            if (hasUnfinishedTasks) {
+                new AlertDialog.Builder(this)
+                        .setTitle("Chưa thể trả hàng")
+                        .setMessage(
+                                "Vẫn còn đơn hàng đang giao.\n" +
+                                        "Chỉ được trả hàng về kho khi tất cả các đơn còn lại đều bị trễ hoặc thất bại."
+                        )
+                        .setPositiveButton("OK", null)
+                        .show();
+                return;
+            }
+
+            // OK → cho phép trả kho
+            Intent intent = new Intent(this, ReturnToWarehouseActivity.class);
+            intent.putExtra(
+                    ReturnToWarehouseActivity.EXTRA_ASSIGNMENT_ID,
+                    task.getAssignmentId()
+            );
+            startActivityForResult(intent, 9002);
+        });
     }
+
 
     private void updateMainActionButton(String status) {
         int green = getResources().getColor(android.R.color.holo_green_dark);
@@ -195,7 +222,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
                 btnMainAction.setBackgroundTintList(android.content.res.ColorStateList.valueOf(green));
                 break;
             case "COMPLETED":
-            case "FAILED":
+            case "FAILED", "DELAYED":
                 btnMainAction.setText("ĐÃ HOÀN TẤT");
                 btnMainAction.setEnabled(false);
                 btnFailAction.setVisibility(GONE);
@@ -206,13 +233,38 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         }
     }
 
+    private void updateBottomButtonsByTaskStatus(DeliveryAssignment task) {
+        if (task == null) return;
+
+        String status = task.getStatus();
+
+        boolean isReturnState =
+                "FAILED".equalsIgnoreCase(status)
+                        || "DELAYED".equalsIgnoreCase(status);
+
+        if (isReturnState) {
+            // 👉 ĐÈ NÚT TRẢ VỀ KHO
+            btnReturnToWarehouse.setVisibility(VISIBLE);
+
+            btnMainAction.setVisibility(GONE);
+            btnFailAction.setVisibility(GONE);
+        } else {
+            // 👉 GIỮ NGUYÊN HÀNH VI CŨ
+            btnReturnToWarehouse.setVisibility(GONE);
+
+            btnMainAction.setVisibility(VISIBLE);
+            btnFailAction.setVisibility(VISIBLE);
+        }
+    }
+
+
     /**
      * Disable actions when session is not IN_PROGRESS (e.g., CREATED).
      * Only allow: call, chat, and cancel/delay (btnFailAction).
      */
     private void updateButtonsBasedOnSessionStatus() {
         boolean isSessionActive = "IN_PROGRESS".equals(sessionStatus);
-        
+
         if (!isSessionActive) {
             // Session not started - disable completion action
             if (btnMainAction != null) {
@@ -293,6 +345,8 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
             // Reload proofs to show RETURNED proof
             if (currentTask != null) {
                 loadProofs(currentTask.getAssignmentId());
+                updateBottomButtonsByTaskStatus(currentTask);
+
             }
             // Hide return button if proof exists
             updateReturnToWarehouseButton(currentTask);
@@ -329,10 +383,10 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
             @Override
             public void onResponse(Call<BaseResponse<List<DeliveryProof>>> call, Response<BaseResponse<List<DeliveryProof>>> response) {
                 tvProofsLoading.setVisibility(View.GONE);
-                
+
                 if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
                     List<DeliveryProof> proofs = response.body().getResult();
-                    
+
                     if (proofs.isEmpty()) {
                         tvProofsEmpty.setVisibility(View.VISIBLE);
                         recyclerProofs.setVisibility(View.GONE);
@@ -359,6 +413,8 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
     @Override
     public void onStatusUpdated(String newStatus) {
         currentTask.setStatus(newStatus);
+        updateBottomButtonsByTaskStatus(currentTask);
+
         updateMainActionButton(newStatus);
 
         // Pass updated task info back to TaskFragment
@@ -370,12 +426,12 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         displayData(currentTask);
 
         Toast.makeText(this, "Đã cập nhật: " + newStatus, Toast.LENGTH_SHORT).show();
-        
+
         // Reload proofs if status changed to COMPLETED
         if ("COMPLETED".equals(newStatus)) {
             loadProofs(currentTask.getAssignmentId());
         }
-        
+
         finish();
     }
 }
