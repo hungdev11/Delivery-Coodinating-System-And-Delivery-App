@@ -23,6 +23,7 @@ export interface OSRMContainer {
 // containerName: actual Docker container name (with project prefix)
 // model: model identifier used in API endpoints
 const OSRM_CONTAINERS: OSRMContainer[] = [
+  // Bicycle (motorbike) models
   {
     name: 'osrm-v2-full', // Service name in docker-compose.yml
     containerName: 'dss-osrm-v2-full', // Actual container name (project_name + service_name)
@@ -50,6 +51,35 @@ const OSRM_CONTAINERS: OSRMContainer[] = [
     model: 'osrm-base',
     port: 5000,
     dataPath: 'osrm-base',
+  },
+  // Car models
+  {
+    name: 'osrm-v2-car-full',
+    containerName: 'dss-osrm-v2-car-full',
+    model: 'osrm-car-full',
+    port: 5000,
+    dataPath: 'osrm-car-full',
+  },
+  {
+    name: 'osrm-v2-car-rating-only',
+    containerName: 'dss-osrm-v2-car-rating-only',
+    model: 'osrm-car-rating-only',
+    port: 5000,
+    dataPath: 'osrm-car-rating-only',
+  },
+  {
+    name: 'osrm-v2-car-blocking-only',
+    containerName: 'dss-osrm-v2-car-blocking-only',
+    model: 'osrm-car-blocking-only',
+    port: 5000,
+    dataPath: 'osrm-car-blocking-only',
+  },
+  {
+    name: 'osrm-v2-car-base',
+    containerName: 'dss-osrm-v2-car-base',
+    model: 'osrm-car-base',
+    port: 5000,
+    dataPath: 'osrm-car-base',
   },
 ];
 

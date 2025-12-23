@@ -60,4 +60,9 @@ public interface IUserServiceClient {
      */
     CompletableFuture<UserDto> syncUserByKeycloakId(String keycloakId, String username, String email, 
                                                     String firstName, String lastName);
+    
+    /**
+     * Get delivery man info by user ID
+     */
+    CompletableFuture<UserDto.DeliveryManInfo> getDeliveryManByUserId(String userId);
 }

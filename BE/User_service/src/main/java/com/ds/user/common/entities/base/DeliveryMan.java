@@ -53,8 +53,12 @@ public class DeliveryMan {
     @JoinColumn(name = "user_id", nullable = false, unique = true, updatable = false)
     private User user;
 
+    /**
+     * Vehicle type: BIKE (xe đạp/xe máy) or CAR (ô tô)
+     * Legacy values (MOTORBIKE) will be migrated to BIKE
+     */
     @Column(name = "vehicle_type", nullable = false)
-    private String vehicleType;
+    private String vehicleType; // BIKE or CAR
 
     @Column(name = "capacity_kg", nullable = false)
     private Double capacityKg;

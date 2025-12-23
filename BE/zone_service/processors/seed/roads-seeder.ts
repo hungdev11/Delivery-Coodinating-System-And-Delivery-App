@@ -20,9 +20,141 @@ import { existsSync } from 'fs';
 const prisma = new PrismaClient();
 
 const COORDINATE_PRECISION = 7;
+const SKIP_TO_STEP = process.env.SKIP_TO_STEP ? parseInt(process.env.SKIP_TO_STEP, 10) : undefined;
 
 function coordinateKey(lat: number, lon: number): string {
   return `${lat.toFixed(COORDINATE_PRECISION)},${lon.toFixed(COORDINATE_PRECISION)}`;
+}
+
+function createStepLogger(stepName: string) {
+  const start = Date.now();
+  let lastLine = '';
+
+  const logProgress = (current: number, total?: number) => {
+    const percent = total && total > 0 ? ` (${((current / total) * 100).toFixed(1)}%)` : '';
+    const line = `  ${stepName}: ${current}${total ? '/' + total : ''}${percent}`;
+    if (line === lastLine) return;
+    lastLine = line;
+    process.stdout.write(`\r${line}`);
+  };
+
+  const done = (extra?: string) => {
+    const duration = ((Date.now() - start) / 1000).toFixed(1);
+    process.stdout.write('\n');
+    console.log(`✓ ${stepName} done in ${duration}s${extra ? ` (${extra})` : ''}`);
+  };
+
+  return { logProgress, done };
+}
+
+/**
+ * Step 18: Merge duplicate nodes by coordinates
+ * Can be called standalone or as part of seedRoads()
+ */
+async function mergeDuplicateNodes() {
+  console.log('Step 18: Merging duplicate nodes by coordinates...');
+  const mergeStep = createStepLogger('Merge duplicates');
+  
+  // Load nodes with select only needed fields
+  const allNodes = await prisma.road_nodes.findMany({
+    select: { node_id: true, lat: true, lon: true },
+  });
+  
+  mergeStep.logProgress(0, allNodes.length);
+  
+  const coordMap = new Map<string, string[]>();
+  for (const node of allNodes) {
+    const key = coordinateKey(node.lat, node.lon);
+    if (!coordMap.has(key)) {
+      coordMap.set(key, []);
+    }
+    coordMap.get(key)!.push(node.node_id);
+  }
+
+  const duplicateGroups = Array.from(coordMap.entries())
+    .filter(([_, nodeIds]) => nodeIds.length > 1);
+
+  if (duplicateGroups.length > 0) {
+    console.log(`  Found ${duplicateGroups.length} locations with duplicates`);
+
+    const nodeIdMap = new Map<string, string>();
+    const nodesToDelete: string[] = [];
+
+    for (const [_, nodeIds] of duplicateGroups) {
+      const [keepNodeId, ...duplicateNodeIds] = nodeIds;
+      if (!keepNodeId) continue;
+      
+      for (const dupId of duplicateNodeIds) {
+        nodeIdMap.set(dupId, keepNodeId);
+        nodesToDelete.push(dupId);
+      }
+    }
+
+    // Simple approach: Update segments using raw SQL with CASE WHEN (batch all mappings)
+    if (nodeIdMap.size > 0) {
+      console.log(`  Updating ${nodeIdMap.size} duplicate node references in segments...`);
+      
+      const entries = Array.from(nodeIdMap.entries());
+      const updateStep = createStepLogger('Update segments');
+      const batchSize = 20000; // Large batches for CASE WHEN
+      
+      // Update from_node_id in batches
+      for (let i = 0; i < entries.length; i += batchSize) {
+        const batch = entries.slice(i, i + batchSize);
+        const oldIds = batch.map(([old]) => `'${old.replace(/'/g, "''")}'`).join(',');
+        const caseWhens = batch.map(([old, _new]) => 
+          `WHEN '${old.replace(/'/g, "''")}' THEN '${_new.replace(/'/g, "''")}'`
+        ).join(' ');
+        
+        await prisma.$executeRawUnsafe(`
+          UPDATE road_segments
+          SET from_node_id = CASE from_node_id
+            ${caseWhens}
+          END
+          WHERE from_node_id IN (${oldIds})
+        `);
+        
+        updateStep.logProgress(Math.min(i + batchSize, entries.length), entries.length);
+      }
+      
+      // Update to_node_id in batches
+      for (let i = 0; i < entries.length; i += batchSize) {
+        const batch = entries.slice(i, i + batchSize);
+        const oldIds = batch.map(([old]) => `'${old.replace(/'/g, "''")}'`).join(',');
+        const caseWhens = batch.map(([old, _new]) => 
+          `WHEN '${old.replace(/'/g, "''")}' THEN '${_new.replace(/'/g, "''")}'`
+        ).join(' ');
+        
+        await prisma.$executeRawUnsafe(`
+          UPDATE road_segments
+          SET to_node_id = CASE to_node_id
+            ${caseWhens}
+          END
+          WHERE to_node_id IN (${oldIds})
+        `);
+        
+        updateStep.logProgress(Math.min(i + batchSize, entries.length), entries.length);
+      }
+      
+      updateStep.done();
+
+      // Delete duplicate nodes in batches
+      console.log(`  Deleting ${nodesToDelete.length} duplicate nodes...`);
+      const deleteBatchSize = 5000;
+      for (let i = 0; i < nodesToDelete.length; i += deleteBatchSize) {
+        const batch = nodesToDelete.slice(i, i + deleteBatchSize);
+        await prisma.road_nodes.deleteMany({
+          where: { node_id: { in: batch } },
+        });
+      }
+
+      mergeStep.done(`merged=${nodeIdMap.size}, deleted=${nodesToDelete.length}`);
+    }
+  } else {
+    console.log('  No duplicate nodes found');
+    mergeStep.done('no duplicates');
+  }
+  console.log();
 }
 
 async function seedRoads() {
@@ -30,9 +162,32 @@ async function seedRoads() {
   const startTime = Date.now();
 
   try {
-    // Guard: run only when roads table is empty
+    // Skip to specific step if SKIP_TO_STEP is set
+    if (SKIP_TO_STEP === 18) {
+      console.log('⚠️ Skipping to Step 18 (merge duplicates)...\n');
+      await mergeDuplicateNodes();
+      
+      // Final summary
+      const finalNodeCount = await prisma.road_nodes.count();
+      const finalSegmentCount = await prisma.road_segments.count();
+      const finalRoadCount = await prisma.roads.count();
+      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      console.log('='.repeat(60));
+      console.log('✅ Step 18 Completed Successfully!');
+      console.log('='.repeat(60));
+      console.log(`\nTime taken: ${duration}s`);
+      console.log('\nFinal counts:');
+      console.log(`  - Roads: ${finalRoadCount}`);
+      console.log(`  - Nodes: ${finalNodeCount}`);
+      console.log(`  - Segments: ${finalSegmentCount}`);
+      console.log('='.repeat(60));
+      return;
+    }
+
+    // Guard: run only when roads table is empty (unless skipping to step 18)
     const existing = await prisma.roads.count();
-    if (existing > 0) {
+    if (existing > 0 && !SKIP_TO_STEP) {
       console.log(`⚠️ roads table is not empty (${existing} rows). Skip seeding.`);
       return;
     }
@@ -80,6 +235,7 @@ async function seedRoads() {
 
     // Step 4: Prepare roads for batch insert
     console.log('Step 4: Preparing roads data...');
+    const prepRoadsStep = createStepLogger('Prepare roads');
     const roadsToCreate: Array<{
       osm_id: string;
       name: string;
@@ -101,7 +257,8 @@ async function seedRoads() {
     }> = [];
     let generatedNameCount = 0;
 
-    for (const way of roadWays) {
+    for (let idx = 0; idx < roadWays.length; idx++) {
+      const way = roadWays[idx];
       const { name, nameEn, isNamed } = OSMParser.getRoadName(way.tags);
       
       if (!isNamed) {
@@ -152,10 +309,11 @@ async function seedRoads() {
         nodeIds: way.nodes,
       });
 
-      if (roadsArray.length % 1000 === 0) {
-        console.log(`  Prepared ${roadsArray.length} roads...`);
+      if (roadsArray.length % 1000 === 0 || roadsArray.length === roadWays.length) {
+        prepRoadsStep.logProgress(roadsArray.length, roadWays.length);
       }
     }
+    prepRoadsStep.done();
 
     const originallyNamed = roadsArray.length - generatedNameCount;
     console.log(`✓ Prepared ${roadsArray.length} roads (${originallyNamed} có tên gốc, ${generatedNameCount} tên được tạo)\n`);
@@ -241,21 +399,30 @@ async function seedRoads() {
       zone_id: string | null;
     }> = [];
 
-    // Build intersection node ID set for fast lookup
-    const intersectionNodeIds = new Set(
-      intersections.map(i => i.nodeId)
-    );
-    
+    // Build intersection node ID → roadsCount map for O(1) lookup
+    const intersectionRoadsCount = new Map<string, number>();
+    for (const inter of intersections) {
+      intersectionRoadsCount.set(inter.nodeId, inter.roads.length);
+    }
+
+    const prepareNodesStep = createStepLogger('Prepare nodes');
+    let nodeIndex = 0;
+    let missingNodeCount = 0;
+    const maxMissingLogs = 10;
+
     for (const osmNodeId of usedNodeIds) {
       const osmNode = osmData.nodes.get(osmNodeId);
       if (!osmNode) {
-        console.warn(`  Warning: OSM node ${osmNodeId} not found`);
+        missingNodeCount++;
+        if (missingNodeCount <= maxMissingLogs) {
+          console.warn(`  Warning: OSM node ${osmNodeId} not found`);
+        }
         continue;
       }
 
-      // Determine node type: INTERSECTION if it's in intersections list with 3+ roads, otherwise WAYPOINT
-      const intersection = intersections.find(i => i.nodeId === osmNodeId);
-      const nodeType = intersection && intersection.roads.length >= 3 ? 'INTERSECTION' : 'WAYPOINT';
+      // Determine node type: INTERSECTION if it has 3+ connected roads, otherwise WAYPOINT
+      const roadsCount = intersectionRoadsCount.get(osmNodeId) ?? 0;
+      const nodeType = roadsCount >= 3 ? 'INTERSECTION' : 'WAYPOINT';
 
       nodesToCreate.push({
         osm_id: osmNodeId,
@@ -264,20 +431,34 @@ async function seedRoads() {
         node_type: nodeType as any,
         zone_id: defaultZoneId,
       });
+      nodeIndex++;
+      if (nodeIndex % 5000 === 0 || nodeIndex === usedNodeIds.size) {
+        prepareNodesStep.logProgress(nodeIndex, usedNodeIds.size);
+      }
     }
 
+    const missingExtra =
+      missingNodeCount > maxMissingLogs
+        ? `, missing nodes skipped=${missingNodeCount}`
+        : missingNodeCount > 0
+        ? `, missing nodes skipped=${missingNodeCount}`
+        : undefined;
+
+    prepareNodesStep.done(missingExtra);
     console.log(`✓ Prepared ${nodesToCreate.length} nodes\n`);
 
     // Step 13: Batch insert nodes
     console.log('Step 13: Inserting nodes in batches...');
+    const insertNodesStep = createStepLogger('Insert nodes');
     for (let i = 0; i < nodesToCreate.length; i += batchSize) {
       const batch = nodesToCreate.slice(i, i + batchSize);
       await prisma.road_nodes.createMany({
         data: batch,
         skipDuplicates: true,
       });
-      console.log(`  Inserted ${Math.min(i + batchSize, nodesToCreate.length)}/${nodesToCreate.length} nodes...`);
+      insertNodesStep.logProgress(Math.min(i + batchSize, nodesToCreate.length), nodesToCreate.length);
     }
+    insertNodesStep.done();
     console.log(`✓ Inserted ${nodesToCreate.length} nodes\n`);
 
     // Step 14: Build node ID map
@@ -296,6 +477,7 @@ async function seedRoads() {
 
     // Step 16: Prepare segments for batch insert
     console.log('Step 16: Preparing segments data...');
+    const prepareSegmentsStep = createStepLogger('Prepare segments');
     const segmentsToCreate: Array<{
       from_node_id: string;
       to_node_id: string;
@@ -314,7 +496,8 @@ async function seedRoads() {
     }> = [];
     let skippedCount = 0;
 
-    for (const segment of segments) {
+    for (let idx = 0; idx < segments.length; idx++) {
+      const segment = segments[idx];
       const road = roadMap.get(segment.roadId);
       if (!road) {
         skippedCount++;
@@ -359,88 +542,29 @@ async function seedRoads() {
         zone_id: road.zone_id,
       });
 
-      if (segmentsToCreate.length % 1000 === 0) {
-        console.log(`  Prepared ${segmentsToCreate.length} segments...`);
+      if (segmentsToCreate.length % 1000 === 0 || segmentsToCreate.length === segments.length) {
+        prepareSegmentsStep.logProgress(segmentsToCreate.length, segments.length);
       }
     }
 
+    prepareSegmentsStep.done(`skipped=${skippedCount}`);
     console.log(`✓ Prepared ${segmentsToCreate.length} segments (skipped ${skippedCount})\n`);
 
     // Step 17: Batch insert segments
     console.log('Step 17: Inserting segments in batches...');
+    const insertSegmentsStep = createStepLogger('Insert segments');
     for (let i = 0; i < segmentsToCreate.length; i += batchSize) {
       const batch = segmentsToCreate.slice(i, i + batchSize);
       await prisma.road_segments.createMany({
         data: batch,
       });
-      console.log(`  Inserted ${Math.min(i + batchSize, segmentsToCreate.length)}/${segmentsToCreate.length} segments...`);
+      insertSegmentsStep.logProgress(Math.min(i + batchSize, segmentsToCreate.length), segmentsToCreate.length);
     }
+    insertSegmentsStep.done();
     console.log(`✓ Inserted ${segmentsToCreate.length} segments\n`);
 
     // Step 18: Merge duplicate nodes by coordinates
-    console.log('Step 18: Merging duplicate nodes by coordinates...');
-    const allNodes = await prisma.road_nodes.findMany();
-    const coordMap = new Map<string, string[]>();
-
-    for (const node of allNodes) {
-      const key = coordinateKey(node.lat, node.lon);
-      if (!coordMap.has(key)) {
-        coordMap.set(key, []);
-      }
-      coordMap.get(key)!.push(node.node_id);
-    }
-
-    const duplicateGroups = Array.from(coordMap.entries())
-      .filter(([_, nodeIds]) => nodeIds.length > 1);
-
-    if (duplicateGroups.length > 0) {
-      console.log(`  Found ${duplicateGroups.length} locations with duplicates`);
-
-      const nodeIdMap = new Map<string, string>();
-      const nodesToDelete: string[] = [];
-
-      for (const [_, nodeIds] of duplicateGroups) {
-        const [keepNodeId, ...duplicateNodeIds] = nodeIds;
-        if (!keepNodeId) continue;
-        
-        for (const dupId of duplicateNodeIds) {
-          nodeIdMap.set(dupId, keepNodeId);
-          nodesToDelete.push(dupId);
-        }
-      }
-
-      // Bulk update segments
-      if (nodeIdMap.size > 0) {
-        const entries = Array.from(nodeIdMap.entries());
-        const fromCases = entries.map(([old, _new]) => `WHEN '${old}' THEN '${_new}'`);
-        const oldIds = entries.map(([old, _]) => `'${old}'`).join(',');
-
-        await prisma.$executeRawUnsafe(`
-          UPDATE road_segments
-          SET from_node_id = CASE from_node_id
-            ${fromCases.join('\n            ')}
-          END
-          WHERE from_node_id IN (${oldIds})
-        `);
-
-        await prisma.$executeRawUnsafe(`
-          UPDATE road_segments
-          SET to_node_id = CASE to_node_id
-            ${fromCases.join('\n            ')}
-          END
-          WHERE to_node_id IN (${oldIds})
-        `);
-
-        await prisma.road_nodes.deleteMany({
-          where: { node_id: { in: nodesToDelete } },
-        });
-
-        console.log(`  ✓ Merged ${nodeIdMap.size} duplicate nodes`);
-      }
-    } else {
-      console.log('  No duplicate nodes found');
-    }
-    console.log();
+    await mergeDuplicateNodes();
 
     // Final summary
     const finalNodeCount = await prisma.road_nodes.count();
@@ -483,4 +607,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     });
 }
 
-export { seedRoads };
+export { seedRoads, mergeDuplicateNodes };

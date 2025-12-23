@@ -143,9 +143,12 @@ public class DeliverySessionService {
      * API 2: Get demo-route by data from API 1
      * This must be done in api gateway, service layer
      * It takes session data and calculates a demo route for all assignments
+     * 
+     * @param vehicle Vehicle type: "bicycle" (default) or "car"
+     * @param routingType Routing type: "full" (default), "rating-only", "blocking-only", "base"
      */
-    public ResponseEntity<?> getDemoRouteForSession(java.util.UUID sessionId, Double overrideStartLat, Double overrideStartLon) {
-        log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Calculating demo route for session {} (override start: {}, {})", sessionId, overrideStartLat, overrideStartLon);
+    public ResponseEntity<?> getDemoRouteForSession(java.util.UUID sessionId, Double overrideStartLat, Double overrideStartLon, String vehicle, String routingType) {
+        log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Calculating demo route for session {} (override start: {}, {}, vehicle: {}, routingType: {})", sessionId, overrideStartLat, overrideStartLon, vehicle, routingType);
         
         try {
             // Step 1: Get session with assignments (API 1)
@@ -306,12 +309,54 @@ public class DeliverySessionService {
                 priorityGroups.add(group);
             }
 
-            // Step 6: Call zone service to calculate demo route with correct format
+            // Step 6: Map vehicle and routingType to zone-service format
+            // Normalize vehicle: "bicycle" -> "motorbike" (zone-service uses "motorbike")
+            String normalizedVehicle = "bicycle".equalsIgnoreCase(vehicle) ? "motorbike" : "car";
+            
+            // Map routingType to mode based on vehicle
+            String mode;
+            if ("bicycle".equalsIgnoreCase(vehicle)) {
+                switch (routingType.toLowerCase()) {
+                    case "rating-only":
+                        mode = "v2-rating-only";
+                        break;
+                    case "blocking-only":
+                        mode = "v2-blocking-only";
+                        break;
+                    case "base":
+                        mode = "v2-base";
+                        break;
+                    case "full":
+                    default:
+                        mode = "v2-full";
+                        break;
+                }
+            } else { // car
+                switch (routingType.toLowerCase()) {
+                    case "rating-only":
+                        mode = "v2-car-rating-only";
+                        break;
+                    case "blocking-only":
+                        mode = "v2-car-blocking-only";
+                        break;
+                    case "base":
+                        mode = "v2-car-base";
+                        break;
+                    case "full":
+                    default:
+                        mode = "v2-car-full";
+                        break;
+                }
+            }
+
+            // Step 7: Call zone service to calculate demo route with correct format
             Map<String, Object> routeRequest = new HashMap<>();
             routeRequest.put("startPoint", startPoint);
             routeRequest.put("priorityGroups", priorityGroups);
+            routeRequest.put("vehicle", normalizedVehicle);
+            routeRequest.put("mode", mode);
 
-            log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Sending request to zone-service with startPoint: {} and {} priority groups (total {} waypoints)", startPoint, priorityGroups.size(), allWaypoints.size());
+            log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Sending request to zone-service with startPoint: {}, {} priority groups (total {} waypoints), vehicle: {}, mode: {}", startPoint, priorityGroups.size(), allWaypoints.size(), normalizedVehicle, mode);
             
             try {
                 CompletableFuture<Object> routeFuture = zoneServiceClient.calculateDemoRoute(routeRequest);

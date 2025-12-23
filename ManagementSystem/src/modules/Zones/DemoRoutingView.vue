@@ -57,37 +57,13 @@ const {
 
 // UI State
 const mapLoaded = ref(false)
-const selectedPriority = ref<PriorityLevelType>(8) // Default: P8 EXPRESS
-const useLegacyPriority = ref(false) // Toggle between 1-10 and 0-4 scale
+const selectedPriority = ref<PriorityLevelType>(PriorityLevel.EXPRESS) // Default: EXPRESS
 const clickMode = ref<'start' | 'waypoint'>('start')
 const selectedStep = ref<{ legIndex: number; stepIndex: number } | null>(null)
 const mapViewRef = ref<InstanceType<typeof MapView>>()
 
-// Priority options for selector (1-10 scale)
+// Priority options (chỉ dùng legacy 0-4 scale: URGENT, EXPRESS, FAST, NORMAL, ECONOMY)
 const priorityOptions = computed(() => [
-  // High Priority (9-10)
-  { label: PriorityLabel[10], value: 10 },
-  { label: PriorityLabel[9], value: 9 },
-
-  // Express (7-8)
-  { label: PriorityLabel[8], value: 8 },
-  { label: PriorityLabel[7], value: 7 },
-
-  // Normal (4-6)
-  { label: PriorityLabel[6], value: 6 },
-  { label: PriorityLabel[5], value: 5 },
-  { label: PriorityLabel[4], value: 4 },
-
-  // Economy (2-3)
-  { label: PriorityLabel[3], value: 3 },
-  { label: PriorityLabel[2], value: 2 },
-
-  // Low (1)
-  { label: PriorityLabel[1], value: 1 },
-])
-
-// Legacy priority options (for backward compatibility)
-const legacyPriorityOptions = computed(() => [
   { label: PriorityLabel[PriorityLevel.URGENT], value: PriorityLevel.URGENT },
   { label: PriorityLabel[PriorityLevel.EXPRESS], value: PriorityLevel.EXPRESS },
   { label: PriorityLabel[PriorityLevel.FAST], value: PriorityLevel.FAST },
@@ -603,24 +579,24 @@ onUnmounted(() => {
         <!-- Vehicle Type Selector -->
         <UCard>
           <template #header>
-            <h3 class="text-lg font-semibold">Vehicle Type</h3>
+            <h3 class="text-lg font-semibold">Phương tiện</h3>
           </template>
 
           <div class="space-y-3">
             <URadioGroup
               v-model="vehicleType"
               :items="[
-                { label: '🏍️ Motorbike (Xe máy)', value: 'motorbike' },
-                { label: '🚗 Car (Ô tô)', value: 'car' },
+                { label: '🏍️ Xe máy', value: 'motorbike' },
+                { label: '🚗 Ô tô', value: 'car' },
               ]"
             />
             <div class="text-xs text-gray-500">
               <span v-if="vehicleType === 'motorbike'"
-                >Motorbike routing - optimized for Vietnam traffic, no motorways</span
+                >Xe máy - tối ưu cho giao thông Việt Nam, không dùng đường cao tốc</span
               >
               <span v-else
-                >Car routing - full OSRM car.lua profile with dynamic weights (priority_factor,
-                rating, flow)</span
+                >Ô tô - profile OSRM car.lua đầy đủ với trọng số động (priority_factor, rating,
+                flow)</span
               >
             </div>
           </div>
@@ -629,36 +605,45 @@ onUnmounted(() => {
         <!-- Routing Mode Selector -->
         <UCard>
           <template #header>
-            <h3 class="text-lg font-semibold">Routing Mode (V2)</h3>
+            <h3 class="text-lg font-semibold">Loại routing</h3>
           </template>
 
           <div class="space-y-3">
             <URadioGroup
               v-model="routingMode"
-              :items="[
-                { label: '⭐ V2 Full (Rating→Weight, Blocking→Speed)', value: 'v2-full' },
-                { label: '👥 V2 Rating Only (User Feedback→Weight)', value: 'v2-rating-only' },
-                { label: '🚦 V2 Blocking Only (Traffic→Speed)', value: 'v2-blocking-only' },
-                { label: '🏍️ V2 Base (VN Motorbike Optimized)', value: 'v2-base' },
-              ]"
+              :items="
+                vehicleType === 'motorbike'
+                  ? [
+                      { label: '⭐ Đầy đủ (Rating→Weight, Blocking→Speed)', value: 'v2-full' },
+                      { label: '👥 Cộng đồng (User Feedback→Weight)', value: 'v2-rating-only' },
+                      { label: '🚦 Đơn giản (Traffic→Speed)', value: 'v2-blocking-only' },
+                      { label: '🏍️ Cơ bản (VN Motorbike)', value: 'v2-base' },
+                    ]
+                  : [
+                      { label: '⭐ Đầy đủ (Rating→Weight, Blocking→Speed)', value: 'v2-car-full' },
+                      { label: '👥 Cộng đồng (User Feedback→Weight)', value: 'v2-car-rating-only' },
+                      { label: '🚦 Đơn giản (Traffic→Speed)', value: 'v2-car-blocking-only' },
+                      { label: '🚗 Cơ bản (Car Base)', value: 'v2-car-base' },
+                    ]
+              "
             />
 
             <div class="text-xs text-gray-500 mt-3 p-2 bg-gray-50 dark:bg-gray-800 rounded">
-              <span v-if="routingMode === 'v2-full'"
-                >✨ <strong>V2 Full:</strong> User rating affects weight (cost), traffic blocking
-                affects speed (time). Best for production use.</span
+              <span v-if="routingMode === 'v2-full' || routingMode === 'v2-car-full'"
+                >✨ <strong>Đầy đủ:</strong> Rating ảnh hưởng weight (chi phí), blocking ảnh hưởng
+                speed (thời gian). Tốt nhất cho production.</span
               >
-              <span v-else-if="routingMode === 'v2-rating-only'"
-                >✨ <strong>V2 Rating:</strong> Only user feedback affects weight, traffic
-                conditions ignored. Useful for testing user feedback impact.</span
+              <span v-else-if="routingMode === 'v2-rating-only' || routingMode === 'v2-car-rating-only'"
+                >✨ <strong>Cộng đồng:</strong> Chỉ user feedback ảnh hưởng weight, bỏ qua traffic.
+                Dùng để test tác động của feedback.</span
               >
-              <span v-else-if="routingMode === 'v2-blocking-only'"
-                >✨ <strong>V2 Blocking:</strong> Only traffic affects speed, user feedback ignored.
-                Useful for testing traffic impact.</span
+              <span v-else-if="routingMode === 'v2-blocking-only' || routingMode === 'v2-car-blocking-only'"
+                >✨ <strong>Đơn giản:</strong> Chỉ traffic ảnh hưởng speed, bỏ qua user feedback.
+                Dùng để test tác động của traffic.</span
               >
-              <span v-else-if="routingMode === 'v2-base'"
-                >✨ <strong>V2 Base:</strong> VN motorbike profile (35km/h, easy turns, flexible
-                oneways). No user feedback or traffic data.</span
+              <span v-else-if="routingMode === 'v2-base' || routingMode === 'v2-car-base'"
+                >✨ <strong>Cơ bản:</strong> Profile cơ bản, không có user feedback hoặc traffic
+                data.</span
               >
             </div>
           </div>
@@ -667,33 +652,17 @@ onUnmounted(() => {
         <!-- Click Mode Selector -->
         <UCard>
           <template #header>
-            <div class="flex items-center justify-between">
               <h3 class="text-lg font-semibold">Click Mode</h3>
-              <UToggle v-model="useLegacyPriority" size="xs" color="neutral">
-                <template #label>
-                  <span class="text-xs text-gray-500">Legacy (0-4)</span>
-                </template>
-              </UToggle>
-            </div>
           </template>
 
           <div class="space-y-3">
             <URadioGroup v-model="clickMode" :items="clickModeItems" />
 
-            <UFormField
-              v-if="clickMode === 'waypoint'"
-              :label="useLegacyPriority ? 'Priority Level (Legacy 0-4)' : 'Priority Level (1-10)'"
-            >
-              <USelect
-                v-model="selectedPriority"
-                :items="useLegacyPriority ? legacyPriorityOptions : priorityOptions"
-              />
+            <UFormField v-if="clickMode === 'waypoint'" label="Priority Level (0-4)">
+              <USelect v-model="selectedPriority" :items="priorityOptions" />
               <template #help>
-                <span v-if="useLegacyPriority" class="text-xs text-gray-500">
-                  Legacy scale: will be converted to 1-10 (0→10, 1→8, 2→6, 3→4, 4→2)
-                </span>
-                <span v-else class="text-xs text-gray-500">
-                  New scale: Higher number = Higher priority (10=URGENT, 1=LOW)
+                <span class="text-xs text-gray-500">
+                  Priority scale: 0=URGENT, 1=EXPRESS, 2=FAST, 3=NORMAL, 4=ECONOMY
                 </span>
               </template>
             </UFormField>

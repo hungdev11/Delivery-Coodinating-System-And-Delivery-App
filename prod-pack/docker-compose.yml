@@ -151,6 +151,11 @@ services:
       OSRM_V2_RATING_URL: http://osrm-v2-rating-only:5000
       OSRM_V2_BLOCKING_URL: http://osrm-v2-blocking-only:5000
       OSRM_V2_BASE_URL: http://osrm-v2-base:5000
+      # OSRM V2 Car URLs
+      OSRM_V2_CAR_FULL_URL: http://osrm-v2-car-full:5000
+      OSRM_V2_CAR_RATING_URL: http://osrm-v2-car-rating-only:5000
+      OSRM_V2_CAR_BLOCKING_URL: http://osrm-v2-car-blocking-only:5000
+      OSRM_V2_CAR_BASE_URL: http://osrm-v2-car-base:5000
       PORT: 21503
     volumes:
       # Mount raw_data from host to allow adding files without rebuilding image
@@ -416,6 +421,70 @@ services:
     restart: on-failure
     volumes:
       - ./osrm_data/osrm-base:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/route/v1/driving/106.7718,10.8505;106.8032,10.8623?overview=false || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ============================================
+  # OSRM V2 Car Services
+  # ============================================
+
+  # OSRM V2 Car Full (Rating affects weight, Blocking affects speed)
+  osrm-v2-car-full:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-car-full
+    restart: on-failure
+    volumes:
+      - ./osrm_data/osrm-car-full:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/route/v1/driving/106.7718,10.8505;106.8032,10.8623?overview=false || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # OSRM V2 Car Rating Only (User feedback affects weight)
+  osrm-v2-car-rating-only:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-car-rating-only
+    restart: on-failure
+    volumes:
+      - ./osrm_data/osrm-car-rating-only:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/route/v1/driving/106.7718,10.8505;106.8032,10.8623?overview=false || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # OSRM V2 Car Blocking Only (Traffic affects speed)
+  osrm-v2-car-blocking-only:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-car-blocking-only
+    restart: on-failure
+    volumes:
+      - ./osrm_data/osrm-car-blocking-only:/data:ro
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/route/v1/driving/106.7718,10.8505;106.8032,10.8623?overview=false || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # OSRM V2 Car Base (Standard car profile, no modifiers)
+  osrm-v2-car-base:
+    image: osrm/osrm-backend:latest
+    container_name: dss-osrm-v2-car-base
+    restart: on-failure
+    volumes:
+      - ./osrm_data/osrm-car-base:/data:ro
     command: osrm-routed --algorithm mld --max-table-size 10000 /data/network.osrm
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/route/v1/driving/106.7718,10.8505;106.8032,10.8623?overview=false || exit 1"]

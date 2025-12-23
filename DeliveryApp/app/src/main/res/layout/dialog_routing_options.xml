@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- Vehicle Type Display (Read-only, from user profile) -->
+    <TextView
+        android:id="@+id/tv_vehicle_type_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Phương tiện:"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="4dp"
+        android:visibility="gone"/>
+
+    <TextView
+        android:id="@+id/tv_vehicle_type_value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Xe máy"
+        android:textSize="14sp"
+        android:textColor="@color/default_text_color"
+        android:layout_marginBottom="16dp"
+        android:visibility="gone"/>
+
+    <!-- Routing Type Section -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Loại routing:"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp"/>
+
+    <RadioGroup
+        android:id="@+id/rg_routing_type"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/rb_full"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tối ưu"
+            android:checked="true"/>
+
+        <RadioButton
+            android:id="@+id/rb_rating_only"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Cộng đồng"/>
+
+        <RadioButton
+            android:id="@+id/rb_blocking_only"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Đơn giản"/>
+
+        <RadioButton
+            android:id="@+id/rb_base"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Cơ bản"/>
+    </RadioGroup>
+
+</LinearLayout>

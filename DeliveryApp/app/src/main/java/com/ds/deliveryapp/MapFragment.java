@@ -87,7 +87,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     private static final float GPS_UPDATE_DISTANCE_M = 5; // 5 mét
 
     // --- Các biến UI ---
-    private FloatingActionButton fabListTasks, fabReloadRoute, fabRecenter;
+    private FloatingActionButton fabListTasks, fabReloadRoute, fabRecenter, fabRoutingOptions;
     private CoordinatorLayout coordinatorLayout;
     private MapView mapView;
     private TextView tvInstruction;
@@ -107,6 +107,11 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     private boolean isRecalculating = false;
     private boolean isNavigating = true; // --- NÂNG CẤP: Trạng thái tự động điều hướng ---
     private String currentSessionId; // session hiện tại (CREATED/IN_PROGRESS)
+    private String activeSessionStatus; // CREATED hoặc IN_PROGRESS
+    
+    // Routing options (lưu trong SharedPreferences)
+    private String selectedVehicle = "bicycle"; // bicycle hoặc car (default: bicycle)
+    private String selectedRoutingType = "full"; // full, rating-only, blocking-only, base (default: full)
 
     // --- GPS & Tracking ---
     private LocationManager locationManager;
@@ -122,6 +127,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     // --- Icon cho nút điều hướng ---
     private Drawable iconRecenter;
     private Drawable iconNavigation;
+    private Drawable driverIcon; // Icon cho driver marker
 
     // --- Lớp chứa kết quả AsyncTask ---
     private static class RouteCalculationResult {
@@ -168,15 +174,18 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             }
 
             try {
-                // 0. Lấy session đang hoạt động để biết sessionId
-                if (fragment.currentSessionId == null) {
+                // 0. Lấy session đang hoạt động để biết sessionId và status
+                if (fragment.currentSessionId == null || fragment.activeSessionStatus == null) {
                     Response<BaseResponse<DeliverySession>> activeSessionResp = fragment.sessionClient
                             .getActiveSession(fragment.driverId)
                             .execute();
                     if (!activeSessionResp.isSuccessful() || activeSessionResp.body() == null || activeSessionResp.body().getResult() == null) {
                         return new RouteCalculationResult(null, null, null, new Exception("Không có phiên hoạt động"));
                     }
-                    fragment.currentSessionId = activeSessionResp.body().getResult().getId().toString();
+                    DeliverySession session = activeSessionResp.body().getResult();
+                    fragment.currentSessionId = session.getId().toString();
+                    fragment.activeSessionStatus = session.getStatus() != null ? session.getStatus() : "CREATED";
+                    Log.d(TAG, "Session status: " + fragment.activeSessionStatus);
                 }
 
                 // 1. Lấy danh sách task nếu chưa có (Tối ưu: fetch từng page, early stop)
@@ -258,8 +267,12 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                 // 2. Gọi API Routing qua gateway (đã tính sẵn demo-route cho session)
                 Double startLat = startLocation != null ? startLocation.getLatitude() : null;
                 Double startLon = startLocation != null ? startLocation.getLongitude() : null;
+                // Lấy vehicle và routingType từ SharedPreferences (hoặc dùng default)
+                // Vehicle sẽ được map từ database format (BIKE/CAR) sang API format (bicycle/car)
+                String vehicle = fragment.getVehicleForRouting();
+                String routingType = fragment.selectedRoutingType != null ? fragment.selectedRoutingType : "full";
                 Response<com.ds.deliveryapp.clients.res.BaseResponse<RoutingResponseDto>> routeApiResponse = fragment.sessionClient
-                        .getDemoRouteForSession(fragment.currentSessionId, startLat, startLon)
+                        .getDemoRouteForSession(fragment.currentSessionId, startLat, startLon, vehicle, routingType)
                         .execute();
 
                 if (!routeApiResponse.isSuccessful() || routeApiResponse.body() == null) {
@@ -297,10 +310,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             fragment.isRecalculating = false;
 
             // Re-enable FAB after route calculation completes
-            if (fragment.fabReloadRoute != null) {
-                fragment.fabReloadRoute.setEnabled(true);
-                fragment.fabReloadRoute.setAlpha(1.0f);
-            }
+            fragment.updateFabButtonsState(true);
 
             if (result.exception != null) {
                 String errorMessage = result.exception.getMessage();
@@ -350,7 +360,15 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             fragment.isNavigating = true;
 
             fragment.currentLegIndex = 0;
-            fragment.displayCurrentLeg();
+            
+            // Hiển thị route khác nhau tùy theo session status
+            if ("CREATED".equals(fragment.activeSessionStatus)) {
+                // CREATED: Hiển thị toàn bộ route, có thể xem từng leg
+                fragment.displayAllLegs();
+            } else {
+                // IN_PROGRESS: Chỉ hiển thị leg hiện tại
+                fragment.displayCurrentLeg();
+            }
             fragment.updateLegNavigationUI();
 
             // Hiển thị ETA ước tính từ route (tổng duration giây -> phút)
@@ -396,6 +414,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         fabListTasks = view.findViewById(R.id.fab_list_tasks);
         fabReloadRoute = view.findViewById(R.id.fab_reload_task); // Dùng ID cũ nhưng gán vào biến mới
         fabRecenter = view.findViewById(R.id.fab_recenter); // Nút mới
+        fabRoutingOptions = view.findViewById(R.id.fab_routing_options); // Nút thiết lập OSRM
         tvInstruction = view.findViewById(R.id.tv_instruction);
         progressBar = view.findViewById(R.id.progress_bar);
         legNavigationContainer = view.findViewById(R.id.leg_navigation_container);
@@ -404,23 +423,37 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         tvLegInfo = view.findViewById(R.id.tv_leg_info);
 
         // --- NÂNG CẤP: Tải icon cho nút điều hướng ---
+        // Icon recenter (unlock mode) - màu cam (primary)
         iconRecenter = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_mylocation);
-        // --- SỬA LỖI: Quay lại dùng R.drawable.ic_navigation của bạn, thêm kiểm tra null ---
+        if (iconRecenter != null) {
+            iconRecenter = iconRecenter.mutate(); // Mutate để tránh conflict màu
+            int primaryColor = ContextCompat.getColor(getContext(), R.color.colorPrimary);
+            iconRecenter.setTint(primaryColor); // Màu cam (primary)
+        }
+        
+        // Icon navigation (lock mode) - màu cam (primary)
         try {
             iconNavigation = ContextCompat.getDrawable(getContext(), R.drawable.ic_navigation);
-            if (iconNavigation == null) { // Fallback nếu R.drawable.ic_navigation bị null
+            if (iconNavigation == null) {
+                // Fallback: dùng ic_menu_send nếu ic_navigation không tồn tại
                 iconNavigation = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_send);
             }
-        } catch (Exception e) { // Fallback nếu R.drawable.ic_navigation không tồn tại
+        } catch (Exception e) {
+            // Fallback: dùng ic_menu_send nếu có lỗi
             iconNavigation = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_send);
         }
         if (iconNavigation != null) {
-            iconNavigation.setTint(Color.BLACK); // lock/focus icon màu đen
+            iconNavigation = iconNavigation.mutate(); // Mutate để tránh conflict màu
+            int primaryColor = ContextCompat.getColor(getContext(), R.color.colorPrimary);
+            iconNavigation.setTint(primaryColor); // Màu cam (primary)
         }
-        if (iconRecenter != null) {
-            iconRecenter.setTint(Color.BLACK);
+        
+        // Tạo icon màu xanh dương cho driver marker
+        driverIcon = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_mylocation);
+        if (driverIcon != null) {
+            driverIcon = driverIcon.mutate(); // Mutate để tránh conflict màu
+            driverIcon.setTint(Color.BLUE); // Màu xanh dương cho con trỏ người dùng
         }
-        fabRecenter.setImageDrawable(iconNavigation); // Bắt đầu ở chế độ điều hướng (focus)
 
         // Lấy driverId
         SessionManager sessionManager = new SessionManager(requireContext());
@@ -430,12 +463,25 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             return view;
         }
 
+        // Load routing preferences từ SharedPreferences
+        android.content.SharedPreferences prefs = requireContext().getSharedPreferences("routing_prefs", android.content.Context.MODE_PRIVATE);
+        selectedVehicle = prefs.getString("vehicle", "bicycle"); // Default: bicycle
+        selectedRoutingType = prefs.getString("routing_type", "full"); // Default: full
+        Log.d(TAG, "Routing preferences loaded: vehicle=" + selectedVehicle + ", routingType=" + selectedRoutingType);
+
         // Khởi tạo API Clients
         sessionClient = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
 
         setupOSMMap();
+        setupFabButtonsStyle(); // Setup style cho tất cả FAB buttons
         setupFabListeners();
         setupLegNavigation();
+        
+        // Setup routing options button
+        if (fabRoutingOptions != null) {
+            fabRoutingOptions.setOnClickListener(v -> showRoutingOptionsDialog());
+        }
+        
         checkAndRequestLocation(); // Bắt đầu luồng
         return view;
     }
@@ -503,20 +549,20 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             // --- FOCUS MODE: Luôn focus vào vị trí driver và giữ mức zoom 18 ---
             mapView.getController().setZoom(18.0);
             mapView.getController().animateTo(mCurrentLocation);
-            // --- MAP ROTATION: Ưu tiên theo hướng route, fallback GPS bearing ---
+            // --- MAP ROTATION: Luôn theo step hiện tại, fallback về hướng bắc (0 độ) ---
             float bearing = -1;
             if (isRouteLoaded && mRouteResponse != null && mCurrentLocation != null) {
-                // Ưu tiên: Tính bearing từ route geometry (hướng cần đi)
+                // Ưu tiên: Tính bearing từ route geometry theo step hiện tại
                 bearing = calculateRouteBearing(location);
             }
-            if (bearing < 0 && location.hasBearing()) {
-                // Fallback: Dùng GPS bearing nếu không tính được route bearing
-                bearing = location.getBearing();
-            }
+            // Không dùng GPS bearing nữa, chỉ dùng route bearing hoặc hướng bắc
             if (bearing >= 0) {
                 mapView.setMapOrientation(-bearing);
-                boolean fromRoute = bearing >= 0 && isRouteLoaded && mRouteResponse != null;
-                Log.d(TAG, "Map rotation updated: bearing=" + bearing + " (from route: " + fromRoute + ")");
+                Log.d(TAG, "Map rotation updated: bearing=" + bearing + " (from current step)");
+            } else {
+                // Fallback: Hướng về hướng bắc (0 độ)
+                mapView.setMapOrientation(0);
+                Log.d(TAG, "Map rotation: no step bearing, using north (0 degrees)");
             }
         }
         // Mode khác (!isNavigating): không auto-rotate, user tự do xoay map
@@ -691,10 +737,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             Toast.makeText(getContext(), "Phát hiện lệch hướng, đang tính toán lại...", Toast.LENGTH_SHORT).show();
             
             // Disable FAB and show loading during recalculation
-            if (fabReloadRoute != null) {
-                fabReloadRoute.setEnabled(false);
-                fabReloadRoute.setAlpha(0.5f);
-            }
+            updateFabButtonsState(false);
             if (progressBar != null) {
                 progressBar.setVisibility(View.VISIBLE);
             }
@@ -712,9 +755,16 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         if (mDriverMarker == null) {
             mDriverMarker = new Marker(mapView);
             mDriverMarker.setTitle("Vị trí của bạn");
-            // Scale icon điều hướng để dễ nhìn
-            if (iconNavigation != null) {
-                mDriverMarker.setIcon(getScaledDrawable(iconNavigation, 32)); // 32dp
+            // Sử dụng icon màu xanh dương cho driver marker
+            if (driverIcon != null) {
+                mDriverMarker.setIcon(getScaledDrawable(driverIcon, 32)); // 32dp
+            } else {
+                // Fallback: tạo icon màu xanh dương từ ic_menu_mylocation
+                Drawable fallbackIcon = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_mylocation);
+                if (fallbackIcon != null) {
+                    fallbackIcon.setTint(Color.BLUE);
+                    mDriverMarker.setIcon(getScaledDrawable(fallbackIcon, 32));
+                }
             }
             mDriverMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER);
         }
@@ -906,17 +956,25 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     }
 
     private void navigateToPreviousLeg() {
+        // Chỉ cho phép navigate khi CREATED
+        if (!"CREATED".equals(activeSessionStatus)) {
+            return;
+        }
         if (currentLegIndex > 0) {
             currentLegIndex--;
-            displayCurrentLeg();
+            displayAllLegs(); // Hiển thị lại toàn bộ route với leg được highlight
             updateLegNavigationUI();
         }
     }
 
     private void navigateToNextLeg() {
+        // Chỉ cho phép navigate khi CREATED
+        if (!"CREATED".equals(activeSessionStatus)) {
+            return;
+        }
         if (mSortedTasks != null && currentLegIndex < mSortedTasks.size() - 1) {
             currentLegIndex++;
-            displayCurrentLeg();
+            displayAllLegs(); // Hiển thị lại toàn bộ route với leg được highlight
             updateLegNavigationUI();
         }
     }
@@ -929,28 +987,105 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             return;
         }
 
+        // Chỉ hiển thị leg navigation khi session CREATED (có thể xem từng leg)
+        // Khi IN_PROGRESS: ẩn navigation, chỉ hiện leg hiện tại
         if (legNavigationContainer != null) {
-            legNavigationContainer.setVisibility(View.VISIBLE);
+            if ("CREATED".equals(activeSessionStatus)) {
+                legNavigationContainer.setVisibility(View.VISIBLE);
+            } else {
+                // IN_PROGRESS: ẩn leg navigation
+                legNavigationContainer.setVisibility(View.GONE);
+            }
         }
 
         if (tvLegInfo != null) {
             tvLegInfo.setText((currentLegIndex + 1) + " / " + mSortedTasks.size());
         }
 
-        // Enable/disable navigation buttons
-        if (btnPrevLeg != null) {
-            btnPrevLeg.setEnabled(currentLegIndex > 0);
-            btnPrevLeg.setAlpha(currentLegIndex > 0 ? 1.0f : 0.5f);
-        }
+        // Enable/disable navigation buttons (chỉ khi CREATED)
+        if ("CREATED".equals(activeSessionStatus)) {
+            if (btnPrevLeg != null) {
+                btnPrevLeg.setEnabled(currentLegIndex > 0);
+                btnPrevLeg.setAlpha(currentLegIndex > 0 ? 1.0f : 0.5f);
+            }
 
-        if (btnNextLeg != null) {
-            btnNextLeg.setEnabled(currentLegIndex < mSortedTasks.size() - 1);
-            btnNextLeg.setAlpha(currentLegIndex < mSortedTasks.size() - 1 ? 1.0f : 0.5f);
+            if (btnNextLeg != null) {
+                btnNextLeg.setEnabled(currentLegIndex < mSortedTasks.size() - 1);
+                btnNextLeg.setAlpha(currentLegIndex < mSortedTasks.size() - 1 ? 1.0f : 0.5f);
+            }
         }
     }
 
     /**
-     * Hiển thị chặng hiện tại lên bản đồ.
+     * Hiển thị toàn bộ route (tất cả legs) lên bản đồ - dùng khi session CREATED
+     */
+    private void displayAllLegs() {
+        if (!isRouteLoaded || mPrecalculatedPolylines == null || mSortedTasks == null || mRouteResponse == null) {
+            Log.w(TAG, "Dữ liệu chưa sẵn sàng để hiển thị.");
+            return;
+        }
+
+        // Xóa các overlay cũ (trừ marker tài xế)
+        mapView.getOverlays().clear();
+        updateDriverMarker(); // Thêm lại marker tài xế
+
+        // Vẽ tất cả các legs
+        for (int i = 0; i < mPrecalculatedPolylines.size() && i < mSortedTasks.size(); i++) {
+            ArrayList<GeoPoint> routePoints = mPrecalculatedPolylines.get(i);
+            if (routePoints.isEmpty()) continue;
+
+            DeliveryAssignment task = mSortedTasks.get(i);
+            GeoPoint endPoint = routePoints.get(routePoints.size() - 1);
+
+            // Thêm Marker cho mỗi điểm đến
+            Marker endMarker = new Marker(mapView);
+            endMarker.setPosition(endPoint);
+            endMarker.setTitle(task.getReceiverName());
+            endMarker.setSnippet("Mã đơn: " + task.getParcelCode());
+            mapView.getOverlays().add(endMarker);
+
+            // Vẽ đường đi với màu khác nhau cho mỗi leg
+            Polyline roadOverlay = new Polyline();
+            roadOverlay.setPoints(routePoints);
+            
+            // Highlight leg hiện tại với màu đậm hơn và rộng hơn
+            if (i == currentLegIndex) {
+                roadOverlay.setColor(Color.RED); // Màu đỏ cho leg hiện tại
+                roadOverlay.setWidth(12.0f); // Đường dày hơn
+            } else {
+                // Màu khác nhau cho các leg khác để dễ phân biệt
+                int[] colors = {Color.BLUE, Color.GREEN, Color.MAGENTA, Color.CYAN, Color.YELLOW};
+                roadOverlay.setColor(colors[i % colors.length]);
+                roadOverlay.setWidth(6.0f); // Đường mỏng hơn
+            }
+            mapView.getOverlays().add(roadOverlay);
+        }
+
+        // Zoom để hiển thị toàn bộ route
+        if (!mPrecalculatedPolylines.isEmpty()) {
+            List<GeoPoint> allPoints = new ArrayList<>();
+            for (ArrayList<GeoPoint> legPoints : mPrecalculatedPolylines) {
+                allPoints.addAll(legPoints);
+            }
+            if (!allPoints.isEmpty()) {
+                BoundingBox boundingBox = BoundingBox.fromGeoPoints(allPoints);
+                mapView.zoomToBoundingBox(boundingBox, true, 100);
+            }
+        }
+
+        // Hiển thị thông tin tổng quan
+        if (mRouteResponse != null && mRouteResponse.getRoute() != null) {
+            double totalDistance = mRouteResponse.getRoute().getDistance();
+            double totalDuration = mRouteResponse.getRoute().getDuration();
+            tvInstruction.setText(String.format("Tổng: %.1f km, ~%.0f phút (%d đơn)", 
+                totalDistance / 1000.0, totalDuration / 60.0, mSortedTasks.size()));
+        }
+
+        mapView.invalidate();
+    }
+
+    /**
+     * Hiển thị chặng hiện tại lên bản đồ - dùng khi session IN_PROGRESS
      */
     private void displayCurrentLeg() {
         if (!isRouteLoaded || mPrecalculatedPolylines == null || mSortedTasks == null || mRouteResponse == null) {
@@ -960,7 +1095,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         if (currentLegIndex >= mSortedTasks.size()) {
             Toast.makeText(getContext(), "Đã hoàn thành tất cả nhiệm vụ!", Toast.LENGTH_LONG).show();
             tvInstruction.setText("Đã hoàn thành tất cả nhiệm vụ!");
-            fabReloadRoute.setEnabled(false); // --- THAY ĐỔI: Tắt nút fabReloadRoute
+            updateFabButtonsState(false); // --- THAY ĐỔI: Tắt các nút FAB
             isNavigating = false;
             fabRecenter.setImageDrawable(iconRecenter);
 
@@ -1058,6 +1193,103 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     }
 
     /**
+     * Setup style cho tất cả FAB buttons: nền secondary, màu icon primary
+     */
+    private void setupFabButtonsStyle() {
+        int secondaryColor = ContextCompat.getColor(getContext(), R.color.colorAccent); // Secondary color
+        int primaryColor = ContextCompat.getColor(getContext(), R.color.colorPrimary); // Primary color
+        
+        // Setup fabListTasks
+        if (fabListTasks != null) {
+            fabListTasks.setBackgroundTintList(android.content.res.ColorStateList.valueOf(secondaryColor));
+            Drawable listIcon = ContextCompat.getDrawable(getContext(), R.drawable.ic_list);
+            if (listIcon != null) {
+                listIcon = listIcon.mutate(); // Mutate để tránh conflict màu
+                listIcon.setTint(primaryColor);
+                fabListTasks.setImageDrawable(listIcon);
+            }
+        }
+        
+        // Setup fabReloadRoute
+        if (fabReloadRoute != null) {
+            fabReloadRoute.setBackgroundTintList(android.content.res.ColorStateList.valueOf(secondaryColor));
+            Drawable reloadIcon = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_rotate);
+            if (reloadIcon != null) {
+                reloadIcon = reloadIcon.mutate(); // Mutate để tránh conflict màu
+                reloadIcon.setTint(primaryColor);
+                fabReloadRoute.setImageDrawable(reloadIcon);
+            }
+        }
+        
+        // Setup fabRecenter - bắt đầu ở lock mode (iconNavigation)
+        if (fabRecenter != null) {
+            fabRecenter.setBackgroundTintList(android.content.res.ColorStateList.valueOf(secondaryColor));
+            if (iconNavigation != null) {
+                // Đảm bảo icon có màu cam (primary)
+                Drawable navIcon = iconNavigation.mutate();
+                navIcon.setTint(primaryColor);
+                fabRecenter.setImageDrawable(navIcon);
+            } else {
+                // Fallback nếu iconNavigation null
+                Drawable fallbackIcon = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_send);
+                if (fallbackIcon != null) {
+                    fallbackIcon = fallbackIcon.mutate();
+                    fallbackIcon.setTint(primaryColor);
+                    fabRecenter.setImageDrawable(fallbackIcon);
+                }
+            }
+        }
+        
+        // Setup fabRoutingOptions
+        if (fabRoutingOptions != null) {
+            fabRoutingOptions.setBackgroundTintList(android.content.res.ColorStateList.valueOf(secondaryColor));
+            Drawable settingsIcon = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_preferences);
+            if (settingsIcon != null) {
+                settingsIcon = settingsIcon.mutate(); // Mutate để tránh conflict màu
+                settingsIcon.setTint(primaryColor);
+                fabRoutingOptions.setImageDrawable(settingsIcon);
+            }
+        }
+        
+        // Update state based on current session
+        updateFabButtonsState(isRouteLoaded && currentSessionId != null);
+    }
+    
+    /**
+     * Cập nhật trạng thái enabled/disabled cho các FAB buttons
+     * Disabled: nền xám, enabled: nền secondary
+     */
+    private void updateFabButtonsState(boolean enabled) {
+        int secondaryColor = ContextCompat.getColor(getContext(), R.color.colorAccent);
+        int disabledGrayColor = Color.parseColor("#FF9E9E9E"); // Gray for disabled state
+        int targetColor = enabled ? secondaryColor : disabledGrayColor;
+        
+        if (fabListTasks != null) {
+            fabListTasks.setEnabled(enabled);
+            fabListTasks.setBackgroundTintList(android.content.res.ColorStateList.valueOf(targetColor));
+            fabListTasks.setAlpha(enabled ? 1.0f : 0.6f);
+        }
+        
+        if (fabReloadRoute != null) {
+            fabReloadRoute.setEnabled(enabled);
+            fabReloadRoute.setBackgroundTintList(android.content.res.ColorStateList.valueOf(targetColor));
+            fabReloadRoute.setAlpha(enabled ? 1.0f : 0.6f);
+        }
+        
+        if (fabRecenter != null) {
+            fabRecenter.setEnabled(enabled);
+            fabRecenter.setBackgroundTintList(android.content.res.ColorStateList.valueOf(targetColor));
+            fabRecenter.setAlpha(enabled ? 1.0f : 0.6f);
+        }
+        
+        if (fabRoutingOptions != null) {
+            fabRoutingOptions.setEnabled(enabled);
+            fabRoutingOptions.setBackgroundTintList(android.content.res.ColorStateList.valueOf(targetColor));
+            fabRoutingOptions.setAlpha(enabled ? 1.0f : 0.6f);
+        }
+    }
+    
+    /**
      * Cài đặt listener cho các nút FAB
      */
     private void setupFabListeners() {
@@ -1071,13 +1303,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             dialog.show(getParentFragmentManager(), "TaskListDialog");
         });
 
-        // Đặt icon là 'refresh'
-        Drawable reloadIcon = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_rotate);
-        if (reloadIcon != null) {
-            reloadIcon.setTint(Color.WHITE); // icon trắng cho nút tải lại
-        }
-        fabReloadRoute.setImageDrawable(reloadIcon);
-        fabReloadRoute.setColorFilter(Color.WHITE);
+        // Icon đã được setup trong setupFabButtonsStyle()
         fabReloadRoute.setOnClickListener(v -> {
             if (mCurrentLocation == null) {
                 Toast.makeText(getContext(), "Chưa có vị trí, không thể tải lại.", Toast.LENGTH_SHORT).show();
@@ -1089,8 +1315,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             }
 
             // Disable FAB and show loading
-            fabReloadRoute.setEnabled(false);
-            fabReloadRoute.setAlpha(0.5f);
+            updateFabButtonsState(false);
             if (progressBar != null) {
                 progressBar.setVisibility(View.VISIBLE);
             }
@@ -1102,13 +1327,34 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             // Gọi lại AsyncTask với vị trí hiện tại
             new FetchAndRouteTask(this, mCurrentLocation).execute();
         });
+        
+        // Long press để mở dialog chọn routing type
+        fabReloadRoute.setOnLongClickListener(v -> {
+            showRoutingOptionsDialog();
+            return true;
+        });
 
         // --- NÂNG CẤP: Nút Lock/Focus Toggle - Bật/Tắt Focus mode (lock camera vào driver) ---
         fabRecenter.setOnClickListener(v -> {
             isNavigating = !isNavigating; // Toggle lock/focus mode
+            int primaryColor = ContextCompat.getColor(getContext(), R.color.colorPrimary);
+            
             if (isNavigating) {
                 // Bật Focus mode: Lock camera vào driver, tự động follow và rotate
-                fabRecenter.setImageDrawable(iconNavigation);
+                // Hiển thị iconNavigation (lock icon) với màu cam (primary)
+                if (iconNavigation != null) {
+                    Drawable navIcon = iconNavigation.mutate(); // Mutate để tránh conflict
+                    navIcon.setTint(primaryColor);
+                    fabRecenter.setImageDrawable(navIcon);
+                } else {
+                    // Fallback nếu iconNavigation null
+                    Drawable fallbackIcon = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_send);
+                    if (fallbackIcon != null) {
+                        fallbackIcon = fallbackIcon.mutate();
+                        fallbackIcon.setTint(primaryColor);
+                        fabRecenter.setImageDrawable(fallbackIcon);
+                    }
+                }
                 if (mCurrentLocation != null) {
                     mapView.getController().animateTo(mCurrentLocation);
                     mapView.getController().setZoom(18.0);
@@ -1121,7 +1367,20 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                 Toast.makeText(getContext(), "Đã bật Focus mode - Camera sẽ tự động theo dõi vị trí.", Toast.LENGTH_SHORT).show();
             } else {
                 // Tắt Focus mode: Manual camera control
-                fabRecenter.setImageDrawable(iconRecenter);
+                // Hiển thị iconRecenter (unlock icon) với màu cam (primary)
+                if (iconRecenter != null) {
+                    Drawable recenterIcon = iconRecenter.mutate(); // Mutate để tránh conflict
+                    recenterIcon.setTint(primaryColor);
+                    fabRecenter.setImageDrawable(recenterIcon);
+                } else {
+                    // Fallback nếu iconRecenter null
+                    Drawable fallbackIcon = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_mylocation);
+                    if (fallbackIcon != null) {
+                        fallbackIcon = fallbackIcon.mutate();
+                        fallbackIcon.setTint(primaryColor);
+                        fabRecenter.setImageDrawable(fallbackIcon);
+                    }
+                }
                 Toast.makeText(getContext(), "Đã tắt Focus mode - Bạn có thể di chuyển camera tự do.", Toast.LENGTH_SHORT).show();
             }
         });
@@ -1302,6 +1561,47 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     }
     
     /**
+     * Get vehicle type for routing API call.
+     * Maps database format (BIKE/CAR) to API format (bicycle/car).
+     * Default: "bicycle"
+     * 
+     * Gets vehicleType from SessionManager (saved from user profile) or falls back to SharedPreferences.
+     */
+    private String getVehicleForRouting() {
+        // First, try to get from SessionManager (from user profile)
+        SessionManager sessionManager = new SessionManager(requireContext());
+        String vehicleTypeFromSession = sessionManager.getVehicleType();
+        
+        if (vehicleTypeFromSession != null && !vehicleTypeFromSession.isEmpty()) {
+            // Map database format (BIKE/CAR) to API format (bicycle/car)
+            String upperVehicle = vehicleTypeFromSession.toUpperCase();
+            if ("CAR".equals(upperVehicle)) {
+                return "car";
+            } else if ("BIKE".equals(upperVehicle) || "MOTORBIKE".equals(upperVehicle)) {
+                return "bicycle";
+            }
+        }
+        
+        // Fallback to SharedPreferences (for backward compatibility)
+        android.content.SharedPreferences prefs = requireContext().getSharedPreferences("routing_prefs", android.content.Context.MODE_PRIVATE);
+        String vehicleFromPrefs = prefs.getString("vehicle", "bicycle");
+        
+        if (vehicleFromPrefs == null) {
+            return "bicycle";
+        }
+        
+        String upperVehicle = vehicleFromPrefs.toUpperCase();
+        if ("CAR".equals(upperVehicle)) {
+            return "car";
+        } else if ("BIKE".equals(upperVehicle) || "MOTORBIKE".equals(upperVehicle)) {
+            return "bicycle";
+        }
+        
+        // If already in API format (bicycle/car), return as-is
+        return vehicleFromPrefs.toLowerCase();
+    }
+    
+    /**
      * Check session status and cleanup map if session ended (COMPLETED or FAILED)
      */
     private void checkSessionStatusAndCleanup() {
@@ -1335,6 +1635,25 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                 
                 DeliverySession session = baseResponse.getResult();
                 String status = session.getStatus();
+                
+                // Update activeSessionStatus
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        activeSessionStatus = status;
+                        currentSessionId = session.getId().toString();
+                        Log.d(TAG, "Session status updated: " + activeSessionStatus);
+                        
+                        // Nếu route đã load và status thay đổi, cần refresh display
+                        if (isRouteLoaded && mRouteResponse != null) {
+                            if ("CREATED".equals(activeSessionStatus)) {
+                                displayAllLegs();
+                            } else if ("IN_PROGRESS".equals(activeSessionStatus)) {
+                                displayCurrentLeg();
+                            }
+                            updateLegNavigationUI();
+                        }
+                    });
+                }
                 
                 if ("COMPLETED".equals(status) || "FAILED".equals(status)) {
                     // Session ended - cleanup map
@@ -1374,6 +1693,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         currentLegIndex = 0;
         currentStepIndex = 0;
         currentSessionId = null;
+        activeSessionStatus = null;
         
         // Clear route data
         mOriginalTasks = null;
@@ -1391,18 +1711,17 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             mapView.invalidate();
         }
         
-        // Reset UI
+        // Reset UI - Ẩn instruction khi session kết thúc
         if (tvInstruction != null) {
-            tvInstruction.setText("Phiên đã kết thúc. Không có tuyến đường.");
+            tvInstruction.setVisibility(View.GONE);
         }
         
         if (legNavigationContainer != null) {
             legNavigationContainer.setVisibility(View.GONE);
         }
         
-        if (fabReloadRoute != null) {
-            fabReloadRoute.setEnabled(false);
-        }
+        // Disable và cập nhật style cho các FAB buttons
+        updateFabButtonsState(false);
         
         // Reset map rotation
         if (mapView != null) {
@@ -1531,5 +1850,96 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                 }
             }
         }
+    }
+    
+    /**
+     * Hiển thị dialog để chọn routing type (mô hình OSRM)
+     * Vehicle type được hiển thị từ user profile (read-only)
+     */
+    private void showRoutingOptionsDialog() {
+        // Tạo custom view cho dialog
+        View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_routing_options, null);
+        
+        // Display vehicle type from SessionManager (read-only)
+        android.widget.TextView tvVehicleTypeLabel = dialogView.findViewById(R.id.tv_vehicle_type_label);
+        android.widget.TextView tvVehicleTypeValue = dialogView.findViewById(R.id.tv_vehicle_type_value);
+        
+        SessionManager sessionManager = new SessionManager(requireContext());
+        String vehicleType = sessionManager.getVehicleType();
+        
+        if (vehicleType != null && !vehicleType.isEmpty()) {
+            String vehicleTypeText = "";
+            if ("BIKE".equalsIgnoreCase(vehicleType)) {
+                vehicleTypeText = "Xe máy";
+            } else if ("CAR".equalsIgnoreCase(vehicleType)) {
+                vehicleTypeText = "Ô tô";
+            } else {
+                vehicleTypeText = vehicleType;
+            }
+            tvVehicleTypeLabel.setVisibility(View.VISIBLE);
+            tvVehicleTypeValue.setText(vehicleTypeText);
+            tvVehicleTypeValue.setVisibility(View.VISIBLE);
+        } else {
+            tvVehicleTypeLabel.setVisibility(View.GONE);
+            tvVehicleTypeValue.setVisibility(View.GONE);
+        }
+        
+        // Routing type options
+        android.widget.RadioGroup rgRoutingType = dialogView.findViewById(R.id.rg_routing_type);
+        android.widget.RadioButton rbFull = dialogView.findViewById(R.id.rb_full);
+        android.widget.RadioButton rbRatingOnly = dialogView.findViewById(R.id.rb_rating_only);
+        android.widget.RadioButton rbBlockingOnly = dialogView.findViewById(R.id.rb_blocking_only);
+        android.widget.RadioButton rbBase = dialogView.findViewById(R.id.rb_base);
+        
+        // Set current routing type selection
+        switch (selectedRoutingType) {
+            case "rating-only":
+                rbRatingOnly.setChecked(true);
+                break;
+            case "blocking-only":
+                rbBlockingOnly.setChecked(true);
+                break;
+            case "base":
+                rbBase.setChecked(true);
+                break;
+            default:
+                rbFull.setChecked(true);
+                break;
+        }
+        
+        new android.app.AlertDialog.Builder(getContext())
+            .setTitle("Thiết lập mô hình OSRM")
+            .setView(dialogView)
+            .setPositiveButton("Áp dụng", (dialog, which) -> {
+                // Vehicle type is now from user profile (delivery info), no need to select
+                
+                // Get selected routing type
+                int routingTypeId = rgRoutingType.getCheckedRadioButtonId();
+                if (routingTypeId == R.id.rb_rating_only) {
+                    selectedRoutingType = "rating-only";
+                } else if (routingTypeId == R.id.rb_blocking_only) {
+                    selectedRoutingType = "blocking-only";
+                } else if (routingTypeId == R.id.rb_base) {
+                    selectedRoutingType = "base";
+                } else {
+                    selectedRoutingType = "full";
+                }
+                
+                // Lưu vào SharedPreferences
+                android.content.SharedPreferences prefs = requireContext().getSharedPreferences("routing_prefs", android.content.Context.MODE_PRIVATE);
+                prefs.edit()
+                    .putString("routing_type", selectedRoutingType)
+                    .apply();
+                
+                Log.d(TAG, "Routing options updated: routingType=" + selectedRoutingType);
+                
+                // Reload route với options mới
+                if (mCurrentLocation != null && !isRecalculating) {
+                    mOriginalTasks = null; // Force reload
+                    new FetchAndRouteTask(this, mCurrentLocation).execute();
+                }
+            })
+            .setNegativeButton("Hủy", null)
+            .show();
     }
 }

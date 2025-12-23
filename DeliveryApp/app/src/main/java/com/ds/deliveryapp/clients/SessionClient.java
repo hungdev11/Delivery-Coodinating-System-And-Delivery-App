@@ -166,12 +166,16 @@ public interface SessionClient {
 
     /**
      * Lấy demo-route đã tính sẵn cho session hiện tại (gateway -> session-service -> zone-service)
+     * @param vehicle Vehicle type: "bicycle" (default) or "car"
+     * @param routingType Routing type: "full" (default), "rating-only", "blocking-only", "base"
      */
     @GET("/api/v1/delivery-sessions/{sessionId}/demo-route")
     Call<BaseResponse<com.ds.deliveryapp.clients.res.RoutingResponseDto>> getDemoRouteForSession(
             @Path("sessionId") String sessionId,
             @Query("startLat") Double startLat,
-            @Query("startLon") Double startLon
+            @Query("startLon") Double startLon,
+            @Query("vehicle") String vehicle,
+            @Query("routingType") String routingType
     );
 
     /**

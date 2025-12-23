@@ -19,6 +19,7 @@ import com.ds.deliveryapp.clients.res.Message;
 import com.ds.deliveryapp.dialog.ProposalPopupDialog;
 import com.ds.deliveryapp.enums.ContentType;
 import com.ds.deliveryapp.service.GlobalChatService;
+import com.ds.deliveryapp.utils.UserInfoLoader;
 import com.ds.deliveryapp.widget.ChatFloatingButton;
 
 public class MainActivity extends AppCompatActivity implements GlobalChatService.ProposalListener {
@@ -79,6 +80,9 @@ public class MainActivity extends AppCompatActivity implements GlobalChatService
         } else {
             bottomNavigation.setSelectedItemId(R.id.nav_orders);
         }
+        
+        // Load user info and vehicle type if token exists
+        UserInfoLoader.loadUserInfo(this);
     }
 
     /**

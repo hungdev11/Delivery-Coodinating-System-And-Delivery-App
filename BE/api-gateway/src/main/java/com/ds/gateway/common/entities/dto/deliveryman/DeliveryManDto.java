@@ -1,0 +1,22 @@
+package com.ds.gateway.common.entities.dto.deliveryman;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class DeliveryManDto {
+    private UUID id;
+    private String userId;
+    private String vehicleType;
+    private Double capacityKg;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}

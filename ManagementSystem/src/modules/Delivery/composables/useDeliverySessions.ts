@@ -200,9 +200,15 @@ export function useDeliverySessions() {
     return session ?? null
   }
 
-  const loadSessionRoute = async (sessionId: string): Promise<SessionRouteResult | null> => {
+  const loadSessionRoute = async (
+    sessionId: string,
+    options?: {
+      vehicle?: 'bicycle' | 'car'
+      routingType?: 'full' | 'rating-only' | 'blocking-only' | 'base'
+    }
+  ): Promise<SessionRouteResult | null> => {
     try {
-      const response = await getSessionDemoRoute(sessionId)
+      const response = await getSessionDemoRoute(sessionId, options)
       const resultWrapper = response as { result?: SessionRouteResult }
       const payload = resultWrapper.result ?? (response as SessionRouteResult | null)
       return payload ?? null

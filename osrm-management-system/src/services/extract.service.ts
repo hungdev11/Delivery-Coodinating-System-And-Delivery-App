@@ -52,7 +52,7 @@ export class ExtractService {
       const pbfPath = findLatestVietnamPBF(this.rawDataPath);
       const defaultPolyFile = join(this.rawDataPath, 'poly/hcmc.poly');
       const poly = polyFile || defaultPolyFile;
-      const outputPbf = join(this.rawDataPath, 'extracted/thuduc_complete.osm.pbf');
+      const outputPbf = join(this.rawDataPath, 'extracted/hcmc.osm.pbf');
 
       if (!existsSync(poly)) {
         throw new Error(`Poly file not found: ${poly}`);

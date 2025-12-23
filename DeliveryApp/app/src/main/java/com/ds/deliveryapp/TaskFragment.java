@@ -340,8 +340,10 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
 
                     if (page == 0) tasks.clear();
 
-                    tasks.addAll(newTasks);
-                    adapter.updateTasks(tasks);
+                    // Filter out tasks that should be hidden:
+                    // 1. DELIVERED/COMPLETED tasks (already delivered)
+                    // 2. FAILED tasks with RETURNED proof (already returned to warehouse)
+                    filterAndAddTasks(newTasks);
                     
                     // Ẩn skeleton khi đã có data
                     if (page == 0 && adapter != null) {
@@ -442,7 +444,10 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private boolean isSessionIncidentMode() {
         boolean flag = false;
         for (DeliveryAssignment task : tasks) {
-            if (task.getFailReason().contains("Session failed:")) return true;
+            String failReason = task.getFailReason();
+            if (failReason != null && failReason.contains("Session failed:")) {
+                return true;
+            }
         }
         return flag;
     }
@@ -909,10 +914,17 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         Double startLon = latLon[1];
 
         SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
+        // Lấy vehicle và routingType từ SharedPreferences (hoặc dùng default)
+        // Vehicle sẽ được map từ database format (BIKE/CAR) sang API format (bicycle/car)
+        String vehicle = getVehicleForRouting();
+        android.content.SharedPreferences prefs = getContext().getSharedPreferences("routing_prefs", android.content.Context.MODE_PRIVATE);
+        String routingType = prefs.getString("routing_type", "full"); // Default: full
         Call<BaseResponse<com.ds.deliveryapp.clients.res.RoutingResponseDto>> call = service.getDemoRouteForSession(
                 activeSessionId,
                 startLat,
-                startLon
+                startLon,
+                vehicle,
+                routingType
         );
 
         call.enqueue(new Callback<BaseResponse<com.ds.deliveryapp.clients.res.RoutingResponseDto>>() {
@@ -946,7 +958,12 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         }
         double durationSec = route.getRoute().getDuration();
         double distanceM = route.getRoute().getDistance();
-        String etaText = "Thời gian: ~" + Math.round(durationSec / 60.0) + " phút";
+        
+        // Tính thời gian giao: thời gian route + số đơn * 5 phút
+        int numberOfOrders = (tasks != null) ? tasks.size() : 0;
+        double deliveryTimeMinutes = (durationSec / 60.0) + (numberOfOrders * 5.0);
+        
+        String etaText = "Thời gian: ~" + Math.round(deliveryTimeMinutes) + " phút";
         String distText = "Quãng đường: " + String.format(java.util.Locale.getDefault(), "%.2f km", distanceM / 1000.0);
 
         if (tvRouteEta != null) tvRouteEta.setText(etaText);
@@ -1306,5 +1323,180 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                 break;
             }
         }
+    }
+    
+    /**
+     * Filter out tasks that should be hidden from the list:
+     * 1. DELIVERED/COMPLETED tasks (already delivered successfully) - filtered immediately
+     * 2. FAILED tasks with RETURNED proof (already returned to warehouse) - checked async
+     */
+    private void filterAndAddTasks(List<DeliveryAssignment> newTasks) {
+        List<DeliveryAssignment> visibleTasks = new ArrayList<>();
+        List<DeliveryAssignment> failedTasksToCheck = new ArrayList<>();
+        
+        for (DeliveryAssignment task : newTasks) {
+            String status = task.getStatus();
+            
+            // Hide DELIVERED/COMPLETED tasks immediately
+            if ("DELIVERED".equals(status) || "COMPLETED".equals(status)) {
+                continue; // Skip this task
+            }
+            
+            // For FAILED/DELAYED tasks, check if they have RETURNED proof async
+            if ("FAILED".equals(status) || "DELAYED".equals(status)) {
+                failedTasksToCheck.add(task);
+            } else {
+                // Other statuses (IN_PROGRESS, etc.) are visible immediately
+                visibleTasks.add(task);
+            }
+        }
+        
+        // Add visible tasks immediately
+        if (!visibleTasks.isEmpty()) {
+            tasks.addAll(visibleTasks);
+            adapter.updateTasks(tasks);
+            adapter.notifyDataSetChanged();
+        }
+        
+        // Check proofs for FAILED tasks async and add only if no RETURNED proof
+        if (!failedTasksToCheck.isEmpty()) {
+            checkAndAddFailedTasks(failedTasksToCheck);
+        }
+    }
+    
+    /**
+     * Check proofs for FAILED tasks and add them to the list only if they don't have RETURNED proof.
+     * This is done async to avoid blocking the UI.
+     */
+    private void checkAndAddFailedTasks(List<DeliveryAssignment> failedTasks) {
+        // Check proofs for each failed task
+        for (DeliveryAssignment task : failedTasks) {
+            SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
+            service.getProofsByAssignment(task.getAssignmentId()).enqueue(new Callback<BaseResponse<List<DeliveryProof>>>() {
+                @Override
+                public void onResponse(Call<BaseResponse<List<DeliveryProof>>> call, Response<BaseResponse<List<DeliveryProof>>> response) {
+                    if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
+                        List<DeliveryProof> proofs = response.body().getResult();
+                        boolean hasReturnedProof = false;
+                        
+                        for (DeliveryProof proof : proofs) {
+                            if ("RETURNED".equals(proof.getType())) {
+                                hasReturnedProof = true;
+                                break;
+                            }
+                        }
+                        
+                        // Only add task if it doesn't have RETURNED proof
+                        if (!hasReturnedProof) {
+                            if (getActivity() != null) {
+                                getActivity().runOnUiThread(() -> {
+                                    // Check if task is not already in the list
+                                    boolean exists = false;
+                                    for (DeliveryAssignment existingTask : tasks) {
+                                        if (existingTask.getAssignmentId() != null && 
+                                            existingTask.getAssignmentId().equals(task.getAssignmentId())) {
+                                            exists = true;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (!exists) {
+                                        tasks.add(task);
+                                        adapter.updateTasks(tasks);
+                                        adapter.notifyDataSetChanged();
+                                    }
+                                });
+                            }
+                        }
+                        // If has RETURNED proof, don't add it (task is hidden)
+                    } else {
+                        // On error, show the task (better to show than hide on error)
+                        if (getActivity() != null) {
+                            getActivity().runOnUiThread(() -> {
+                                boolean exists = false;
+                                for (DeliveryAssignment existingTask : tasks) {
+                                    if (existingTask.getAssignmentId() != null && 
+                                        existingTask.getAssignmentId().equals(task.getAssignmentId())) {
+                                        exists = true;
+                                        break;
+                                    }
+                                }
+                                
+                                if (!exists) {
+                                    tasks.add(task);
+                                    adapter.updateTasks(tasks);
+                                    adapter.notifyDataSetChanged();
+                                }
+                            });
+                        }
+                    }
+                }
+                
+                @Override
+                public void onFailure(Call<BaseResponse<List<DeliveryProof>>> call, Throwable t) {
+                    Log.e(TAG, "Failed to check proofs for task " + task.getAssignmentId(), t);
+                    // On error, show the task (better to show than hide on error)
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            boolean exists = false;
+                            for (DeliveryAssignment existingTask : tasks) {
+                                if (existingTask.getAssignmentId() != null && 
+                                    existingTask.getAssignmentId().equals(task.getAssignmentId())) {
+                                    exists = true;
+                                    break;
+                                }
+                            }
+                            
+                            if (!exists) {
+                                tasks.add(task);
+                                adapter.updateTasks(tasks);
+                                adapter.notifyDataSetChanged();
+                            }
+                        });
+                    }
+                }
+            });
+        }
+    }
+    
+    /**
+     * Get vehicle type for routing API call.
+     * Maps database format (BIKE/CAR) to API format (bicycle/car).
+     * Default: "bicycle"
+     * 
+     * Gets vehicleType from SessionManager (saved from user profile) or falls back to SharedPreferences.
+     */
+    private String getVehicleForRouting() {
+        // First, try to get from SessionManager (from user profile)
+        SessionManager sessionManager = new SessionManager(getContext());
+        String vehicleTypeFromSession = sessionManager.getVehicleType();
+        
+        if (vehicleTypeFromSession != null && !vehicleTypeFromSession.isEmpty()) {
+            // Map database format (BIKE/CAR) to API format (bicycle/car)
+            String upperVehicle = vehicleTypeFromSession.toUpperCase();
+            if ("CAR".equals(upperVehicle)) {
+                return "car";
+            } else if ("BIKE".equals(upperVehicle) || "MOTORBIKE".equals(upperVehicle)) {
+                return "bicycle";
+            }
+        }
+        
+        // Fallback to SharedPreferences (for backward compatibility)
+        android.content.SharedPreferences prefs = getContext().getSharedPreferences("routing_prefs", android.content.Context.MODE_PRIVATE);
+        String vehicleFromPrefs = prefs.getString("vehicle", "bicycle");
+        
+        if (vehicleFromPrefs == null) {
+            return "bicycle";
+        }
+        
+        String upperVehicle = vehicleFromPrefs.toUpperCase();
+        if ("CAR".equals(upperVehicle)) {
+            return "car";
+        } else if ("BIKE".equals(upperVehicle) || "MOTORBIKE".equals(upperVehicle)) {
+            return "bicycle";
+        }
+        
+        // If already in API format (bicycle/car), return as-is
+        return vehicleFromPrefs.toLowerCase();
     }
 }

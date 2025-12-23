@@ -171,8 +171,21 @@ export const updateAssignmentStatus = async (
   )
 }
 
-export const getSessionDemoRoute = async (sessionId: string): Promise<DemoRouteResponse> => {
-  return apiClient.get<DemoRouteResponse>(`/v1/delivery-sessions/${sessionId}/demo-route`)
+export const getSessionDemoRoute = async (
+  sessionId: string,
+  options?: {
+    vehicle?: 'bicycle' | 'car'
+    routingType?: 'full' | 'rating-only' | 'blocking-only' | 'base'
+  }
+): Promise<DemoRouteResponse> => {
+  const params: Record<string, string> = {}
+  if (options?.vehicle) {
+    params.vehicle = options.vehicle
+  }
+  if (options?.routingType) {
+    params.routingType = options.routingType
+  }
+  return apiClient.get<DemoRouteResponse>(`/v1/delivery-sessions/${sessionId}/demo-route`, { params })
 }
 
 /**

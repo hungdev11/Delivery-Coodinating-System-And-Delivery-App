@@ -38,6 +38,19 @@
         app:backgroundTint="@color/material_dynamic_neutral99"
         android:contentDescription="Về vị trí hiện tại"/>
 
+    <!-- NÚT: Thiết lập mô hình OSRM -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_routing_options"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="140dp"
+        android:layout_marginEnd="16dp"
+        android:src="@android:drawable/ic_menu_preferences"
+        app:fabSize="mini"
+        app:backgroundTint="@color/material_dynamic_neutral99"
+        android:contentDescription="Thiết lập mô hình OSRM"/>
+
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_list_tasks"
         android:layout_width="wrap_content"

@@ -31,9 +31,18 @@ export const useRoutingStore = defineStore('routing', () => {
   const routeResult = ref<DemoRouteResponseData | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
-  const routingMode = ref<'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base'>('v2-full')
+  const routingMode = ref<
+    | 'v2-full'
+    | 'v2-rating-only'
+    | 'v2-blocking-only'
+    | 'v2-base'
+    | 'v2-car-full'
+    | 'v2-car-rating-only'
+    | 'v2-car-blocking-only'
+    | 'v2-car-base'
+  >('v2-full')
   const routingStrategy = ref<'strict_urgent' | 'flexible'>('strict_urgent')
-  const vehicleType = ref<'car' | 'motorbike'>('motorbike') // Vehicle type selector
+  const vehicleType = ref<'car' | 'motorbike'>('motorbike') // Vehicle type selector (default: motorbike/bicycle)
 
   // Computed
   const hasStartPoint = computed(() => startPoint.value !== null)

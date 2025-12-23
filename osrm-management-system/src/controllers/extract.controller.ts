@@ -22,7 +22,7 @@ export class ExtractController {
    */
   async extractComplete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { polyFile } = req.body;
+      const { polyFile } = req?.body || { polyFile: undefined };
 
       logger.info('Extract complete request received', { polyFile });
 

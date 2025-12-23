@@ -3,9 +3,11 @@ package com.ds.gateway.business.v1.services;
 import com.ds.gateway.common.entities.dto.common.BaseResponse;
 import com.ds.gateway.common.entities.dto.common.PagedData;
 import com.ds.gateway.common.entities.dto.common.PagingRequest;
+import com.ds.gateway.common.entities.dto.deliveryman.DeliveryManDto;
 import com.ds.gateway.common.entities.dto.user.CreateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UpdateUserRequestDto;
 import com.ds.gateway.common.entities.dto.user.UserDto;
+import com.ds.gateway.common.entities.dto.user.UserServiceUserDto;
 import com.ds.gateway.common.exceptions.ServiceUnavailableException;
 import com.ds.gateway.common.interfaces.IUserServiceClient;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +16,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -51,8 +54,8 @@ public class UserServiceClient implements IUserServiceClient {
         return userServiceWebClient.get()
             .uri("/api/v1/users/{id}", userId)
             .retrieve()
-            .bodyToMono(new ParameterizedTypeReference<BaseResponse<UserDto>>() {})
-            .map(BaseResponse::getResult)
+            .bodyToMono(new ParameterizedTypeReference<BaseResponse<UserServiceUserDto>>() {})
+            .map(response -> mapUserServiceDtoToGatewayDto(response.getResult()))
             .onErrorMap(ex -> new ServiceUnavailableException("User service unavailable: " + ex.getMessage(), ex))
             .toFuture();
     }
@@ -64,8 +67,8 @@ public class UserServiceClient implements IUserServiceClient {
         return userServiceWebClient.get()
             .uri("/api/v1/users/username/{username}", username)
             .retrieve()
-            .bodyToMono(new ParameterizedTypeReference<BaseResponse<UserDto>>() {})
-            .map(BaseResponse::getResult)
+            .bodyToMono(new ParameterizedTypeReference<BaseResponse<UserServiceUserDto>>() {})
+            .map(response -> mapUserServiceDtoToGatewayDto(response.getResult()))
             .onErrorMap(ex -> new ServiceUnavailableException("User service unavailable: " + ex.getMessage(), ex))
             .toFuture();
     }
@@ -159,5 +162,85 @@ public class UserServiceClient implements IUserServiceClient {
             .map(BaseResponse::getResult)
             .onErrorMap(ex -> new ServiceUnavailableException("User service unavailable: " + ex.getMessage(), ex))
             .toFuture();
+    }
+    
+    @Override
+    public CompletableFuture<UserDto.DeliveryManInfo> getDeliveryManByUserId(String userId) {
+        log.debug("Getting delivery man by user ID via REST: {}", userId);
+        
+        return userServiceWebClient.get()
+            .uri("/api/v1/delivery-mans/user/{userId}", userId)
+            .retrieve()
+            .bodyToMono(new ParameterizedTypeReference<BaseResponse<DeliveryManDto>>() {})
+            .map(response -> {
+                if (response.getResult() == null) {
+                    return null;
+                }
+                DeliveryManDto dm = response.getResult();
+                return UserDto.DeliveryManInfo.builder()
+                    .id(dm.getId() != null ? dm.getId().toString() : null)
+                    .vehicleType(dm.getVehicleType())
+                    .capacityKg(dm.getCapacityKg())
+                    .createdAt(dm.getCreatedAt())
+                    .updatedAt(dm.getUpdatedAt())
+                    .build();
+            })
+            .onErrorResume(ex -> {
+                // If delivery man not found (404) or any error, return empty Mono
+                if (ex instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
+                    org.springframework.web.reactive.function.client.WebClientResponseException wce = 
+                        (org.springframework.web.reactive.function.client.WebClientResponseException) ex;
+                    if (wce.getStatusCode().value() == 404) {
+                        log.debug("Delivery man not found for user ID: {}", userId);
+                    } else {
+                        log.warn("Error fetching delivery man for user ID {}: {} {}", userId, wce.getStatusCode(), wce.getMessage());
+                    }
+                } else {
+                    log.warn("Error fetching delivery man for user ID {}: {}", userId, ex.getMessage());
+                }
+                // Return empty Mono (will be handled by switchIfEmpty)
+                return Mono.<UserDto.DeliveryManInfo>empty();
+            })
+            .switchIfEmpty(Mono.just((UserDto.DeliveryManInfo) null))
+            .toFuture();
+    }
+    
+    /**
+     * Map UserServiceUserDto to API Gateway UserDto
+     */
+    private UserDto mapUserServiceDtoToGatewayDto(UserServiceUserDto userServiceDto) {
+        if (userServiceDto == null) {
+            return null;
+        }
+        
+        // Map deliveryMan from DeliveryManDto (User Service) to DeliveryManInfo (API Gateway)
+        UserDto.DeliveryManInfo deliveryManInfo = null;
+        if (userServiceDto.getDeliveryMan() != null) {
+            DeliveryManDto dm = userServiceDto.getDeliveryMan();
+            deliveryManInfo = UserDto.DeliveryManInfo.builder()
+                .id(dm.getId() != null ? dm.getId().toString() : null)
+                .vehicleType(dm.getVehicleType())
+                .capacityKg(dm.getCapacityKg())
+                .createdAt(dm.getCreatedAt())
+                .updatedAt(dm.getUpdatedAt())
+                .build();
+        }
+        
+        return UserDto.builder()
+            .id(userServiceDto.getId())
+            .keycloakId(userServiceDto.getId()) // User Service uses Keycloak ID as id
+            .username(userServiceDto.getUsername())
+            .email(userServiceDto.getEmail())
+            .firstName(userServiceDto.getFirstName())
+            .lastName(userServiceDto.getLastName())
+            .phone(userServiceDto.getPhone())
+            .address(userServiceDto.getAddress())
+            .identityNumber(userServiceDto.getIdentityNumber())
+            .roles(userServiceDto.getRoles())
+            .status(userServiceDto.getStatus())
+            .createdAt(userServiceDto.getCreatedAt())
+            .updatedAt(userServiceDto.getUpdatedAt())
+            .deliveryMan(deliveryManInfo)
+            .build();
     }
 }
