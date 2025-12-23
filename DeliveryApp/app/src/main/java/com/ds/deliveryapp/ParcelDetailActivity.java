@@ -211,7 +211,7 @@ public class ParcelDetailActivity extends AppCompatActivity {
                 String errorMsg =
                         response.body() != null && response.body().getMessage() != null
                                 ? response.body().getMessage()
-                                : "Không đạt điều kiện.";
+                                : "Không thể nhân đơn. Vui lòng thử lại.";
 
                 Log.e(TAG, "Business reject: " + errorMsg);
 

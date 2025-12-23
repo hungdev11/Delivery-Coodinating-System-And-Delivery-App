@@ -38,4 +38,6 @@ public interface DeliverySessionRepository extends JpaRepository<DeliverySession
             SessionStatus status,
             LocalDateTime startTime,
             LocalDateTime endTime);
+
+    List<DeliverySession> findByStatusIn(List<SessionStatus> of);
 }

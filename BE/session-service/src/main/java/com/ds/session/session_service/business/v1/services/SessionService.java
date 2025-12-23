@@ -64,6 +64,24 @@ public class SessionService implements ISessionService {
     private static final int MAX_DELIVERY_HOURS = 5; // Maximum 5 hours for delivery routing 
 
 
+    // =========================================================================
+    // CẤU HÌNH CÔNG BẰNG & CHỐNG LỰA ĐƠN
+    // =========================================================================
+    
+    // 1. Cấu hình Cân bằng tải (Fairness)
+    private static final double FAIRNESS_THRESHOLD = 1.3; // Được phép nhận hơn mức trung bình 30%
+    private static final int MIN_PARCELS_TO_APPLY_FAIRNESS = 5; // Chỉ áp dụng khi đã có ít nhất 5 đơn
+
+    // 2. Cấu hình Chống lựa đơn (Anti-Cherry Picking)
+    //Cần thay bằng tọa độ thực tế của Hub/Kho hiện tại
+    private static final double WAREHOUSE_LAT = 10.7769; 
+    private static final double WAREHOUSE_LON = 106.7009;
+    
+    private static final double EASY_ORDER_DISTANCE_KM = 3.0; // Đơn dưới 3km coi là đơn "ngon/dễ"
+    private static final double MAX_EASY_RATIO = 0.6; // Không được quá 60% đơn là đơn dễ
+
+    // =========================================================================
+
     @Override
     @Transactional
     public AssignmentResponse acceptParcelToSession(String deliveryManId, String parcelId) {
@@ -130,6 +148,14 @@ public class SessionService implements ISessionService {
                 .build();
         }
 
+        // 1. Kiểm tra Công bằng (Load Balancing)
+        // Nếu shipper này đang ôm quá nhiều đơn so với anh em -> Chặn
+        validateFairness(sessionToUse);
+
+        // 2. Kiểm tra Chống lựa đơn (Anti-Cherry Picking)
+        // Nếu shipper này chỉ toàn nhặt đơn gần -> Chặn
+        validateCherryPicking(sessionToUse, parcelInfo); // parcelInfo lấy từ bước 1
+
         // 5. Tạo Assignment (Task) mới
         DeliveryAssignment newAssignment = DeliveryAssignment.builder()
             .parcelId(parcelId)
@@ -146,16 +172,16 @@ public class SessionService implements ISessionService {
         // }
 
         // 7. Validation: Nếu số đơn > 5, kiểm tra routing time
-        int currentParcelCount = sessionToUse.getAssignments().size();
-        if (currentParcelCount >= 5) {
-            log.debug("[session-service] [SessionService.acceptParcelToSession] Session {} has {} parcels. Validating routing time before adding new parcel.", 
-                sessionToUse.getId(), currentParcelCount);
+        // int currentParcelCount = sessionToUse.getAssignments().size();
+        // if (currentParcelCount >= 5) {
+        //     log.debug("[session-service] [SessionService.acceptParcelToSession] Session {} has {} parcels. Validating routing time before adding new parcel.", 
+        //         sessionToUse.getId(), currentParcelCount);
             
-            // Validate routing time
-            long routingStart = System.currentTimeMillis();
-            validateRoutingTime(sessionToUse, parcelInfo);
-            log.debug("[session-service] [SessionService.acceptParcelToSession] Routing validation completed in {}ms", System.currentTimeMillis() - routingStart);
-        }
+        //     // Validate routing time
+        //     long routingStart = System.currentTimeMillis();
+        //     validateRoutingTime(sessionToUse, parcelInfo);
+        //     log.debug("[session-service] [SessionService.acceptParcelToSession] Routing validation completed in {}ms", System.currentTimeMillis() - routingStart);
+        // }
 
         // 8. Liên kết task vào session
         sessionToUse.addAssignment(newAssignment);
@@ -177,6 +203,112 @@ public class SessionService implements ISessionService {
         return toAssignmentResponse(newAssignment);
     }
 
+
+    /**
+     * GIẢI PHÁP 1: CÂN BẰNG TẢI (FAIRNESS)
+     * Ngăn chặn việc 1 người nhận quá nhiều đơn trong khi người khác đói đơn.
+     */
+    private void validateFairness(DeliverySession currentSession) {
+        int myLoad = currentSession.getAssignments().size();
+        
+        // Chưa đủ số lượng tối thiểu để đánh giá -> Bỏ qua
+        if (myLoad < MIN_PARCELS_TO_APPLY_FAIRNESS) {
+            return; 
+        }
+
+        // Lấy danh sách tất cả các session đang hoạt động (CREATED hoặc IN_PROGRESS)
+        List<DeliverySession> activeSessions = sessionRepository.findByStatusIn(
+            List.of(SessionStatus.CREATED, SessionStatus.IN_PROGRESS)
+        );
+
+        if (activeSessions.isEmpty()) return;
+
+        // Tính tổng số đơn toàn hệ thống
+        double totalParcels = activeSessions.stream()
+            .mapToInt(s -> s.getAssignments().size())
+            .sum();
+
+        // Tính trung bình (Average Load)
+        double averageLoad = totalParcels / activeSessions.size();
+        
+        // Tính giới hạn cho phép (Ví dụ: Trung bình 10 đơn * 1.3 = 13 đơn)
+        double allowedLimit = Math.max(averageLoad * FAIRNESS_THRESHOLD, MIN_PARCELS_TO_APPLY_FAIRNESS);
+
+        if (myLoad > allowedLimit) {
+            throw new IllegalStateException(
+                String.format("Bạn đang giữ %d đơn, vượt quá mức trung bình (%.1f). " +
+                              "Vui lòng đợi đồng nghiệp nhận thêm đơn hoặc nhường đơn cho người mới.", 
+                              myLoad, averageLoad));
+        }
+    }
+
+    /**
+     * GIẢI PHÁP 2: CHỐNG LỰA ĐƠN (ANTI-CHERRY PICKING)
+     * Ngăn chặn việc chỉ chọn đơn Gần (Dễ) và chừa lại đơn Xa (Khó).
+     */
+    private void validateCherryPicking(DeliverySession session, ParcelResponse newParcel) {
+        // Nếu đơn mới không có tọa độ -> Bỏ qua check (hoặc chặn tuỳ policy)
+        if (newParcel.getLat() == null || newParcel.getLon() == null) return;
+
+        // 1. Tính khoảng cách đơn mới đến kho
+        double newDistance = calculateDistance(
+            WAREHOUSE_LAT, WAREHOUSE_LON, 
+            newParcel.getLat().doubleValue(), newParcel.getLon().doubleValue()
+        ) / 1000.0; // Đổi ra km
+
+        // Nếu đơn mới là đơn XA (Khó) -> Luôn cho phép nhận (Khuyến khích)
+        if (newDistance >= EASY_ORDER_DISTANCE_KM) {
+            return;
+        }
+
+        // 2. Nếu đơn mới là đơn GẦN (Dễ) -> Kiểm tra xem trong giỏ đã có bao nhiêu đơn gần rồi?
+        List<DeliveryAssignment> assignments = session.getAssignments();
+        int totalOrders = assignments.size();
+        
+        if (totalOrders < MIN_PARCELS_TO_APPLY_FAIRNESS) return; // Chưa đủ mẫu để chặn
+
+        long easyOrderCount = 0;
+        
+        // *Lưu ý Performance*: Vòng lặp này gọi API ParcelService nhiều lần.
+        // Tốt nhất: Nên lưu field 'distance' hoặc 'isEasy' vào bảng DeliveryAssignment lúc tạo.
+        //  demo nen tính toán lại.
+        for (DeliveryAssignment assignment : assignments) {
+            try {
+                ParcelResponse p = parcelApiClient.fetchParcelResponse(assignment.getParcelId());
+                if (p != null && p.getLat() != null) {
+                    double d = calculateDistance(WAREHOUSE_LAT, WAREHOUSE_LON, p.getLat().doubleValue(), p.getLon().doubleValue()) / 1000.0;
+                    if (d < EASY_ORDER_DISTANCE_KM) {
+                        easyOrderCount++;
+                    }
+                }
+            } catch (Exception e) {
+                // Skip lỗi lẻ tẻ
+            }
+        }
+
+        // Tính tỷ lệ đơn dễ hiện tại
+        double currentEasyRatio = (double) easyOrderCount / totalOrders;
+
+        // Nếu tỷ lệ đơn dễ đã quá cao (ví dụ > 60%) -> Chặn không cho nhận thêm đơn dễ
+        if (currentEasyRatio > MAX_EASY_RATIO) {
+            throw new IllegalStateException(
+                String.format("Tỷ lệ đơn gần của bạn đang là %.0f%% (Giới hạn %.0f%%). " +
+                              "Vui lòng nhận đơn khác (>%skm) để cân bằng lộ trình.", 
+                              currentEasyRatio * 100, MAX_EASY_RATIO * 100, EASY_ORDER_DISTANCE_KM));
+        }
+    }
+
+    // --- Helper tính khoảng cách (Haversine) ---
+    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371; // Radius of the earth in km
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c * 1000; // Trả về mét
+    }
 
     @Override
     @Transactional
