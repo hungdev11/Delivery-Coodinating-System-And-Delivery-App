@@ -916,13 +916,13 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         deliveryAssignmentRepository.save(assignment);
         log.debug("Assignment {} updated", assignmentId);
 
-        // 9. Check if session should be auto-completed
-        if (isPostponeOutsideSession) {
-            checkAndAutoCompleteSessionIfNeeded(session);
-        } else if (shouldMoveToEnd) {
-            // If moving to end, also check if only postponed parcels remain
-            checkAndAutoCompleteSessionIfOnlyPostponedRemain(session);
-        }
+        // // 9. Check if session should be auto-completed
+        // if (isPostponeOutsideSession) {
+        //     checkAndAutoCompleteSessionIfNeeded(session);
+        // } else if (shouldMoveToEnd) {
+        //     // If moving to end, also check if only postponed parcels remain
+        //     checkAndAutoCompleteSessionIfOnlyPostponedRemain(session);
+        // }
 
         // 10. Fetch parcel information (includes receiver info from UserSnapshot)
         ParcelInfo parcel = null;
