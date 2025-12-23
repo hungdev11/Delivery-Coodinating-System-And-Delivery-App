@@ -257,13 +257,26 @@ public class SessionService implements ISessionService {
 
     @Override
     @Transactional
-    public SessionResponse startSession(UUID sessionId) {
+    public SessionResponse startSession(UUID sessionId, com.ds.session.session_service.common.entities.dto.request.StartSessionRequest request) {
         log.debug("[session-service] [SessionService.startSession] Starting session {} (CREATED -> IN_PROGRESS)", sessionId);
         DeliverySession session = sessionRepository.findById(sessionId)
             .orElseThrow(() -> new ResourceNotFound("Session not found: " + sessionId));
 
         if (session.getStatus() != SessionStatus.CREATED) {
             throw new IllegalStateException("Session " + sessionId + " must be in CREATED status to start. Current status: " + session.getStatus());
+        }
+
+        // Save start location if provided
+        if (request != null) {
+            if (request.getStartLocationLat() != null && request.getStartLocationLon() != null) {
+                session.setStartLocationLat(request.getStartLocationLat());
+                session.setStartLocationLon(request.getStartLocationLon());
+                session.setStartLocationTimestamp(request.getStartLocationTimestamp() != null 
+                    ? request.getStartLocationTimestamp() 
+                    : LocalDateTime.now());
+                log.debug("[session-service] [SessionService.startSession] Saved start location: lat={}, lon={}", 
+                    request.getStartLocationLat(), request.getStartLocationLon());
+            }
         }
 
         session.setStatus(SessionStatus.IN_PROGRESS);

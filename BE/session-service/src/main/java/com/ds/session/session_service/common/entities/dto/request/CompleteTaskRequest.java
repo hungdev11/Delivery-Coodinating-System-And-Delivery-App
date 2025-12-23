@@ -1,5 +1,6 @@
 package com.ds.session.session_service.common.entities.dto.request;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import lombok.AllArgsConstructor;
@@ -14,4 +15,7 @@ import lombok.NoArgsConstructor;
 public class CompleteTaskRequest {
     private RouteInfo routeInfo;
     private List<String> proofImageUrls;
+    private Double currentLat; // Vị trí hiện tại của shipper khi xác nhận
+    private Double currentLon;
+    private LocalDateTime currentTimestamp;
 }

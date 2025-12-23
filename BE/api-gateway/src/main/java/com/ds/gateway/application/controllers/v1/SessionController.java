@@ -92,9 +92,11 @@ public class SessionController {
      * Shipper nhấn "Bắt đầu giao" để chuyển trạng thái.
      */
     @PostMapping("/{sessionId}/start")
-    public ResponseEntity<?> startSession(@PathVariable UUID sessionId) {
+    public ResponseEntity<?> startSession(
+            @PathVariable UUID sessionId,
+            @RequestBody(required = false) Object startSessionRequest) {
         log.debug("[api-gateway] [SessionController.startSession] Starting session {} (CREATED -> IN_PROGRESS)", sessionId);
-        return sessionServiceClient.startSession(sessionId);
+        return sessionServiceClient.startSession(sessionId, startSessionRequest);
     }
 
     /**

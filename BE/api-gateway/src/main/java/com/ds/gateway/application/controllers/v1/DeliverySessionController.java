@@ -45,6 +45,17 @@ public class DeliverySessionController {
     }
 
     /**
+     * API 2b: Get actual route for a delivery session
+     * Proxies to session-service /api/v1/sessions/{sessionId}/actual-route which is built
+     * from shipper_location_tracking history.
+     */
+    @GetMapping("/{sessionId}/actual-route")
+    public ResponseEntity<?> getActualRouteForSession(@PathVariable UUID sessionId) {
+        log.debug("[api-gateway] [DeliverySessionController.getActualRouteForSession] Getting actual route for session {}", sessionId);
+        return deliverySessionService.getActualRouteForSession(sessionId);
+    }
+
+    /**
      * API 3: Set delivery_assignments status and parcel status
      * This is a nesting query that updates both assignment and parcel status
      */

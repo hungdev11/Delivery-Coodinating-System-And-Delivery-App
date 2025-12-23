@@ -122,9 +122,11 @@ public class SessionController {
      * Shipper nhấn "Bắt đầu giao" để chuyển trạng thái.
      */
     @PostMapping("/{sessionId}/start")
-    public ResponseEntity<BaseResponse<SessionResponse>> startSession(@PathVariable UUID sessionId) {
+    public ResponseEntity<BaseResponse<SessionResponse>> startSession(
+            @PathVariable UUID sessionId,
+            @RequestBody(required = false) com.ds.session.session_service.common.entities.dto.request.StartSessionRequest request) {
         log.debug("Starting session {} (CREATED -> IN_PROGRESS)", sessionId);
-        SessionResponse response = sessionService.startSession(sessionId);
+        SessionResponse response = sessionService.startSession(sessionId, request);
         return ResponseEntity.ok(BaseResponse.success(response));
     }
 

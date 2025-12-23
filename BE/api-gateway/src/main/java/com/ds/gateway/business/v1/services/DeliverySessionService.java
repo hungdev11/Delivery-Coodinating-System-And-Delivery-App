@@ -132,6 +132,14 @@ public class DeliverySessionService {
     }
 
     /**
+     * API 2b: Proxy to session-service actual route endpoint.
+     */
+    public ResponseEntity<?> getActualRouteForSession(java.util.UUID sessionId) {
+        log.debug("[api-gateway] [DeliverySessionService.getActualRouteForSession] Proxying actual route for session {}", sessionId);
+        return sessionServiceClient.getActualRouteForSession(sessionId);
+    }
+
+    /**
      * API 2: Get demo-route by data from API 1
      * This must be done in api gateway, service layer
      * It takes session data and calculates a demo route for all assignments

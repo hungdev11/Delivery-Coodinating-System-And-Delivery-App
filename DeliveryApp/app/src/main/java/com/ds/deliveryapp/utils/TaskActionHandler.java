@@ -177,7 +177,10 @@ public class TaskActionHandler {
                 .build();
 
         // 2. Tạo Request Body chứa RouteInfo và List URL
-        CompleteTaskRequest requestBody = new CompleteTaskRequest(routeInfoObj, imageUrls);
+        // Sử dụng no-args constructor để tương thích với phiên bản mới (có thêm location)
+        CompleteTaskRequest requestBody = new CompleteTaskRequest();
+        requestBody.setRouteInfo(routeInfoObj);
+        requestBody.setProofImageUrls(imageUrls);
         for (String url : imageUrls) {
             Log.e(TAG, "IMAGE URL = " + url);
         }

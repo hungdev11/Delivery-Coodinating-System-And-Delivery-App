@@ -272,11 +272,12 @@ public class DeliveryAssignmentController {
             @PathVariable UUID parcelId,
             @RequestBody CompleteTaskRequest request) {
         log.debug("Completing task for parcel {} with proof images: {}", parcelId, request.getProofImageUrls());
+        // Reuse the incoming DTO directly so we don't lose location fields (currentLat/Lon/Timestamp)
         DeliveryAssignmentResponse response = assignmentService.completeTask(
                 parcelId,
                 deliveryManId,
-                new CompleteTaskRequest(request.getRouteInfo(), request.getProofImageUrls())
-            );
+                request
+        );
         return ResponseEntity.ok(BaseResponse.success(response));
     }
 }

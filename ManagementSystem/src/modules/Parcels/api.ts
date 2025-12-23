@@ -138,6 +138,28 @@ export const changeParcelStatus = async (
 }
 
 /**
+ * Get latest assignment info for a parcel (sessionId, assignmentId, status, deliveryManId)
+ * Proxied by API Gateway to session-service.
+ */
+export interface LatestAssignmentResponse {
+  assignmentId: string | null
+  sessionId: string | null
+  status: string | null
+  deliveryManId: string | null
+}
+
+export const getLatestAssignmentForParcel = async (
+  parcelId: string,
+): Promise<LatestAssignmentResponse | null> => {
+  const response = await apiClient.get<{
+    result: LatestAssignmentResponse | null
+    message?: string
+  }>(`/api/v1/assignments/parcels/${parcelId}/latest-assignment`)
+
+  return response.result ?? null
+}
+
+/**
  * Seed Parcels API
  */
 export interface SeedParcelsRequest {

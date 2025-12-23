@@ -32,9 +32,10 @@ public interface ISessionService {
     /**
      * Chuyển phiên từ CREATED sang IN_PROGRESS (bắt đầu giao hàng).
      * @param sessionId ID của phiên
+     * @param request Request chứa thông tin vị trí bắt đầu (optional)
      * @return Thông tin phiên sau khi cập nhật
      */
-    SessionResponse startSession(UUID sessionId);
+    SessionResponse startSession(UUID sessionId, com.ds.session.session_service.common.entities.dto.request.StartSessionRequest request);
     
     /**
      * Lấy thông tin chi tiết một phiên.

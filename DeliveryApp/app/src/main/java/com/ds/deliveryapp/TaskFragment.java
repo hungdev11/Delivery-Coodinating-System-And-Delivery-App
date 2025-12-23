@@ -1,6 +1,8 @@
 package com.ds.deliveryapp;
 
 import android.content.Intent;
+import android.location.Location;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.Log;
@@ -36,6 +38,7 @@ import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.model.DeliveryAssignment;
 import com.ds.deliveryapp.model.DeliveryProof;
 import com.ds.deliveryapp.service.GlobalChatService;
+import com.ds.deliveryapp.service.LocationTrackingService;
 import com.ds.deliveryapp.utils.SessionManager;
 
 import java.util.ArrayList;
@@ -215,6 +218,8 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).showDashboard();
         }
+        // Ensure tracking service is stopped when leaving session dashboard
+        stopLocationTrackingService();
     }
 
     private void resetAndFetchTasks() {
@@ -829,6 +834,9 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             if (btnScanOrder != null) {
                 btnScanOrder.setVisibility(View.VISIBLE);
             }
+
+            // Stop tracking when session is not in progress
+            stopLocationTrackingService();
         } else {
             // Hide "Start Delivery" button for IN_PROGRESS sessions
             if (btnStartDelivery != null) {
@@ -837,6 +845,11 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             // Hide scan order button for IN_PROGRESS session (can only transfer parcels)
             if (btnScanOrder != null) {
                 btnScanOrder.setVisibility(View.GONE);
+            }
+
+            // Start tracking when session is IN_PROGRESS
+            if ("IN_PROGRESS".equals(activeSessionStatus)) {
+                startLocationTrackingService();
             }
         }
     }
@@ -866,7 +879,11 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         btnStartDelivery.setText("Đang bắt đầu...");
 
         SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
-        Call<BaseResponse<DeliverySession>> call = service.startSession(activeSessionId);
+
+        // Build start session request with current location if available
+        com.ds.deliveryapp.clients.req.StartSessionRequest startRequest = buildStartSessionRequestWithCurrentLocation();
+
+        Call<BaseResponse<DeliverySession>> call = service.startSession(activeSessionId, startRequest);
 
         call.enqueue(new Callback<BaseResponse<DeliverySession>>() {
             @Override
@@ -916,6 +933,75 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         // Unregister update notification listener
         if (globalChatService != null) {
             globalChatService.removeListener(this);
+        }
+    }
+
+    /**
+     * Build StartSessionRequest with current device location (if available).
+     */
+    private com.ds.deliveryapp.clients.req.StartSessionRequest buildStartSessionRequestWithCurrentLocation() {
+        if (getContext() == null) {
+            return null;
+        }
+
+        try {
+            LocationManager locationManager = (LocationManager) getContext().getSystemService(android.content.Context.LOCATION_SERVICE);
+            if (locationManager == null) {
+                return null;
+            }
+
+            if (androidx.core.content.ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.ACCESS_FINE_LOCATION)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED
+                    && androidx.core.content.ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                // No location permission, return null request (backend will fallback)
+                return null;
+            }
+
+            Location lastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (lastLocation == null) {
+                lastLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            }
+
+            if (lastLocation == null) {
+                return null;
+            }
+
+            double lat = lastLocation.getLatitude();
+            double lon = lastLocation.getLongitude();
+
+            String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
+                    .format(new java.util.Date());
+
+            return new com.ds.deliveryapp.clients.req.StartSessionRequest(lat, lon, timestamp);
+        } catch (Exception e) {
+            android.util.Log.w(TAG, "Failed to get current location for startSession: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private void startLocationTrackingService() {
+        if (getContext() == null || activeSessionId == null) {
+            return;
+        }
+        Intent intent = new Intent(getContext(), LocationTrackingService.class);
+        intent.putExtra(LocationTrackingService.EXTRA_SESSION_ID, activeSessionId);
+        try {
+            getContext().startService(intent);
+        } catch (Exception e) {
+            android.util.Log.e(TAG, "Failed to start LocationTrackingService", e);
+        }
+    }
+
+    private void stopLocationTrackingService() {
+        if (getContext() == null) {
+            return;
+        }
+        Intent intent = new Intent(getContext(), LocationTrackingService.class);
+        try {
+            getContext().stopService(intent);
+        } catch (Exception e) {
+            android.util.Log.e(TAG, "Failed to stop LocationTrackingService", e);
         }
     }
 
