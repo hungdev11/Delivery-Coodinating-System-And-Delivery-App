@@ -475,10 +475,10 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             }
         }
 
-        // 10. Check if session should be auto-completed (no more pending tasks)
-        if (newStatus == AssignmentStatus.COMPLETED || newStatus == AssignmentStatus.FAILED) {
-            checkAndAutoCompleteSession(session);
-        }
+        // // 10. Check if session should be auto-completed (no more pending tasks)
+        // if (newStatus == AssignmentStatus.COMPLETED || newStatus == AssignmentStatus.FAILED) {
+        //     checkAndAutoCompleteSession(session);
+        // }
 
         // 11. Trả về DTO (receiverName comes from parcel which already includes
         // UserSnapshot data)

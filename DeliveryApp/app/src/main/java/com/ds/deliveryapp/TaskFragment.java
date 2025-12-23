@@ -141,7 +141,20 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         // First check if there's an active session
         checkActiveSession();
     }
-    
+
+    private boolean hasUnfinishedTasks() {
+        for (DeliveryAssignment task : tasks) {
+            String status = task.getStatus();
+            if (!"COMPLETED".equals(status)
+                    && !"FAILED".equals(status)
+                    && !"DELAYED".equals(status)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
     /**
      * Check if there's an active session for this driver
      */
@@ -439,10 +452,24 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     }
 
     private void showCompleteSessionDialog() {
-        // Check if there are FAILED/DELAYED tasks without RETURNED proofs
+
+        if (hasUnfinishedTasks()) {
+            new AlertDialog.Builder(getContext())
+                    .setTitle("Chưa thể kết thúc phiên")
+                    .setMessage(
+                            "Vẫn còn đơn hàng đang giao.\n" +
+                                    "Bạn chỉ có thể trả hàng về kho khi tất cả các đơn còn lại đều bị trễ hoặc thất bại."
+                    )
+                    .setPositiveButton("OK", null)
+                    .show();
+            return;
+        }
+
+        // Lúc này mới hợp lệ để kiểm tra FAILED / DELAYED
         checkReturnedProofsBeforeComplete();
     }
-    
+
+
     private void checkReturnedProofsBeforeComplete() {
         // Filter FAILED and DELAYED tasks
         List<DeliveryAssignment> failedOrDelayedTasks = new ArrayList<>();
@@ -828,6 +855,8 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         Intent intent = new Intent(getActivity(), TaskDetailActivity.class);
         intent.putExtra("TASK_DETAIL", task);
         intent.putExtra("SESSION_STATUS", activeSessionStatus);
+        intent.putExtra("HAS_UNFINISHED_TASKS", hasUnfinishedTasks());
+
         startActivityForResult(intent, SCAN_REQUEST_CODE);
     }
 
