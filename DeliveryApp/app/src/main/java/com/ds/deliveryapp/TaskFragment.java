@@ -442,7 +442,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private boolean isSessionIncidentMode() {
         boolean flag = false;
         for (DeliveryAssignment task : tasks) {
-            if (task.getFailReason().contains("Session failed:")) return true;
+            if (task.getFailReason() != null && task.getFailReason().contains("Session failed:")) return true;
         }
         return flag;
     }
@@ -499,7 +499,8 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     .setTitle("Chưa thể kết thúc phiên")
                     .setMessage(
                             "Vẫn còn đơn hàng đang giao.\n" +
-                                    "Bạn chỉ có thể trả hàng về kho khi tất cả các đơn còn lại đều bị trễ hoặc thất bại."
+                                    "Hãy hoàn tất tất cả đơn hàng \n" +
+                                    "và trả đơn về kho trước khi hoàn thành phiên này."
                     )
                     .setPositiveButton("OK", null)
                     .show();

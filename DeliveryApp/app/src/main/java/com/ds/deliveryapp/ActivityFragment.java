@@ -112,9 +112,9 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
     }
 
     private void initViews(View view) {
-        tvDistance = view.findViewById(R.id.tvDistance);
-        tvOrdersCount = view.findViewById(R.id.tvOrdersCount);
-        tvTime = view.findViewById(R.id.tvTime);
+        //tvDistance = view.findViewById(R.id.tvDistance);
+        //tvOrdersCount = view.findViewById(R.id.tvOrdersCount);
+        //tvTime = view.findViewById(R.id.tvTime);
         rvActivities = view.findViewById(R.id.recyclerActivities);
         tvEmptyState = view.findViewById(R.id.tv_empty_state);
         tvCreatedAtStart = view.findViewById(R.id.tv_created_at_start);
@@ -133,6 +133,7 @@ public class ActivityFragment extends Fragment implements TasksAdapter.OnTaskCli
         statusOptions.add(new SpinnerItem("Đang giao", "IN_PROGRESS"));
         statusOptions.add(new SpinnerItem("Đã giao thành công", "COMPLETED"));
         statusOptions.add(new SpinnerItem("Giao hàng thất bại", "FAILED"));
+        statusOptions.add(new SpinnerItem("Hoãn giao", "DELAYED"));
     }
 
     private void setupStatusSpinnerLogic() {
