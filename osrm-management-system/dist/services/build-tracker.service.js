@@ -74,8 +74,8 @@ class BuildTrackerService {
      */
     async markFailed(buildId, errorMessage) {
         // Truncate error message to prevent database field overflow
-        // MySQL VARCHAR(255) is common, so we limit to 250 chars for safety (including '...')
-        const MAX_ERROR_LENGTH = 250;
+        // Reduce to 200 chars to be safe (including '...')
+        const MAX_ERROR_LENGTH = 200;
         const truncatedError = errorMessage.length > MAX_ERROR_LENGTH
             ? errorMessage.substring(0, MAX_ERROR_LENGTH - 3) + '...'
             : errorMessage;
