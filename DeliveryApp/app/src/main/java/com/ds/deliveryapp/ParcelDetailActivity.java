@@ -122,19 +122,19 @@ public class ParcelDetailActivity extends AppCompatActivity {
         tvDeliveryType.setText("Loại giao hàng: " + (parcel.getDeliveryType() != null ? parcel.getDeliveryType().toString() : "N/A"));
         tvReceiveFrom.setText("Từ: " + (parcel.getReceiveFrom() != null ? parcel.getReceiveFrom() : "N/A"));
         tvTargetDestination.setText("Đến: " + (parcel.getTargetDestination() != null ? parcel.getTargetDestination() : "N/A"));
-        tvDeliveryWindow.setText("Thời gian giao: " + 
-                (parcel.getWindowStart() != null ? parcel.getWindowStart() : "N/A") + " - " + 
-                (parcel.getWindowEnd() != null ? parcel.getWindowEnd() : "N/A"));
+//        tvDeliveryWindow.setText("Thời gian giao: " +
+//                (parcel.getWindowStart() != null ? parcel.getWindowStart() : "N/A") + " - " +
+//                (parcel.getWindowEnd() != null ? parcel.getWindowEnd() : "N/A"));
         
         // Display sender name (with fallback to ID if name not available)
         String senderDisplay = parcel.getSenderName() != null && !parcel.getSenderName().isEmpty()
-                ? parcel.getSenderName() + " (" + parcel.getSenderId() + ")"
-                : "Người gửi (ID): " + parcel.getSenderId();
+                ? parcel.getSenderName()
+                : "Người gửi (ID): " + parcel.getSenderId().substring(0,5);
         tvSenderName.setText(senderDisplay);
         
         // Display receiver name (with fallback to ID if name not available)
         String receiverDisplay = parcel.getReceiverName() != null && !parcel.getReceiverName().isEmpty()
-                ? parcel.getReceiverName() + " (" + parcel.getReceiverId() + ")"
+                ? parcel.getReceiverName()
                 : "Người nhận (ID): " + parcel.getReceiverId();
         tvReceiverName.setText(receiverDisplay);
         
