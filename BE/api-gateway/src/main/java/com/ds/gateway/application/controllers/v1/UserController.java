@@ -39,6 +39,11 @@ public class UserController {
         log.debug("[api-gateway] [UserController.getCurrentUser] Get current user: {}", currentUser.getUserId());
         
         return userServiceClient.getUserByUsername(currentUser.getUsername())
+            .thenApply(user -> {
+                // User Service now includes deliveryMan info in UserDto if user is a shipper
+                // No need to fetch separately
+                return user;
+            })
             .thenApply(user -> ResponseEntity.ok(BaseResponse.success(user)))
             .exceptionally(ex -> {
                 log.error("[api-gateway] [UserController.getCurrentUser] Failed to get current user", ex);

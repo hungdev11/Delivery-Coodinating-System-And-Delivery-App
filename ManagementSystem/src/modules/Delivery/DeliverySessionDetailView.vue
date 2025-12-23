@@ -50,6 +50,17 @@ const routeSummary = ref<RouteSummary | null>(null)
 const routeData = ref<Route | null>(null)
 const demoRouteError = ref<string | null>(null)
 
+// Routing options
+const selectedVehicle = ref<'bicycle' | 'car'>('bicycle')
+const selectedRoutingType = ref<'full' | 'rating-only' | 'blocking-only' | 'base'>('full')
+
+const routingTypeOptions = [
+  { value: 'full', label: 'Đầy đủ' },
+  { value: 'rating-only', label: 'Cộng đồng' },
+  { value: 'blocking-only', label: 'Đơn giản' },
+  { value: 'base', label: 'Cơ bản' },
+] as const
+
 // Other sessions for admin view
 const otherSessions = ref<DeliverySessionDto[]>([])
 const loadingOtherSessions = ref(false)
@@ -111,7 +122,10 @@ const loadRoute = async () => {
   mapMarkers.value = []
   routeSummary.value = null
 
-  const result = await loadSessionRoute(sessionId.value)
+  const result = await loadSessionRoute(sessionId.value, {
+    vehicle: selectedVehicle.value,
+    routingType: selectedRoutingType.value,
+  })
   if (!result) {
     demoRouteError.value = 'Unable to calculate route for this session.'
     routeLoading.value = false
@@ -642,6 +656,28 @@ const assignmentColumns: TableColumn<EnrichedAssignment>[] = [
           </template>
 
           <div class="space-y-4">
+            <!-- Routing Options -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b">
+              <div>
+                <label class="block text-sm font-medium mb-2">Phương tiện</label>
+                <USelect
+                  v-model="selectedVehicle"
+                  :options="[
+                    { value: 'bicycle', label: 'Xe máy' },
+                    { value: 'car', label: 'Ô tô' },
+                  ]"
+                  @update:model-value="loadRoute"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-2">Loại routing</label>
+                <USelect
+                  v-model="selectedRoutingType"
+                  :options="routingTypeOptions"
+                  @update:model-value="loadRoute"
+                />
+              </div>
+            </div>
             <USkeleton v-if="routeLoading" class="h-[480px] w-full" />
 
             <UAlert

@@ -24,6 +24,27 @@ type Feature = {
   };
 };
 
+function createStepLogger(stepName: string) {
+  const start = Date.now();
+  let lastLine = '';
+
+  const logProgress = (current: number, total?: number) => {
+    const percent = total && total > 0 ? ` (${((current / total) * 100).toFixed(1)}%)` : '';
+    const line = `  ${stepName}: ${current}${total ? '/' + total : ''}${percent}`;
+    if (line === lastLine) return;
+    lastLine = line;
+    process.stdout.write(`\r${line}`);
+  };
+
+  const done = (extra?: string) => {
+    const duration = ((Date.now() - start) / 1000).toFixed(1);
+    process.stdout.write('\n');
+    console.log(`✓ ${stepName} done in ${duration}s${extra ? ` (${extra})` : ''}`);
+  };
+
+  return { logProgress, done };
+}
+
 function normalizePolygon(geom: Feature['geometry']): number[][] {
   if (geom.type === 'Polygon') {
     return geom.coordinates?.[0] || [];
@@ -84,14 +105,11 @@ async function upsertZones(centerId: string, features: Feature[], levelLabel: st
   let created = 0;
   let updated = 0;
   const batchSize = 100;
-  const existingCodes = new Set<string>(
-    (await prisma.zones.findMany({ select: { code: true } })).map(z => z.code)
-  );
+  const step = createStepLogger(`Inserting ${levelLabel.toLowerCase()}s`);
 
   for (let i = 0; i < features.length; i += batchSize) {
     const batch = features.slice(i, i + batchSize);
-    const txOps: any[] = [];
-    const meta: Array<{ existing: boolean; name: string; code: string; centroid: { lat: number; lon: number } }> = [];
+    const data: Array<{ code: string; name: string; polygon: any; center_id: string }> = [];
 
     for (const f of batch) {
       try {
@@ -102,41 +120,35 @@ async function upsertZones(centerId: string, features: Feature[], levelLabel: st
           console.warn(`⚠️ Skip ${name}: invalid polygon`);
           continue;
         }
-        const centroid = calculateCentroid(ring);
         const geoJson =
           f.geometry.type === 'Polygon'
             ? { type: 'Polygon', coordinates: [ring] }
             : { type: 'MultiPolygon', coordinates: f.geometry.coordinates };
 
-        const existed = existingCodes.has(code);
-        txOps.push(prisma.zones.upsert({
-          where: { code },
-          update: { name, polygon: geoJson, center_id: centerId },
-          create: { code, name, polygon: geoJson, center_id: centerId },
-        }));
-        meta.push({ existing: existed, name, code, centroid });
-        existingCodes.add(code);
+        data.push({
+          code,
+          name,
+          polygon: geoJson,
+          center_id: centerId,
+        });
       } catch (e) {
         console.error(`  ✗ Error processing feature:`, e);
         continue;
       }
     }
 
-    if (txOps.length > 0) {
-      await prisma.$transaction(txOps);
+    if (data.length > 0) {
+      await prisma.zones.createMany({
+        data,
+        skipDuplicates: true,
+      });
+      created += data.length;
     }
 
-    for (const r of meta) {
-      if (r.existing) updated++;
-      else created++;
-      console.log(`  ✓ ${levelLabel}: ${r.name} (${r.code}) centroid=${r.centroid.lat.toFixed(6)},${r.centroid.lon.toFixed(6)}`);
-    }
-
-    if ((i + batchSize) % (BATCH_LOG * batchSize) === 0 || i + batchSize >= features.length) {
-      console.log(`  ... processed ${Math.min(i + batchSize, features.length)}/${features.length} ${levelLabel.toLowerCase()}s`);
-    }
+    step.logProgress(Math.min(i + batchSize, features.length), features.length);
   }
 
+  step.done(`created=${created}, updated=${updated}`);
   return { created, updated };
 }
 

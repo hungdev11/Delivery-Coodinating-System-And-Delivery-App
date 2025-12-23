@@ -26,6 +26,7 @@ import com.ds.deliveryapp.clients.res.LoginResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
 import com.ds.deliveryapp.configs.ServerConfigManager;
 import com.ds.deliveryapp.utils.SessionManager;
+import com.ds.deliveryapp.utils.UserInfoLoader;
 
 import java.util.List;
 
@@ -237,7 +238,10 @@ public class LoginActivity extends AppCompatActivity {
                     Log.i(TAG, "User info fetched and tokens saved. UserID: " + user.getSub() + ", Roles: " + user.getRoles());
                     Log.i(TAG, "DriverId saved to SessionManager: " + user.getSub());
 
-                    // 2. Điều hướng dựa trên roles
+                    // 2. Load user info and vehicle type from API
+                    UserInfoLoader.loadUserInfo(LoginActivity.this);
+
+                    // 3. Điều hướng dựa trên roles
                     navigateToMainApp(user.getRoles());
                 } else {
                     // Lỗi (ví dụ: token hết hạn)

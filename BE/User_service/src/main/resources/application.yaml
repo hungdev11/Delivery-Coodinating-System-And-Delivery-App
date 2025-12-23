@@ -185,7 +185,7 @@ keycloak:
                         frontend-client: [delivery-service]
                     deliveryMan:
                         enabled: true
-                        vehicleType: MOTORBIKE
+                        vehicleType: BIKE
                         capacityKg: 120
 
                   - username: shipper02
@@ -200,7 +200,7 @@ keycloak:
                         frontend-client: [delivery-service]
                     deliveryMan:
                         enabled: true
-                        vehicleType: MOTORBIKE
+                        vehicleType: BIKE
                         capacityKg: 150
 
                   - username: shipper03
@@ -230,7 +230,7 @@ keycloak:
                         frontend-client: [delivery-service]
                     deliveryMan:
                         enabled: true
-                        vehicleType: MOTORBIKE
+                        vehicleType: CAR
                         capacityKg: 120
 
                   - username: shipper05
@@ -245,7 +245,7 @@ keycloak:
                         frontend-client: [delivery-service]
                     deliveryMan:
                         enabled: true
-                        vehicleType: MOTORBIKE
+                        vehicleType: CAR
                         capacityKg: 200
 
                   - username: shop01

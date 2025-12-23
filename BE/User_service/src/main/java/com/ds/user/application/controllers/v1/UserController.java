@@ -10,6 +10,7 @@ import com.ds.user.common.entities.dto.user.UpdateUserRequest;
 import com.ds.user.common.entities.dto.user.UserDto;
 import com.ds.user.common.interfaces.IExternalAuthFacade;
 import com.ds.user.common.interfaces.IUserService;
+import com.ds.user.common.interfaces.IDeliveryManService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -45,6 +46,7 @@ public class UserController {
 
     private final IUserService userService;
     private final IExternalAuthFacade externalAuthFacade;
+    private final IDeliveryManService deliveryManService;
 
     @PostMapping("/create")
     @Operation(summary = "Create a new user")
@@ -268,6 +270,17 @@ public class UserController {
             }
         }
 
-        return UserDto.from(user, roles);
+        // Fetch delivery man info if user has SHIPPER role
+        com.ds.user.common.entities.dto.deliveryman.DeliveryManDto deliveryMan = null;
+        if (roles != null && roles.contains("SHIPPER") && user.getId() != null) {
+            try {
+                deliveryMan = deliveryManService.getDeliveryManByUserId(user.getId()).orElse(null);
+            } catch (Exception e) {
+                log.warn("Failed to load delivery man info for user {} (id={}): {}", user.getUsername(), user.getId(),
+                        e.getMessage());
+            }
+        }
+
+        return UserDto.from(user, roles, deliveryMan);
     }
 }

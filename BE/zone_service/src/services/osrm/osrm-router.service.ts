@@ -23,7 +23,8 @@ export interface RouteOptions {
   continue_straight?: boolean;
   vehicle?: 'car' | 'motorbike';  // Vehicle type (determines which OSRM profile to use)
   // Routing mode determines WHICH OSRM instance to query (V2 modes only)
-  mode?: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base';
+  // Supports both bicycle (v2-*) and car (v2-car-*) modes
+  mode?: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base' | 'v2-car-full' | 'v2-car-rating-only' | 'v2-car-blocking-only' | 'v2-car-base';
 }
 
 export interface OSRMRoute {
@@ -169,12 +170,16 @@ export class OSRMRouterService {
     try {
       // Both motorbike and car use per-mode instances
       if (vehicle === 'motorbike') {
-        const client = this.getMotorbikeClientForMode(options.mode);
+        // Filter mode to only bicycle modes (v2-*), ignore car modes (v2-car-*)
+        const bicycleMode = options.mode && options.mode.startsWith('v2-car-') 
+          ? undefined 
+          : (options.mode as 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base' | undefined);
+        const client = this.getMotorbikeClientForMode(bicycleMode);
         const response = await client.get(path);
         return response.data;
       }
       
-      // Car uses per-mode instances (same as motorbike)
+      // Car uses per-mode instances (supports v2-car-* modes)
       if (vehicle === 'car') {
         const client = this.getCarClientForMode(options.mode);
         const response = await client.get(path);
@@ -227,17 +232,24 @@ export class OSRMRouterService {
 
   /**
    * Select car OSRM axios client based on routing mode (V2 only)
+   * Supports both bicycle modes (v2-*) and car modes (v2-car-*)
    */
   private getCarClientForMode(
-    mode: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base' | undefined
+    mode: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base' | 'v2-car-full' | 'v2-car-rating-only' | 'v2-car-blocking-only' | 'v2-car-base' | undefined
   ): AxiosInstance {
     const map: Record<string, string | undefined> = {
+      // Bicycle modes (fallback for car if car-specific mode not provided)
       'v2-full': process.env.OSRM_V2_FULL_URL,
       'v2-rating-only': process.env.OSRM_V2_RATING_URL,
       'v2-blocking-only': process.env.OSRM_V2_BLOCKING_URL,
       'v2-base': process.env.OSRM_V2_BASE_URL,
+      // Car modes
+      'v2-car-full': process.env.OSRM_V2_CAR_FULL_URL || 'http://osrm-v2-car-full:5000',
+      'v2-car-rating-only': process.env.OSRM_V2_CAR_RATING_URL || 'http://osrm-v2-car-rating-only:5000',
+      'v2-car-blocking-only': process.env.OSRM_V2_CAR_BLOCKING_URL || 'http://osrm-v2-car-blocking-only:5000',
+      'v2-car-base': process.env.OSRM_V2_CAR_BASE_URL || 'http://osrm-v2-car-base:5000',
     };
-    const selected = (mode && map[mode]) || process.env.OSRM_V2_FULL_URL || 'http://localhost:25920';
+    const selected = (mode && map[mode]) || process.env.OSRM_V2_CAR_FULL_URL || 'http://osrm-v2-car-full:5000';
     return axios.create({ baseURL: selected, timeout: 10000 });
   }
 

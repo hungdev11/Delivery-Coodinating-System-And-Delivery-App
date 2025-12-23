@@ -8,7 +8,7 @@
  */
 
 import { spawn } from 'child_process';
-import { join } from 'path';
+import { join } from 'path';  
 
 async function runSeeder(scriptPath: string, name: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -57,19 +57,12 @@ async function main() {
       'Roads Seeder'
     );
 
-    // Step 3: Seed addresses from Overpass API (real addresses from OSM)
-    await runSeeder(
-      join(__dirname, 'overpass-addresses-seeder.ts'),
-      'Addresses Seeder (Overpass API - Real Data)'
-    );
-
     console.log('\n' + '='.repeat(70));
     console.log('🎉 All seeders completed successfully!');
     console.log('='.repeat(70));
     console.log('\n📋 Seeded Data:');
     console.log('  ✅ Zones (real administrative boundaries)');
     console.log('  ✅ Roads (real road network from OSM)');
-    console.log('  ✅ Addresses (real POIs from OpenStreetMap)');
     console.log('\n💡 Next Steps:');
     console.log('  • Run "npm run osrm:generate" to generate OSRM routing data');
     console.log('  • Start OSRM containers: docker-compose up osrm-*');

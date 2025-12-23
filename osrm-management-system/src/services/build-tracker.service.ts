@@ -93,21 +93,31 @@ export class BuildTrackerService {
    * Update build status to FAILED
    */
   async markFailed(buildId: string, errorMessage: string): Promise<void> {
-    // Truncate error message to prevent database field overflow (limit to 500 chars for safety)
-    // Most databases have VARCHAR(255) or TEXT limits, so we use 500 to be safe
-    const truncatedError = errorMessage.length > 500 
-      ? errorMessage.substring(0, 497) + '...' 
+    // Truncate error message to prevent database field overflow
+    // MySQL VARCHAR(255) is common, so we limit to 250 chars for safety (including '...')
+    const MAX_ERROR_LENGTH = 250;
+    const truncatedError = errorMessage.length > MAX_ERROR_LENGTH 
+      ? errorMessage.substring(0, MAX_ERROR_LENGTH - 3) + '...' 
       : errorMessage;
     
-    await this.prisma.osrm_builds.update({
-      where: { build_id: buildId },
-      data: {
-        status: OsrmBuildStatus.FAILED,
-        completed_at: new Date(),
-        error_message: truncatedError,
-      },
-    });
-    logger.error(`Build ${buildId} marked as FAILED: ${errorMessage}`);
+    try {
+      await this.prisma.osrm_builds.update({
+        where: { build_id: buildId },
+        data: {
+          status: OsrmBuildStatus.FAILED,
+          completed_at: new Date(),
+          error_message: truncatedError,
+        },
+      });
+      logger.error(`Build ${buildId} marked as FAILED: ${errorMessage}`);
+    } catch (error: any) {
+      // If update fails (e.g., database connection issue), log the error but don't throw
+      // This prevents cascading failures
+      logger.error(`Failed to update build status in database: ${error.message}`, {
+        buildId,
+        originalError: errorMessage.substring(0, 500), // Log full error message
+      });
+    }
   }
 
   /**

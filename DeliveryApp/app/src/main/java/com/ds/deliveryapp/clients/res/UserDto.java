@@ -23,4 +23,20 @@ public class UserDto {
     private String status;
     private String createdAt;
     private String updatedAt;
+    
+    /**
+     * Delivery man information (only populated for shippers)
+     */
+    private DeliveryManInfo deliveryMan;
+    
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class DeliveryManInfo {
+        private String id;
+        private String vehicleType; // BIKE or CAR
+        private Double capacityKg;
+        private String createdAt;
+        private String updatedAt;
+    }
 }

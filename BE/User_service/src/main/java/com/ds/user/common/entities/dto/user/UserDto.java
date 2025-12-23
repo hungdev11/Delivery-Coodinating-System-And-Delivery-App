@@ -1,6 +1,7 @@
 package com.ds.user.common.entities.dto.user;
 
 import com.ds.user.common.entities.base.User;
+import com.ds.user.common.entities.dto.deliveryman.DeliveryManDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -30,15 +31,20 @@ public class UserDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<String> roles;
+    private DeliveryManDto deliveryMan; // Delivery man info (if user is a shipper)
     
     /**
      * Convert from User entity to DTO
      */
     public static UserDto from(User user) {
-        return from(user, null);
+        return from(user, null, null);
     }
 
     public static UserDto from(User user, List<String> roles) {
+        return from(user, roles, null);
+    }
+
+    public static UserDto from(User user, List<String> roles, com.ds.user.common.entities.dto.deliveryman.DeliveryManDto deliveryMan) {
         if (user == null) return null;
         
         return UserDto.builder()
@@ -54,6 +60,7 @@ public class UserDto {
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .roles(roles != null ? List.copyOf(roles) : Collections.emptyList())
+                .deliveryMan(deliveryMan)
                 .build();
     }
 }

@@ -1235,19 +1235,25 @@ export class RoutingService {
   private static async getOSRMTableForDemoRoute(
     points: Array<{ lat: number; lon: number }>,
     vehicle: 'car' | 'motorbike' = 'motorbike',
-    mode: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base' = 'v2-full'
+    mode: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base' | 'v2-car-full' | 'v2-car-rating-only' | 'v2-car-blocking-only' | 'v2-car-base' = 'v2-full'
   ): Promise<{ durations: number[][]; distances: number[][] }> {
     const vehicleType = vehicle === 'motorbike' ? 'motorbike' : 'driving';
     const coordinates = points.map(p => `${p.lon},${p.lat}`).join(';');
     
-    // V2 Models (Simplified Architecture) - works for both motorbike and car
+    // V2 Models (Simplified Architecture) - supports both bicycle and car
     const modeUrls: Record<string, string> = {
-      'v2-full': process.env.OSRM_V2_FULL_URL || 'http://localhost:25920',
-      'v2-rating-only': process.env.OSRM_V2_RATING_URL || 'http://localhost:25921',
-      'v2-blocking-only': process.env.OSRM_V2_BLOCKING_URL || 'http://localhost:25922',
-      'v2-base': process.env.OSRM_V2_BASE_URL || 'http://localhost:25923',
+      // Bicycle models
+      'v2-full': process.env.OSRM_V2_FULL_URL || 'http://osrm-v2-full:5000',
+      'v2-rating-only': process.env.OSRM_V2_RATING_URL || 'http://osrm-v2-rating-only:5000',
+      'v2-blocking-only': process.env.OSRM_V2_BLOCKING_URL || 'http://osrm-v2-blocking-only:5000',
+      'v2-base': process.env.OSRM_V2_BASE_URL || 'http://osrm-v2-base:5000',
+      // Car models
+      'v2-car-full': process.env.OSRM_V2_CAR_FULL_URL || 'http://osrm-v2-car-full:5000',
+      'v2-car-rating-only': process.env.OSRM_V2_CAR_RATING_URL || 'http://osrm-v2-car-rating-only:5000',
+      'v2-car-blocking-only': process.env.OSRM_V2_CAR_BLOCKING_URL || 'http://osrm-v2-car-blocking-only:5000',
+      'v2-car-base': process.env.OSRM_V2_CAR_BASE_URL || 'http://osrm-v2-car-base:5000',
     };
-    const baseUrl = modeUrls[mode] || modeUrls['v2-full'] || 'http://localhost:25920';
+    const baseUrl = modeUrls[mode] || modeUrls['v2-full'] || 'http://osrm-v2-full:5000';
 
     const url = `${baseUrl}/table/v1/${vehicleType}/${coordinates}?annotations=duration,distance`;
     
@@ -1344,7 +1350,7 @@ export class RoutingService {
 
       // Get OSRM distance/duration matrix for intelligent ordering
       const vehicle = request.vehicle || 'motorbike';
-      // V2 Models only: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base'
+      // V2 Models: bicycle ('v2-full', 'v2-rating-only', 'v2-blocking-only', 'v2-base') or car ('v2-car-full', 'v2-car-rating-only', 'v2-car-blocking-only', 'v2-car-base')
       const mode = request.mode || 'v2-full';
       
       const allPoints = [
@@ -1352,11 +1358,11 @@ export class RoutingService {
         ...allWaypoints.map(w => ({ lat: w.waypoint.lat, lon: w.waypoint.lon })),
       ];
 
-      logger.info(`Fetching OSRM table for distance/duration matrix (mode: ${mode})...`);
+      logger.info(`Fetching OSRM table for distance/duration matrix (vehicle: ${vehicle}, mode: ${mode})...`);
       const matrix = await this.getOSRMTableForDemoRoute(
         allPoints, 
         vehicle, 
-        mode as 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base'
+        mode as 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base' | 'v2-car-full' | 'v2-car-rating-only' | 'v2-car-blocking-only' | 'v2-car-base'
       );
 
       // Helper function to calculate priority weight

@@ -42,9 +42,11 @@ public class DeliverySessionController {
     public ResponseEntity<?> getDemoRouteForSession(
             @PathVariable UUID sessionId,
             @RequestParam(value = "startLat", required = false) Double startLat,
-            @RequestParam(value = "startLon", required = false) Double startLon) {
-        log.debug("[api-gateway] [DeliverySessionController.getDemoRouteForSession] Getting demo route for session {} (startLat={}, startLon={})", sessionId, startLat, startLon);
-        return deliverySessionService.getDemoRouteForSession(sessionId, startLat, startLon);
+            @RequestParam(value = "startLon", required = false) Double startLon,
+            @RequestParam(value = "vehicle", required = false, defaultValue = "bicycle") String vehicle,
+            @RequestParam(value = "routingType", required = false, defaultValue = "full") String routingType) {
+        log.debug("[api-gateway] [DeliverySessionController.getDemoRouteForSession] Getting demo route for session {} (startLat={}, startLon={}, vehicle={}, routingType={})", sessionId, startLat, startLon, vehicle, routingType);
+        return deliverySessionService.getDemoRouteForSession(sessionId, startLat, startLon, vehicle, routingType);
     }
 
     /**
