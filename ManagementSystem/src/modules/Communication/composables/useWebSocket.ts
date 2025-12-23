@@ -659,6 +659,32 @@ export function useWebSocket() {
     }
   })
 
+  /**
+   * Subscribe to an arbitrary STOMP destination (e.g., /topic/sessions/{sessionId}/tracking)
+   */
+  const subscribeTo = (destination: string, callback: (payload: any) => void) => {
+    if (!stompClient.value || !connected.value) {
+      console.warn('WebSocket not connected. Cannot subscribe to', destination)
+      return
+    }
+
+    try {
+      const client = stompClient.value as any
+      const subscription = client.subscribe(destination, (message: any) => {
+        try {
+          const body = message.body ? JSON.parse(message.body) : null
+          callback(body)
+        } catch (error) {
+          console.error('Failed to parse message from destination', destination, error)
+        }
+      })
+      subscriptions.value.push(subscription)
+      console.log(`✅ Subscribed to custom destination: ${destination}`)
+    } catch (error) {
+      console.error('Failed to subscribe to destination', destination, error)
+    }
+  }
+
   return {
     connected,
     connecting,
@@ -668,5 +694,6 @@ export function useWebSocket() {
     markAsRead,
     sendQuickAction,
     disconnect,
+    subscribeTo,
   }
 }

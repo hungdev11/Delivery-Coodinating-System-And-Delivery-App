@@ -427,7 +427,7 @@ wget https://download.geofabrik.de/asia/vietnam-latest.osm.pbf
 
 # Step 2: Extract Thu Duc area
 osmium extract vietnam-latest.osm.pbf \
-  --polygon ../old_thuduc_city/thuduc_cu.poly \
+  --polygon ../old_thuduc_city/hcmc.poly \
   --output hochiminh_city.osm.pbf
 
 # Step 3: Clear old road data

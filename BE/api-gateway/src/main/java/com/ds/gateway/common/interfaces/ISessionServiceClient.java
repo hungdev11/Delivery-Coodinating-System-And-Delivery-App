@@ -45,7 +45,12 @@ public interface ISessionServiceClient {
     /**
      * Start session (transition from CREATED to IN_PROGRESS)
      */
-    ResponseEntity<?> startSession(UUID sessionId);
+    ResponseEntity<?> startSession(UUID sessionId, Object startSessionRequest);
+    
+    /**
+     * Send location update for tracking
+     */
+    ResponseEntity<?> sendLocationUpdate(String sessionId, Object locationUpdateRequest);
     
     /**
      * Get active session (CREATED or IN_PROGRESS) for a delivery man
@@ -56,6 +61,16 @@ public interface ISessionServiceClient {
      * Get all sessions for a delivery man
      */
     ResponseEntity<?> getAllSessionsForDeliveryMan(String deliveryManId, String excludeParcelId);
+    
+    /**
+     * Get latest assignment info for a parcel (sessionId, assignmentId, status, deliveryManId)
+     */
+    ResponseEntity<?> getLatestAssignmentForParcel(String parcelId);
+
+    /**
+     * Get actual route for a delivery session (built from shipper_location_tracking history)
+     */
+    ResponseEntity<?> getActualRouteForSession(UUID sessionId);
     
     /**
      * Get all proofs for a specific assignment

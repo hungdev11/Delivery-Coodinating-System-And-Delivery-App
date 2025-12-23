@@ -17,9 +17,89 @@ import {
   DemoRouteResponseDto,
   WaypointDto,
 } from './routing.model';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export class RoutingService {
   private static osrmRouter = new OSRMRouterService();
+  private static serviceAreaPoly: number[][] | null = null;
+
+  /**
+   * Lazy-load service area polygon from .poly file (Thuduc).
+   */
+  private static getServiceAreaPolygon(): number[][] | null {
+    if (this.serviceAreaPoly) return this.serviceAreaPoly;
+    try {
+      const polyPath = path.resolve(__dirname, '../../../raw_data/poly/thuduc_cu.poly');
+      if (!fs.existsSync(polyPath)) {
+        logger.warn(`Service area poly not found at ${polyPath}`);
+        return null;
+      }
+      const content = fs.readFileSync(polyPath, 'utf-8').split('\n');
+      const rings: number[][] = [];
+      for (const line of content) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === 'END') continue;
+        const parts = trimmed.split(/\s+/);
+        if (parts.length >= 2) {
+          const lon = parseFloat(parts[0] ?? '');
+          const lat = parseFloat(parts[1] ?? '');
+          if (!isNaN(lon) && !isNaN(lat)) {
+            rings.push([lon, lat]);
+          }
+        }
+      }
+      // ensure closed
+      if (rings.length > 0) {
+        const first = rings[0];
+        const last = rings[rings.length - 1];
+        if (first && last && (first[0] !== last[0] || first[1] !== last[1])) {
+          rings.push([...first]);
+        }
+      }
+      this.serviceAreaPoly = rings.length > 0 ? rings : null;
+      logger.info(`Loaded service area polygon with ${rings.length} points`);
+      return this.serviceAreaPoly;
+    } catch (err) {
+      logger.warn(`Failed to load service area polygon: ${err instanceof Error ? err.message : err}`);
+      return null;
+    }
+  }
+
+  /**
+   * Ray-casting point in polygon check (lon, lat).
+   */
+  private static isInsideServiceArea(point: { lat: number; lon: number }): boolean {
+    const poly = this.getServiceAreaPolygon();
+    if (!poly || poly.length < 3) return true; // if not available, skip check
+    const x = point.lon;
+    const y = point.lat;
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const cur = poly[i];
+      const prev = poly[j];
+      if (!cur || !prev || cur.length < 2 || prev.length < 2) continue;
+      const [xi, yi] = cur;
+      const [xj, yj] = prev;
+      if (xi === undefined || yi === undefined || xj === undefined || yj === undefined) continue;
+      const denom = (yj - yi) + Number.EPSILON;
+      const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / denom + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  private static validateServiceArea(start: WaypointDto, waypoints: WaypointDto[]) {
+    const points = [start, ...waypoints];
+    for (const p of points) {
+      if (!p || p.lat === undefined || p.lon === undefined) {
+        throw createError('Invalid waypoint coordinates', 400);
+      }
+      if (!this.isInsideServiceArea({ lat: p.lat, lon: p.lon })) {
+        throw createError('Điểm nằm ngoài vùng hỗ trợ bản đồ. Vui lòng ở trong khu vực được hỗ trợ.', 400);
+      }
+    }
+  }
 
   /**
    * Calculate route between waypoints
@@ -1200,6 +1280,9 @@ export class RoutingService {
   public static async calculateDemoRoute(request: DemoRouteRequestDto): Promise<DemoRouteResponseDto> {                                                         
     try {
       logger.info(`Calculating demo route with priority-based ordering (mode: ${request.mode || 'v2-full'})`);       
+
+      // Validate service area coverage
+      this.validateServiceArea(request.startPoint, request.priorityGroups.flatMap(g => g.waypoints));
 
       // Priority labels mapping (1-10 scale: higher = more urgent)
       // 10: URGENT (khẩn cấp - giao ngay)

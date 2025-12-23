@@ -165,6 +165,16 @@ public interface SessionClient {
     );
 
     /**
+     * Lấy demo-route đã tính sẵn cho session hiện tại (gateway -> session-service -> zone-service)
+     */
+    @GET("/api/v1/delivery-sessions/{sessionId}/demo-route")
+    Call<BaseResponse<com.ds.deliveryapp.clients.res.RoutingResponseDto>> getDemoRouteForSession(
+            @Path("sessionId") String sessionId,
+            @Query("startLat") Double startLat,
+            @Query("startLon") Double startLon
+    );
+
+    /**
      * Tạo phiên ở trạng thái CREATED (chuẩn bị nhận đơn).
      * Ánh xạ tới: SessionController.createSessionPrepared
      */
@@ -176,7 +186,20 @@ public interface SessionClient {
      * Ánh xạ tới: SessionController.startSession
      */
     @POST("/api/v1/sessions/{sessionId}/start")
-    Call<BaseResponse<DeliverySession>> startSession(@Path("sessionId") String sessionId);
+    Call<BaseResponse<DeliverySession>> startSession(
+            @Path("sessionId") String sessionId,
+            @Body com.ds.deliveryapp.clients.req.StartSessionRequest request
+    );
+    
+    /**
+     * Send location update for tracking
+     * POST /api/v1/sessions/{sessionId}/tracking
+     */
+    @POST("/api/v1/sessions/{sessionId}/tracking")
+    Call<BaseResponse<Void>> sendLocationUpdate(
+            @Path("sessionId") String sessionId,
+            @Body com.ds.deliveryapp.clients.req.LocationUpdateRequest request
+    );
 
     /**
      * Lấy phiên đang hoạt động (CREATED hoặc IN_PROGRESS) của shipper.

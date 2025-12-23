@@ -319,10 +319,17 @@ public class SessionServiceClient implements ISessionServiceClient {
     }
 
     @Override
-    public ResponseEntity<?> startSession(UUID sessionId) {
+    public ResponseEntity<?> startSession(UUID sessionId, Object startSessionRequest) {
         String uri = String.format("/api/v1/sessions/%s/start", sessionId);
         log.debug("[api-gateway] [SessionServiceClient.startSession] WebClient: POST -> {}", uri);
-        return callPost(uri, null);
+        return callPost(uri, startSessionRequest);
+    }
+
+    @Override
+    public ResponseEntity<?> sendLocationUpdate(String sessionId, Object locationUpdateRequest) {
+        String uri = String.format("/api/v1/sessions/%s/tracking", sessionId);
+        log.debug("[api-gateway] [SessionServiceClient.sendLocationUpdate] WebClient: POST -> {}", uri);
+        return callPost(uri, locationUpdateRequest);
     }
 
     @Override
@@ -375,6 +382,20 @@ public class SessionServiceClient implements ISessionServiceClient {
     public ResponseEntity<?> getProofsByParcel(String parcelId) {
         String uri = String.format("/api/v1/delivery-proofs/parcels/%s", parcelId);
         log.debug("[api-gateway] [SessionServiceClient.getProofsByParcel] WebClient: GET -> {}", uri);
+        return callGet(uri);
+    }
+
+    @Override
+    public ResponseEntity<?> getLatestAssignmentForParcel(String parcelId) {
+        String uri = String.format("/api/v1/assignments/parcel/%s/latest-assignment", parcelId);
+        log.debug("[api-gateway] [SessionServiceClient.getLatestAssignmentForParcel] WebClient: GET -> {}", uri);
+        return callGet(uri);
+    }
+
+    @Override
+    public ResponseEntity<?> getActualRouteForSession(UUID sessionId) {
+        String uri = String.format("/api/v1/sessions/%s/actual-route", sessionId);
+        log.debug("[api-gateway] [SessionServiceClient.getActualRouteForSession] WebClient: GET -> {}", uri);
         return callGet(uri);
     }
 }

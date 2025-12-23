@@ -9,6 +9,8 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Log;
+import android.location.Location;
+import android.location.LocationManager;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -369,7 +371,12 @@ public class ProofActivity extends AppCompatActivity {
                 .build();
 
         // Create Request Body
-        CompleteTaskRequest requestBody = new CompleteTaskRequest(routeInfoObj, mediaUrls);
+        CompleteTaskRequest requestBody = new CompleteTaskRequest();
+        requestBody.setRouteInfo(routeInfoObj);
+        requestBody.setProofImageUrls(mediaUrls);
+
+        // Attach current location if available
+        attachCurrentLocation(requestBody);
         
         Log.d(TAG, "Submitting completion - AssignmentId: " + assignmentId + ", ParcelId: " + parcelId + ", DriverId: " + driverId);
         Log.d(TAG, "Media URLs count: " + mediaUrls.size());
@@ -433,5 +440,38 @@ public class ProofActivity extends AppCompatActivity {
                         Toast.makeText(ProofActivity.this, "Lỗi kết nối: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                     }
                 });
+    }
+
+    /**
+     * Try to attach current GPS location to CompleteTaskRequest.
+     */
+    private void attachCurrentLocation(CompleteTaskRequest request) {
+        try {
+            LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+            if (locationManager == null) return;
+
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                    != PackageManager.PERMISSION_GRANTED
+                    && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                    != PackageManager.PERMISSION_GRANTED) {
+                return;
+            }
+
+            Location lastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (lastLocation == null) {
+                lastLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            }
+
+            if (lastLocation == null) return;
+
+            request.setCurrentLat(lastLocation.getLatitude());
+            request.setCurrentLon(lastLocation.getLongitude());
+
+            String timestamp = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+                    .format(new Date());
+            request.setCurrentTimestamp(timestamp);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to attach current location: " + e.getMessage());
+        }
     }
 }

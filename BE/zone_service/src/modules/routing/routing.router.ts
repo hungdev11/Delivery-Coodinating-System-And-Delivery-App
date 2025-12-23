@@ -15,6 +15,14 @@ export const routingRouter = Router();
 routingRouter.post('/route', RoutingController.calculateRoute);
 
 /**
+ * POST /routing/actual-route
+ * Re-draw shipper's actual route from time-ordered tracking history.
+ * Client should send waypoints sorted by timestamp.
+ * This reuses the same engine as /routing/route but with raw history points.
+ */
+routingRouter.post('/actual-route', RoutingController.calculateRoute);
+
+/**
  * POST /routing/priority-route
  * Calculate priority-based multi-stop route (for delivery)
  */

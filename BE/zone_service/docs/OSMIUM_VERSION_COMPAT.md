@@ -96,7 +96,7 @@ unrecognised option '--complete-ways'
 
 ```bash
 osmium extract \
-  --polygon raw_data/poly/thuduc_cu.poly \
+  --polygon raw_data/poly/hcmc.poly \
   -s complete_ways \
   -o test_modern.osm.pbf \
   raw_data/vietnam-latest.osm.pbf
@@ -106,7 +106,7 @@ osmium extract \
 
 ```bash
 osmium extract \
-  --polygon raw_data/poly/thuduc_cu.poly \
+  --polygon raw_data/poly/hcmc.poly \
   --complete-ways \
   --complete-nodes \
   --complete-relations \

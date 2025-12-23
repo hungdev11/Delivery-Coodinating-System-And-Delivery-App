@@ -24,7 +24,7 @@ async function extractThuDucRoads() {
     // Paths to data files
     const rawDataDir = join(process.cwd(), './raw_data');
     const hcmPbfPath = join(rawDataDir, 'new_hochiminh_city/hochiminh_city.osm.pbf');
-    const thuDucPolyPath = join(rawDataDir, 'old_thuduc_city/thuduc_cu.poly');
+    const thuDucPolyPath = join(rawDataDir, 'old_thuduc_city/hcmc.poly');
 
     // Verify files exist
     if (!existsSync(hcmPbfPath)) {

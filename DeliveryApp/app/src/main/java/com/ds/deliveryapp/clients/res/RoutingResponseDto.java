@@ -12,8 +12,11 @@ import java.util.Map;
 @Data
 public class RoutingResponseDto {
 
-    // JSON gốc có dạng { "result": { ... } }
-    private RouteResponseDto result;
+    // JSON gốc: BaseResponse.result -> { code, route, visitOrder, summary }
+    private String code;
+    private RouteDto route;
+    private List<VisitOrder> visitOrder;
+    private Summary summary;
 
     @Data
     @NoArgsConstructor
@@ -86,32 +89,26 @@ public class RoutingResponseDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    public static class RouteResponseDto {
-        private String code;
-        private RouteDto route;
-        private List<VisitOrder> visitOrder;
-        private Summary summary;
+    public static class VisitOrder {
+        private int index;
+        private int priority;
+        private int originalPriority;
+        private String priorityLabel;
+        private RoutingRequestDto.WaypointDto waypoint;
+        private double durationFromStart;
+        private double distanceFromStart;
+        private double effectiveCost;
+        private double priorityWeight;
+    }
 
-        @Data
-        @NoArgsConstructor
-        @AllArgsConstructor
-        @Builder
-        public static class VisitOrder {
-            private int index;
-            private int priority;
-            private String priorityLabel;
-            private RoutingRequestDto.WaypointDto waypoint;
-        }
-
-        @Data
-        @NoArgsConstructor
-        @AllArgsConstructor
-        @Builder
-        public static class Summary {
-            private double totalDistance;
-            private double totalDuration;
-            private int totalWaypoints;
-            private Map<String, Integer> priorityCounts;
-        }
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class Summary {
+        private double totalDistance;
+        private double totalDuration;
+        private int totalWaypoints;
+        private Map<String, Integer> priorityCounts;
     }
 }

@@ -4,7 +4,7 @@
  * Client view for managing their own parcels (as receiver)
  */
 
-import { ref, onMounted, computed, h, resolveComponent, watch } from 'vue'
+import { ref, onMounted, computed, h, resolveComponent, watch, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
@@ -13,12 +13,13 @@ import {
   confirmParcelReceived,
   reportParcelNotReceived,
   retractDispute,
+  getLatestAssignmentForParcel,
+  type LatestAssignmentResponse,
 } from '@/modules/Parcels/api'
 import { ParcelDto, type ParcelStatus } from '@/modules/Parcels/model.type'
 import { getCurrentUser } from '@/common/guards/roleGuard.guard'
-import { defineAsyncComponent } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
-import { useConversations } from '@/modules/Communication/composables'
+import { useConversations, useWebSocket } from '@/modules/Communication/composables'
 import type { TabsItem } from '@nuxt/ui'
 import type {
   FilterGroupItemV2,
@@ -29,6 +30,7 @@ import type {
 import { FilterItemType } from '@/common/types/filter-v2'
 
 const PageHeader = defineAsyncComponent(() => import('@/common/components/PageHeader.vue'))
+const MapView = defineAsyncComponent(() => import('@/common/components/MapView.vue'))
 const LazyParcelQRModal = defineAsyncComponent(
   () => import('@/modules/Parcels/components/ParcelQRModal.vue'),
 )
@@ -43,6 +45,7 @@ const toast = useToast()
 const overlay = useOverlay()
 const currentUser = getCurrentUser()
 const { findOrCreateConversation } = useConversations()
+const { connected, connect, subscribeTo } = useWebSocket()
 
 // Tab state - mỗi tab có state riêng
 type TabState = {
@@ -66,6 +69,46 @@ const disputingParcelId = ref<string | null>(null)
 const retractingDisputeParcelId = ref<string | null>(null)
 const activeTab = ref<string | number>('pending')
 
+// Tracking modal state
+const trackingParcel = ref<ParcelDto | null>(null)
+const trackingSessionId = ref<string | null>(null)
+const trackingLocation = ref<{ lat: number; lon: number; timestamp?: string } | null>(null)
+const trackingLoading = ref(false)
+
+type TrackingMarker = {
+  id: string
+  coordinates: [number, number]
+  type: string
+  title: string
+  color: string
+}
+
+const trackingMarkers = computed<TrackingMarker[]>(() => {
+  if (!trackingLocation.value) return []
+
+  const markers: TrackingMarker[] = [
+    {
+      id: 'shipper',
+      coordinates: [trackingLocation.value.lon, trackingLocation.value.lat],
+      type: 'shipper',
+      title: 'Vị trí shipper',
+      color: '#ef4444',
+    },
+  ]
+
+  if (trackingParcel.value?.lat != null && trackingParcel.value?.lon != null) {
+    markers.push({
+      id: 'destination',
+      coordinates: [trackingParcel.value.lon, trackingParcel.value.lat],
+      type: 'destination',
+      title: 'Địa chỉ giao hàng',
+      color: '#3b82f6',
+    })
+  }
+
+  return markers
+})
+
 // Computed để lấy state của tab hiện tại
 const currentTabState = computed(() => {
   const tabKey = String(activeTab.value)
@@ -86,6 +129,14 @@ const paginationSummary = computed(() => {
   const end = Math.min((page.value + 1) * pageSize.value, total.value)
   return { start, end }
 })
+
+/**
+ * Ensure WebSocket is connected for current user (client)
+ */
+const ensureWebSocketConnected = async () => {
+  if (connected.value || !currentUser?.id) return
+  await connect(currentUser.id)
+}
 
 /**
  * Get status filter for tab
@@ -240,6 +291,63 @@ const loadAllTabCounts = async () => {
   // Load all tab counts in parallel
   const tabKeys = ['pending', 'delivering', 'need-confirm', 'delivered', 'cancelled']
   await Promise.all(tabKeys.map((tabKey) => loadTabCount(tabKey)))
+}
+
+/**
+ * Open real-time tracking for a parcel in delivering tab.
+ * Client subscribes only when viewing their parcel.
+ */
+const handleTrackShipper = async (parcel: ParcelDto) => {
+  if (!parcel.id) return
+  trackingParcel.value = parcel
+  trackingLocation.value = null
+  trackingSessionId.value = null
+  trackingLoading.value = true
+
+  try {
+    await ensureWebSocketConnected()
+    const latest: LatestAssignmentResponse | null = await getLatestAssignmentForParcel(parcel.id)
+    if (!latest || !latest.sessionId) {
+      toast.add({
+        title: 'Không tìm thấy phiên giao hàng',
+        description: 'Không thể xác định phiên giao hàng hiện tại cho đơn này.',
+        color: 'warning',
+      })
+      trackingLoading.value = false
+      trackingParcel.value = null
+      return
+    }
+
+    trackingSessionId.value = latest.sessionId
+
+    // Subscribe to session tracking topic
+    const destination = `/topic/sessions/${latest.sessionId}/tracking`
+    subscribeTo(destination, (event: { lat?: number; lon?: number; timestamp?: string } | null) => {
+      if (!event || event.lat == null || event.lon == null) return
+      trackingLocation.value = {
+        lat: event.lat,
+        lon: event.lon,
+        timestamp: event.timestamp,
+      }
+    })
+  } catch (error) {
+    console.error('Failed to start shipper tracking:', error)
+    toast.add({
+      title: 'Lỗi',
+      description: 'Không thể bắt đầu theo dõi vị trí shipper.',
+      color: 'error',
+    })
+    trackingParcel.value = null
+  } finally {
+    trackingLoading.value = false
+  }
+}
+
+const closeTrackingModal = () => {
+  trackingParcel.value = null
+  trackingSessionId.value = null
+  trackingLocation.value = null
+  trackingLoading.value = false
 }
 
 /**
@@ -552,6 +660,7 @@ const columns: TableColumn<ParcelDto>[] = [
       const canChatWithSender = canChat(parcel)
 
       const canViewProofsForParcel = canViewProofs(parcel)
+      const isDelivering = parcel.status === 'ON_ROUTE'
 
       return h('div', { class: 'flex space-x-2' }, [
         // Chat with sender button
@@ -579,7 +688,7 @@ const columns: TableColumn<ParcelDto>[] = [
             variant: 'ghost',
             title: 'Xem ảnh/video đơn hàng',
             onClick: () => openProofModal(parcel),
-        }),
+          }),
         // Report not received button (for DELIVERED status)
         canReport &&
           h(
@@ -644,6 +753,19 @@ const columns: TableColumn<ParcelDto>[] = [
               return 'Đã nhận được hàng'
             },
           ),
+        // Track shipper location button (only when parcel is being delivered)
+        isDelivering &&
+          h(
+            UButton,
+            {
+              size: 'sm',
+              variant: 'ghost',
+              color: 'primary',
+              title: 'Theo dõi vị trí shipper',
+              onClick: () => handleTrackShipper(parcel),
+            },
+            () => 'Theo dõi',
+          ),
       ])
     },
   },
@@ -688,30 +810,30 @@ onMounted(async () => {
         }"
       >
         <template #content>
-    <div class="space-y-4">
-      <!-- Desktop Table View -->
-      <div class="hidden md:block">
-        <UTable
-          :data="parcels"
-          :columns="columns"
-          :loading="loading"
-          :ui="{
-            empty: 'text-center py-12',
-            root: 'h-[50vh]',
-            thead: 'sticky top-0 bg-white dark:bg-gray-800',
-          }"
-        >
-          <template #cell(code)="{ row }">
-            <span class="font-mono text-sm">{{ row.original.code }}</span>
-          </template>
-        </UTable>
-      </div>
+          <div class="space-y-4">
+            <!-- Desktop Table View -->
+            <div class="hidden md:block">
+              <UTable
+                :data="parcels"
+                :columns="columns"
+                :loading="loading"
+                :ui="{
+                  empty: 'text-center py-12',
+                  root: 'h-[50vh]',
+                  thead: 'sticky top-0 bg-white dark:bg-gray-800',
+                }"
+              >
+                <template #cell(code)="{ row }">
+                  <span class="font-mono text-sm">{{ row.original.code }}</span>
+                </template>
+              </UTable>
+            </div>
 
-      <!-- Mobile Card View -->
-      <div class="md:hidden space-y-3">
-        <template v-if="loading">
-          <USkeleton v-for="i in 3" :key="i" class="h-40 w-full rounded-lg" />
-        </template>
+            <!-- Mobile Card View -->
+            <div class="md:hidden space-y-3">
+              <template v-if="loading">
+                <USkeleton v-for="i in 3" :key="i" class="h-40 w-full rounded-lg" />
+              </template>
               <template v-else-if="parcels.length === 0">
                 <div class="text-center py-12">
                   <UIcon name="i-heroicons-cube" class="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -721,67 +843,77 @@ onMounted(async () => {
                   <p class="text-gray-500">Không có đơn hàng nào trong danh mục này</p>
                 </div>
               </template>
-        <template v-else>
-          <UCard v-for="parcel in parcels" :key="parcel.id" class="overflow-hidden">
-            <div class="space-y-3">
-              <!-- Header: Code and Status -->
-              <div class="flex items-center justify-between">
-                <span class="font-mono text-sm font-semibold text-gray-900">
-                  {{ parcel.code }}
-                </span>
-                <UBadge :color="getStatusColor(parcel.status)" variant="soft" size="sm">
-                  {{ parcel.displayStatus || parcel.status }}
-                </UBadge>
-              </div>
+              <template v-else>
+                <UCard v-for="parcel in parcels" :key="parcel.id" class="overflow-hidden">
+                  <div class="space-y-3">
+                    <!-- Header: Code and Status -->
+                    <div class="flex items-center justify-between">
+                      <span class="font-mono text-sm font-semibold text-gray-900">
+                        {{ parcel.code }}
+                      </span>
+                      <UBadge :color="getStatusColor(parcel.status)" variant="soft" size="sm">
+                        {{ parcel.displayStatus || parcel.status }}
+                      </UBadge>
+                    </div>
 
-              <!-- Info Grid -->
-              <div class="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <span class="text-gray-500">Người gửi:</span>
+                    <!-- Info Grid -->
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span class="text-gray-500">Người gửi:</span>
                         <p class="font-medium text-gray-900 truncate">
                           {{ parcel.senderName || 'N/A' }}
                         </p>
-                </div>
-                <div>
-                  <span class="text-gray-500">Loại:</span>
-                  <p class="font-medium text-gray-900">{{ parcel.deliveryType }}</p>
-                </div>
-              </div>
+                      </div>
+                      <div>
+                        <span class="text-gray-500">Loại:</span>
+                        <p class="font-medium text-gray-900">{{ parcel.deliveryType }}</p>
+                      </div>
+                    </div>
 
-              <!-- Destination -->
-              <div class="text-sm">
-                <span class="text-gray-500">Địa chỉ giao:</span>
-                <p class="font-medium text-gray-900 line-clamp-2">
-                  {{ parcel.targetDestination || 'N/A' }}
-                </p>
-              </div>
+                    <!-- Destination -->
+                    <div class="text-sm">
+                      <span class="text-gray-500">Địa chỉ giao:</span>
+                      <p class="font-medium text-gray-900 line-clamp-2">
+                        {{ parcel.targetDestination || 'N/A' }}
+                      </p>
+                    </div>
 
-              <!-- Created Date -->
-              <div class="text-xs text-gray-500">
-                Tạo lúc: {{ new Date(parcel.createdAt).toLocaleString('vi-VN') }}
-              </div>
+                    <!-- Created Date -->
+                    <div class="text-xs text-gray-500">
+                      Tạo lúc: {{ new Date(parcel.createdAt).toLocaleString('vi-VN') }}
+                    </div>
 
-              <!-- Actions -->
-              <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-                <UButton
-                  v-if="canChat(parcel)"
-                  icon="i-heroicons-chat-bubble-left-right"
-                  size="xs"
-                  variant="ghost"
-                  color="neutral"
-                  @click="openChat(parcel)"
-                >
-                  Chat
-                </UButton>
-                <UButton
-                  icon="i-heroicons-qr-code"
-                  size="xs"
-                  variant="ghost"
-                  color="neutral"
-                  @click="openQRModal(parcel)"
-                >
-                  QR
-                </UButton>
+                    <!-- Actions -->
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                      <UButton
+                        v-if="canChat(parcel)"
+                        icon="i-heroicons-chat-bubble-left-right"
+                        size="xs"
+                        variant="ghost"
+                        color="neutral"
+                        @click="openChat(parcel)"
+                      >
+                        Chat
+                      </UButton>
+                      <UButton
+                        icon="i-heroicons-qr-code"
+                        size="xs"
+                        variant="ghost"
+                        color="neutral"
+                        @click="openQRModal(parcel)"
+                      >
+                        QR
+                      </UButton>
+                      <UButton
+                        v-if="canViewProofs(parcel)"
+                        icon="i-heroicons-photo"
+                        size="xs"
+                        variant="ghost"
+                        color="neutral"
+                        @click="openProofModal(parcel)"
+                      >
+                        Xem ảnh
+                      </UButton>
                       <!-- Confirm received button (for DELIVERED status) -->
                       <UButton
                         v-if="canConfirmParcel(parcel)"
@@ -803,9 +935,7 @@ onMounted(async () => {
                         :loading="disputingParcelId === parcel.id"
                         @click="handleReportNotReceived(parcel)"
                       >
-                        {{
-                          disputingParcelId === parcel.id ? 'Đang gửi...' : 'Chưa nhận được'
-                        }}
+                        {{ disputingParcelId === parcel.id ? 'Đang gửi...' : 'Chưa nhận được' }}
                       </UButton>
                       <!-- Retract dispute button (for DISPUTE status) -->
                       <UButton
@@ -822,19 +952,27 @@ onMounted(async () => {
                             : 'Đã nhận được hàng'
                         }}
                       </UButton>
-              </div>
+
+                      <!-- Track shipper for ON_ROUTE parcels -->
+                      <UButton
+                        v-if="parcel.status === 'ON_ROUTE'"
+                        size="xs"
+                        variant="ghost"
+                        color="primary"
+                        @click="handleTrackShipper(parcel)"
+                      >
+                        Theo dõi
+                      </UButton>
+                    </div>
+                  </div>
+                </UCard>
+              </template>
             </div>
-          </UCard>
-        </template>
-      </div>
           </div>
         </template>
       </UTabs>
 
-      <div
-        v-if="!loading && parcels.length === 0"
-        class="text-center py-12"
-      >
+      <div v-if="!loading && parcels.length === 0" class="text-center py-12">
         <UIcon name="i-heroicons-cube" class="w-16 h-16 text-gray-400 mx-auto mb-4" />
         <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
           Chưa có đơn hàng
@@ -865,5 +1003,46 @@ onMounted(async () => {
         />
       </div>
     </div>
+
+    <!-- Tracking modal (aligned with other modals) -->
+    <UModal
+      :v-model:open="!!trackingParcel"
+      :title="trackingParcel ? `Theo dõi shipper - ${trackingParcel.code}` : 'Theo dõi shipper'"
+      :description="trackingSessionId ? `Phiên giao: ${trackingSessionId}` : 'Đang kết nối vị trí shipper'"
+      @close="closeTrackingModal"
+    >
+      <template #body>
+        <div class="space-y-3">
+          <p v-if="trackingLoading" class="text-gray-500">Đang kết nối tới vị trí shipper...</p>
+          <p v-else-if="!trackingLocation" class="text-gray-500">
+            Chưa nhận được vị trí. Vui lòng giữ màn hình mở vài giây.
+          </p>
+          <div v-else class="space-y-3">
+            <MapView
+              height="280px"
+              :show-zones="false"
+              :show-routing="false"
+              :markers="trackingMarkers"
+              :auto-fit="true"
+              :fit-padding="40"
+            />
+            <p><span class="font-semibold">Vĩ độ:</span> {{ trackingLocation.lat }}</p>
+            <p><span class="font-semibold">Kinh độ:</span> {{ trackingLocation.lon }}</p>
+            <p v-if="trackingLocation.timestamp">
+              <span class="font-semibold">Cập nhật lúc:</span>
+              {{ new Date(trackingLocation.timestamp).toLocaleString('vi-VN') }}
+            </p>
+            <p class="text-xs text-gray-500">
+              (Gợi ý: có thể hiển thị vị trí này trên bản đồ trong bước tiếp theo.)
+            </p>
+          </div>
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <UButton variant="soft" color="gray" @click="closeTrackingModal">Đóng</UButton>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>

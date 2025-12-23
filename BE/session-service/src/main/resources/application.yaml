@@ -99,6 +99,18 @@ services:
     user:
         base-url: ${USER_SERVICE_URL:http://localhost:21501}
     zone:
+        base-url: ${ZONE_SERVICE_URL:http://localhost:21504}
+    communication:
+        base-url: ${COMMUNICATION_SERVICE_URL:http://localhost:21511}
+
+# Shipper Location Tracking Configuration
+shipper-tracking:
+    node-detection:
+        radius-meters: 100 # Bán kính để phát hiện node
+        passed-threshold-meters: 50 # Khoảng cách để coi là "đã qua node"
+    cache:
+        max-points-per-session: 5 # Số điểm tracking lưu trong cache
+    zone:
         base-url: ${ZONE_SERVICE_URL:http://localhost:21510}
 
 # Feign Client Configuration

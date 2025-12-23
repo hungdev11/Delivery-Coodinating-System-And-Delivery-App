@@ -4,7 +4,7 @@ import { join } from 'path';
 async function debugOSMData() {
   const rawDataDir = join(process.cwd(), './raw_data');
   const pbfPath = join(rawDataDir, 'vietnam/vietnam-251013.osm.pbf');
-  const thuDucPoly = join(rawDataDir, 'old_thuduc_city/thuduc_cu.poly');
+  const thuDucPoly = join(rawDataDir, 'old_thuduc_city/hcmc.poly');
 
   console.log('🔍 Debugging OSM Data Parsing...\n');
   console.log('PBF Path:', pbfPath);

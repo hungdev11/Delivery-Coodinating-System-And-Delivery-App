@@ -67,6 +67,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     private final ObjectMapper objectMapper;
     private final ISessionService sessionService; // Inject to call completeSession
     private final DeliveryProofRepository deliveryProofRepository;
+    private final com.ds.session.session_service.app_context.repositories.DeliveryConfirmationPointRepository confirmationPointRepository;
 
     private void uploadProof(
         DeliveryAssignment assignment,
@@ -148,6 +149,12 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
 
         uploadProof(assignment, ProofType.DELIVERED, request.getProofImageUrls());
 
+        // Save confirmation point if location provided
+        if (request.getCurrentLat() != null && request.getCurrentLon() != null) {
+            saveConfirmationPoint(assignment, request.getCurrentLat(), request.getCurrentLon(), 
+                request.getCurrentTimestamp(), "DELIVERED");
+        }
+
         // Get parcelId and deliveryManId from assignment
         UUID parcelId = UUID.fromString(assignment.getParcelId());
         UUID deliveryManId = UUID.fromString(assignment.getSession().getDeliveryManId());
@@ -175,6 +182,12 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
 
         // Upload proofs with type RETURNED
         uploadProof(assignment, ProofType.RETURNED, request.getProofImageUrls());
+
+        // Save confirmation point if location provided
+        if (request.getCurrentLat() != null && request.getCurrentLon() != null) {
+            saveConfirmationPoint(assignment, request.getCurrentLat(), request.getCurrentLon(), 
+                request.getCurrentTimestamp(), "RETURNED");
+        }
 
         // Get parcel info for response (don't update parcel status - keep it as is)
         UUID parcelId = UUID.fromString(assignment.getParcelId());
@@ -1193,5 +1206,62 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                     ex.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Save delivery confirmation point with location
+     */
+    private void saveConfirmationPoint(
+            DeliveryAssignment assignment,
+            Double lat,
+            Double lon,
+            java.time.LocalDateTime timestamp,
+            String confirmationType) {
+        try {
+            // Calculate distance from parcel (if parcel info available)
+            Double distanceFromParcel = null;
+            try {
+                ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(assignment.getParcelId());
+                if (parcelResponse != null && parcelResponse.getLat() != null && parcelResponse.getLon() != null) {
+                    distanceFromParcel = calculateDistance(
+                        lat, lon,
+                        parcelResponse.getLat().doubleValue(), parcelResponse.getLon().doubleValue()
+                    );
+                }
+            } catch (Exception e) {
+                log.debug("[session-service] [DeliveryAssignmentService.saveConfirmationPoint] Failed to calculate distance from parcel: {}", e.getMessage());
+            }
+
+            com.ds.session.session_service.app_context.models.DeliveryConfirmationPoint confirmationPoint = 
+                com.ds.session.session_service.app_context.models.DeliveryConfirmationPoint.builder()
+                    .assignmentId(assignment.getId())
+                    .sessionId(assignment.getSession().getId().toString())
+                    .latitude(lat)
+                    .longitude(lon)
+                    .confirmedAt(timestamp != null ? timestamp : java.time.LocalDateTime.now())
+                    .confirmationType(confirmationType)
+                    .distanceFromParcel(distanceFromParcel)
+                    .build();
+
+            confirmationPointRepository.save(confirmationPoint);
+            log.debug("[session-service] [DeliveryAssignmentService.saveConfirmationPoint] Saved confirmation point for assignment {}", assignment.getId());
+        } catch (Exception e) {
+            log.error("[session-service] [DeliveryAssignmentService.saveConfirmationPoint] Failed to save confirmation point", e);
+            // Don't throw - confirmation point is not critical for task completion
+        }
+    }
+
+    /**
+     * Calculate distance between two points using Haversine formula (in meters)
+     */
+    private Double calculateDistance(Double lat1, Double lon1, Double lat2, Double lon2) {
+        final int R = 6371000; // Earth radius in meters
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
     }
 }

@@ -9,6 +9,7 @@ import { zoneRouter } from './zone';
 import { routingRouter } from './routing';
 import { addressRouter } from './address';
 import { osrmDataRouter } from './osrm';
+import roadNodesRouter from './road_nodes/road_nodes.router';
 
 const routes = Router();
 
@@ -21,5 +22,6 @@ routes.use('/zones', zoneRouter); // V1 (default)
 routes.use('/routing', routingRouter);
 routes.use('/addresses', addressRouter);
 routes.use('/osrm', osrmDataRouter);
+routes.use('/road-nodes', roadNodesRouter);
 
 export { routes };

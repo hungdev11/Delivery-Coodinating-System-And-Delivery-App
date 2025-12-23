@@ -400,7 +400,7 @@ wget https://download.geofabrik.de/asia/vietnam-latest.osm.pbf
 
 # Extract only HCMC area using osmium
 osmium extract vietnam-latest.osm.pbf \
-  --polygon ../old_thuduc_city/thuduc_cu.poly \
+  --polygon ../old_thuduc_city/hcmc.poly \
   --output hochiminh_city.osm.pbf
 
 # Clean up

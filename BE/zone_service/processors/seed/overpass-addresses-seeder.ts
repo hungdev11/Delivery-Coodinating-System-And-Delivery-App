@@ -60,9 +60,9 @@ function parsePolyFileBbox(polyPath: string): string {
   return `${minLat.toFixed(6)},${minLon.toFixed(6)},${maxLat.toFixed(6)},${maxLon.toFixed(6)}`;
 }
 
-// Read bounding box from old Thủ Đức polygon file
-const thuDucPolyPath = join(process.cwd(), 'raw_data/poly/thuduc_cu.poly');
-const THUDUC_BBOX = parsePolyFileBbox(thuDucPolyPath);
+// Read bounding box from HCMC polygon file (city-wide)
+const hcmcPolyPath = join(process.cwd(), 'raw_data/poly/hcmc.poly');
+const HCMC_BBOX = parsePolyFileBbox(hcmcPolyPath);
 
 interface OverpassElement {
   type: string;
@@ -74,16 +74,15 @@ interface OverpassElement {
 }
 
 /**
- * Overpass QL query to get POIs in old Thủ Đức City area
- * Simplified query to reduce server load
+ * Overpass QL query to get POIs in HCMC
  */
-const OVERPASS_QUERY = `
-[out:json][timeout:180][bbox:${THUDUC_BBOX}];
+const OVERPASS_QUERY_HCMC = `
+[out:json][timeout:180][bbox:${HCMC_BBOX}];
 (
-  node["amenity"]["name"](${THUDUC_BBOX});
-  way["amenity"]["name"](${THUDUC_BBOX});
-  node["shop"]["name"](${THUDUC_BBOX});
-  way["shop"]["name"](${THUDUC_BBOX});
+  node["amenity"]["name"](${HCMC_BBOX});
+  way["amenity"]["name"](${HCMC_BBOX});
+  node["shop"]["name"](${HCMC_BBOX});
+  way["shop"]["name"](${HCMC_BBOX});
 );
 out center;
 `;
@@ -228,13 +227,13 @@ function getAddressText(tags: Record<string, string>): string | null {
  */
 async function queryOverpass(): Promise<OverpassElement[]> {
   console.log('Querying Overpass API...');
-  console.log(`Bounding box: ${THUDUC_BBOX} (Old Thủ Đức City from polygon)`);
+  console.log(`Bounding box: ${HCMC_BBOX} (HCMC city polygon)`);
   console.log('This may take 1-2 minutes...\n');
 
   try {
     const response = await axios.post(
       OVERPASS_API,
-      OVERPASS_QUERY,
+      OVERPASS_QUERY_HCMC,
       {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         timeout: 180000, // 3 minutes
@@ -263,8 +262,15 @@ async function seedFromOverpass() {
   const startTime = Date.now();
 
   try {
+    // Guard: run only when addresses table is empty
+    const existing = await prisma.addresses.count();
+    if (existing > 0) {
+      console.log(`⚠️ addresses table is not empty (${existing} rows). Skip seeding.`);
+      return;
+    }
+
     // Step 1: Query Overpass API
-    console.log('Step 1: Querying Overpass API for Old Thủ Đức City POIs...');
+    console.log('Step 1: Querying Overpass API for HCMC POIs...');
     const elements = await queryOverpass();
     console.log(`✓ Retrieved ${elements.length} elements from OSM\n`);
 
@@ -328,6 +334,16 @@ async function seedFromOverpass() {
         district_name: districtName,
         address_type: addressType,
       });
+    }
+
+    // Optional range slice
+    const startIdx = process.env.ADDRESS_START ? parseInt(process.env.ADDRESS_START, 10) : 0;
+    const endIdx = process.env.ADDRESS_END ? parseInt(process.env.ADDRESS_END, 10) : undefined;
+    if (startIdx > 0 || endIdx !== undefined) {
+      const sliced = addresses.slice(startIdx, endIdx);
+      console.log(`✓ Applied range slice [${startIdx}, ${endIdx ?? 'end'}) → ${sliced.length}`);
+      addresses.length = 0;
+      addresses.push(...sliced);
     }
 
     console.log(`✓ Parsed ${addresses.length} valid addresses\n`);

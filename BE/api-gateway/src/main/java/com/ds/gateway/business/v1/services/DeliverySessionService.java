@@ -132,12 +132,20 @@ public class DeliverySessionService {
     }
 
     /**
+     * API 2b: Proxy to session-service actual route endpoint.
+     */
+    public ResponseEntity<?> getActualRouteForSession(java.util.UUID sessionId) {
+        log.debug("[api-gateway] [DeliverySessionService.getActualRouteForSession] Proxying actual route for session {}", sessionId);
+        return sessionServiceClient.getActualRouteForSession(sessionId);
+    }
+
+    /**
      * API 2: Get demo-route by data from API 1
      * This must be done in api gateway, service layer
      * It takes session data and calculates a demo route for all assignments
      */
-    public ResponseEntity<?> getDemoRouteForSession(java.util.UUID sessionId) {
-        log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Calculating demo route for session {}", sessionId);
+    public ResponseEntity<?> getDemoRouteForSession(java.util.UUID sessionId, Double overrideStartLat, Double overrideStartLon) {
+        log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Calculating demo route for session {} (override start: {}, {})", sessionId, overrideStartLat, overrideStartLon);
         
         try {
             // Step 1: Get session with assignments (API 1)
@@ -246,12 +254,34 @@ public class DeliverySessionService {
                 return ResponseEntity.badRequest().body(Map.of("error", "No valid waypoints found for route calculation"));
             }
 
-            // Use first waypoint as start point (warehouse/shipper location)
-            startPoint = new HashMap<>(allWaypoints.get(0));
-            startPoint.put("parcelId", "START");
+            // Derive start point:
+            // 1) Prefer session start/current location if present
+            // 2) Fallback to driver's first parcel location but keep it in destinations
+            Double startLat = overrideStartLat != null ? overrideStartLat : toDouble(sessionData.get("startLat"));
+            Double startLon = overrideStartLon != null ? overrideStartLon : toDouble(sessionData.get("startLon"));
+            if (startLat == null || startLon == null) {
+                startLat = overrideStartLat != null ? overrideStartLat : toDouble(sessionData.get("currentLat"));
+                startLon = overrideStartLon != null ? overrideStartLon : toDouble(sessionData.get("currentLon"));
+            }
+            if (startLat == null || startLon == null) {
+                startLat = overrideStartLat != null ? overrideStartLat : toDouble(sessionData.get("lat"));
+                startLon = overrideStartLon != null ? overrideStartLon : toDouble(sessionData.get("lon"));
+            }
+
+            if (startLat != null && startLon != null) {
+                startPoint = new HashMap<>();
+                startPoint.put("lat", startLat);
+                startPoint.put("lon", startLon);
+                startPoint.put("parcelId", "START");
+            } else {
+                // Fallback: reuse first waypoint but do NOT remove it from destinations
+                Map<String, Object> firstWaypoint = new HashMap<>(allWaypoints.get(0));
+                startPoint = new HashMap<>(firstWaypoint);
+                startPoint.put("parcelId", "START");
+            }
             
-            // Group remaining waypoints by priority based on deliveryType
-            for (int i = 1; i < allWaypoints.size(); i++) {
+            // Group ALL waypoints by priority based on deliveryType (including the first one)
+            for (int i = 0; i < allWaypoints.size(); i++) {
                 Map<String, Object> waypoint = allWaypoints.get(i);
                 Map<String, Object> parcelData = parcelFutures.get(i).get();
                 
@@ -289,7 +319,16 @@ public class DeliverySessionService {
                 Object routeResponse = routeFuture.get(30, java.util.concurrent.TimeUnit.SECONDS);
 
                 log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Successfully calculated demo route for session {} with {} total waypoints", sessionId, allWaypoints.size());
-                return ResponseEntity.ok(routeResponse);
+
+                // Normalize response to BaseResponse format for Android client
+                if (routeResponse instanceof Map<?, ?> map) {
+                    if (map.containsKey("result") || map.containsKey("message")) {
+                        return ResponseEntity.ok(routeResponse);
+                    }
+                    return ResponseEntity.ok(Map.of("result", map));
+                }
+
+                return ResponseEntity.ok(Map.of("result", routeResponse));
             } catch (java.util.concurrent.TimeoutException e) {
                 log.error("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Timeout waiting for zone-service response for session {}", sessionId, e);
                 return ResponseEntity.status(504).body(Map.of("error", "Zone service timeout: " + e.getMessage()));
@@ -437,6 +476,26 @@ public class DeliverySessionService {
             }
         } catch (Exception e) {
             log.debug("[api-gateway] [DeliverySessionService.extractDestinationFromParcel] Error extracting destination from parcel data: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Safely convert object to Double if possible.
+     */
+    private Double toDouble(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        if (value instanceof String s) {
+            try {
+                return Double.parseDouble(s);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
         }
         return null;
     }

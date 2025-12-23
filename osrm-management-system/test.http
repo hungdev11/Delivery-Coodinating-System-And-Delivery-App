@@ -23,7 +23,7 @@ POST {{baseUrl}}/api/v1/extract/complete
 Content-Type: {{contentType}}
 
 {
-  "polyFile": "../raw_data/poly/thuduc_cu.poly"
+  "polyFile": "../raw_data/poly/hcmc.poly"
 }
 
 ### ============================================

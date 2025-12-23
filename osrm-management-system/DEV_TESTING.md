@@ -96,7 +96,7 @@ curl http://localhost:21520/api/v1/health
 **Prerequisites:**
 - osmium-tool installed
 - Raw data files available tại `RAW_DATA_PATH`
-- Polygon file available (default: `raw_data/poly/thuduc_cu.poly`)
+- Polygon file available (default: `raw_data/poly/hcmc.poly`)
 
 ```bash
 # Extract với default polygon
@@ -106,7 +106,7 @@ curl -X POST http://localhost:21520/api/v1/extract/complete \
 # Extract với custom polygon file
 curl -X POST http://localhost:21520/api/v1/extract/complete \
   -H "Content-Type: application/json" \
-  -d '{"polyFile": "./raw_data/poly/thuduc_cu.poly"}'
+  -d '{"polyFile": "./raw_data/poly/hcmc.poly"}'
 ```
 
 **Expected Response:**
@@ -179,7 +179,7 @@ Tạo collection với các requests:
    - Body (optional):
      ```json
      {
-       "polyFile": "./raw_data/poly/thuduc_cu.poly"
+       "polyFile": "./raw_data/poly/hcmc.poly"
      }
      ```
 
@@ -306,7 +306,7 @@ Cannot connect to the Docker daemon
 
 **Error:**
 ```
-Poly file not found: ./raw_data/poly/thuduc_cu.poly
+Poly file not found: ./raw_data/poly/hcmc.poly
 ```
 
 **Solution:**

@@ -53,6 +53,15 @@ public class DeliverySession {
 
     private LocalDateTime endTime; // Được đặt khi phiên kết thúc
 
+    @Column(name = "start_location_lat")
+    private Double startLocationLat; // Vị trí bắt đầu khi shipper nhấn "Bắt đầu giao hàng"
+
+    @Column(name = "start_location_lon")
+    private Double startLocationLon;
+
+    @Column(name = "start_location_timestamp")
+    private LocalDateTime startLocationTimestamp;
+
     // --- BỔ SUNG MỐI QUAN HỆ HAI CHIỀU ---
     /**
      * Danh sách các lượt giao hàng (task) thuộc phiên này.

@@ -50,7 +50,7 @@ export class ExtractService {
 
       // Setup paths
       const pbfPath = findLatestVietnamPBF(this.rawDataPath);
-      const defaultPolyFile = join(this.rawDataPath, 'poly/thuduc_cu.poly');
+      const defaultPolyFile = join(this.rawDataPath, 'poly/hcmc.poly');
       const poly = polyFile || defaultPolyFile;
       const outputPbf = join(this.rawDataPath, 'extracted/thuduc_complete.osm.pbf');
 

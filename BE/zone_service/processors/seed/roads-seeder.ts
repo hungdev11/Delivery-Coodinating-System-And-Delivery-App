@@ -30,24 +30,31 @@ async function seedRoads() {
   const startTime = Date.now();
 
   try {
+    // Guard: run only when roads table is empty
+    const existing = await prisma.roads.count();
+    if (existing > 0) {
+      console.log(`⚠️ roads table is not empty (${existing} rows). Skip seeding.`);
+      return;
+    }
+
     // Step 1: Parse OSM PBF file
     console.log('Step 1: Parsing OSM PBF file...');
     const rawDataDir = join(process.cwd(), './raw_data');
     
-    // Use complete extract if available, otherwise use poly extract
-    const completeExtractPath = join(rawDataDir, 'extracted/thuduc_complete.osm.pbf');
+    // Prefer extracted HCMC (city-wide); fallback to latest Vietnam PBF + clip HCMC
+    const hcmcExtractPath = join(rawDataDir, 'extracted/hcmc.osm.pbf');
     let pbfPath: string;
     let polyFile: string | undefined;
     
-    if (existsSync(completeExtractPath)) {
-      console.log('  Using complete extract (routing + addresses)');
-      pbfPath = completeExtractPath;
+    if (existsSync(hcmcExtractPath)) {
+      console.log('  Using HCMC extract (city-wide)');
+      pbfPath = hcmcExtractPath;
       polyFile = undefined; // Already clipped
     } else {
-      console.log('  Using source PBF with polygon clip');
-      console.log('  Tip: Run "npm run extract:complete" for better coverage');
+      console.log('  Using source PBF with HCMC polygon clip');
+      console.log('  Tip: Run "npm run extract:complete" to pre-extract hcmc.osm.pbf');
       pbfPath = findLatestVietnamPBF(rawDataDir);
-      polyFile = join(rawDataDir, 'poly/thuduc_cu.poly');
+      polyFile = join(rawDataDir, 'poly/hcmc.poly');
     }
 
     const parser = new OSMParser();
@@ -56,7 +63,13 @@ async function seedRoads() {
 
     // Step 2: Filter road ways
     console.log('Step 2: Filtering road ways...');
-    const roadWays = osmData.ways.filter(way => OSMParser.isRoadWay(way));
+    let roadWays = osmData.ways.filter(way => OSMParser.isRoadWay(way));
+    const roadStart = process.env.ROAD_START ? parseInt(process.env.ROAD_START, 10) : 0;
+    const roadEnd = process.env.ROAD_END ? parseInt(process.env.ROAD_END, 10) : undefined;
+    if (roadStart > 0 || roadEnd !== undefined) {
+      roadWays = roadWays.slice(roadStart, roadEnd);
+      console.log(`✓ Applied road slice [${roadStart}, ${roadEnd ?? 'end'}) → ${roadWays.length}`);
+    }
     console.log(`✓ Found ${roadWays.length} road ways\n`);
 
     // Step 3: Load zones

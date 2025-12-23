@@ -134,7 +134,7 @@ curl http://localhost:21520/api/v1/health
 # Extract complete data
 curl -X POST http://localhost:21520/api/v1/extract/complete \
   -H "Content-Type: application/json" \
-  -d '{"polyFile": "./raw_data/poly/thuduc_cu.poly"}'
+  -d '{"polyFile": "./raw_data/poly/hcmc.poly"}'
 
 # Generate OSRM V2 models
 curl -X POST http://localhost:21520/api/v1/generate/osrm-v2

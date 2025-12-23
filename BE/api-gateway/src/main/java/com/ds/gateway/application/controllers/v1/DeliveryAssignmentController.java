@@ -114,4 +114,14 @@ public class DeliveryAssignmentController {
     public ResponseEntity<?> lastestShipperForParcel(@PathVariable UUID parcelId) {
         return assignmentClient.lastestShipperForParcel(parcelId);
     }
+
+    /**
+     * Get latest assignment info for a parcel (sessionId, assignmentId, status, deliveryManId)
+     * Used by client parcel tracking to find active session for a parcel.
+     */
+    @GetMapping("/parcels/{parcelId}/latest-assignment")
+    public ResponseEntity<?> getLatestAssignmentForParcel(@PathVariable String parcelId) {
+        log.debug("[api-gateway] [DeliveryAssignmentController.getLatestAssignmentForParcel] GET /api/v1/assignments/parcels/{}/latest-assignment", parcelId);
+        return assignmentClient.getLatestAssignmentForParcel(parcelId);
+    }
 }
