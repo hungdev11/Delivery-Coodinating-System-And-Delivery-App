@@ -25,6 +25,8 @@ export declare class GenerateService {
     private calculateBlockingStatus;
     private exportToOSMXML;
     private generateLuaProfile;
+    private generateBicycleLuaProfile;
+    private generateCarLuaProfile;
     private setupModelInstance;
     private processOSRMInstance;
     private mapRoadTypeToOSM;

@@ -19,7 +19,7 @@ class ExtractController {
      */
     async extractComplete(req, res, next) {
         try {
-            const { polyFile } = req.body;
+            const { polyFile } = req?.body || { polyFile: undefined };
             logger_1.logger.info('Extract complete request received', { polyFile });
             const result = await this.extractService.extractCompleteData(polyFile);
             if (result.success) {

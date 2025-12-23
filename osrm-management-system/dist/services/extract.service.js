@@ -38,7 +38,7 @@ class ExtractService {
             const pbfPath = (0, osm_parser_1.findLatestVietnamPBF)(this.rawDataPath);
             const defaultPolyFile = (0, path_1.join)(this.rawDataPath, 'poly/hcmc.poly');
             const poly = polyFile || defaultPolyFile;
-            const outputPbf = (0, path_1.join)(this.rawDataPath, 'extracted/thuduc_complete.osm.pbf');
+            const outputPbf = (0, path_1.join)(this.rawDataPath, 'extracted/hcmc.osm.pbf');
             if (!(0, fs_1.existsSync)(poly)) {
                 throw new Error(`Poly file not found: ${poly}`);
             }
