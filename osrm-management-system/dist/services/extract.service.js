@@ -36,7 +36,7 @@ class ExtractService {
             logger_1.logger.info(`Starting complete OSM data extraction (Build ID: ${buildId})...`);
             // Setup paths
             const pbfPath = (0, osm_parser_1.findLatestVietnamPBF)(this.rawDataPath);
-            const defaultPolyFile = (0, path_1.join)(this.rawDataPath, 'poly/thuduc_cu.poly');
+            const defaultPolyFile = (0, path_1.join)(this.rawDataPath, 'poly/hcmc.poly');
             const poly = polyFile || defaultPolyFile;
             const outputPbf = (0, path_1.join)(this.rawDataPath, 'extracted/thuduc_complete.osm.pbf');
             if (!(0, fs_1.existsSync)(poly)) {

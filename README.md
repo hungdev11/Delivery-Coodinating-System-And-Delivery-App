@@ -102,7 +102,7 @@ mkdir -p raw_data/{vietnam,poly,extracted,osrm-logic}
 # Ví dụ: raw_data/vietnam/vietnam-251013.osm.pbf
 
 # Thêm file polygon vào thư mục poly (nếu có)
-# Ví dụ: raw_data/poly/thuduc_cu.poly
+# Ví dụ: raw_data/poly/hcmc.poly
 ```
 
 **Lưu ý:**
