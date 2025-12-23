@@ -149,7 +149,7 @@ public class ParcelDetailActivity extends AppCompatActivity {
             btnAcceptTask.setEnabled(false);
         } else {
             String status = parcel.getStatus().toString();
-            if (!"IN_WAREHOUSE".equals(status) && !"DELAYED".equals(status)) {
+            if (!"IN_WAREHOUSE".equals(status)) {
                 btnAcceptTask.setText("KHÔNG THỂ NHẬN NHIỆM VỤ");
                 btnAcceptTask.setEnabled(false);
             } else {
@@ -180,37 +180,70 @@ public class ParcelDetailActivity extends AppCompatActivity {
         SessionClient service = retrofit.create(SessionClient.class);
 
         ScanParcelRequest requestBody = new ScanParcelRequest(parcelIdToAccept);
-        Call<com.ds.deliveryapp.clients.res.BaseResponse<DeliveryAssignment>> call = service.acceptParcelToSession(driverId, requestBody);
+        Call<BaseResponse<DeliveryAssignment>> call =
+                service.acceptParcelToSession(driverId, requestBody);
 
-        call.enqueue(new Callback<com.ds.deliveryapp.clients.res.BaseResponse<DeliveryAssignment>>() {
+        call.enqueue(new Callback<BaseResponse<DeliveryAssignment>>() {
+
             @Override
-            public void onResponse(Call<com.ds.deliveryapp.clients.res.BaseResponse<DeliveryAssignment>> call, Response<com.ds.deliveryapp.clients.res.BaseResponse<DeliveryAssignment>> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    com.ds.deliveryapp.clients.res.BaseResponse<DeliveryAssignment> baseResponse = response.body();
-                    if (baseResponse.getResult() != null) {
-                        Toast.makeText(ParcelDetailActivity.this, "Nhận đơn thành công.", Toast.LENGTH_SHORT).show();
-                        setResult(RESULT_OK);
-                    } else {
-                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể nhận nhiệm vụ";
-                        Log.e(TAG, "Lỗi khi nhận đơn: " + errorMsg);
-                        Toast.makeText(ParcelDetailActivity.this, errorMsg, Toast.LENGTH_SHORT).show();
-                        setResult(RESULT_CANCELED);
-                    }
-                } else {
-                    Log.e(TAG, "Lỗi khi nhận đơn: " + response.code());
-                    Toast.makeText(ParcelDetailActivity.this, "Không thể nhận nhiệm vụ.", Toast.LENGTH_SHORT).show();
-                    setResult(RESULT_CANCELED);
+            public void onResponse(
+                    Call<BaseResponse<DeliveryAssignment>> call,
+                    Response<BaseResponse<DeliveryAssignment>> response
+            ) {
+
+                //Nhận đơn THÀNH CÔNG → finish
+                if (response.isSuccessful()
+                        && response.body() != null
+                        && response.body().getResult() != null) {
+
+                    Toast.makeText(
+                            ParcelDetailActivity.this,
+                            "Nhận đơn thành công.",
+                            Toast.LENGTH_SHORT
+                    ).show();
+
+                    setResult(RESULT_OK);
+                    finish();
+                    return;
                 }
-                finish();
+
+                // BE từ chối nghiệp vụ (routing, time, session rule…)
+                String errorMsg =
+                        response.body() != null && response.body().getMessage() != null
+                                ? response.body().getMessage()
+                                : "Không đạt điều kiện.";
+
+                Log.e(TAG, "Business reject: " + errorMsg);
+
+                Toast.makeText(
+                        ParcelDetailActivity.this,
+                        errorMsg,
+                        Toast.LENGTH_LONG
+                ).show();
+
+                // ❌ KHÔNG finish
+                btnAcceptTask.setEnabled(false);
+                btnAcceptTask.setText("KHÔNG THỂ NHẬN NHIỆM VỤ");
             }
 
             @Override
-            public void onFailure(Call<com.ds.deliveryapp.clients.res.BaseResponse<DeliveryAssignment>> call, Throwable t) {
+            public void onFailure(
+                    Call<BaseResponse<DeliveryAssignment>> call,
+                    Throwable t
+            ) {
                 Log.e(TAG, "Network error: " + t.getMessage());
-                Toast.makeText(ParcelDetailActivity.this, "Lỗi mạng khi nhận nhiệm vụ.", Toast.LENGTH_SHORT).show();
-                setResult(RESULT_CANCELED);
-                finish();
+
+                Toast.makeText(
+                        ParcelDetailActivity.this,
+                        "Không thể kết nối server. Không thể nhận thêm đơn.",
+                        Toast.LENGTH_LONG
+                ).show();
+
+                // ❌ KHÔNG finish
+                btnAcceptTask.setEnabled(false);
+                btnAcceptTask.setText("KHÔNG THỂ NHẬN NHIỆM VỤ");
             }
         });
     }
+
 }
