@@ -44,7 +44,9 @@ import com.google.gson.Gson;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -71,6 +73,11 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private TextView tvRouteMessage;
     private TextView tvEmptyState;
 
+    private SessionClient sessionClient;
+
+    List<DeliveryAssignment> noProofTasks = new ArrayList<>();
+
+
     private int currentPage = 0;
     private final int pageSize = 10;
     private boolean isLoading = false;
@@ -90,6 +97,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private SessionManager sessionManager;
     private Button btnStartDelivery;
     private GlobalChatService globalChatService;
+
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -133,6 +141,9 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             btnRecalcRoute.setOnClickListener(v -> manualRecalcRoute());
         }
         tvEmptyState = view.findViewById(R.id.tv_empty_state);
+
+        sessionClient = RetrofitClient.getRetrofitInstance(requireContext()).create(SessionClient.class);
+
 
         // Hiển thị skeleton ngay khi onCreateView (trước khi fetch data)
         adapter.setShowSkeleton(true);
@@ -680,12 +691,91 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         return false;
     }
 
+    public interface ProofCheckCallback {
+        void onResult(List<DeliveryAssignment> noProofTasks);
+    }
+
+    private void checkAllFailedOrDelayedTasksHaveProofs(List<DeliveryAssignment> tasks, ProofCheckCallback callback) {
+        if (tasks == null || tasks.isEmpty()) {
+            callback.onResult(Collections.emptyList());
+            return;
+        }
+        List<DeliveryAssignment> noProofTasks = new ArrayList<>();
+        checkNextTask(tasks, 0, noProofTasks, callback);
+    }
+
+    private void checkNextTask(List<DeliveryAssignment> tasks, int index, List<DeliveryAssignment> noProofTasks, ProofCheckCallback callback) {
+        if (index >= tasks.size()) {
+            callback.onResult(noProofTasks); // trả danh sách task chưa proof
+            return;
+        }
+
+        DeliveryAssignment task = tasks.get(index);
+        if (!"FAILED".equals(task.getStatus()) && !"DELAYED".equals(task.getStatus())) {
+            checkNextTask(tasks, index + 1, noProofTasks, callback);
+            return;
+        }
+
+        Log.d("DEBUG_TASK", "Task: " + task.getAssignmentId() + " Status: " + task.getStatus());
+
+        sessionClient.getProofsByAssignment(task.getAssignmentId())
+                .enqueue(new retrofit2.Callback<BaseResponse<List<DeliveryProof>>>() {
+                    @Override
+                    public void onResponse(Call<BaseResponse<List<DeliveryProof>>> call, Response<BaseResponse<List<DeliveryProof>>> response) {
+                        List<DeliveryProof> proofs = response.body() != null ? response.body().getResult() : null;
+                        Log.d("DEBUG_PROOF", "Task: " + task.getAssignmentId() + " Proofs: " + proofs);
+
+                        if (proofs == null || proofs.isEmpty()) {
+                            noProofTasks.add(task);
+                            Log.d("DEBUG_ADD_TASK", "Added to noProofTasks: " + task.getAssignmentId());
+                        }
+                        checkNextTask(tasks, index + 1, noProofTasks, callback);
+                    }
+
+                    @Override
+                    public void onFailure(Call<BaseResponse<List<DeliveryProof>>> call, Throwable t) {
+                        noProofTasks.add(task);
+                        checkNextTask(tasks, index + 1, noProofTasks, callback);
+                    }
+                });
+    }
+
+    private void showNoProofDialog(List<String> noProofIds) {
+        if (noProofIds == null || noProofIds.isEmpty()) return;
+
+        String message = "Còn " + noProofIds.size() + " đơn chưa thao tác trả xong:\n" +
+                String.join("\n", noProofIds);
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Chú ý")
+                .setMessage(message)
+                .setPositiveButton("OK", null)
+                .show();
+    }
+
     private void showFailSessionDialog() {
 
         // ===== PHASE 2 =====
+        if (!hasInProgressTasks() && isSessionIncidentMode()) {
+            checkAllFailedOrDelayedTasksHaveProofs(tasks, result -> {
+                Log.e(TAG, "Result: " + result.size());
+                if (result.isEmpty()) {
+                    // tất cả task fail/delay đều có proof
+                    // Không hỏi lý do nữa
+                    callFailSession(null);
+                } else {
+                    List<String> noProofIds = result.stream()
+                            .map(DeliveryAssignment::getParcelCode)
+                            .collect(Collectors.toList());
+                    showNoProofDialog(noProofIds);
+                }
+            });
+
+            return;
+        }
+
         if (!hasInProgressTasks()) {
-            // Không hỏi lý do nữa
-            callFailSession(null);
+            Toast.makeText(getContext(), "Không có nhiệm vụ nào đang giao. Hãy hoàn thành phiên", Toast.LENGTH_SHORT).show();
             return;
         }
 
