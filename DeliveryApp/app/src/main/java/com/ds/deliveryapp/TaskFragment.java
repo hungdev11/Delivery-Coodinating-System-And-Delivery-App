@@ -732,7 +732,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private void showFailSessionDialog() {
 
         // ===== PHASE 2 =====
-        if (!hasInProgressTasks()) {
+        if (!hasInProgressTasks() && isSessionIncidentMode()) {
             checkAllFailedOrDelayedTasksHaveProofs(tasks, result -> {
                 Log.e(TAG, "Result: " + result.size());
                 if (result.isEmpty()) {
@@ -747,6 +747,11 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                 }
             });
 
+            return;
+        }
+
+        if (!hasInProgressTasks()) {
+            Toast.makeText(getContext(), "Không có nhiệm vụ nào đang giao. Hãy hoàn thành phiên", Toast.LENGTH_SHORT).show();
             return;
         }
 
