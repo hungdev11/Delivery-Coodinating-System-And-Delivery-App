@@ -47,7 +47,7 @@ async function seedRoads() {
       console.log('  Using source PBF with polygon clip');
       console.log('  Tip: Run "npm run extract:complete" for better coverage');
       pbfPath = findLatestVietnamPBF(rawDataDir);
-      polyFile = join(rawDataDir, 'poly/thuduc_cu.poly');
+      polyFile = join(rawDataDir, 'poly/hcmc.poly');
     }
 
     const parser = new OSMParser();

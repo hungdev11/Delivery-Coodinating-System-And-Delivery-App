@@ -108,7 +108,7 @@ npm start
 - `POST /api/v1/extract/complete` - Extract complete OSM data
   ```json
   {
-    "polyFile": "./raw_data/poly/thuduc_cu.poly" // optional
+    "polyFile": "./raw_data/poly/hcmc.poly" // optional
   }
   ```
 

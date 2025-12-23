@@ -4,7 +4,9 @@ import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.location.LocationListener;
@@ -30,7 +32,6 @@ import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.fragment.app.Fragment;
 
 // API Clients
-import com.ds.deliveryapp.clients.RoutingApi;
 import com.ds.deliveryapp.clients.SessionClient;
 import com.ds.deliveryapp.clients.req.RoutingRequestDto;
 import com.ds.deliveryapp.clients.res.BaseResponse;
@@ -98,13 +99,14 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     // --- Dữ liệu & Trạng thái ---
     private List<DeliveryAssignment> mOriginalTasks;
     private List<DeliveryAssignment> mSortedTasks;
-    private RoutingResponseDto.RouteResponseDto mRouteResponse;
+    private RoutingResponseDto mRouteResponse;
     private List<ArrayList<GeoPoint>> mPrecalculatedPolylines;
     private int currentLegIndex = 0;
     private int currentStepIndex = 0; // --- NÂNG CẤP: Theo dõi bước (step) hiện tại ---
     private boolean isRouteLoaded = false;
     private boolean isRecalculating = false;
     private boolean isNavigating = true; // --- NÂNG CẤP: Trạng thái tự động điều hướng ---
+    private String currentSessionId; // session hiện tại (CREATED/IN_PROGRESS)
 
     // --- GPS & Tracking ---
     private LocationManager locationManager;
@@ -115,7 +117,6 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     // --- API Clients ---
     private String driverId;
     private SessionClient sessionClient;
-    private RoutingApi routingApi;
     private GlobalChatService globalChatService;
 
     // --- Icon cho nút điều hướng ---
@@ -125,12 +126,12 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     // --- Lớp chứa kết quả AsyncTask ---
     private static class RouteCalculationResult {
         //... (Giữ nguyên)
-        final RoutingResponseDto.RouteResponseDto routeResponse;
+        final RoutingResponseDto routeResponse;
         final List<DeliveryAssignment> sortedTasks;
         final List<ArrayList<GeoPoint>> polylines;
         final Exception exception;
 
-        RouteCalculationResult(RoutingResponseDto.RouteResponseDto routeResponse, List<DeliveryAssignment> sortedTasks, List<ArrayList<GeoPoint>> polylines, Exception e) {
+        RouteCalculationResult(RoutingResponseDto routeResponse, List<DeliveryAssignment> sortedTasks, List<ArrayList<GeoPoint>> polylines, Exception e) {
             this.routeResponse = routeResponse;
             this.sortedTasks = sortedTasks;
             this.polylines = polylines;
@@ -167,6 +168,17 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             }
 
             try {
+                // 0. Lấy session đang hoạt động để biết sessionId
+                if (fragment.currentSessionId == null) {
+                    Response<BaseResponse<DeliverySession>> activeSessionResp = fragment.sessionClient
+                            .getActiveSession(fragment.driverId)
+                            .execute();
+                    if (!activeSessionResp.isSuccessful() || activeSessionResp.body() == null || activeSessionResp.body().getResult() == null) {
+                        return new RouteCalculationResult(null, null, null, new Exception("Không có phiên hoạt động"));
+                    }
+                    fragment.currentSessionId = activeSessionResp.body().getResult().getId().toString();
+                }
+
                 // 1. Lấy danh sách task nếu chưa có (Tối ưu: fetch từng page, early stop)
                 if (fragment.mOriginalTasks == null || fragment.mOriginalTasks.isEmpty()) {
                     Log.d(TAG, "Đang lấy danh sách Task (tối ưu pagination)...");
@@ -181,7 +193,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                     
                     while (hasMore && allTasks.size() < maxTasks) {
                         Response<com.ds.deliveryapp.clients.res.BaseResponse<PageResponse<DeliveryAssignment>>> taskResponse = fragment.sessionClient
-                                .getSessionTasks(fragment.driverId, List.of("CREATED", "IN_PROGRESS"), page, pageSize)
+                                .getTasksBySessionId(fragment.currentSessionId, page, pageSize)
                                 .execute();
 
                         if (!taskResponse.isSuccessful()) {
@@ -243,14 +255,11 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                     return new RouteCalculationResult(null, new ArrayList<>(), new ArrayList<>(), null);
                 }
 
-                // 2. Tạo routing payload
-                RoutingRequestDto.RouteRequestDto routeRequest = fragment.buildRoutingRequest(startLocation, fragment.mOriginalTasks);
-                String payloadJson = gson.toJson(routeRequest);
-                Log.d(TAG, "Routing API Payload: " + payloadJson.substring(0, Math.min(1000, payloadJson.length())));
-
-                // 3. Gọi API Routing
-                Response<com.ds.deliveryapp.clients.res.BaseResponse<RoutingResponseDto>> routeApiResponse = fragment.routingApi
-                        .getOptimalRoute(routeRequest)
+                // 2. Gọi API Routing qua gateway (đã tính sẵn demo-route cho session)
+                Double startLat = startLocation != null ? startLocation.getLatitude() : null;
+                Double startLon = startLocation != null ? startLocation.getLongitude() : null;
+                Response<com.ds.deliveryapp.clients.res.BaseResponse<RoutingResponseDto>> routeApiResponse = fragment.sessionClient
+                        .getDemoRouteForSession(fragment.currentSessionId, startLat, startLon)
                         .execute();
 
                 if (!routeApiResponse.isSuccessful() || routeApiResponse.body() == null) {
@@ -263,8 +272,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                     throw new IOException(errorMsg);
                 }
 
-                RoutingResponseDto routeResponseWrapper = baseResponse.getResult();
-                RoutingResponseDto.RouteResponseDto routeResponse = routeResponseWrapper.getResult();
+                RoutingResponseDto routeResponse = baseResponse.getResult();
                 Log.d(TAG, "Routing API Response: " + gson.toJson(routeResponse).substring(0, Math.min(1000, gson.toJson(routeResponse).length())));
 
                 // 4. Xử lý kết quả
@@ -345,6 +353,17 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             fragment.displayCurrentLeg();
             fragment.updateLegNavigationUI();
 
+            // Hiển thị ETA ước tính từ route (tổng duration giây -> phút)
+            try {
+                if (fragment.mRouteResponse != null && fragment.mRouteResponse.getRoute() != null) {
+                    double etaMinutes = fragment.mRouteResponse.getRoute().getDuration() / 60.0;
+                    Toast.makeText(fragment.getContext(),
+                            "Thời gian dự kiến ~ " + Math.round(etaMinutes) + " phút",
+                            Toast.LENGTH_LONG).show();
+                }
+            } catch (Exception ignored) {
+            }
+
             if (!fragment.mSortedTasks.isEmpty()) {
                 fragment.showTaskSnackbar(fragment.mSortedTasks.get(fragment.currentLegIndex));
             }
@@ -395,7 +414,13 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         } catch (Exception e) { // Fallback nếu R.drawable.ic_navigation không tồn tại
             iconNavigation = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_send);
         }
-        fabRecenter.setImageDrawable(iconNavigation); // Bắt đầu ở chế độ điều hướng
+        if (iconNavigation != null) {
+            iconNavigation.setTint(Color.BLACK); // lock/focus icon màu đen
+        }
+        if (iconRecenter != null) {
+            iconRecenter.setTint(Color.BLACK);
+        }
+        fabRecenter.setImageDrawable(iconNavigation); // Bắt đầu ở chế độ điều hướng (focus)
 
         // Lấy driverId
         SessionManager sessionManager = new SessionManager(requireContext());
@@ -407,7 +432,6 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
 
         // Khởi tạo API Clients
         sessionClient = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
-        routingApi = RetrofitClient.getRetrofitInstance(getContext()).create(RoutingApi.class);
 
         setupOSMMap();
         setupFabListeners();
@@ -688,22 +712,20 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         if (mDriverMarker == null) {
             mDriverMarker = new Marker(mapView);
             mDriverMarker.setTitle("Vị trí của bạn");
-            // Dùng icon 'iconNavigation' đã tải an toàn
+            // Scale icon điều hướng để dễ nhìn
             if (iconNavigation != null) {
-                mDriverMarker.setIcon(iconNavigation);
+                mDriverMarker.setIcon(getScaledDrawable(iconNavigation, 32)); // 32dp
             }
-            // Căn giữa icon mũi tên
             mDriverMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER);
         }
 
         // --- KHỞI TẠO AURA ---
         if (mDriverAura == null) {
             mDriverAura = new Polygon(mapView);
-            // Màu xanh sáng, bán trong suốt
-            mDriverAura.getFillPaint().setColor(Color.parseColor("#800077FF"));
-            // Viền xanh đậm
-            mDriverAura.getFillPaint().setColor(Color.parseColor("#FF0033AA"));
-            mDriverAura.getFillPaint().setStrokeWidth(2.0f);
+            mDriverAura.getFillPaint().setColor(Color.parseColor("#803498DB")); // xanh tím nhạt, bán trong
+            mDriverAura.getFillPaint().setStrokeWidth(2.5f);
+            mDriverAura.getOutlinePaint().setColor(Color.parseColor("#FF1F4B99")); // viền đậm
+            mDriverAura.getOutlinePaint().setStrokeWidth(3.0f);
         }
 
         // --- CẬP NHẬT VỊ TRÍ ---
@@ -712,14 +734,27 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         mDriverAura.setPoints(Polygon.pointsAsCircle(mCurrentLocation, 20.0));
 
         // --- ĐẢM BẢO HIỂN THỊ (QUAN TRỌNG) ---
-        // Xóa (nếu có)
         mapView.getOverlays().remove(mDriverAura);
         mapView.getOverlays().remove(mDriverMarker);
-        // Thêm lại (Aura vẽ trước, Marker vẽ trên)
         mapView.getOverlays().add(mDriverAura);
         mapView.getOverlays().add(mDriverMarker);
 
         mapView.invalidate();
+    }
+
+    /**
+     * Scale drawable to desired dp size to keep marker readable across screens.
+     */
+    private Drawable getScaledDrawable(Drawable drawable, int sizeDp) {
+        if (drawable == null || getResources() == null) return drawable;
+        int sizePx = (int) (sizeDp * getResources().getDisplayMetrics().density);
+        try {
+            Bitmap bitmap = ((BitmapDrawable) drawable).getBitmap();
+            Bitmap scaled = Bitmap.createScaledBitmap(bitmap, sizePx, sizePx, true);
+            return new BitmapDrawable(getResources(), scaled);
+        } catch (Exception e) {
+            return drawable;
+        }
     }
 
 
@@ -771,7 +806,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     /**
      * Xử lý DTO trả về (Giữ nguyên)
      */
-    private RouteCalculationResult processRoutingResponse(RoutingResponseDto.RouteResponseDto response, List<DeliveryAssignment> originalTasks) {
+    private RouteCalculationResult processRoutingResponse(RoutingResponseDto response, List<DeliveryAssignment> originalTasks) {
         if (response == null || response.getVisitOrder() == null || response.getRoute() == null) {
             return new RouteCalculationResult(null, null, null, new Exception("Phản hồi tuyến đường không hợp lệ"));
         }
@@ -782,7 +817,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
 
         // 2. Map VisitOrder
         List<DeliveryAssignment> sortedTasks = new ArrayList<>();
-        for (RoutingResponseDto.RouteResponseDto.VisitOrder visitOrder : response.getVisitOrder()) {
+        for (RoutingResponseDto.VisitOrder visitOrder : response.getVisitOrder()) {
             String parcelId = visitOrder.getWaypoint().getParcelId();
             if (parcelId != null && originalTaskMap.containsKey(parcelId)) {
                 sortedTasks.add(originalTaskMap.get(parcelId));
@@ -1037,7 +1072,12 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         });
 
         // Đặt icon là 'refresh'
-        fabReloadRoute.setImageDrawable(ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_rotate));
+        Drawable reloadIcon = ContextCompat.getDrawable(getContext(), android.R.drawable.ic_menu_rotate);
+        if (reloadIcon != null) {
+            reloadIcon.setTint(Color.WHITE); // icon trắng cho nút tải lại
+        }
+        fabReloadRoute.setImageDrawable(reloadIcon);
+        fabReloadRoute.setColorFilter(Color.WHITE);
         fabReloadRoute.setOnClickListener(v -> {
             if (mCurrentLocation == null) {
                 Toast.makeText(getContext(), "Chưa có vị trí, không thể tải lại.", Toast.LENGTH_SHORT).show();
@@ -1333,6 +1373,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         isRecalculating = false;
         currentLegIndex = 0;
         currentStepIndex = 0;
+        currentSessionId = null;
         
         // Clear route data
         mOriginalTasks = null;

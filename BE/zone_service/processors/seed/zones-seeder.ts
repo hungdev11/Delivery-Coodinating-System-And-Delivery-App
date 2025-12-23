@@ -47,7 +47,7 @@ async function seedZones() {
 
     // Step 1: Parse multi-polygon file (contains all wards)
     console.log('Step 1: Parsing Thu Duc Cu multi-polygon file...');
-    const polyPath = join(process.cwd(), './raw_data/poly/thuduc_cu.poly');
+    const polyPath = join(process.cwd(), './raw_data/poly/hcmc.poly');
     
     const wards = parseMultiPolyFile(polyPath);
     console.log(`✓ Parsed ${wards.length} wards from poly file\n`);

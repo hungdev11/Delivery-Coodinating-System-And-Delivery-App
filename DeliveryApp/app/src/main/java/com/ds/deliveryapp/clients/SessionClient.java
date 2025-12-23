@@ -165,6 +165,16 @@ public interface SessionClient {
     );
 
     /**
+     * Lấy demo-route đã tính sẵn cho session hiện tại (gateway -> session-service -> zone-service)
+     */
+    @GET("/api/v1/delivery-sessions/{sessionId}/demo-route")
+    Call<BaseResponse<com.ds.deliveryapp.clients.res.RoutingResponseDto>> getDemoRouteForSession(
+            @Path("sessionId") String sessionId,
+            @Query("startLat") Double startLat,
+            @Query("startLon") Double startLon
+    );
+
+    /**
      * Tạo phiên ở trạng thái CREATED (chuẩn bị nhận đơn).
      * Ánh xạ tới: SessionController.createSessionPrepared
      */

@@ -61,7 +61,7 @@ function parsePolyFileBbox(polyPath: string): string {
 }
 
 // Read bounding box from old Thủ Đức polygon file
-const thuDucPolyPath = join(process.cwd(), 'raw_data/poly/thuduc_cu.poly');
+const thuDucPolyPath = join(process.cwd(), 'raw_data/poly/hcmc.poly');
 const THUDUC_BBOX = parsePolyFileBbox(thuDucPolyPath);
 
 interface OverpassElement {

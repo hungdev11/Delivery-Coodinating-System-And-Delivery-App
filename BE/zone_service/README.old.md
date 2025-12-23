@@ -114,7 +114,7 @@ cd ../.. && npm run prisma:migrate  # Run migrations
 - Location: `./raw_data/new_hochiminh_city/hochiminh_city.osm.pbf`
 - Format: OSM PBF (Protobuf Binary Format)
 - Content: Full road network for Ho Chi Minh City
-- Filter: Old Thu Duc city boundary (`./raw_data/old_thuduc_city/thuduc_cu.poly`)
+- Filter: Old Thu Duc city boundary (`./raw_data/old_thuduc_city/hcmc.poly`)
 
 ## Features
 

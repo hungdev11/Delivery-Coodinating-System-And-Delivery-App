@@ -87,7 +87,7 @@ raw_data/
 │   ├── tangnhonphu_district.poly
 │   └── thuduc_ward.poly
 ├── old_thuduc_city/
-│   └── thuduc_cu.poly          # Old Thu Duc boundary
+│   └── hcmc.poly          # Old Thu Duc boundary
 └── vietnam/
     └── vietnam-250925.osm.pbf  # Vietnam OSM data
 ```

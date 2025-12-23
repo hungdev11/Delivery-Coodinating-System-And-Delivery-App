@@ -61,14 +61,21 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private TasksAdapter adapter;
     private List<DeliveryAssignment> tasks;
     private ProgressBar progressBar;
+    private ProgressBar progressRoute;
     private Button btnScanOrder;
     private ImageButton btnSessionMenu;
+    private Button btnRecalcRoute;
+    private View routeCard;
+    private TextView tvRouteEta;
+    private TextView tvRouteDistance;
+    private TextView tvRouteMessage;
     private TextView tvEmptyState;
 
     private int currentPage = 0;
     private final int pageSize = 10;
     private boolean isLoading = false;
     private boolean isLastPage = false;
+    private boolean isCalculatingRoute = false;
 
     private LinearLayoutManager layoutManager;
 
@@ -116,6 +123,15 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         rvTasks.setLayoutManager(layoutManager);
         rvTasks.setAdapter(adapter);
         progressBar = view.findViewById(R.id.progress_bar);
+        progressRoute = view.findViewById(R.id.progress_route);
+        routeCard = view.findViewById(R.id.layout_route_summary);
+        tvRouteEta = view.findViewById(R.id.tv_route_eta);
+        tvRouteDistance = view.findViewById(R.id.tv_route_distance);
+        tvRouteMessage = view.findViewById(R.id.tv_route_message);
+        btnRecalcRoute = view.findViewById(R.id.btn_recalc_route);
+        if (btnRecalcRoute != null) {
+            btnRecalcRoute.setOnClickListener(v -> manualRecalcRoute());
+        }
         tvEmptyState = view.findViewById(R.id.tv_empty_state);
 
         // Hiển thị skeleton ngay khi onCreateView (trước khi fetch data)
@@ -337,6 +353,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                         // Try to get session status from first task or fetch session details
                         fetchSessionStatus();
                         if (btnSessionMenu != null) btnSessionMenu.setVisibility(View.VISIBLE);
+                        maybeCalculatePreRoute();
                     }
 
                     if (tasks.isEmpty() && page == 0) {
@@ -371,6 +388,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                             tvEmptyState.setVisibility(View.GONE);
                         }
                         Log.d(TAG, "Tasks loaded: Page " + page + ", Size " + newTasks.size());
+                        maybeCalculatePreRoute();
                     }
 
                     currentPage++;
@@ -810,6 +828,9 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                         }
                         
                         updateUIForSessionStatus();
+
+                        // Trigger pre-start route calc for CREATED
+                        maybeCalculatePreRoute();
                         
                         // Check if all tasks are complete for IN_PROGRESS session
                         if ("IN_PROGRESS".equals(activeSessionStatus) && tasks.isEmpty()) {
@@ -858,6 +879,112 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                 startLocationTrackingService();
             }
         }
+    }
+
+    /**
+     * Tính route dự kiến khi phiên đang CREATED và đã có danh sách đơn (trước khi bấm bắt đầu).
+     */
+    private void maybeCalculatePreRoute() {
+        if (routeCard == null || tasks == null || tasks.isEmpty()) return;
+        if (!"CREATED".equals(activeSessionStatus)) {
+            routeCard.setVisibility(View.GONE);
+            return;
+        }
+        routeCard.setVisibility(View.VISIBLE);
+        triggerRouteCalculation(false);
+    }
+
+    private void manualRecalcRoute() {
+        triggerRouteCalculation(true);
+    }
+
+    private void triggerRouteCalculation(boolean isManual) {
+        if (isCalculatingRoute || activeSessionId == null) return;
+        isCalculatingRoute = true;
+        if (progressRoute != null) progressRoute.setVisibility(View.VISIBLE);
+        if (tvRouteMessage != null) tvRouteMessage.setText(isManual ? "Đang tính lại tuyến..." : "Đang tính tuyến...");
+
+        Double[] latLon = getCurrentLatLon();
+        Double startLat = latLon[0];
+        Double startLon = latLon[1];
+
+        SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
+        Call<BaseResponse<com.ds.deliveryapp.clients.res.RoutingResponseDto>> call = service.getDemoRouteForSession(
+                activeSessionId,
+                startLat,
+                startLon
+        );
+
+        call.enqueue(new Callback<BaseResponse<com.ds.deliveryapp.clients.res.RoutingResponseDto>>() {
+            @Override
+            public void onResponse(Call<BaseResponse<com.ds.deliveryapp.clients.res.RoutingResponseDto>> call, Response<BaseResponse<com.ds.deliveryapp.clients.res.RoutingResponseDto>> response) {
+                isCalculatingRoute = false;
+                if (progressRoute != null) progressRoute.setVisibility(View.GONE);
+                if (!isAdded()) return;
+
+                if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
+                    com.ds.deliveryapp.clients.res.RoutingResponseDto route = response.body().getResult();
+                    updateRouteSummaryUI(route);
+                } else {
+                    showRouteError("Không thể tính tuyến: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<BaseResponse<com.ds.deliveryapp.clients.res.RoutingResponseDto>> call, Throwable t) {
+                isCalculatingRoute = false;
+                if (progressRoute != null) progressRoute.setVisibility(View.GONE);
+                showRouteError("Lỗi mạng: " + t.getMessage());
+            }
+        });
+    }
+
+    private void updateRouteSummaryUI(com.ds.deliveryapp.clients.res.RoutingResponseDto route) {
+        if (route == null || route.getRoute() == null) {
+            showRouteError("Route rỗng");
+            return;
+        }
+        double durationSec = route.getRoute().getDuration();
+        double distanceM = route.getRoute().getDistance();
+        String etaText = "Thời gian: ~" + Math.round(durationSec / 60.0) + " phút";
+        String distText = "Quãng đường: " + String.format(java.util.Locale.getDefault(), "%.2f km", distanceM / 1000.0);
+
+        if (tvRouteEta != null) tvRouteEta.setText(etaText);
+        if (tvRouteDistance != null) tvRouteDistance.setText(distText);
+        if (tvRouteMessage != null) tvRouteMessage.setText("");
+    }
+
+    private void showRouteError(String msg) {
+        if (tvRouteMessage != null) tvRouteMessage.setText(msg);
+    }
+
+    /**
+     * Lấy last known location (nếu có) để làm startPoint khi tính demo-route.
+     */
+    private Double[] getCurrentLatLon() {
+        Double[] result = new Double[]{null, null};
+        if (getContext() == null) return result;
+        try {
+            LocationManager locationManager = (LocationManager) getContext().getSystemService(android.content.Context.LOCATION_SERVICE);
+            if (locationManager == null) return result;
+            if (androidx.core.content.ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.ACCESS_FINE_LOCATION)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED
+                    && androidx.core.content.ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                return result;
+            }
+            Location lastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (lastLocation == null) {
+                lastLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            }
+            if (lastLocation != null) {
+                result[0] = lastLocation.getLatitude();
+                result[1] = lastLocation.getLongitude();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "getCurrentLatLon error: " + e.getMessage());
+        }
+        return result;
     }
 
     /**

@@ -28,7 +28,7 @@ async function extractCompleteData() {
     // Setup paths
     const rawDataDir = join(process.cwd(), './raw_data');
     const pbfPath = findLatestVietnamPBF(rawDataDir);
-    const polyFile = join(rawDataDir, 'poly/thuduc_cu.poly');
+    const polyFile = join(rawDataDir, 'poly/hcmc.poly');
     const outputPbf = join(rawDataDir, 'extracted/thuduc_complete.osm.pbf');
 
     if (!existsSync(polyFile)) {

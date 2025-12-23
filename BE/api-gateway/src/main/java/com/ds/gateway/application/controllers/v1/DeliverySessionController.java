@@ -39,9 +39,12 @@ public class DeliverySessionController {
      * It takes session data and calculates a demo route for all assignments
      */
     @GetMapping("/{sessionId}/demo-route")
-    public ResponseEntity<?> getDemoRouteForSession(@PathVariable UUID sessionId) {
-        log.debug("[api-gateway] [DeliverySessionController.getDemoRouteForSession] Getting demo route for session {}", sessionId);
-        return deliverySessionService.getDemoRouteForSession(sessionId);
+    public ResponseEntity<?> getDemoRouteForSession(
+            @PathVariable UUID sessionId,
+            @RequestParam(value = "startLat", required = false) Double startLat,
+            @RequestParam(value = "startLon", required = false) Double startLon) {
+        log.debug("[api-gateway] [DeliverySessionController.getDemoRouteForSession] Getting demo route for session {} (startLat={}, startLon={})", sessionId, startLat, startLon);
+        return deliverySessionService.getDemoRouteForSession(sessionId, startLat, startLon);
     }
 
     /**
