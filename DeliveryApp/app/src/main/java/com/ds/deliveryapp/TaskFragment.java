@@ -60,8 +60,6 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private ProgressBar progressBar;
     private Button btnScanOrder;
     private ImageButton btnSessionMenu;
-    private boolean isSessionInIncidentMode = false;
-
     private TextView tvEmptyState;
 
     private int currentPage = 0;
@@ -418,6 +416,14 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         });
     }
 
+    private boolean isSessionIncidentMode() {
+        boolean flag = false;
+        for (DeliveryAssignment task : tasks) {
+            if (task.getFailReason().contains("Session failed:")) return true;
+        }
+        return flag;
+    }
+
     private void setupSessionMenu() {
         btnSessionMenu.setOnClickListener(v -> {
             if (activeSessionId == null) {
@@ -436,7 +442,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     startActivity(intent);
                     return true;
                 } else if (itemId == R.id.menu_complete_session) {
-                    if (isSessionInIncidentMode) {
+                    if (isSessionIncidentMode()) {
                         Toast.makeText(
                                 getContext(),
                                 "Phiên đang xử lý sự cố, không thể hoàn tất.",
@@ -718,7 +724,6 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     Toast.makeText(getContext(), "Không thể hủy phiên", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                isSessionInIncidentMode = true;
                 // ===== PHASE 1 =====
                 if (hasInProgressTasks()) {
                     // reload task list
