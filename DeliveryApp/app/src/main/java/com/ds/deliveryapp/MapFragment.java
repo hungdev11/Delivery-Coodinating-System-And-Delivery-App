@@ -86,6 +86,8 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
     private static final long GPS_UPDATE_INTERVAL_MS = 1000; // 1 giây
     private static final float GPS_UPDATE_DISTANCE_M = 5; // 5 mét
 
+    private static final float ZOOM_SIZE = 19;
+
     // --- Các biến UI ---
     private FloatingActionButton fabListTasks, fabReloadRoute, fabRecenter, fabRoutingOptions;
     private CoordinatorLayout coordinatorLayout;
@@ -520,7 +522,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
             mCurrentLocation = new GeoPoint(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
             updateDriverMarker();
             // --- THAY ĐỔI ZOOM: Tăng mức zoom ban đầu ---
-            mapView.getController().setZoom(18.0);
+            mapView.getController().setZoom(ZOOM_SIZE);
             mapView.getController().animateTo(mCurrentLocation);
             // Có vị trí -> Bắt đầu tải Task và tính đường
             new FetchAndRouteTask(this, mCurrentLocation).execute();
@@ -547,7 +549,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         // --- NÂNG CẤP: Tự động di chuyển camera (Focus mode) ---
         if (isNavigating) {
             // --- FOCUS MODE: Luôn focus vào vị trí driver và giữ mức zoom 18 ---
-            mapView.getController().setZoom(18.0);
+            mapView.getController().setZoom(ZOOM_SIZE);
             mapView.getController().animateTo(mCurrentLocation);
             // --- MAP ROTATION: Luôn theo step hiện tại, fallback về hướng bắc (0 độ) ---
             float bearing = -1;
@@ -1162,7 +1164,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
         // --- NÂNG CẤP: Tự động di chuyển camera đến vị trí tài xế ---
         if (isNavigating && mCurrentLocation != null) {
             mapView.getController().animateTo(mCurrentLocation);
-            mapView.getController().setZoom(18.0); // Ép zoom 18
+            mapView.getController().setZoom(ZOOM_SIZE); // Ép zoom 18
         }
 
         // Update leg navigation UI
@@ -1357,7 +1359,7 @@ public class MapFragment extends Fragment implements TaskListDialogFragment.OnTa
                 }
                 if (mCurrentLocation != null) {
                     mapView.getController().animateTo(mCurrentLocation);
-                    mapView.getController().setZoom(18.0);
+                    mapView.getController().setZoom(ZOOM_SIZE);
                     // Reset rotation if location has bearing
                     Location lastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
                     if (lastLocation != null && lastLocation.hasBearing()) {
