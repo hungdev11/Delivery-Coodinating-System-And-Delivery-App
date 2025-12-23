@@ -1,5 +1,7 @@
 package com.ds.deliveryapp;
 
+import static android.view.View.GONE;
+
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
@@ -124,6 +126,7 @@ public class SessionDetailActivity extends AppCompatActivity implements TasksAda
         // Session ID
         String sessionIdStr = session.getId() != null ? session.getId().toString() : "N/A";
         tvSessionId.setText("Session ID: " + sessionIdStr);
+        tvSessionId.setVisibility(GONE);
 
         // Status
         String statusText = StatusMapper.mapSessionStatus(session.getStatus());
@@ -151,7 +154,7 @@ public class SessionDetailActivity extends AppCompatActivity implements TasksAda
 
     private void loadTasks() {
         progressBar.setVisibility(View.VISIBLE);
-        tvEmptyState.setVisibility(View.GONE);
+        tvEmptyState.setVisibility(GONE);
 
         SessionClient service = RetrofitClient.getRetrofitInstance(this).create(SessionClient.class);
         Call<BaseResponse<PageResponse<DeliveryAssignment>>> call = service.getTasksBySessionId(
@@ -161,7 +164,7 @@ public class SessionDetailActivity extends AppCompatActivity implements TasksAda
             @Override
             public void onResponse(Call<BaseResponse<PageResponse<DeliveryAssignment>>> call, 
                                    Response<BaseResponse<PageResponse<DeliveryAssignment>>> response) {
-                progressBar.setVisibility(View.GONE);
+                progressBar.setVisibility(GONE);
 
                 if (response.isSuccessful() && response.body() != null) {
                     PageResponse<DeliveryAssignment> pageResponse = response.body().getResult();
@@ -171,7 +174,7 @@ public class SessionDetailActivity extends AppCompatActivity implements TasksAda
                         tasks.clear();
                         tasks.addAll(assignments);
                         adapter.updateTasks(tasks);
-                        tvEmptyState.setVisibility(View.GONE);
+                        tvEmptyState.setVisibility(GONE);
                         Log.d(TAG, "Loaded " + assignments.size() + " tasks");
                     } else {
                         tasks.clear();
@@ -188,7 +191,7 @@ public class SessionDetailActivity extends AppCompatActivity implements TasksAda
 
             @Override
             public void onFailure(Call<BaseResponse<PageResponse<DeliveryAssignment>>> call, Throwable t) {
-                progressBar.setVisibility(View.GONE);
+                progressBar.setVisibility(GONE);
                 tvEmptyState.setVisibility(View.VISIBLE);
                 Log.e(TAG, "Failed to load tasks", t);
                 Toast.makeText(SessionDetailActivity.this, 

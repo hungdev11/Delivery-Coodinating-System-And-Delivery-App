@@ -58,6 +58,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
     private RecyclerView recyclerProofs;
     private TextView tvProofsLoading, tvProofsEmpty;
     private ProofAdapter proofAdapter;
+    private List<DeliveryProof> currentProofs = new ArrayList<>();
 
     private DeliveryAssignment currentTask;
     private TaskActionHandler actionHandler;
@@ -173,22 +174,42 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         updateBottomButtonsByTaskStatus(task);
     }
 
+    private boolean hasReturnedProof(List<DeliveryProof> proofs) {
+        if (proofs == null) return false;
+        for (DeliveryProof proof : proofs) {
+            if ("RETURNED".equalsIgnoreCase(proof.getType())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
     private void updateReturnToWarehouseButton(DeliveryAssignment task) {
-        if (btnReturnToWarehouse == null) return;
+        if (btnReturnToWarehouse == null || task == null) return;
 
         boolean isReturnState =
-                "FAILED".equals(task.getStatus())
-                        || "DELAYED".equals(task.getStatus());
+                "FAILED".equals(task.getStatus()) || "DELAYED".equals(task.getStatus());
 
         if (!isReturnState) {
             btnReturnToWarehouse.setVisibility(GONE);
             return;
         }
 
+        // 👉 Nếu đã có proof RETURNED → disable
+        if (hasReturnedProof(currentProofs)) {
+            btnReturnToWarehouse.setVisibility(VISIBLE);
+            btnReturnToWarehouse.setEnabled(false);
+            btnReturnToWarehouse.setText("ĐÃ TRẢ HÀNG VỀ KHO");
+            return;
+        }
+
+        // 👉 Chưa có proof → cho phép trả kho
         btnReturnToWarehouse.setVisibility(VISIBLE);
+        btnReturnToWarehouse.setEnabled(true);
+        btnReturnToWarehouse.setText("TRẢ HÀNG VỀ KHO");
 
         btnReturnToWarehouse.setOnClickListener(v -> {
-
             if (hasUnfinishedTasks) {
                 new AlertDialog.Builder(this)
                         .setTitle("Chưa thể trả hàng")
@@ -201,7 +222,6 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
                 return;
             }
 
-            // OK → cho phép trả kho
             Intent intent = new Intent(this, ReturnToWarehouseActivity.class);
             intent.putExtra(
                     ReturnToWarehouseActivity.EXTRA_ASSIGNMENT_ID,
@@ -210,6 +230,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
             startActivityForResult(intent, 9002);
         });
     }
+
 
 
     private void updateMainActionButton(String status) {
@@ -385,18 +406,20 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
                 tvProofsLoading.setVisibility(View.GONE);
 
                 if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
-                    List<DeliveryProof> proofs = response.body().getResult();
+                    currentProofs = response.body().getResult();
 
-                    if (proofs.isEmpty()) {
+                    if (currentProofs.isEmpty()) {
                         tvProofsEmpty.setVisibility(View.VISIBLE);
                         recyclerProofs.setVisibility(View.GONE);
                     } else {
                         tvProofsEmpty.setVisibility(View.GONE);
                         recyclerProofs.setVisibility(View.VISIBLE);
-                        proofAdapter.setProofs(proofs);
+                        proofAdapter.setProofs(currentProofs);
                     }
+
+                    // 👇 QUAN TRỌNG
+                    updateReturnToWarehouseButton(currentTask);
                 } else {
-                    // Hide card if failed to load
                     cardProofs.setVisibility(View.GONE);
                 }
             }

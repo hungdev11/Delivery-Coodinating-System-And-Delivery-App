@@ -40,6 +40,7 @@ import com.ds.deliveryapp.model.DeliveryProof;
 import com.ds.deliveryapp.service.GlobalChatService;
 import com.ds.deliveryapp.service.LocationTrackingService;
 import com.ds.deliveryapp.utils.SessionManager;
+import com.google.gson.Gson;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,7 +55,7 @@ import retrofit2.Response;
  * (API lấy các task của phiên (session) đang hoạt động).
  */
 public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickListener, GlobalChatService.UpdateNotificationListener {
-
+    private final Gson gson = new Gson();
     private RecyclerView rvTasks;
     private SwipeRefreshLayout swipeRefreshLayout;
     private TasksAdapter adapter;
@@ -62,8 +63,6 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private ProgressBar progressBar;
     private Button btnScanOrder;
     private ImageButton btnSessionMenu;
-    private boolean isSessionInIncidentMode = false;
-
     private TextView tvEmptyState;
 
     private int currentPage = 0;
@@ -422,6 +421,14 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         });
     }
 
+    private boolean isSessionIncidentMode() {
+        boolean flag = false;
+        for (DeliveryAssignment task : tasks) {
+            if (task.getFailReason().contains("Session failed:")) return true;
+        }
+        return flag;
+    }
+
     private void setupSessionMenu() {
         btnSessionMenu.setOnClickListener(v -> {
             if (activeSessionId == null) {
@@ -440,7 +447,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     startActivity(intent);
                     return true;
                 } else if (itemId == R.id.menu_complete_session) {
-                    if (isSessionInIncidentMode) {
+                    if (isSessionIncidentMode()) {
                         Toast.makeText(
                                 getContext(),
                                 "Phiên đang xử lý sự cố, không thể hoàn tất.",
@@ -717,12 +724,11 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
 
                 progressBar.setVisibility(View.GONE);
                 setButtonsEnabled(true);
-
+                Log.e(TAG, "Response: " + gson.toJson(response.body()));
                 if (!response.isSuccessful() || response.body() == null) {
                     Toast.makeText(getContext(), "Không thể hủy phiên", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                isSessionInIncidentMode = true;
                 // ===== PHASE 1 =====
                 if (hasInProgressTasks()) {
                     // reload task list

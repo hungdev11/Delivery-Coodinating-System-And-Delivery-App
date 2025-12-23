@@ -1,5 +1,7 @@
 package com.ds.deliveryapp.adapter;
 
+import static android.view.View.GONE;
+
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -85,6 +87,7 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.ViewHold
                 sessionIdStr = sessionIdStr.substring(0, 8) + "...";
             }
             tvSessionId.setText("Phiên: " + sessionIdStr);
+            tvSessionId.setVisibility(GONE);
 
             // Status
             String statusText = StatusMapper.mapSessionStatus(session.getStatus());
