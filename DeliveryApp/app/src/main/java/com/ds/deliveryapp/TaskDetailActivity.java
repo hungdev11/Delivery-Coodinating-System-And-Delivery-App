@@ -93,7 +93,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
                 finish();
             }
 
-            if (sessionStatus == null) {
+            if (sessionStatus == null || currentTask.getStatus().equals("COMPLETED")) {
                 btnMainAction.setVisibility(GONE);
                 btnFailAction.setVisibility(GONE);
             }
