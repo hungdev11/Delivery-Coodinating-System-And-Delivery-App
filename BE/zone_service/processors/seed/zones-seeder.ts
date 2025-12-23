@@ -1,174 +1,218 @@
 /**
- * Seeder for zones (wards/phường)
- * Processes multi-polygon .poly file for old Thu Duc City and its wards
- * Creates:
- * - 1 center: TP Thủ Đức (cũ) - represents the entire old Thu Duc City area
- * - N zones: Individual wards (phường) that belong to the Thu Duc center
+ * Seeder v2 for zones (districts/phường)
+ * Source: GeoJSON exported from PBF (see README)
+ * - Center: HCMC
+ * - Zones: admin_level=6 (districts). Wards are optional and skipped.
  */
 
 import { PrismaClient } from '@prisma/client';
+import { readFileSync } from 'fs';
 import { join } from 'path';
-import { 
-  parseMultiPolyFile, 
-  unionPolygons, 
-  generateZoneCode,
-  calculateCentroid
-} from '../../utils/polygon-parser';
+import { generateZoneCode, calculateCentroid, parseMultiPolyFile, unionPolygons } from '../../utils/polygon-parser';
 
 const prisma = new PrismaClient();
+const START_INDEX = process.env.ZONE_START ? parseInt(process.env.ZONE_START, 10) : 0;
+const END_INDEX = process.env.ZONE_END ? parseInt(process.env.ZONE_END, 10) : undefined;
+const BATCH_LOG = 100;
 
-async function seedZones() {
-  console.log('🌱 Starting zones seeding...\n');
-  console.log('='.repeat(60));
+type Feature = {
+  type: string;
+  properties: Record<string, any>;
+  geometry: {
+    type: 'Polygon' | 'MultiPolygon';
+    coordinates: number[][][] | number[][][][];
+  };
+};
 
+function normalizePolygon(geom: Feature['geometry']): number[][] {
+  if (geom.type === 'Polygon') {
+    return geom.coordinates?.[0] || [];
+  }
+  // MultiPolygon: take first polygon ring
+  const mp = geom.coordinates as number[][][][];
+  return mp?.[0]?.[0] || [];
+}
+
+function loadFeatures(geoPath: string): Feature[] {
+  const raw = readFileSync(geoPath, 'utf-8');
+  const parsed = JSON.parse(raw);
+  if (!parsed || !parsed.features) return [];
+  return parsed.features as Feature[];
+}
+
+function loadBoundaryRing(polyPath: string): number[][] | null {
   try {
-    // Step 0: Debug database connection
-    console.log('Step 0: Checking database connection...');
-    const dbUrl = process.env.ZONE_DB_CONNECTION;
-    console.log(`Database URL: ${dbUrl ? dbUrl + '...' : 'NOT SET'}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    
-    try {
-      const existingCenters = await prisma.centers.findMany();
-      const existingZones = await prisma.zones.findMany();
-      console.log(`✓ Database connected successfully`);
-      console.log(`  - Existing centers: ${existingCenters.length}`);
-      console.log(`  - Existing zones: ${existingZones.length}`);
-    } catch (dbError) {
-      console.error('❌ Database connection failed:', dbError);
-      console.error('Error details:', {
-        message: dbError.message,
-        code: dbError.code,
-        name: dbError.name
-      });
-      throw dbError;
-    }
-    console.log();
+    const polys = parseMultiPolyFile(polyPath);
+    if (!polys || polys.length === 0) return null;
+    const union = unionPolygons(polys);
+    return union && union.length >= 3 ? union : null;
+  } catch (e) {
+    console.warn(`⚠️ Cannot load boundary poly ${polyPath}:`, e);
+    return null;
+  }
+}
 
-    // Step 1: Parse multi-polygon file (contains all wards)
-    console.log('Step 1: Parsing Thu Duc Cu multi-polygon file...');
-    const polyPath = join(process.cwd(), './raw_data/poly/hcmc.poly');
-    
-    const wards = parseMultiPolyFile(polyPath);
-    console.log(`✓ Parsed ${wards.length} wards from poly file\n`);
+function pointInRing(point: { lat: number; lon: number }, ring: number[][] | null): boolean {
+  if (!ring || ring.length < 3) return true; // skip check if missing boundary
+  const x = point.lon;
+  const y = point.lat;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const cur = ring[i];
+    const prev = ring[j];
+    if (!cur || !prev || cur.length < 2 || prev.length < 2) continue;
+    const xi = cur[0], yi = cur[1];
+    const xj = prev[0], yj = prev[1];
+    const denom = (yj - yi) + Number.EPSILON;
+    const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / denom + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
 
-    if (wards.length === 0) {
-      throw new Error('No wards found in poly file');
-    }
+async function upsertCenter(name: string, code: string, boundary: number[][]) {
+  const centroid = calculateCentroid(boundary);
+  const geoJson = { type: 'Polygon', coordinates: [boundary] };
+  return prisma.centers.upsert({
+    where: { code },
+    update: { name, address: name, lat: centroid.lat, lon: centroid.lon, polygon: geoJson },
+    create: { code, name, address: name, lat: centroid.lat, lon: centroid.lon, polygon: geoJson },
+  });
+}
 
-    // Show parsed wards
-    console.log('Found wards:');
-    for (const ward of wards) {
-      const code = generateZoneCode(ward.name);
-      console.log(`  - ${ward.name} (${code}): ${ward.coordinates.length} points`);
-    }
-    console.log();
+async function upsertZones(centerId: string, features: Feature[], levelLabel: string) {
+  let created = 0;
+  let updated = 0;
+  const batchSize = 100;
+  const existingCodes = new Set<string>(
+    (await prisma.zones.findMany({ select: { code: true } })).map(z => z.code)
+  );
 
-    // Step 2: Create/update center for TP Thủ Đức (cũ)
-    console.log('Step 2: Creating center for TP Thủ Đức (cũ)...');
-    const centerBoundary = unionPolygons(wards);
-    const centerCentroid = calculateCentroid(centerBoundary);
-    
-    const centerGeoJSON = {
-      type: 'Polygon',
-      coordinates: [centerBoundary],
-    };
+  for (let i = 0; i < features.length; i += batchSize) {
+    const batch = features.slice(i, i + batchSize);
+    const txOps: any[] = [];
+    const meta: Array<{ existing: boolean; name: string; code: string; centroid: { lat: number; lon: number } }> = [];
 
-    const thuDucCenter = await prisma.centers.upsert({
-      where: { code: 'THUDUC_OLD' },
-      update: {
-        name: 'TP Thủ Đức (cũ)',
-        address: 'Thành phố Thủ Đức (cũ), Thành phố Hồ Chí Minh',
-        lat: centerCentroid.lat,
-        lon: centerCentroid.lon,
-        polygon: centerGeoJSON,
-      },
-      create: {
-        code: 'THUDUC_OLD',
-        name: 'TP Thủ Đức (cũ)',
-        address: 'Thành phố Thủ Đức (cũ), Thành phố Hồ Chí Minh',
-        lat: centerCentroid.lat,
-        lon: centerCentroid.lon,
-        polygon: centerGeoJSON,
-      },
-    });
-
-    console.log(`✓ Center created: ${thuDucCenter.name}`);
-    console.log(`  Code: ${thuDucCenter.code}`);
-    console.log(`  Centroid: ${centerCentroid.lat.toFixed(6)}, ${centerCentroid.lon.toFixed(6)}\n`);
-
-    // Step 3: Create zones (wards) that belong to Thu Duc center
-    console.log('Step 3: Creating zones (wards)...');
-    let createdCount = 0;
-    let updatedCount = 0;
-
-    for (const ward of wards) {
+    for (const f of batch) {
       try {
-        const code = generateZoneCode(ward.name);
-        const centroid = calculateCentroid(ward.coordinates);
-        
-        const wardGeoJSON = {
-          type: 'Polygon',
-          coordinates: [ward.coordinates],
-        };
-
-        // Check if zone already exists
-        const existing = await prisma.zones.findUnique({
-          where: { code },
-        });
-
-        const wardZone = await prisma.zones.upsert({
-          where: { code },
-          update: {
-            name: ward.name,
-            polygon: wardGeoJSON,
-            center_id: thuDucCenter.center_id,
-          },
-          create: {
-            code,
-            name: ward.name,
-            polygon: wardGeoJSON,
-            center_id: thuDucCenter.center_id,
-          },
-        });
-
-        if (existing) {
-          updatedCount++;
-          console.log(`  ✓ Updated: ${wardZone.name} (${wardZone.code})`);
-        } else {
-          createdCount++;
-          console.log(`  ✓ Created: ${wardZone.name} (${wardZone.code})`);
+        const name = f.properties?.name || f.properties?.['name:vi'] || f.properties?.['ref'] || 'UNKNOWN';
+        const code = generateZoneCode(name);
+        const ring = normalizePolygon(f.geometry);
+        if (!ring || ring.length < 3) {
+          console.warn(`⚠️ Skip ${name}: invalid polygon`);
+          continue;
         }
-        console.log(`    Centroid: ${centroid.lat.toFixed(6)}, ${centroid.lon.toFixed(6)}`);
-      } catch (error) {
-        console.error(`  ✗ Error processing ${ward.name}:`, error);
+        const centroid = calculateCentroid(ring);
+        const geoJson =
+          f.geometry.type === 'Polygon'
+            ? { type: 'Polygon', coordinates: [ring] }
+            : { type: 'MultiPolygon', coordinates: f.geometry.coordinates };
+
+        const existed = existingCodes.has(code);
+        txOps.push(prisma.zones.upsert({
+          where: { code },
+          update: { name, polygon: geoJson, center_id: centerId },
+          create: { code, name, polygon: geoJson, center_id: centerId },
+        }));
+        meta.push({ existing: existed, name, code, centroid });
+        existingCodes.add(code);
+      } catch (e) {
+        console.error(`  ✗ Error processing feature:`, e);
+        continue;
       }
     }
 
-    console.log();
+    if (txOps.length > 0) {
+      await prisma.$transaction(txOps);
+    }
 
-    // Final summary
+    for (const r of meta) {
+      if (r.existing) updated++;
+      else created++;
+      console.log(`  ✓ ${levelLabel}: ${r.name} (${r.code}) centroid=${r.centroid.lat.toFixed(6)},${r.centroid.lon.toFixed(6)}`);
+    }
+
+    if ((i + batchSize) % (BATCH_LOG * batchSize) === 0 || i + batchSize >= features.length) {
+      console.log(`  ... processed ${Math.min(i + batchSize, features.length)}/${features.length} ${levelLabel.toLowerCase()}s`);
+    }
+  }
+
+  return { created, updated };
+}
+
+async function seedZonesV2() {
+  console.log('🌱 Zones seeder v2 (GeoJSON from PBF) ...');
+  console.log('='.repeat(60));
+
+  try {
+    // Step 0: check DB
+    console.log('Step 0: Checking database connection...');
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('✓ DB ok\n');
+
+    // Guard: run only when zones table is empty
+    const existing = await prisma.zones.count();
+    if (existing > 0) {
+      console.log(`⚠️ zones table is not empty (${existing} rows). Skip seeding.`);
+      return;
+    }
+
+    // Paths
+    const districtsPath = join(process.cwd(), './raw_data/extracted/hcmc-districts.geojson'); // admin_level=6
+    const boundaryPath = join(process.cwd(), './raw_data/poly/hcmc.poly'); // HCMC boundary for filter
+
+    // Load features
+    console.log('Step 1: Loading districts geojson...');
+    let districtFeatures = loadFeatures(districtsPath);
+    console.log(`✓ districts loaded (raw): ${districtFeatures.length}`);
+
+    // Filter admin_level=6 only
+    districtFeatures = districtFeatures.filter(f => {
+      const lvl = f.properties?.admin_level;
+      return lvl === '6' || lvl === 6;
+    });
+
+    // Optional: filter by HCMC boundary
+    const boundaryRing = loadBoundaryRing(boundaryPath);
+    if (boundaryRing) {
+      const before = districtFeatures.length;
+      districtFeatures = districtFeatures.filter(f => {
+        const ring = normalizePolygon(f.geometry);
+        const centroid = calculateCentroid(ring);
+        return pointInRing({ lat: centroid.lat, lon: centroid.lon }, boundaryRing);
+      });
+      console.log(`✓ boundary filter applied: ${before} → ${districtFeatures.length}`);
+    }
+    // Optional range slicing to speed up experimentation
+    if (END_INDEX !== undefined || START_INDEX > 0) {
+      districtFeatures = districtFeatures.slice(START_INDEX, END_INDEX);
+      console.log(`✓ applied range slice [${START_INDEX}, ${END_INDEX ?? 'end'}) → ${districtFeatures.length} districts`);
+    }
+
+    console.log(`✓ districts kept: ${districtFeatures.length}\n`);
+
+    if (districtFeatures.length === 0) {
+      throw new Error('Missing districts features after filtering');
+    }
+
+    // Center = HCMC boundary = union of districts (take first MultiPolygon for simplicity)
+    const firstDistrict = districtFeatures[0];
+    const centerBoundary = normalizePolygon(firstDistrict.geometry);
+    const center = await upsertCenter('Thành phố Hồ Chí Minh', 'HCMC', centerBoundary);
+    console.log(`✓ Center upserted: ${center.name}\n`);
+
+    console.log('Step 3: Upserting districts (admin_level=6)...');
+    const dRes = await upsertZones(center.center_id, districtFeatures, 'District');
+    console.log(`   → Created ${dRes.created}, Updated ${dRes.updated}\n`);
+
     const totalCenters = await prisma.centers.count();
     const totalZones = await prisma.zones.count();
-
     console.log('='.repeat(60));
-    console.log('✅ Zones Seeding Completed Successfully!');
-    console.log('='.repeat(60));
-    console.log('\nSummary:');
-    console.log(`  - Center: TP Thủ Đức (cũ)`);
-    console.log(`  - Zones (wards): ${wards.length}`);
-    console.log(`  - Created: ${createdCount}`);
-    console.log(`  - Updated: ${updatedCount}`);
-    console.log(`  - Total centers in DB: ${totalCenters}`);
-    console.log(`  - Total zones in DB: ${totalZones}`);
-    console.log('\nNext steps:');
-    console.log('  1. Seed roads: npm run seed:roads');
-    console.log('  2. Seed addresses: npm run seed:addresses');
-    console.log('='.repeat(60));
-
-  } catch (error) {
-    console.error('\n❌ Error seeding zones:', error);
-    throw error;
+    console.log('✅ Zones Seeding v2 Completed (Districts only)');
+    console.log(`Centers: ${totalCenters} | Zones: ${totalZones}`);
+  } catch (err) {
+    console.error('❌ Error:', err);
+    throw err;
   } finally {
     await prisma.$disconnect();
   }
@@ -176,7 +220,7 @@ async function seedZones() {
 
 // Run if executed directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  seedZones()
+  seedZonesV2()
     .then(() => {
       console.log('Done!');
       process.exit(0);
@@ -187,4 +231,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     });
 }
 
-export { seedZones };
+export { seedZonesV2 };

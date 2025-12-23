@@ -154,7 +154,7 @@ export const getLatestAssignmentForParcel = async (
   const response = await apiClient.get<{
     result: LatestAssignmentResponse | null
     message?: string
-  }>(`/api/v1/assignments/parcels/${parcelId}/latest-assignment`)
+  }>(`/v1/assignments/parcels/${parcelId}/latest-assignment`)
 
   return response.result ?? null
 }

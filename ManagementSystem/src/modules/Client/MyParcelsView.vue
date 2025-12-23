@@ -75,10 +75,18 @@ const trackingSessionId = ref<string | null>(null)
 const trackingLocation = ref<{ lat: number; lon: number; timestamp?: string } | null>(null)
 const trackingLoading = ref(false)
 
-const trackingMarkers = computed(() => {
+type TrackingMarker = {
+  id: string
+  coordinates: [number, number]
+  type: string
+  title: string
+  color: string
+}
+
+const trackingMarkers = computed<TrackingMarker[]>(() => {
   if (!trackingLocation.value) return []
 
-  const markers: any[] = [
+  const markers: TrackingMarker[] = [
     {
       id: 'shipper',
       coordinates: [trackingLocation.value.lon, trackingLocation.value.lat],
@@ -314,8 +322,8 @@ const handleTrackShipper = async (parcel: ParcelDto) => {
 
     // Subscribe to session tracking topic
     const destination = `/topic/sessions/${latest.sessionId}/tracking`
-    subscribeTo(destination, (event: any) => {
-      if (!event) return
+    subscribeTo(destination, (event: { lat?: number; lon?: number; timestamp?: string } | null) => {
+      if (!event || event.lat == null || event.lon == null) return
       trackingLocation.value = {
         lat: event.lat,
         lon: event.lon,
@@ -333,6 +341,13 @@ const handleTrackShipper = async (parcel: ParcelDto) => {
   } finally {
     trackingLoading.value = false
   }
+}
+
+const closeTrackingModal = () => {
+  trackingParcel.value = null
+  trackingSessionId.value = null
+  trackingLocation.value = null
+  trackingLoading.value = false
 }
 
 /**
@@ -673,7 +688,7 @@ const columns: TableColumn<ParcelDto>[] = [
             variant: 'ghost',
             title: 'Xem ảnh/video đơn hàng',
             onClick: () => openProofModal(parcel),
-        }),
+          }),
         // Report not received button (for DELIVERED status)
         canReport &&
           h(
@@ -795,30 +810,30 @@ onMounted(async () => {
         }"
       >
         <template #content>
-    <div class="space-y-4">
-      <!-- Desktop Table View -->
-      <div class="hidden md:block">
-        <UTable
-          :data="parcels"
-          :columns="columns"
-          :loading="loading"
-          :ui="{
-            empty: 'text-center py-12',
-            root: 'h-[50vh]',
-            thead: 'sticky top-0 bg-white dark:bg-gray-800',
-          }"
-        >
-          <template #cell(code)="{ row }">
-            <span class="font-mono text-sm">{{ row.original.code }}</span>
-          </template>
-        </UTable>
-      </div>
+          <div class="space-y-4">
+            <!-- Desktop Table View -->
+            <div class="hidden md:block">
+              <UTable
+                :data="parcels"
+                :columns="columns"
+                :loading="loading"
+                :ui="{
+                  empty: 'text-center py-12',
+                  root: 'h-[50vh]',
+                  thead: 'sticky top-0 bg-white dark:bg-gray-800',
+                }"
+              >
+                <template #cell(code)="{ row }">
+                  <span class="font-mono text-sm">{{ row.original.code }}</span>
+                </template>
+              </UTable>
+            </div>
 
-      <!-- Mobile Card View -->
-      <div class="md:hidden space-y-3">
-        <template v-if="loading">
-          <USkeleton v-for="i in 3" :key="i" class="h-40 w-full rounded-lg" />
-        </template>
+            <!-- Mobile Card View -->
+            <div class="md:hidden space-y-3">
+              <template v-if="loading">
+                <USkeleton v-for="i in 3" :key="i" class="h-40 w-full rounded-lg" />
+              </template>
               <template v-else-if="parcels.length === 0">
                 <div class="text-center py-12">
                   <UIcon name="i-heroicons-cube" class="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -828,67 +843,77 @@ onMounted(async () => {
                   <p class="text-gray-500">Không có đơn hàng nào trong danh mục này</p>
                 </div>
               </template>
-        <template v-else>
-          <UCard v-for="parcel in parcels" :key="parcel.id" class="overflow-hidden">
-            <div class="space-y-3">
-              <!-- Header: Code and Status -->
-              <div class="flex items-center justify-between">
-                <span class="font-mono text-sm font-semibold text-gray-900">
-                  {{ parcel.code }}
-                </span>
-                <UBadge :color="getStatusColor(parcel.status)" variant="soft" size="sm">
-                  {{ parcel.displayStatus || parcel.status }}
-                </UBadge>
-              </div>
+              <template v-else>
+                <UCard v-for="parcel in parcels" :key="parcel.id" class="overflow-hidden">
+                  <div class="space-y-3">
+                    <!-- Header: Code and Status -->
+                    <div class="flex items-center justify-between">
+                      <span class="font-mono text-sm font-semibold text-gray-900">
+                        {{ parcel.code }}
+                      </span>
+                      <UBadge :color="getStatusColor(parcel.status)" variant="soft" size="sm">
+                        {{ parcel.displayStatus || parcel.status }}
+                      </UBadge>
+                    </div>
 
-              <!-- Info Grid -->
-              <div class="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <span class="text-gray-500">Người gửi:</span>
+                    <!-- Info Grid -->
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span class="text-gray-500">Người gửi:</span>
                         <p class="font-medium text-gray-900 truncate">
                           {{ parcel.senderName || 'N/A' }}
                         </p>
-                </div>
-                <div>
-                  <span class="text-gray-500">Loại:</span>
-                  <p class="font-medium text-gray-900">{{ parcel.deliveryType }}</p>
-                </div>
-              </div>
+                      </div>
+                      <div>
+                        <span class="text-gray-500">Loại:</span>
+                        <p class="font-medium text-gray-900">{{ parcel.deliveryType }}</p>
+                      </div>
+                    </div>
 
-              <!-- Destination -->
-              <div class="text-sm">
-                <span class="text-gray-500">Địa chỉ giao:</span>
-                <p class="font-medium text-gray-900 line-clamp-2">
-                  {{ parcel.targetDestination || 'N/A' }}
-                </p>
-              </div>
+                    <!-- Destination -->
+                    <div class="text-sm">
+                      <span class="text-gray-500">Địa chỉ giao:</span>
+                      <p class="font-medium text-gray-900 line-clamp-2">
+                        {{ parcel.targetDestination || 'N/A' }}
+                      </p>
+                    </div>
 
-              <!-- Created Date -->
-              <div class="text-xs text-gray-500">
-                Tạo lúc: {{ new Date(parcel.createdAt).toLocaleString('vi-VN') }}
-              </div>
+                    <!-- Created Date -->
+                    <div class="text-xs text-gray-500">
+                      Tạo lúc: {{ new Date(parcel.createdAt).toLocaleString('vi-VN') }}
+                    </div>
 
-              <!-- Actions -->
-              <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-                <UButton
-                  v-if="canChat(parcel)"
-                  icon="i-heroicons-chat-bubble-left-right"
-                  size="xs"
-                  variant="ghost"
-                  color="neutral"
-                  @click="openChat(parcel)"
-                >
-                  Chat
-                </UButton>
-                <UButton
-                  icon="i-heroicons-qr-code"
-                  size="xs"
-                  variant="ghost"
-                  color="neutral"
-                  @click="openQRModal(parcel)"
-                >
-                  QR
-                </UButton>
+                    <!-- Actions -->
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                      <UButton
+                        v-if="canChat(parcel)"
+                        icon="i-heroicons-chat-bubble-left-right"
+                        size="xs"
+                        variant="ghost"
+                        color="neutral"
+                        @click="openChat(parcel)"
+                      >
+                        Chat
+                      </UButton>
+                      <UButton
+                        icon="i-heroicons-qr-code"
+                        size="xs"
+                        variant="ghost"
+                        color="neutral"
+                        @click="openQRModal(parcel)"
+                      >
+                        QR
+                      </UButton>
+                      <UButton
+                        v-if="canViewProofs(parcel)"
+                        icon="i-heroicons-photo"
+                        size="xs"
+                        variant="ghost"
+                        color="neutral"
+                        @click="openProofModal(parcel)"
+                      >
+                        Xem ảnh
+                      </UButton>
                       <!-- Confirm received button (for DELIVERED status) -->
                       <UButton
                         v-if="canConfirmParcel(parcel)"
@@ -910,9 +935,7 @@ onMounted(async () => {
                         :loading="disputingParcelId === parcel.id"
                         @click="handleReportNotReceived(parcel)"
                       >
-                        {{
-                          disputingParcelId === parcel.id ? 'Đang gửi...' : 'Chưa nhận được'
-                        }}
+                        {{ disputingParcelId === parcel.id ? 'Đang gửi...' : 'Chưa nhận được' }}
                       </UButton>
                       <!-- Retract dispute button (for DISPUTE status) -->
                       <UButton
@@ -930,29 +953,26 @@ onMounted(async () => {
                         }}
                       </UButton>
 
-                <!-- Track shipper for ON_ROUTE parcels -->
-                <UButton
-                  v-if="parcel.status === 'ON_ROUTE'"
-                  size="xs"
-                  variant="ghost"
-                  color="primary"
-                  @click="handleTrackShipper(parcel)"
-                >
-                  Theo dõi
-                </UButton>
-              </div>
+                      <!-- Track shipper for ON_ROUTE parcels -->
+                      <UButton
+                        v-if="parcel.status === 'ON_ROUTE'"
+                        size="xs"
+                        variant="ghost"
+                        color="primary"
+                        @click="handleTrackShipper(parcel)"
+                      >
+                        Theo dõi
+                      </UButton>
+                    </div>
+                  </div>
+                </UCard>
+              </template>
             </div>
-          </UCard>
-        </template>
-      </div>
           </div>
         </template>
       </UTabs>
 
-      <div
-        v-if="!loading && parcels.length === 0"
-        class="text-center py-12"
-      >
+      <div v-if="!loading && parcels.length === 0" class="text-center py-12">
         <UIcon name="i-heroicons-cube" class="w-16 h-16 text-gray-400 mx-auto mb-4" />
         <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
           Chưa có đơn hàng
@@ -984,22 +1004,15 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Simple tracking modal -->
+    <!-- Tracking modal (aligned with other modals) -->
     <UModal
-      :model-value="!!trackingParcel"
-      @update:model-value="(val) => !val && (trackingParcel = null)"
+      :v-model:open="!!trackingParcel"
+      :title="trackingParcel ? `Theo dõi shipper - ${trackingParcel.code}` : 'Theo dõi shipper'"
+      :description="trackingSessionId ? `Phiên giao: ${trackingSessionId}` : 'Đang kết nối vị trí shipper'"
+      @close="closeTrackingModal"
     >
-      <UCard>
-        <template #header>
-          <div class="flex items-center justify-between">
-            <h3 class="text-lg font-semibold">
-              Theo dõi shipper - {{ trackingParcel?.code }}
-            </h3>
-            <UButton icon="i-heroicons-x-mark" variant="ghost" size="xs" @click="trackingParcel = null" />
-          </div>
-        </template>
-
-        <div class="space-y-2">
+      <template #body>
+        <div class="space-y-3">
           <p v-if="trackingLoading" class="text-gray-500">Đang kết nối tới vị trí shipper...</p>
           <p v-else-if="!trackingLocation" class="text-gray-500">
             Chưa nhận được vị trí. Vui lòng giữ màn hình mở vài giây.
@@ -1009,7 +1022,7 @@ onMounted(async () => {
               height="280px"
               :show-zones="false"
               :show-routing="false"
-              :markers="trackingMarkers as any"
+              :markers="trackingMarkers"
               :auto-fit="true"
               :fit-padding="40"
             />
@@ -1024,7 +1037,12 @@ onMounted(async () => {
             </p>
           </div>
         </div>
-      </UCard>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <UButton variant="soft" color="gray" @click="closeTrackingModal">Đóng</UButton>
+        </div>
+      </template>
     </UModal>
   </div>
 </template>
