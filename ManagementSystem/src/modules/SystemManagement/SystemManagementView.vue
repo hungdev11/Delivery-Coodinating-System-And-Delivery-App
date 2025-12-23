@@ -204,9 +204,10 @@ const getContainerStatus = (modelName: string) => {
   return containerStatuses.value.find(c => c.model === modelName)
 }
 
-const getBuildStatus = (modelName: string) => {
+const getBuildStatus = (modelName: string): OSRMBuildStatus | null => {
   if (!osrmStatus.value?.buildStatus) return null
-  return osrmStatus.value.buildStatus.find(b => b.model === modelName)
+  const status = osrmStatus.value.buildStatus.find(b => b.model === modelName)
+  return status || null
 }
 
 const getBuildStatusColor = (status: string | null | undefined) => {
@@ -398,16 +399,23 @@ onMounted(() => {
           <!-- OSRM Models Status -->
           <div v-if="osrmStatus">
             <h4 class="font-medium mb-3">OSRM Models Status</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div
-                v-for="model in osrmStatus.models"
-                :key="model.name"
-                class="p-4 border rounded-lg"
-                :class="{
-                  'border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800': model.exists,
-                  'border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800': !model.exists,
-                }"
-              >
+            
+            <!-- Bicycle (Motorbike) Models -->
+            <div class="mb-6">
+              <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <UIcon name="i-heroicons-bicycle" class="w-4 h-4" />
+                Bicycle (Motorbike) Models
+              </h5>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div
+                  v-for="model in osrmStatus.models.filter(m => !m.name.includes('car'))"
+                  :key="model.name"
+                  class="p-4 border rounded-lg"
+                  :class="{
+                    'border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800': model.exists,
+                    'border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800': !model.exists,
+                  }"
+                >
                 <div class="flex items-center justify-between mb-3">
                   <span class="font-medium">{{ model.name }}</span>
                   <UBadge
@@ -502,6 +510,121 @@ onMounted(() => {
                     </UButton>
                   </div>
                 </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Car Models -->
+            <div class="mb-6">
+              <h5 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <UIcon name="i-heroicons-truck" class="w-4 h-4" />
+                Car Models
+              </h5>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div
+                  v-for="model in osrmStatus.models.filter(m => m.name.includes('car'))"
+                  :key="model.name"
+                  class="p-4 border rounded-lg"
+                  :class="{
+                    'border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800': model.exists,
+                    'border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800': !model.exists,
+                  }"
+                >
+                  <div class="flex items-center justify-between mb-3">
+                    <span class="font-medium">{{ model.name }}</span>
+                    <UBadge
+                      :color="model.exists ? 'green' : 'red'"
+                      variant="soft"
+                    >
+                      {{ model.exists ? 'Ready' : 'Missing' }}
+                    </UBadge>
+                  </div>
+                  
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    Path: {{ model.path }}
+                  </div>
+                  
+                  <!-- Container Status and Build Status - Side by Side -->
+                  <div class="space-y-2">
+                    <!-- Container Status Row -->
+                    <div v-if="getContainerStatus(model.name)" class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Container:</span>
+                        <UBadge
+                          :color="getContainerStatus(model.name)?.status === 'running' ? 'green' : 'gray'"
+                          variant="soft"
+                          size="sm"
+                        >
+                          {{ getContainerStatus(model.name)?.status || 'unknown' }}
+                        </UBadge>
+                        <div v-if="getContainerStatus(model.name)?.health" class="flex items-center gap-1 text-xs">
+                          <UIcon
+                            :name="getContainerStatus(model.name)?.health?.healthy ? 'i-heroicons-check-circle' : 'i-heroicons-x-circle'"
+                            class="w-3 h-3"
+                            :class="getContainerStatus(model.name)?.health?.healthy ? 'text-green-600' : 'text-red-600'"
+                          />
+                          <span class="text-gray-600 dark:text-gray-400">{{ getContainerStatus(model.name)?.health?.healthy ? 'Healthy' : 'Unhealthy' }}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- Build Status Row -->
+                    <div v-if="getBuildStatus(model.name)" class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Build:</span>
+                        <template v-if="getBuildStatusText(getBuildStatus(model.name))">
+                          <UBadge
+                            :color="getBuildStatusText(getBuildStatus(model.name))?.color || 'gray'"
+                            variant="soft"
+                            size="sm"
+                          >
+                            <UIcon 
+                              :name="getBuildStatusText(getBuildStatus(model.name))?.icon || 'i-heroicons-information-circle'" 
+                              class="w-3 h-3 mr-1" 
+                            />
+                            {{ getBuildStatusText(getBuildStatus(model.name))?.text }}
+                          </UBadge>
+                        </template>
+                        <template v-else>
+                          <UBadge color="gray" variant="soft" size="sm">
+                            No build data
+                          </UBadge>
+                        </template>
+                      </div>
+                    </div>
+                    
+                    <!-- Container Actions -->
+                    <div v-if="getContainerStatus(model.name)" class="flex gap-1 pt-2">
+                      <UButton
+                        v-if="getContainerStatus(model.name)?.status !== 'running'"
+                        size="xs"
+                        color="green"
+                        :loading="actionLoading[`start-${model.name}`]"
+                        @click="handleContainerAction(model.name, 'start')"
+                      >
+                        Start
+                      </UButton>
+                      <UButton
+                        v-if="getContainerStatus(model.name)?.status === 'running'"
+                        size="xs"
+                        color="red"
+                        :loading="actionLoading[`stop-${model.name}`]"
+                        @click="handleContainerAction(model.name, 'stop')"
+                      >
+                        Stop
+                      </UButton>
+                      <UButton
+                        v-if="getContainerStatus(model.name)?.status === 'running'"
+                        size="xs"
+                        color="yellow"
+                        :loading="actionLoading[`restart-${model.name}`]"
+                        @click="handleContainerAction(model.name, 'restart')"
+                      >
+                        Restart
+                      </UButton>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             
@@ -538,7 +661,7 @@ onMounted(() => {
                 <strong>Extract:</strong> Extract complete OSM data (routing + addresses) from source files.
               </div>
               <div>
-                <strong>Generate:</strong> Generate all 4 OSRM models (osrm-full, osrm-rating-only, osrm-blocking-only, osrm-base) from the current database state.
+                <strong>Generate:</strong> Generate all 8 OSRM models (4 bicycle + 4 car models) from the current database state.
               </div>
             </div>
           </div>

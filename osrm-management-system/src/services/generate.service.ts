@@ -594,7 +594,6 @@ Set = require('lib/set')
 Sequence = require('lib/sequence')
 Handlers = require("lib/way_handlers")
 Relations = require("lib/relations")
-Obstacles = require("lib/obstacles")
 find_access_tag = require("lib/access").find_access_tag
 limit = require("lib/maxspeed").limit
 Utils = require("lib/utils")
@@ -750,39 +749,9 @@ function setup()
 end
 
 function process_node(profile, node, result, relations)
-  local access = find_access_tag(node, profile.access_tags_hierarchy)
-  if access then
-    if profile.access_tag_blacklist[access] and not profile.restricted_access_tag_list[access] then
-      if obstacle_map then
-        obstacle_map:add(node, Obstacle.new(obstacle_type.barrier))
-      end
-    end
-  else
-    local barrier = node:get_value_by_key("barrier")
-    if barrier then
-      local restricted_by_height = false
-      if barrier == 'height_restrictor' then
-         local maxheight = Measure.get_max_height(node:get_value_by_key("maxheight"), node)
-         restricted_by_height = maxheight and maxheight < profile.vehicle_height
-      end
-      local bollard = node:get_value_by_key("bollard")
-      local rising_bollard = bollard and "rising" == bollard
-      local kerb = node:get_value_by_key("kerb")
-      local highway = node:get_value_by_key("highway")
-      local flat_kerb = kerb and ("lowered" == kerb or "flush" == kerb)
-      local highway_crossing_kerb = barrier == "kerb" and highway and highway == "crossing"
-      if not profile.barrier_whitelist[barrier]
-                and not rising_bollard
-                and not flat_kerb
-                and not highway_crossing_kerb
-                or restricted_by_height then
-        if obstacle_map then
-          obstacle_map:add(node, Obstacle.new(obstacle_type.barrier))
-        end
-      end
-    end
-  end
-  Obstacles.process_node(profile, node)
+  -- Process node for car profile
+  -- Note: Obstacles module is not available in OSRM backend, so we skip obstacle handling
+  -- Barrier and access restrictions are handled in process_way instead
 end
 
 -- Apply dynamic modifiers after WayHandlers.run()
@@ -866,22 +835,7 @@ function process_turn(profile, turn)
   local turn_penalty = profile.turn_penalty
   local turn_bias = turn.is_left_hand_driving and 1. / profile.turn_bias or profile.turn_bias
 
-  if obstacle_map then
-    for _, obs in pairs(obstacle_map:get(turn.from, turn.via)) do
-      if obs.type == obstacle_type.stop_minor and not Obstacles.entering_by_minor_road(turn) then
-          goto skip
-      end
-      if turn.number_of_roads == 2
-          and obs.type == obstacle_type.stop
-          and obs.direction == obstacle_direction.none
-          and turn.source_road.distance < 20
-          and turn.target_road.distance > 20 then
-              goto skip
-      end
-      turn.duration = turn.duration + obs.duration
-      ::skip::
-    end
-  end
+  -- Note: Obstacles module is not available, so we skip obstacle-based turn penalties
 
   if turn.number_of_roads > 2 or turn.source_mode ~= turn.target_mode or turn.is_u_turn then
     if turn.angle >= 0 then
