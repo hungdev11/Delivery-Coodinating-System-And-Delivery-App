@@ -37,6 +37,7 @@ import com.ds.deliveryapp.model.DeliveryAssignment;
 import com.ds.deliveryapp.model.DeliveryProof;
 import com.ds.deliveryapp.service.GlobalChatService;
 import com.ds.deliveryapp.utils.SessionManager;
+import com.google.gson.Gson;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,7 +52,7 @@ import retrofit2.Response;
  * (API lấy các task của phiên (session) đang hoạt động).
  */
 public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickListener, GlobalChatService.UpdateNotificationListener {
-
+    private final Gson gson = new Gson();
     private RecyclerView rvTasks;
     private SwipeRefreshLayout swipeRefreshLayout;
     private TasksAdapter adapter;
@@ -712,7 +713,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
 
                 progressBar.setVisibility(View.GONE);
                 setButtonsEnabled(true);
-
+                Log.e(TAG, "Response: " + gson.toJson(response.body()));
                 if (!response.isSuccessful() || response.body() == null) {
                     Toast.makeText(getContext(), "Không thể hủy phiên", Toast.LENGTH_SHORT).show();
                     return;
