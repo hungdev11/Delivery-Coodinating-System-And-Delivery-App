@@ -269,8 +269,8 @@ public class TaskActionHandler {
         List<IssueReason> reasons = new ArrayList<>();
         reasons.add(new IssueReason("Khách không liên lạc được", "CANNOT_CONTACT"));
         reasons.add(new IssueReason("Địa chỉ không tìm thấy", "PHANTOM_ADDRESS"));
-        reasons.add(new IssueReason("Xe bị hỏng/sự cố", "ACCIDENT"));
-        reasons.add(new IssueReason("Lý do khác", "CUSTOM"));
+        reasons.add(new IssueReason("Sự cố gây hỏng hàng", "ACCIDENT"));
+        //reasons.add(new IssueReason("Lý do khác", "CUSTOM"));
         return reasons;
     }
 }

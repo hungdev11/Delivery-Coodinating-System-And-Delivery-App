@@ -92,6 +92,11 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
                 Toast.makeText(this, "Lỗi tải dữ liệu chi tiết.", Toast.LENGTH_LONG).show();
                 finish();
             }
+
+            if (sessionStatus == null) {
+                btnMainAction.setVisibility(GONE);
+                btnFailAction.setVisibility(GONE);
+            }
         } else {
             Toast.makeText(this, "Không tìm thấy dữ liệu đơn hàng.", Toast.LENGTH_LONG).show();
             finish();
@@ -144,6 +149,9 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         if (tvDeliveryType != null) tvDeliveryType.setText(DeliveryType.NORMAL.equals(task.getDeliveryType()) ? "Giao Hàng Tiêu Chuẩn" : "Giao Hàng Nhanh");
         if (tvWeight != null) tvWeight.setText(formatWeight(task.getWeight()));
         if (tvParcelId != null) tvParcelId.setText(task.getParcelCode());
+
+        cardProofs.setVisibility(GONE);
+
         String formatCreatedAt = FormaterUtil.formatDateTime(task.getCreatedAt());
         String formatCompletedAt = FormaterUtil.formatDateTime(task.getCompletedAt());
         if (tvCreatedAt != null) tvCreatedAt.setText(formatCreatedAt);
@@ -391,47 +399,54 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
 
     private void loadProofs(String assignmentId) {
         if (assignmentId == null || assignmentId.isEmpty()) {
+            cardProofs.setVisibility(GONE);
             return;
         }
 
-        // Show loading
-        cardProofs.setVisibility(View.VISIBLE);
-        tvProofsLoading.setVisibility(View.VISIBLE);
-        tvProofsEmpty.setVisibility(View.GONE);
-        recyclerProofs.setVisibility(View.GONE);
+        // Chỉ show loading text, KHÔNG show card vội
+        cardProofs.setVisibility(GONE);
+        tvProofsLoading.setVisibility(VISIBLE);
+        tvProofsEmpty.setVisibility(GONE);
+        recyclerProofs.setVisibility(GONE);
 
-        sessionClient.getProofsByAssignment(assignmentId).enqueue(new Callback<BaseResponse<List<DeliveryProof>>>() {
-            @Override
-            public void onResponse(Call<BaseResponse<List<DeliveryProof>>> call, Response<BaseResponse<List<DeliveryProof>>> response) {
-                tvProofsLoading.setVisibility(View.GONE);
+        sessionClient.getProofsByAssignment(assignmentId)
+                .enqueue(new Callback<BaseResponse<List<DeliveryProof>>>() {
+                    @Override
+                    public void onResponse(
+                            Call<BaseResponse<List<DeliveryProof>>> call,
+                            Response<BaseResponse<List<DeliveryProof>>> response
+                    ) {
+                        tvProofsLoading.setVisibility(GONE);
 
-                if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
-                    currentProofs = response.body().getResult();
+                        if (!response.isSuccessful()
+                                || response.body() == null
+                                || response.body().getResult() == null
+                                || response.body().getResult().isEmpty()) {
 
-                    if (currentProofs.isEmpty()) {
-                        tvProofsEmpty.setVisibility(View.VISIBLE);
-                        recyclerProofs.setVisibility(View.GONE);
-                    } else {
-                        tvProofsEmpty.setVisibility(View.GONE);
-                        recyclerProofs.setVisibility(View.VISIBLE);
+                            // ❌ Không có proof → ẩn toàn bộ card
+                            currentProofs = new ArrayList<>();
+                            cardProofs.setVisibility(GONE);
+                            updateReturnToWarehouseButton(currentTask);
+                            return;
+                        }
+
+                        // ✅ Có proof
+                        currentProofs = response.body().getResult();
+                        cardProofs.setVisibility(VISIBLE);
+                        recyclerProofs.setVisibility(VISIBLE);
                         proofAdapter.setProofs(currentProofs);
+
+                        updateReturnToWarehouseButton(currentTask);
                     }
 
-                    // 👇 QUAN TRỌNG
-                    updateReturnToWarehouseButton(currentTask);
-                } else {
-                    cardProofs.setVisibility(View.GONE);
-                }
-            }
-
-            @Override
-            public void onFailure(Call<BaseResponse<List<DeliveryProof>>> call, Throwable t) {
-                tvProofsLoading.setVisibility(View.GONE);
-                // Hide card if failed to load
-                cardProofs.setVisibility(View.GONE);
-            }
-        });
+                    @Override
+                    public void onFailure(Call<BaseResponse<List<DeliveryProof>>> call, Throwable t) {
+                        tvProofsLoading.setVisibility(GONE);
+                        cardProofs.setVisibility(GONE);
+                    }
+                });
     }
+
 
     @Override
     public void onStatusUpdated(String newStatus) {
