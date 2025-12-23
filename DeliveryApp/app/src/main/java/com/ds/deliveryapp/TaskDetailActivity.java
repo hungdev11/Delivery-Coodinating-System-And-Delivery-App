@@ -269,6 +269,11 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
 
             btnMainAction.setVisibility(GONE);
             btnFailAction.setVisibility(GONE);
+        } else if (status.equalsIgnoreCase("COMPLETED")) {
+            btnReturnToWarehouse.setVisibility(GONE);
+
+            btnMainAction.setVisibility(GONE);
+            btnFailAction.setVisibility(GONE);
         } else {
             // 👉 GIỮ NGUYÊN HÀNH VI CŨ
             btnReturnToWarehouse.setVisibility(GONE);
