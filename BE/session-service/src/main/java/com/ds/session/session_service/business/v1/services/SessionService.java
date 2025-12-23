@@ -347,49 +347,113 @@ public class SessionService implements ISessionService {
         return toSessionResponse(savedSession);
     }
 
+    // @Override
+    // @Transactional
+    // public SessionResponse failSession(UUID sessionId, String reason) {
+    //     log.debug("[session-service] [SessionService.failSession] Failing session {} due to: {}", sessionId, reason);
+    //     DeliverySession session = sessionRepository.findById(sessionId)
+    //         .orElseThrow(() -> new ResourceNotFound("Session not found: " + sessionId));
+        
+    //     // Allow failing CREATED or IN_PROGRESS sessions
+    //     // Session fail is when: expired, shipper cancels, or admin cancels
+    //     // NOT when individual parcels fail
+    //     if (session.getStatus() != SessionStatus.IN_PROGRESS && session.getStatus() != SessionStatus.CREATED) {
+    //         log.debug("[session-service] [SessionService.failSession] Session {} is already in state {}. Cannot fail.", sessionId, session.getStatus());
+    //         throw new IllegalStateException("Session " + sessionId + " must be in IN_PROGRESS or CREATED status to fail. Current status: " + session.getStatus());
+    //     }
+        
+    //     session.setStatus(SessionStatus.FAILED);
+    //     session.setEndTime(LocalDateTime.now());
+        
+    //     DeliverySession savedSession = sessionRepository.save(session);
+
+    //     // When session fails (expired, cancelled by shipper/admin), all undelivered parcels (IN_PROGRESS) 
+    //     // must be set to DELAYED status, not FAILED
+    //     List<DeliveryAssignment> pendingTasks = assignmentRepository.findBySession_IdAndStatus(sessionId, AssignmentStatus.IN_PROGRESS);
+    //     log.debug("[session-service] [SessionService.failSession] Session {} failed. Setting {} pending tasks to DELAYED status", sessionId, pendingTasks.size());
+        
+    //     for (DeliveryAssignment task : pendingTasks) {
+    //         // Set assignment status to DELAYED (not FAILED)
+    //         task.setStatus(AssignmentStatus.DELAYED);
+    //         task.setFailReason("Session Failed: " + reason);
+    //         assignmentRepository.save(task);
+
+    //         // Notify Parcel-Service: parcel should be delayed (POSTPONE event)
+    //         // This will change parcel status from ON_ROUTE to DELAYED
+    //         try {
+    //             parcelApiClient.changeParcelStatus(task.getParcelId(), ParcelEvent.POSTPONE);
+    //             log.debug("[session-service] [SessionService.failSession] Parcel {} set to DELAYED due to session failure", task.getParcelId());
+    //         } catch (Exception e) {
+    //             log.error("[session-service] [SessionService.failSession] Failed to call Parcel-Service for parcel {}", task.getParcelId(), e);
+    //         }
+    //     }
+        
+    //     return toSessionResponse(savedSession);
+    // }
+
     @Override
     @Transactional
     public SessionResponse failSession(UUID sessionId, String reason) {
-        log.debug("[session-service] [SessionService.failSession] Failing session {} due to: {}", sessionId, reason);
+
         DeliverySession session = sessionRepository.findById(sessionId)
             .orElseThrow(() -> new ResourceNotFound("Session not found: " + sessionId));
-        
-        // Allow failing CREATED or IN_PROGRESS sessions
-        // Session fail is when: expired, shipper cancels, or admin cancels
-        // NOT when individual parcels fail
-        if (session.getStatus() != SessionStatus.IN_PROGRESS && session.getStatus() != SessionStatus.CREATED) {
-            log.debug("[session-service] [SessionService.failSession] Session {} is already in state {}. Cannot fail.", sessionId, session.getStatus());
-            throw new IllegalStateException("Session " + sessionId + " must be in IN_PROGRESS or CREATED status to fail. Current status: " + session.getStatus());
+
+        if (session.getStatus() != SessionStatus.IN_PROGRESS
+            && session.getStatus() != SessionStatus.CREATED) {
+            throw new IllegalStateException(
+                "Session must be IN_PROGRESS or CREATED to fail. Current: "
+                    + session.getStatus());
         }
-        
+
+        // 🔎 Phase decision dựa vào dữ liệu hiện tại
+        List<DeliveryAssignment> inProgressTasks =
+            assignmentRepository.findBySession_IdAndStatus(
+                sessionId, AssignmentStatus.IN_PROGRESS);
+
+        if (!inProgressTasks.isEmpty()) {
+            // =====================
+            // PHASE 1: soft-fail
+            // =====================
+            log.info(
+                "FailSession phase 1: converting {} IN_PROGRESS assignments to FAILED",
+                inProgressTasks.size());
+
+            for (DeliveryAssignment task : inProgressTasks) {
+                task.setStatus(AssignmentStatus.FAILED);
+                task.setFailReason("Session failed: " + reason);
+                assignmentRepository.save(task);
+
+                try {
+                    parcelApiClient.changeParcelStatus(
+                        task.getParcelId(), ParcelEvent.CAN_NOT_DELIVERY);
+                } catch (Exception e) {
+                    log.error(
+                        "Failed to notify parcel-service for parcel {}",
+                        task.getParcelId(), e);
+                }
+            }
+
+            // ❗ KHÔNG đóng session ở phase này
+            return toSessionResponse(session);
+        }
+
+        // =====================
+        // PHASE 2: hard-close
+        // =====================
+        if (session.getStatus() == SessionStatus.FAILED) {
+            // idempotent safety
+            return toSessionResponse(session);
+        }
+
+        log.info("FailSession phase 2: closing session {}", sessionId);
+
         session.setStatus(SessionStatus.FAILED);
         session.setEndTime(LocalDateTime.now());
-        
-        DeliverySession savedSession = sessionRepository.save(session);
 
-        // When session fails (expired, cancelled by shipper/admin), all undelivered parcels (IN_PROGRESS) 
-        // must be set to DELAYED status, not FAILED
-        List<DeliveryAssignment> pendingTasks = assignmentRepository.findBySession_IdAndStatus(sessionId, AssignmentStatus.IN_PROGRESS);
-        log.debug("[session-service] [SessionService.failSession] Session {} failed. Setting {} pending tasks to DELAYED status", sessionId, pendingTasks.size());
-        
-        for (DeliveryAssignment task : pendingTasks) {
-            // Set assignment status to DELAYED (not FAILED)
-            task.setStatus(AssignmentStatus.DELAYED);
-            task.setFailReason("Session Failed: " + reason);
-            assignmentRepository.save(task);
-
-            // Notify Parcel-Service: parcel should be delayed (POSTPONE event)
-            // This will change parcel status from ON_ROUTE to DELAYED
-            try {
-                parcelApiClient.changeParcelStatus(task.getParcelId(), ParcelEvent.POSTPONE);
-                log.debug("[session-service] [SessionService.failSession] Parcel {} set to DELAYED due to session failure", task.getParcelId());
-            } catch (Exception e) {
-                log.error("[session-service] [SessionService.failSession] Failed to call Parcel-Service for parcel {}", task.getParcelId(), e);
-            }
-        }
-        
-        return toSessionResponse(savedSession);
+        DeliverySession saved = sessionRepository.save(session);
+        return toSessionResponse(saved);
     }
+
     
     /**
      * Publish SessionCompletedEvent to communication-service

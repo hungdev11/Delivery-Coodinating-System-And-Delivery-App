@@ -59,6 +59,8 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private ProgressBar progressBar;
     private Button btnScanOrder;
     private ImageButton btnSessionMenu;
+    private boolean isSessionInIncidentMode = false;
+
     private TextView tvEmptyState;
 
     private int currentPage = 0;
@@ -433,18 +435,27 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     startActivity(intent);
                     return true;
                 } else if (itemId == R.id.menu_complete_session) {
+                    if (isSessionInIncidentMode) {
+                        Toast.makeText(
+                                getContext(),
+                                "Phiên đang xử lý sự cố, không thể hoàn tất.",
+                                Toast.LENGTH_SHORT
+                        ).show();
+                        return true;
+                    }
                     showCompleteSessionDialog();
                     return true;
                 } else if (itemId == R.id.menu_fail_session) {
                     showFailSessionDialog();
                     return true;
-                } else if (itemId == R.id.menu_show_transfer_qr) {
-                    showTransferQRCode();
-                    return true;
-                } else if (itemId == R.id.menu_scan_transfer_qr) {
-                    showSelectParcelForTransferDialog();
-                    return true;
                 }
+//                } else if (itemId == R.id.menu_show_transfer_qr) {
+//                    showTransferQRCode();
+//                    return true;
+//                } else if (itemId == R.id.menu_scan_transfer_qr) {
+//                    showSelectParcelForTransferDialog();
+//                    return true;
+//                }
                 return false;
             });
             popup.show();
@@ -628,68 +639,110 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         startActivityForResult(intent, SCAN_TRANSFER_REQUEST_CODE);
     }
 
+
+    private boolean hasInProgressTasks() {
+        for (DeliveryAssignment task : tasks) {
+            if ("IN_PROGRESS".equals(task.getStatus())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void showFailSessionDialog() {
+
+        // ===== PHASE 2 =====
+        if (!hasInProgressTasks()) {
+            // Không hỏi lý do nữa
+            callFailSession(null);
+            return;
+        }
+
+        // ===== PHASE 1 =====
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
-        builder.setTitle("Báo cáo sự cố (Hủy phiên)");
-        builder.setMessage("Nhập lý do hủy phiên (ví dụ: Hỏng xe, Tai nạn):");
+
+        builder.setTitle("Trả tất cả đơn về kho");
+
+        builder.setMessage(
+                "Hệ thống sẽ:\n\n" +
+                        "• Đánh dấu tất cả đơn đang giao là THẤT BẠI\n" +
+                        "Sau khi xử lý trả tất cả hàng về kho, bạn cần thao tác lại để kết thúc phiên."
+        );
 
         final EditText input = new EditText(getContext());
+        input.setHint("Nhập lý do (bắt buộc)");
         input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setMinLines(2);
+        input.setPadding(32, 24, 32, 24);
+
         builder.setView(input);
 
-        builder.setPositiveButton("Xác nhận hủy", (dialog, which) -> {
+        builder.setPositiveButton("Xác nhận", (dialog, which) -> {
             String reason = input.getText().toString().trim();
+
             if (reason.isEmpty()) {
-                Toast.makeText(getContext(), "Lý do không được để trống.", Toast.LENGTH_SHORT).show();
-            } else {
-                callFailSession(reason);
+                Toast.makeText(getContext(),
+                        "Vui lòng nhập lý do",
+                        Toast.LENGTH_SHORT).show();
+                return;
             }
+
+            callFailSession(reason); // phase 1
         });
-        builder.setNegativeButton("Hủy", (dialog, which) -> dialog.cancel());
+
+        builder.setNegativeButton("Hủy", null);
         builder.show();
     }
 
-    private void callFailSession(String reason) {
-        // Disable buttons during API call
+
+
+    private void callFailSession(@Nullable String reason) {
+
         setButtonsEnabled(false);
         progressBar.setVisibility(View.VISIBLE);
 
         SessionFailRequest requestBody = new SessionFailRequest(reason);
 
         SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
-        Call<BaseResponse<DeliverySession>> call = service.failSession(activeSessionId, requestBody);
+        Call<BaseResponse<DeliverySession>> call =
+                service.failSession(activeSessionId, requestBody);
 
-        call.enqueue(new Callback<BaseResponse<DeliverySession>>() {
+        call.enqueue(new Callback<>() {
             @Override
-            public void onResponse(Call<BaseResponse<DeliverySession>> call, Response<BaseResponse<DeliverySession>> response) {
+            public void onResponse(Call<BaseResponse<DeliverySession>> call,
+                                   Response<BaseResponse<DeliverySession>> response) {
+
                 progressBar.setVisibility(View.GONE);
                 setButtonsEnabled(true);
 
-                if (response.isSuccessful() && response.body() != null) {
-                    BaseResponse<DeliverySession> baseResponse = response.body();
-                    if (baseResponse.getResult() != null) {
-                        Toast.makeText(getContext(), "Đã báo cáo sự cố. Phiên bị hủy.", Toast.LENGTH_LONG).show();
-                        // Navigate to dashboard after failing session
-                        activeSessionId = null;
-                        activeSessionStatus = null;
-                        navigateToDashboard();
-                    } else {
-                        String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể hủy phiên";
-                        Toast.makeText(getContext(), errorMsg, Toast.LENGTH_SHORT).show();
-                    }
-                } else {
-                    Toast.makeText(getContext(), "Lỗi: " + response.code(), Toast.LENGTH_SHORT).show();
+                if (!response.isSuccessful() || response.body() == null) {
+                    Toast.makeText(getContext(), "Không thể hủy phiên", Toast.LENGTH_SHORT).show();
+                    return;
                 }
+                isSessionInIncidentMode = true;
+                // ===== PHASE 1 =====
+                if (hasInProgressTasks()) {
+
+                    // reload task list
+                    resetAndFetchTasks();
+                    return;
+                }
+
+                // ===== PHASE 2 =====
+                activeSessionId = null;
+                activeSessionStatus = null;
+                navigateToDashboard();
             }
 
             @Override
             public void onFailure(Call<BaseResponse<DeliverySession>> call, Throwable t) {
                 progressBar.setVisibility(View.GONE);
                 setButtonsEnabled(true);
-                Toast.makeText(getContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Lỗi mạng", Toast.LENGTH_SHORT).show();
             }
         });
     }
+
 
     private void checkForCreatedSession() {
         // Check if there's an active session (CREATED or IN_PROGRESS)
