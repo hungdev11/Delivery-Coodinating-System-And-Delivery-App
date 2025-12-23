@@ -694,8 +694,6 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         builder.show();
     }
 
-
-
     private void callFailSession(@Nullable String reason) {
 
         setButtonsEnabled(false);
@@ -722,7 +720,6 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                 isSessionInIncidentMode = true;
                 // ===== PHASE 1 =====
                 if (hasInProgressTasks()) {
-
                     // reload task list
                     resetAndFetchTasks();
                     return;
