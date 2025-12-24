@@ -231,7 +231,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 parcelId,
                 deliveryManId,
                 routeInfo,
-                AssignmentStatus.DELAYED, // newStatus
+                AssignmentStatus.FAILED, // newStatus
                 ParcelEvent.CUSTOMER_REJECT, // parcelEvent
                 reason // failReason
         );
