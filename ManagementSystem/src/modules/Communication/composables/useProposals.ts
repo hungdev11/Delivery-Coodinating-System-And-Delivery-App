@@ -172,14 +172,28 @@ export function useProposals() {
 
       console.log('📋 Effective roles for config lookup:', effectiveRoles)
       const configs = await getAvailableConfigs(effectiveRoles)
-      // Backend returns direct array, not wrapped
+      console.log('📋 Raw configs response:', configs)
+      
+      // Handle different response formats
+      let configsArray: ProposalTypeConfig[] = []
       if (Array.isArray(configs)) {
-        availableConfigs.value = configs
-        console.log('📋 Loaded', configs.length, 'available proposal configs')
+        // Direct array response
+        configsArray = configs
+      } else if (configs && typeof configs === 'object') {
+        // Check if wrapped in 'result' (IApiResponse format)
+        const configsObj = configs as Record<string, unknown>
+        if ('result' in configsObj && Array.isArray(configsObj.result)) {
+          configsArray = configsObj.result as ProposalTypeConfig[]
+        } else if ('data' in configsObj && Array.isArray(configsObj.data)) {
+          // Alternative format with 'data' field
+          configsArray = configsObj.data as ProposalTypeConfig[]
       } else {
         console.warn('⚠️ Unexpected response format from getAvailableConfigs:', configs)
-        availableConfigs.value = []
+        }
       }
+      
+      availableConfigs.value = configsArray
+      console.log('📋 Loaded', configsArray.length, 'available proposal configs')
     } catch (error) {
       console.error('Failed to load available configs:', error)
       toast.add({

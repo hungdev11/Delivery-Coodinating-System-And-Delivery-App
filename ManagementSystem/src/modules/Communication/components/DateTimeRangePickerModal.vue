@@ -42,40 +42,37 @@ const formattedDateRange = computed(() => {
  * Handle confirm
  */
 const handleConfirm = () => {
-  if (dateRange.value.start && dateRange.value.end && startTime.value && endTime.value) {
-    // Convert CalendarDate to YYYY-MM-DD format
-    const formatCalendarDate = (date: CalendarDate) => {
-      const year = date.year
-      const month = String(date.month).padStart(2, '0')
-      const day = String(date.day).padStart(2, '0')
-      return `${year}-${month}-${day}`
-    }
+  // Use mock time: tomorrow 14:00 - 16:00
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const year = tomorrow.getFullYear()
+  const month = String(tomorrow.getMonth() + 1).padStart(2, '0')
+  const day = String(tomorrow.getDate()).padStart(2, '0')
+  const startDateString = `${year}-${month}-${day}`
+  const endDateString = `${year}-${month}-${day}`
+  const mockStartTime = '14:00'
+  const mockEndTime = '16:00'
 
-    const startDateString = formatCalendarDate(dateRange.value.start)
-    const endDateString = formatCalendarDate(dateRange.value.end)
-
-    // Validate time range
-    const [startHours, startMinutes] = startTime.value.split(':')
-    const [endHours, endMinutes] = endTime.value.split(':')
-
-    const startDateTime = new Date(startDateString)
-    startDateTime.setHours(parseInt(startHours), parseInt(startMinutes))
-
-    const endDateTime = new Date(endDateString)
-    endDateTime.setHours(parseInt(endHours), parseInt(endMinutes))
-
-    if (endDateTime <= startDateTime) {
-      alert('End time must be after start time')
-      return
-    }
-
-    emit('close', {
-      startDate: startDateString,
-      startTime: startTime.value,
-      endDate: endDateString,
-      endTime: endTime.value,
-    })
-  }
+  emit('close', {
+    startDate: startDateString,
+    startTime: mockStartTime,
+    endDate: endDateString,
+    endTime: mockEndTime,
+  })
+  
+  // Original logic (commented out):
+  // if (dateRange.value.start && dateRange.value.end && startTime.value && endTime.value) {
+  //   // Convert CalendarDate to YYYY-MM-DD format
+  //   const formatCalendarDate = (date: CalendarDate) => {
+  //     const year = date.year
+  //     const month = String(date.month).padStart(2, '0')
+  //     const day = String(date.day).padStart(2, '0')
+  //     return `${year}-${month}-${day}`
+  //   }
+  //   const startDateString = formatCalendarDate(dateRange.value.start)
+  //   const endDateString = formatCalendarDate(dateRange.value.end)
+  //   // ... validation and emit
+  // }
 }
 
 /**
@@ -101,7 +98,8 @@ dateRange.value = {
   <UModal title="Select Date and Time Range" :ui="{ width: 'sm:max-w-sm md:max-w-md' }">
     <template #body>
       <div class="space-y-4 p-4">
-        <div>
+        <!-- Temporarily hidden date/time range picker - using mock time -->
+        <!-- <div>
           <label class="block text-sm font-medium mb-2">Date Range</label>
           <UPopover v-model:open="showCalendar">
             <UButton
@@ -131,6 +129,9 @@ dateRange.value = {
             <h3 class="font-medium text-sm">End Time</h3>
             <UInput v-model="endTime" type="time" />
           </div>
+        </div> -->
+        <div class="text-sm text-gray-500">
+          Đang xử lý yêu cầu hoãn đơn...
         </div>
         <div class="flex justify-end space-x-2">
           <UButton variant="ghost" @click="handleCancel"> Cancel </UButton>

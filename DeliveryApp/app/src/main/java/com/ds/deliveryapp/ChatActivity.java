@@ -1417,113 +1417,95 @@ public class ChatActivity extends AppCompatActivity implements MessageAdapter.On
      * Xử lý chọn 1 mốc Ngày & Giờ
      */
     private void showSingleDateTimePickerDialog(ProposalTypeConfig config, String postponeType) {
+        // Temporarily hidden date/time picker - using mock time
+        // Mock time: tomorrow at 14:00
         Calendar cal = Calendar.getInstance();
-        mSelectedStartTime = null; // Reset
-
-        DatePickerDialog dpd = new DatePickerDialog(this,
-                (datePicker, year, month, day) -> {
-                    mSelectedStartTime = Calendar.getInstance();
-                    mSelectedStartTime.set(year, month, day);
-
-                    TimePickerDialog tpd = new TimePickerDialog(this,
-                            (timePicker, hour, minute) -> {
-                                mSelectedStartTime.set(Calendar.HOUR_OF_DAY, hour);
-                                mSelectedStartTime.set(Calendar.MINUTE, minute);
-
-                                String readableDateTime = String.format("%02d:%02d ngày %02d/%02d/%d",
-                                        hour, minute, day, month + 1, year);
-
-                                String resultData = String.format("%d-%02d-%02dT%02d:%02d:00",
-                                        year, month + 1, day, hour, minute);
-
-                                String dataJson = "{}";
-                                String fallbackContent = "";
-
-                                if ("SPECIFIC".equals(postponeType)) {
-                                    dataJson = "{\"specific_datetime\":\"" + resultData + "\"}";
-                                    fallbackContent = config.getDescription() +  " với mã đơn hàng: " + mParcelCode + " vào " + readableDateTime;
-                                } else if ("AFTER".equals(postponeType)) {
-                                    dataJson = "{\"after_datetime\":\"" + resultData + "\"}";
-                                    fallbackContent = config.getDescription() +  " với mã đơn hàng: " + mParcelCode + " sau " + readableDateTime;
-                                } else {
-                                    dataJson = "{\"after_datetime\":\"" + resultData + "\"}";
-                                    fallbackContent = config.getDescription() +  " với mã đơn hàng: " + mParcelCode + " trước " + readableDateTime;
-                                }
-
-                                sendProposalRequest(config.getType(), dataJson, fallbackContent);
-                            },
-                            cal.get(Calendar.HOUR_OF_DAY),
-                            cal.get(Calendar.MINUTE),
-                            true // 24-hour format
-                    );
-                    tpd.setTitle("Chọn Giờ");
-                    tpd.show();
-                },
-                cal.get(Calendar.YEAR),
-                cal.get(Calendar.MONTH),
-                cal.get(Calendar.DAY_OF_MONTH)
-        );
-        dpd.setTitle("Chọn Ngày");
-        dpd.show();
+        cal.add(Calendar.DAY_OF_YEAR, 1); // Tomorrow
+        cal.set(Calendar.HOUR_OF_DAY, 14);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        
+        int year = cal.get(Calendar.YEAR);
+        int month = cal.get(Calendar.MONTH);
+        int day = cal.get(Calendar.DAY_OF_MONTH);
+        int hour = cal.get(Calendar.HOUR_OF_DAY);
+        int minute = cal.get(Calendar.MINUTE);
+        
+        String readableDateTime = String.format("%02d:%02d ngày %02d/%02d/%d",
+                hour, minute, day, month + 1, year);
+        
+        String resultData = String.format("%d-%02d-%02dT%02d:%02d:00",
+                year, month + 1, day, hour, minute);
+        
+        String dataJson = "{}";
+        String fallbackContent = "";
+        
+        if ("SPECIFIC".equals(postponeType)) {
+            dataJson = "{\"specific_datetime\":\"" + resultData + "\"}";
+            fallbackContent = config.getDescription() + " với mã đơn hàng: " + mParcelCode + " vào " + readableDateTime;
+        } else if ("AFTER".equals(postponeType)) {
+            dataJson = "{\"after_datetime\":\"" + resultData + "\"}";
+            fallbackContent = config.getDescription() + " với mã đơn hàng: " + mParcelCode + " sau " + readableDateTime;
+        } else {
+            dataJson = "{\"before_datetime\":\"" + resultData + "\"}";
+            fallbackContent = config.getDescription() + " với mã đơn hàng: " + mParcelCode + " trước " + readableDateTime;
+        }
+        
+        sendProposalRequest(config.getType(), dataJson, fallbackContent);
+        
+        // Original date/time picker code (commented out):
+        // Calendar cal = Calendar.getInstance();
+        // mSelectedStartTime = null; // Reset
+        // DatePickerDialog dpd = new DatePickerDialog(this, ...);
     }
 
     /**
      * (Layer 2 - Option 3):
      * Xử lý chọn 2 mốc Ngày & Giờ (Bắt đầu và Kết thúc)
+     * Temporarily hidden - using mock time
      */
     private void showDateTimeRangePickerDialog(ProposalTypeConfig config) {
-        mSelectedStartTime = null; // Reset
-
+        // Temporarily hidden date/time picker - using mock time
+        // Mock time: tomorrow 14:00 - 16:00
         Calendar cal = Calendar.getInstance();
-        DatePickerDialog dpdStart = new DatePickerDialog(this, (dpdView, year, month, day) -> {
-            mSelectedStartTime = Calendar.getInstance();
-            mSelectedStartTime.set(year, month, day);
-
-            TimePickerDialog tpdStart = new TimePickerDialog(this, (tpdView, hour, minute) -> {
-                mSelectedStartTime.set(Calendar.HOUR_OF_DAY, hour);
-                mSelectedStartTime.set(Calendar.MINUTE, minute);
-
-                DatePickerDialog dpdEnd = new DatePickerDialog(this, (dpdView2, year2, month2, day2) -> {
-                    Calendar selectedEndTime = Calendar.getInstance();
-                    selectedEndTime.set(year2, month2, day2);
-
-                    TimePickerDialog tpdEnd = new TimePickerDialog(this, (tpdView2, hour2, minute2) -> {
-                        selectedEndTime.set(Calendar.HOUR_OF_DAY, hour2);
-                        selectedEndTime.set(Calendar.MINUTE, minute2);
-
-                        if (selectedEndTime.before(mSelectedStartTime)) {
-                            showErrorToast("Giờ kết thúc phải sau giờ bắt đầu.");
-                            return;
-                        }
-
-                        String startTimeStr = String.format("%d-%02d-%02dT%02d:%02d:00",
-                                year, month + 1, day, hour, minute);
-                        String endTimeStr = String.format("%d-%02d-%02dT%02d:%02d:00",
-                                year2, month2 + 1, day2, hour2, minute2);
-
-                        String dataJson = "{\"start_datetime\":\"" + startTimeStr + "\", \"end_datetime\":\"" + endTimeStr + "\"}";
-                        String fallback = String.format("%s (Từ %02d:%02d %02d/%d đến %02d:%02d %02d/%d)",
-                                config.getDescription(),
-                                hour, minute, day, month+1,
-                                hour2, minute2, day2, month2+1);
-
-                        sendProposalRequest(config.getType(), dataJson, fallback);
-
-                    }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true);
-                    tpdEnd.setTitle("Chọn Giờ Kết Thúc");
-                    tpdEnd.show();
-
-                }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH));
-                dpdEnd.setTitle("Chọn Ngày Kết Thúc");
-                dpdEnd.show();
-
-            }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true);
-            tpdStart.setTitle("Chọn Giờ Bắt Đầu");
-            tpdStart.show();
-
-        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH));
-        dpdStart.setTitle("Chọn Ngày Bắt Đầu");
-        dpdStart.show();
+        cal.add(Calendar.DAY_OF_YEAR, 1); // Tomorrow
+        
+        Calendar startTime = (Calendar) cal.clone();
+        startTime.set(Calendar.HOUR_OF_DAY, 14);
+        startTime.set(Calendar.MINUTE, 0);
+        
+        Calendar endTime = (Calendar) cal.clone();
+        endTime.set(Calendar.HOUR_OF_DAY, 16);
+        endTime.set(Calendar.MINUTE, 0);
+        
+        String startTimeStr = String.format("%d-%02d-%02dT%02d:%02d:00",
+                startTime.get(Calendar.YEAR),
+                startTime.get(Calendar.MONTH) + 1,
+                startTime.get(Calendar.DAY_OF_MONTH),
+                startTime.get(Calendar.HOUR_OF_DAY),
+                startTime.get(Calendar.MINUTE));
+        
+        String endTimeStr = String.format("%d-%02d-%02dT%02d:%02d:00",
+                endTime.get(Calendar.YEAR),
+                endTime.get(Calendar.MONTH) + 1,
+                endTime.get(Calendar.DAY_OF_MONTH),
+                endTime.get(Calendar.HOUR_OF_DAY),
+                endTime.get(Calendar.MINUTE));
+        
+        String dataJson = "{\"start_datetime\":\"" + startTimeStr + "\", \"end_datetime\":\"" + endTimeStr + "\"}";
+        String fallback = String.format("%s (Từ %02d:%02d %02d/%d đến %02d:%02d %02d/%d)",
+                config.getDescription(),
+                startTime.get(Calendar.HOUR_OF_DAY), startTime.get(Calendar.MINUTE),
+                startTime.get(Calendar.DAY_OF_MONTH), startTime.get(Calendar.MONTH) + 1,
+                endTime.get(Calendar.HOUR_OF_DAY), endTime.get(Calendar.MINUTE),
+                endTime.get(Calendar.DAY_OF_MONTH), endTime.get(Calendar.MONTH) + 1);
+        
+        sendProposalRequest(config.getType(), dataJson, fallback);
+        
+        // Original date/time range picker code (commented out):
+        // mSelectedStartTime = null; // Reset
+        // Calendar cal = Calendar.getInstance();
+        // DatePickerDialog dpdStart = new DatePickerDialog(this, ...);
     }
 
     /**

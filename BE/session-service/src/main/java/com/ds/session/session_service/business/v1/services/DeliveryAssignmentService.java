@@ -248,12 +248,13 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
 
             if (assignmentOpt.isPresent()) {
                 // Found IN_PROGRESS assignment, proceed with postpone
+                // Set assignment to FAILED when client accepts postpone request
                 return updateTaskState(
                         parcelId,
                         deliveryManId,
                         routeInfo,
-                        AssignmentStatus.DELAYED, // newStatus - Customer requested delay
-                        ParcelEvent.POSTPONE, // parcelEvent - Changes parcel from ON_ROUTE to DELAYED
+                        AssignmentStatus.FAILED, // newStatus - Set to FAILED when client accepts postpone
+                        ParcelEvent.POSTPONE, // parcelEvent - Changes parcel from ON_ROUTE to DELAY
                         reason // failReason
                 );
             } else {
@@ -301,16 +302,11 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 if (failedAssignmentOpt.isPresent()) {
                     DeliveryAssignment failedAssignment = failedAssignmentOpt.get();
                     log.debug(
-                            "[session-service] [DeliveryAssignmentService.postponeParcel] Found FAILED assignment {} for parcel {}. Transitioning to DELAYED due to customer postpone.",
+                            "[session-service] [DeliveryAssignmentService.postponeParcel] Found FAILED assignment {} for parcel {}. Keeping as FAILED (client accepted postpone).",
                             failedAssignment.getId(), parcelId);
 
-                    // We can reuse updateTaskState logic but we need to be careful as
-                    // updateTaskState
-                    // usually expects IN_PROGRESS. However, we can manually update here or modify
-                    // updateTaskState.
-                    // Let's manually update to be safe and explicit.
-
-                    failedAssignment.setStatus(AssignmentStatus.DELAYED);
+                    // Keep assignment as FAILED when client accepts postpone request
+                    // Just update failReason and routeInfo if needed
                     failedAssignment.setFailReason(reason);
                     if (routeInfo != null) {
                         setRouteInfo(failedAssignment, routeInfo);
@@ -318,11 +314,11 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
 
                     deliveryAssignmentRepository.save(failedAssignment);
 
-                    // Publish event
+                    // Publish event to change parcel status to DELAY
                     try {
                         parcelEventPublisher.publish(parcelId.toString(), ParcelEvent.POSTPONE);
                     } catch (Exception e) {
-                        log.error("[session-service] [DeliveryAssignmentService.postponeParcel] Failed to publish POSTPONE event for transitioned FAILED assignment", e);
+                        log.error("[session-service] [DeliveryAssignmentService.postponeParcel] Failed to publish POSTPONE event for FAILED assignment", e);
                     }
 
                     // Fetch parcel info
@@ -910,13 +906,13 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             // Note: Zone service needs to handle the moveToEnd flag when recalculating
             // route
         } else {
-            // Set to DELAYED
-            assignment.setStatus(AssignmentStatus.DELAYED);
+            // Set to FAILED (when client accepts postpone request)
+            assignment.setStatus(AssignmentStatus.FAILED);
             assignment.setFailReason(request.getReason());
 
-            // Publish parcel event
+            // Publish parcel event to change parcel status to DELAY
             try {
-                log.debug("Publishing parcel event: POSTPONE for parcel: {}", assignment.getParcelId());
+                log.debug("Publishing parcel event: POSTPONE for parcel: {} (assignment set to FAILED)", assignment.getParcelId());
                 parcelEventPublisher.publish(assignment.getParcelId(), ParcelEvent.POSTPONE);
                 log.debug("Successfully published parcel event: POSTPONE for parcel: {}", assignment.getParcelId());
             } catch (Exception e) {

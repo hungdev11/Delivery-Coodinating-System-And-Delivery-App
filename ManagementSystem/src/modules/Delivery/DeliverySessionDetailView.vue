@@ -662,7 +662,7 @@ const assignmentColumns: TableColumn<EnrichedAssignment>[] = [
                 <label class="block text-sm font-medium mb-2">Phương tiện</label>
                 <USelect
                   v-model="selectedVehicle"
-                  :options="[
+                  :items="[
                     { value: 'bicycle', label: 'Xe máy' },
                     { value: 'car', label: 'Ô tô' },
                   ]"
