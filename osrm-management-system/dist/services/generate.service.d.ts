@@ -12,6 +12,7 @@ export interface GenerateResult {
 export declare class GenerateService {
     private prisma;
     private osrmDataPath;
+    private rawDataPath;
     private buildTracker;
     constructor(prisma: PrismaClient);
     /**
@@ -26,7 +27,9 @@ export declare class GenerateService {
     private exportToOSMXML;
     private generateLuaProfile;
     private generateBicycleLuaProfile;
+    private generateBicycleLuaProfileFallback;
     private generateCarLuaProfile;
+    private generateCarLuaProfileFallback;
     private setupModelInstance;
     private processOSRMInstance;
     private mapRoadTypeToOSM;
