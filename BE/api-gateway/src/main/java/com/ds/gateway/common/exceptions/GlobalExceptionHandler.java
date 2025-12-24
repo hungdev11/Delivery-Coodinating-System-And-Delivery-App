@@ -7,9 +7,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 /**
  * Global exception handler for API Gateway
@@ -85,6 +87,38 @@ public class GlobalExceptionHandler {
         log.error("[api-gateway] [GlobalExceptionHandler.handleHttpMessageNotReadableException] Invalid request body", ex);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(BaseResponse.error("Dữ liệu yêu cầu không hợp lệ"));
+    }
+
+    @ExceptionHandler(WebClientResponseException.class)
+    public ResponseEntity<BaseResponse<Object>> handleWebClientResponseException(
+            WebClientResponseException ex, WebRequest request) {
+
+        log.error("[api-gateway] [GlobalExceptionHandler.handleWebClientResponseException] Error from downstream service: status={}, body={}", 
+                ex.getStatusCode(), ex.getResponseBodyAsString(), ex);
+        
+        // Try to parse the error response from the downstream service
+        String errorMessage = "Lỗi từ dịch vụ";
+        try {
+            String responseBody = ex.getResponseBodyAsString();
+            if (responseBody != null && !responseBody.isEmpty()) {
+                errorMessage = responseBody;
+            }
+        } catch (Exception e) {
+            log.warn("[api-gateway] [GlobalExceptionHandler.handleWebClientResponseException] Failed to parse error response", e);
+        }
+        
+        return ResponseEntity.status(ex.getStatusCode())
+                .body(BaseResponse.error(errorMessage));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<BaseResponse<Object>> handleHttpRequestMethodNotSupportedException(
+            HttpRequestMethodNotSupportedException ex, WebRequest request) {
+
+        log.warn("[api-gateway] [GlobalExceptionHandler.handleHttpRequestMethodNotSupportedException] Method not supported: {} for {}", 
+                ex.getMethod(), request.getDescription(false));
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(BaseResponse.error("Phương thức HTTP không được hỗ trợ cho endpoint này"));
     }
 
     @ExceptionHandler(Exception.class)

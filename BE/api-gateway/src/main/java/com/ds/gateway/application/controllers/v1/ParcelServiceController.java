@@ -36,6 +36,26 @@ public class ParcelServiceController {
         return parcelServiceClient.getParcelByCode(code);
     }
 
+    @GetMapping
+    public ResponseEntity<?> getParcels(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String deliveryType,
+            @RequestParam(required = false) String createdFrom,
+            @RequestParam(required = false) String createdTo,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false, defaultValue = "asc") String direction) {
+        // Build filter object from query parameters
+        java.util.Map<String, Object> filter = new java.util.HashMap<>();
+        if (status != null) filter.put("status", status);
+        if (deliveryType != null) filter.put("deliveryType", deliveryType);
+        if (createdFrom != null) filter.put("createdFrom", createdFrom);
+        if (createdTo != null) filter.put("createdTo", createdTo);
+        
+        return parcelServiceClient.getParcels(filter, page, size, sortBy, direction);
+    }
+
     @GetMapping("/me")
     public ResponseEntity<?> getParcelsSent(
             @RequestParam String customerId,

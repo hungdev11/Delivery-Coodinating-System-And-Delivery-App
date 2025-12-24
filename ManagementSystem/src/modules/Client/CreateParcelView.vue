@@ -167,7 +167,7 @@ onMounted(() => {
           <UFormField label="Sender Address" required>
             <USelect
               v-model="form.senderDestinationId"
-              :options="
+              :items="
                 addresses.map((addr) => ({
                   label: `${addr.destinationDetails?.name || 'Unnamed'}${addr.isPrimary ? ' (Primary)' : ''}`,
                   value: addr.destinationId,

@@ -9,6 +9,7 @@ public interface IParcelServiceClient {
     ResponseEntity<?> updateParcel(UUID parcelId, Object request);
     ResponseEntity<?> getParcelById(UUID parcelId);
     ResponseEntity<?> getParcelByCode(String code);
+    ResponseEntity<?> getParcels(Object filter, int page, int size, String sortBy, String direction);
     ResponseEntity<?> getParcelsSent(String customerId, int page, int size);
     ResponseEntity<?> getParcelsReceived(String customerId, int page, int size);
     ResponseEntity<?> getParcelsV2(Object request);

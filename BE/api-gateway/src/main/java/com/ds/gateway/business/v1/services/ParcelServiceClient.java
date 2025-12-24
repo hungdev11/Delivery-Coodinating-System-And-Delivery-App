@@ -2,12 +2,12 @@ package com.ds.gateway.business.v1.services;
 
 import com.ds.gateway.common.interfaces.IParcelServiceClient;
 import com.ds.gateway.common.utils.ProxyHeaderUtils;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 
@@ -25,13 +25,24 @@ public class ParcelServiceClient implements IParcelServiceClient {
 
     @Override
     public ResponseEntity<?> createParcel(Object request) {
-        Object response = parcelServiceWebClient.post()
-                .uri("/api/v1/parcels")
-                .bodyValue(request)
-                .retrieve()
-                .bodyToMono(Object.class)
-                .block();
-        return ResponseEntity.ok(response);
+        try {
+            Object response = parcelServiceWebClient.post()
+                    .uri("/api/v1/parcels")
+                    .bodyValue(request)
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+            return ResponseEntity.ok(response);
+        } catch (WebClientResponseException e) {
+            log.error("[api-gateway] [ParcelServiceClient.createParcel] Error from parcel-service: status={}, body={}", 
+                    e.getStatusCode(), e.getResponseBodyAsString(), e);
+            // Return the error response from the parcel-service
+            return ResponseEntity.status(e.getStatusCode())
+                    .body(e.getResponseBodyAsString());
+        } catch (Exception e) {
+            log.error("[api-gateway] [ParcelServiceClient.createParcel] Unexpected error", e);
+            return ResponseEntity.status(500).body(null);
+        }
     }
 
     @Override
@@ -63,6 +74,57 @@ public class ParcelServiceClient implements IParcelServiceClient {
                 .bodyToMono(Object.class)
                 .block();
         return ResponseEntity.ok(response);
+    }
+
+    @Override
+    public ResponseEntity<?> getParcels(Object filter, int page, int size, String sortBy, String direction) {
+        try {
+            UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUriString("/api/v1/parcels")
+                    .queryParam("page", page)
+                    .queryParam("size", size);
+            
+            // Add filter parameters if filter is a Map
+            if (filter instanceof java.util.Map) {
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> filterMap = (java.util.Map<String, Object>) filter;
+                if (filterMap.containsKey("status")) {
+                    uriBuilder.queryParam("status", filterMap.get("status"));
+                }
+                if (filterMap.containsKey("deliveryType")) {
+                    uriBuilder.queryParam("deliveryType", filterMap.get("deliveryType"));
+                }
+                if (filterMap.containsKey("createdFrom")) {
+                    uriBuilder.queryParam("createdFrom", filterMap.get("createdFrom"));
+                }
+                if (filterMap.containsKey("createdTo")) {
+                    uriBuilder.queryParam("createdTo", filterMap.get("createdTo"));
+                }
+            }
+            
+            if (sortBy != null) {
+                uriBuilder.queryParam("sortBy", sortBy);
+            }
+            if (direction != null) {
+                uriBuilder.queryParam("direction", direction);
+            }
+
+            String finalUrl = uriBuilder.toUriString();
+
+            Object response = parcelServiceWebClient.get()
+                    .uri(finalUrl)
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+            return ResponseEntity.ok(response);
+        } catch (WebClientResponseException e) {
+            log.error("[api-gateway] [ParcelServiceClient.getParcels] Error from parcel-service: status={}, body={}", 
+                    e.getStatusCode(), e.getResponseBodyAsString(), e);
+            return ResponseEntity.status(e.getStatusCode())
+                    .body(e.getResponseBodyAsString());
+        } catch (Exception e) {
+            log.error("[api-gateway] [ParcelServiceClient.getParcels] Unexpected error", e);
+            return ResponseEntity.status(500).body(null);
+        }
     }
 
     @Override

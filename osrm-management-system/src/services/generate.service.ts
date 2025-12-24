@@ -764,7 +764,7 @@ function setup()
       max_speed_for_map_matching      = 180/3.6,
       weight_name                     = 'routability',
       process_call_tagless_node      = false,
-      u_turn_penalty                 = 20,
+      u_turn_penalty                 = 50,
       continue_straight_at_waypoint  = true,
       use_turn_restrictions          = true,
       left_hand_driving              = false,
