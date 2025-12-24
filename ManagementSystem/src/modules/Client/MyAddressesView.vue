@@ -7,8 +7,11 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
+import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
 import {
   getMyAddresses,
+  createMyAddress,
+  updateMyAddress,
   deleteMyAddress,
   setMyPrimaryAddress,
   type UserAddressDto,
@@ -16,9 +19,13 @@ import {
 import { defineAsyncComponent } from 'vue'
 
 const PageHeader = defineAsyncComponent(() => import('@/common/components/PageHeader.vue'))
+const LazyAddressFormModal = defineAsyncComponent(
+  () => import('@/modules/UserAddresses/components/AddressFormModal.vue'),
+)
 
 const router = useRouter()
 const toast = useToast()
+const overlay = useOverlay()
 
 const addresses = ref<UserAddressDto[]>([])
 const loading = ref(false)
@@ -86,8 +93,54 @@ const handleSetPrimary = async (address: UserAddressDto) => {
   }
 }
 
-const goToCreateAddress = () => {
-  router.push({ name: 'client-create-address' })
+const openCreateModal = async () => {
+  const modal = overlay.create(LazyAddressFormModal)
+  const instance = modal.open({ mode: 'create' })
+  const result = await instance.result
+
+  if (result) {
+    try {
+      await createMyAddress(result)
+      toast.add({
+        title: 'Thành công',
+        description: 'Đã thêm địa chỉ mới',
+        color: 'success',
+      })
+      await loadAddresses()
+    } catch (error: any) {
+      console.error('Failed to create address:', error)
+      toast.add({
+        title: 'Lỗi',
+        description: error.message || 'Failed to create address',
+        color: 'error',
+      })
+    }
+  }
+}
+
+const openEditModal = async (address: UserAddressDto) => {
+  const modal = overlay.create(LazyAddressFormModal)
+  const instance = modal.open({ address, mode: 'edit' })
+  const result = await instance.result
+
+  if (result) {
+    try {
+      await updateMyAddress(address.id, result)
+      toast.add({
+        title: 'Thành công',
+        description: 'Đã cập nhật địa chỉ',
+        color: 'success',
+      })
+      await loadAddresses()
+    } catch (error: any) {
+      console.error('Failed to update address:', error)
+      toast.add({
+        title: 'Lỗi',
+        description: error.message || 'Failed to update address',
+        color: 'error',
+      })
+    }
+  }
 }
 
 onMounted(() => {
@@ -104,7 +157,7 @@ onMounted(() => {
           icon="i-heroicons-plus"
           size="sm"
           class="md:size-md"
-          @click="goToCreateAddress"
+          @click="openCreateModal"
         >
           <span class="hidden sm:inline">Thêm địa chỉ</span>
           <span class="sm:hidden">Thêm</span>
@@ -122,7 +175,7 @@ onMounted(() => {
       <UIcon name="i-heroicons-map-pin" class="w-16 h-16 text-gray-400 mx-auto mb-4" />
       <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Chưa có địa chỉ</h3>
       <p class="text-gray-500 mb-4">Thêm địa chỉ đầu tiên để nhận đơn hàng</p>
-      <UButton color="primary" icon="i-heroicons-plus" @click="goToCreateAddress">
+      <UButton color="primary" icon="i-heroicons-plus" @click="openCreateModal">
         Thêm địa chỉ
       </UButton>
     </div>
@@ -172,6 +225,7 @@ onMounted(() => {
 
         <template #footer>
           <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
             <UButton
               v-if="!address.isPrimary"
               variant="ghost"
@@ -184,6 +238,17 @@ onMounted(() => {
             <div v-else class="text-xs text-orange-600 dark:text-orange-400 font-medium">
               Địa chỉ mặc định
             </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <UButton
+                variant="ghost"
+                size="xs"
+                class="md:size-sm"
+                icon="i-heroicons-pencil"
+                @click="openEditModal(address)"
+              >
+                <span class="hidden sm:inline">Sửa</span>
+              </UButton>
             <UButton
               variant="ghost"
               color="error"
@@ -194,6 +259,7 @@ onMounted(() => {
             >
               <span class="hidden sm:inline">Xóa</span>
             </UButton>
+            </div>
           </div>
         </template>
       </UCard>

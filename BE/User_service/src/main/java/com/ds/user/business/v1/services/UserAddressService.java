@@ -2,6 +2,9 @@ package com.ds.user.business.v1.services;
 
 import com.ds.user.app_context.repositories.UserAddressRepository;
 import com.ds.user.app_context.repositories.UserRepository;
+import com.ds.user.application.client.AddressDetail;
+import com.ds.user.application.client.AddressResponse;
+import com.ds.user.application.client.ZoneClient;
 import com.ds.user.common.entities.base.UserAddress;
 import com.ds.user.common.entities.dto.UserAddressDto;
 import com.ds.user.common.entities.dto.request.CreateUserAddressRequest;
@@ -23,6 +26,7 @@ public class UserAddressService implements IUserAddressService {
 
     private final UserAddressRepository userAddressRepository;
     private final UserRepository userRepository;
+    private final ZoneClient zoneClient;
 
     @Override
     @Transactional
@@ -163,7 +167,7 @@ public class UserAddressService implements IUserAddressService {
     }
 
     private UserAddressDto toDto(UserAddress userAddress) {
-        return UserAddressDto.builder()
+        UserAddressDto.UserAddressDtoBuilder builder = UserAddressDto.builder()
                 .id(userAddress.getId())
                 .userId(userAddress.getUserId())
                 .destinationId(userAddress.getDestinationId())
@@ -171,7 +175,28 @@ public class UserAddressService implements IUserAddressService {
                 .tag(userAddress.getTag())
                 .isPrimary(userAddress.getIsPrimary())
                 .createdAt(userAddress.getCreatedAt())
-                .updatedAt(userAddress.getUpdatedAt())
-                .build();
+                .updatedAt(userAddress.getUpdatedAt());
+
+        // Fetch destination details from zone-service
+        try {
+            AddressResponse<AddressDetail> addressResponse = zoneClient.getAddress(userAddress.getDestinationId());
+            if (addressResponse != null && addressResponse.getResult() != null) {
+                AddressDetail addressDetail = addressResponse.getResult();
+                UserAddressDto.DestinationDetails destinationDetails = UserAddressDto.DestinationDetails.builder()
+                        .id(addressDetail.getId())
+                        .name(addressDetail.getName())
+                        .addressText(addressDetail.getAddressText())
+                        .lat(addressDetail.getLat())
+                        .lon(addressDetail.getLon())
+                        .build();
+                builder.destinationDetails(destinationDetails);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch destination details for destinationId {}: {}", 
+                    userAddress.getDestinationId(), e.getMessage());
+            // Continue without destination details
+        }
+
+        return builder.build();
     }
 }

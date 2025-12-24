@@ -53,15 +53,26 @@ const formattedDate = computed(() => {
  * Handle confirm
  */
 const handleConfirm = () => {
-  if (selectedDate.value && selectedTime.value) {
-    // Convert CalendarDate to YYYY-MM-DD format
-    const year = selectedDate.value.year
-    const month = String(selectedDate.value.month).padStart(2, '0')
-    const day = String(selectedDate.value.day).padStart(2, '0')
-    const dateString = `${year}-${month}-${day}`
+  // Use mock time: tomorrow at 14:00
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const year = tomorrow.getFullYear()
+  const month = String(tomorrow.getMonth() + 1).padStart(2, '0')
+  const day = String(tomorrow.getDate()).padStart(2, '0')
+  const dateString = `${year}-${month}-${day}`
+  const mockTime = '14:00'
 
-    emit('close', { date: dateString, time: selectedTime.value })
-  }
+  emit('close', { date: dateString, time: mockTime })
+  
+  // Original logic (commented out):
+  // if (selectedDate.value && selectedTime.value) {
+  //   // Convert CalendarDate to YYYY-MM-DD format
+  //   const year = selectedDate.value.year
+  //   const month = String(selectedDate.value.month).padStart(2, '0')
+  //   const day = String(selectedDate.value.day).padStart(2, '0')
+  //   const dateString = `${year}-${month}-${day}`
+  //   emit('close', { date: dateString, time: selectedTime.value })
+  // }
 }
 
 /**
@@ -80,7 +91,8 @@ selectedDate.value = new CalendarDate(today.getFullYear(), today.getMonth() + 1,
   <UModal :title="modalTitle" :ui="{ width: 'sm:max-w-sm md:max-w-md' }">
     <template #body>
       <div class="space-y-4 p-4">
-        <div>
+        <!-- Temporarily hidden date/time picker - using mock time -->
+        <!-- <div>
           <label class="block text-sm font-medium mb-2">Date</label>
           <UPopover v-model:open="showCalendar">
             <UButton
@@ -98,6 +110,9 @@ selectedDate.value = new CalendarDate(today.getFullYear(), today.getMonth() + 1,
         <div>
           <label class="block text-sm font-medium mb-2">Time</label>
           <UInput v-model="selectedTime" type="time" />
+        </div> -->
+        <div class="text-sm text-gray-500">
+          Đang xử lý yêu cầu hoãn đơn...
         </div>
         <div class="flex justify-end space-x-2">
           <UButton variant="ghost" @click="handleCancel"> Cancel </UButton>

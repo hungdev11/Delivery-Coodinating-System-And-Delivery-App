@@ -29,7 +29,7 @@ import { getParcelsV2 } from '../Parcels/api'
 import type { ParcelDto } from '../Parcels/model.type'
 import type { QueryPayload } from '@/common/types/filter'
 import { getActiveSessionForDeliveryMan, getAssignmentsBySessionId } from '../Delivery/api'
-import type { DeliveryAssignmentTask } from '../Delivery/model.type'
+import type { DeliveryAssignmentTask, DeliveryAssignmentTaskResponse } from '../Delivery/model.type'
 
 // Lazy load modals
 const LazyDateTimePickerModal = defineAsyncComponent(
@@ -329,19 +329,41 @@ const loadActiveSessionAndAssignments = async () => {
         page: 0,
         size: 100,
       })
-
-      if (assignmentsResponse.content) {
+      console.log('📦 assignmentsResponse:', assignmentsResponse)
+      
+      // Handle both direct response and wrapped response formats
+      let assignments: DeliveryAssignmentTask[] = []
+      if (assignmentsResponse) {
+        // Check if response is wrapped in 'result' (IApiResponse format)
+        if ('result' in assignmentsResponse && assignmentsResponse.result) {
+          const unwrapped = assignmentsResponse.result as DeliveryAssignmentTaskResponse
+          assignments = unwrapped.content || []
+          console.log('📦 Unwrapped from result:', assignments.length, 'assignments')
+        } 
+        // Check if response has 'content' directly (DeliveryAssignmentTaskResponse format)
+        else if ('content' in assignmentsResponse) {
+          assignments = assignmentsResponse.content || []
+          console.log('📦 Using content directly:', assignments.length, 'assignments')
+        }
+        // Fallback: check if response is an array directly
+        else if (Array.isArray(assignmentsResponse)) {
+          assignments = assignmentsResponse
+          console.log('📦 Response is array:', assignments.length, 'assignments')
+        } else {
+          console.warn('⚠️ Unexpected response format:', assignmentsResponse)
+        }
+      } else {
+        console.warn('⚠️ assignmentsResponse is null or undefined')
+      }
+      
         // Show ALL assignments in the session (not filtered by receiverId)
-        sessionAssignments.value = assignmentsResponse.content
+      sessionAssignments.value = assignments
         console.log(
           '📦 Loaded',
           sessionAssignments.value.length,
           'parcels in active session for shipper:',
           shipperId,
         )
-      } else {
-        sessionAssignments.value = []
-      }
     } else {
       activeSessionId.value = null
       sessionAssignments.value = []

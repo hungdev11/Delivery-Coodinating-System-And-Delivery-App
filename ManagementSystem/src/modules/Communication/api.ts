@@ -97,17 +97,16 @@ export const respondToProposal = async (
 
 /**
  * Get available proposal configs for roles
- * Backend returns direct array (not wrapped in IApiResponse)
- * AxiosHttpClient already unwraps response.data, so we get the array directly
+ * Backend returns IApiResponse<ProposalTypeConfig[]> format: { result: [...], message: null }
  */
-export const getAvailableConfigs = async (roles: string[]): Promise<ProposalTypeConfig[]> => {
+export const getAvailableConfigs = async (roles: string[]): Promise<ProposalTypeConfig[] | { result: ProposalTypeConfig[] }> => {
   const rolesParam = roles.join(',')
-  // Backend returns ResponseEntity<List<ProposalTypeConfig>> which becomes direct array
-  const response = await apiClient.get<ProposalTypeConfig[]>(
+  // Backend returns IApiResponse format: { result: ProposalTypeConfig[], message: null }
+  const response = await apiClient.get<{ result: ProposalTypeConfig[] } | ProposalTypeConfig[]>(
     `/v1/proposals/available-configs?roles=${rolesParam}`,
   )
-  // AxiosHttpClient returns response.data, which is the direct array from backend
-  return Array.isArray(response) ? response : []
+  // Return response as-is, let useProposals handle the format
+  return response
 }
 
 /**

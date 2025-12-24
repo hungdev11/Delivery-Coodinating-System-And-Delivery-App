@@ -94,8 +94,8 @@ export class BuildTrackerService {
    */
   async markFailed(buildId: string, errorMessage: string): Promise<void> {
     // Truncate error message to prevent database field overflow
-    // Reduce to 200 chars to be safe (including '...')
-    const MAX_ERROR_LENGTH = 200;
+    // Reduce to 150 chars to be safe (including '...')
+    const MAX_ERROR_LENGTH = 150;
     const truncatedError = errorMessage.length > MAX_ERROR_LENGTH 
       ? errorMessage.substring(0, MAX_ERROR_LENGTH - 3) + '...' 
       : errorMessage;
