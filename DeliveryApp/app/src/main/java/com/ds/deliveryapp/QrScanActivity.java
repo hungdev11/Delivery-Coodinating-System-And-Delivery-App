@@ -7,8 +7,10 @@ import android.util.Log;
 import android.widget.Toast;
 
 import com.ds.deliveryapp.clients.ParcelClient;
+import com.ds.deliveryapp.clients.SessionClient;
 import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.configs.RetrofitClient;
+import com.ds.deliveryapp.model.DeliveryAssignment;
 import com.ds.deliveryapp.model.Parcel;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
@@ -23,13 +25,34 @@ public class QrScanActivity extends AppCompatActivity {
     private static final String TAG = "QrScanActivity";
     private static final int PARCEL_DETAIL_REQUEST_CODE = 1002;
 
+    // Các biến cho chế độ ACCEPT_TASK
+    private String scanMode;
+    private String targetParcelCode;
+    private String assignmentId;
+    private String driverId;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Lấy dữ liệu từ Intent để biết đang ở chế độ nào
+        Intent intent = getIntent();
+        if (intent != null) {
+            scanMode = intent.getStringExtra("SCAN_MODE");
+            targetParcelCode = intent.getStringExtra("PARCEL_CODE");
+            assignmentId = intent.getStringExtra("ASSIGNMENT_ID");
+            driverId = intent.getStringExtra("DRIVER_ID");
+        }
+
         // Bắt đầu quét QR ngay khi Activity được tạo
         IntentIntegrator integrator = new IntentIntegrator(this);
-        integrator.setPrompt("Quét mã QR trên đơn hàng");
+        String prompt = "Quét mã QR trên đơn hàng";
+
+        if ("ACCEPT_TASK".equals(scanMode)) {
+            prompt = "Quét mã kiện hàng để NHẬN NHIỆM VỤ\nMã yêu cầu: " + targetParcelCode;
+        }
+
+        integrator.setPrompt(prompt);
         integrator.setCameraId(0);
         integrator.setBeepEnabled(true);
         integrator.setOrientationLocked(false);
@@ -56,11 +79,68 @@ public class QrScanActivity extends AppCompatActivity {
     }
 
     private void handleScannedCode(String scannedCode) {
-        Retrofit retrofit = RetrofitClient.getRetrofitInstance(this);
-        ParcelClient service = retrofit.create(ParcelClient.class);
-        Log.e(TAG, retrofit.baseUrl().toString());
+        if ("ACCEPT_TASK".equals(scanMode)) {
+            // Logic nhận nhiệm vụ
+            verifyAndAcceptTask(scannedCode);
+        } else {
+            // Logic cũ: Tra cứu thông tin kiện hàng
+            //lookupParcelInfo(scannedCode);
+        }
+    }
 
-        Call<BaseResponse<Parcel>> call = service.getParcelById(scannedCode);
+    private void verifyAndAcceptTask(String scannedCode) {
+        // 1. Kiểm tra mã
+        // So sánh scannedCode với targetParcelCode (ID hoặc Code)
+        if (scannedCode == null || targetParcelCode == null) {
+            Toast.makeText(this, "Lỗi dữ liệu đơn hàng.", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+
+        // Chấp nhận nếu quét trúng Parcel Code hoặc Parcel ID (giả sử targetParcelCode lưu Code)
+        if (!scannedCode.equals(targetParcelCode)) {
+            // Thử so sánh lỏng lẻo hơn hoặc báo lỗi
+            Toast.makeText(this, "Sai mã kiện hàng! \nMã quét: " + scannedCode + "\nMã yêu cầu: " + targetParcelCode, Toast.LENGTH_LONG).show();
+
+            // Restart scan or finish? Here we finish to let user click button again, or could restart scan.
+            finish();
+            return;
+        }
+
+        // 2. Gọi API Accept Task
+        Toast.makeText(this, "Mã khớp! Đang xác nhận nhận đơn...", Toast.LENGTH_SHORT).show();
+
+        SessionClient sessionClient = RetrofitClient.getRetrofitInstance(this).create(SessionClient.class);
+        Call<BaseResponse<DeliveryAssignment>> call = sessionClient.acceptTask(assignmentId, driverId);
+
+        call.enqueue(new Callback<BaseResponse<DeliveryAssignment>>() {
+            @Override
+            public void onResponse(Call<BaseResponse<DeliveryAssignment>> call, Response<BaseResponse<DeliveryAssignment>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    // Thành công
+                    Toast.makeText(QrScanActivity.this, "Đã nhận nhiệm vụ thành công!", Toast.LENGTH_SHORT).show();
+                    setResult(RESULT_OK); // Trả về OK cho TaskDetailActivity
+                    finish();
+                } else {
+                    Toast.makeText(QrScanActivity.this, "Lỗi khi nhận nhiệm vụ: " + response.code(), Toast.LENGTH_SHORT).show();
+                    finish();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<BaseResponse<DeliveryAssignment>> call, Throwable t) {
+                Toast.makeText(QrScanActivity.this, "Lỗi kết nối: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                finish();
+            }
+        });
+    }
+
+    private void lookupParcelInfo(String scannedCode) {
+        // Logic cũ của bạn
+        ParcelClient parcelClient = RetrofitClient.getRetrofitInstance(this).create(ParcelClient.class);
+        Call<BaseResponse<Parcel>> call = parcelClient.getParcelById(scannedCode);
+
+        Toast.makeText(this, "Đang tìm kiếm đơn hàng...", Toast.LENGTH_SHORT).show();
 
         call.enqueue(new Callback<BaseResponse<Parcel>>() {
             @Override
@@ -70,6 +150,7 @@ public class QrScanActivity extends AppCompatActivity {
                     if (baseResponse.getResult() == null) {
                         String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không tìm thấy đơn hàng";
                         Toast.makeText(QrScanActivity.this, errorMsg, Toast.LENGTH_SHORT).show();
+                        finish(); // Finish if not found to avoid stuck
                         return;
                     }
                     Parcel parcel = baseResponse.getResult();
@@ -78,14 +159,12 @@ public class QrScanActivity extends AppCompatActivity {
                     Intent intent = new Intent(QrScanActivity.this, ParcelDetailActivity.class);
                     intent.putExtra("PARCEL_INFO", parcel);
 
-                    // 🔥 SỬA LỖI: Gọi ParcelDetailActivity bằng ForResult
                     startActivityForResult(intent, PARCEL_DETAIL_REQUEST_CODE);
-
-                    // KHÔNG GỌI finish() TẠI ĐÂY! Nó sẽ được gọi trong onActivityResult sau.
+                    // Finish will be called in onActivityResult
                 } else {
                     Log.e(TAG, "Response unsuccessful: " + response.code());
                     Toast.makeText(QrScanActivity.this, "Lỗi tải đơn hàng: " + response.code(), Toast.LENGTH_SHORT).show();
-                    finish(); // Kết thúc nếu không tải được đơn hàng
+                    finish();
                 }
             }
             @Override

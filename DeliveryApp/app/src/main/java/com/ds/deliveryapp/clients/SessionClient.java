@@ -1,5 +1,6 @@
 package com.ds.deliveryapp.clients;
 
+import com.ds.deliveryapp.clients.req.AssignmentList;
 import com.ds.deliveryapp.clients.req.CompleteTaskRequest;
 import com.ds.deliveryapp.clients.req.ScanParcelRequest;
 import com.ds.deliveryapp.clients.req.SessionFailRequest;
@@ -20,12 +21,42 @@ import retrofit2.Call;
 import retrofit2.http.Body;
 import retrofit2.http.GET;
 import retrofit2.http.Multipart;
+import retrofit2.http.PATCH;
 import retrofit2.http.POST;
+import retrofit2.http.PUT;
 import retrofit2.http.Part;
 import retrofit2.http.Path;
 import retrofit2.http.Query;
 
 public interface SessionClient {
+
+    @PATCH("/api/v1/assignments/{assignmentId}/drivers/{deliveryManId}/accept")
+    Call<BaseResponse<DeliveryAssignment>> acceptTask(
+            @Path("assignmentId") String assignmentId,
+            @Path("deliveryManId") String deliveryManId
+    );
+
+    @GET("/api/v1/assignments/drivers/{deliveryManId}/assigned-task")
+    Call<BaseResponse<PageResponse<DeliveryAssignment>>> getAssignedTasks (
+        @Path("deliveryManId") String driverId,
+        @Query("page") int page,
+        @Query("size") int size
+    );
+
+    @POST("/api/v1/sessions") Call<BaseResponse<DeliverySession>> createSession (
+            @Body AssignmentList request
+    );
+
+    /**
+     * Lấy các task của một session cụ thể theo sessionId (phân trang).
+     * Ánh xạ tới: DeliveryAssignmentController.getTasksBySessionId
+     */
+    @GET("/api/v1/assignments/session/{sessionId}/tasks")
+    Call<BaseResponse<PageResponse<DeliveryAssignment>>> getTasksBySessionId(
+            @Path("sessionId") String sessionId,
+            @Query("page") int page,
+            @Query("size") int size
+    );
 
     @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/complete-with-urls")
     Call<BaseResponse<DeliveryAssignment>> completeTaskWithUrls(
@@ -95,16 +126,7 @@ public interface SessionClient {
             @Query("size") int size
     );
 
-    /**
-     * Lấy các task của một session cụ thể theo sessionId (phân trang).
-     * Ánh xạ tới: DeliveryAssignmentController.getTasksBySessionId
-     */
-    @GET("/api/v1/assignments/session/{sessionId}/tasks")
-    Call<BaseResponse<PageResponse<DeliveryAssignment>>> getTasksBySessionId(
-            @Path("sessionId") String sessionId,
-            @Query("page") int page,
-            @Query("size") int size
-    );
+
 
     /**
      * Lấy lịch sử task (các phiên đã đóng) với bộ lọc.
