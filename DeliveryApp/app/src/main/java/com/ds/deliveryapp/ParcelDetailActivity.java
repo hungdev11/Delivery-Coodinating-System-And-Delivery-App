@@ -128,17 +128,17 @@ public class ParcelDetailActivity extends AppCompatActivity {
         
         // Display sender name (with fallback to ID if name not available)
         String senderDisplay = parcel.getSenderName() != null && !parcel.getSenderName().isEmpty()
-                ? parcel.getSenderName()
-                : "Người gửi (ID): " + parcel.getSenderId().substring(0,5);
+                ? "Người gửi: " + parcel.getSenderName()
+                : "Người gửi: " + parcel.getSenderId().substring(0,5);
         tvSenderName.setText(senderDisplay);
         
         // Display receiver name (with fallback to ID if name not available)
         String receiverDisplay = parcel.getReceiverName() != null && !parcel.getReceiverName().isEmpty()
-                ? parcel.getReceiverName()
-                : "Người nhận (ID): " + parcel.getReceiverId();
+                ? "Người nhận: " + parcel.getReceiverName()
+                : "Người nhận: " + parcel.getReceiverId();
         tvReceiverName.setText(receiverDisplay);
         
-        tvReceiverPhone.setText("SĐT: " + (parcel.getReceiverPhoneNumber() != null ? parcel.getReceiverPhoneNumber() : "N/A"));
+        tvReceiverPhone.setText("SĐT: " + (parcel.getReceiverPhoneNumber() != null ? parcel.getReceiverPhoneNumber() : "0123123123"));
         tvWeight.setText(String.format(Locale.getDefault(), "Khối lượng: %.2f kg", parcel.getWeight()));
         tvValue.setText("Giá trị: " + formatCurrency(parcel.getValue()));
 

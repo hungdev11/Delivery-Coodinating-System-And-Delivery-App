@@ -8,12 +8,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 import androidx.lifecycle.Lifecycle;
-import com.google.android.material.bottomnavigation.BottomNavigationView;
-
-import java.util.HashMap;
-import java.util.Map;
 
 import com.ds.deliveryapp.clients.res.Message;
 import com.ds.deliveryapp.dialog.ProposalPopupDialog;
@@ -21,147 +18,112 @@ import com.ds.deliveryapp.enums.ContentType;
 import com.ds.deliveryapp.service.GlobalChatService;
 import com.ds.deliveryapp.utils.UserInfoLoader;
 import com.ds.deliveryapp.widget.ChatFloatingButton;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity implements GlobalChatService.ProposalListener {
 
     private ChatFloatingButton chatFloatingButton;
     private GlobalChatService globalChatService;
-    
-    // Cache fragments để giữ state khi switch tabs
-    private Map<Integer, Fragment> fragmentCache = new HashMap<>();
+
+    // Cache fragments
+    private Map<Integer, String> fragmentTags = new HashMap<>(); // Lưu tag thay vì instance để an toàn hơn
     private Fragment currentFragment = null;
+    private static final String TAG_PREFIX = "FRAGMENT_";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Initialize GlobalChatService
+        // Init Service
         globalChatService = GlobalChatService.getInstance(this);
         globalChatService.addProposalListener(this);
         if (!globalChatService.isConnected()) {
             globalChatService.initialize();
         }
 
-        // Setup chat floating button
         chatFloatingButton = findViewById(R.id.chat_floating_button);
-
         BottomNavigationView bottomNavigation = findViewById(R.id.bottomNavigation);
+
+        // Khôi phục trạng thái nếu xoay màn hình
+        if (savedInstanceState != null) {
+            // Tìm lại currentFragment từ FragmentManager để tránh null reference
+            Fragment savedFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+            if (savedFragment != null) {
+                currentFragment = savedFragment;
+            }
+        }
+
         bottomNavigation.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
-            Fragment selectedFragment = null;
-            int fragmentKey = 0;
-
+            // Chỉ truyền ID và Class, không new instance ở đây
             if (id == R.id.nav_orders) {
-                // Check for active session and show appropriate fragment
-                selectedFragment = shouldShowDashboard() ? new SessionDashboardFragment() : new TaskFragment();
-                fragmentKey = R.id.nav_orders;
+                // Luôn hiển thị TaskFragment cho tab Orders
+                changeTab(id, TaskFragment.class);
             } else if (id == R.id.nav_map) {
-                selectedFragment = new MapFragment();
-                fragmentKey = R.id.nav_map;
+                changeTab(id, MapFragment.class);
             } else if (id == R.id.nav_activity) {
-                selectedFragment = new ActivityFragment();
-                fragmentKey = R.id.nav_activity;
+                changeTab(id, ActivityFragment.class);
             } else if (id == R.id.nav_profile) {
-                selectedFragment = new ProfileFragment();
-                fragmentKey = R.id.nav_profile;
+                changeTab(id, ProfileFragment.class);
             }
-
-            if (selectedFragment != null) {
-                switchFragment(fragmentKey, selectedFragment);
-            }
-
             return true;
         });
-        // Start with dashboard or tasks based on session status
-        if (shouldShowDashboard()) {
-            Fragment initialFragment = new SessionDashboardFragment();
-            switchFragment(R.id.nav_orders, initialFragment);
-        } else {
+
+        // Set default selection (chỉ chạy lần đầu, không chạy khi xoay màn hình)
+        if (savedInstanceState == null) {
             bottomNavigation.setSelectedItemId(R.id.nav_orders);
         }
-        
-        // Load user info and vehicle type if token exists
+
         UserInfoLoader.loadUserInfo(this);
     }
 
     /**
-     * Switch fragment using show/hide instead of replace to preserve state
+     * Hàm xử lý switch tab an toàn
      */
-    private void switchFragment(int fragmentKey, Fragment fragment) {
-        Fragment cachedFragment = fragmentCache.get(fragmentKey);
-        FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
-        
-        // Hide current fragment if exists
-        if (currentFragment != null) {
+    private void changeTab(int menuId, Class<? extends Fragment> fragmentClass) {
+        String tag = TAG_PREFIX + menuId;
+        FragmentManager fm = getSupportFragmentManager();
+        FragmentTransaction transaction = fm.beginTransaction();
+
+        // 1. Tìm fragment trong Manager trước (Xử lý xoay màn hình)
+        Fragment targetFragment = fm.findFragmentByTag(tag);
+
+        // 2. Nếu chưa có thì tạo mới
+        if (targetFragment == null) {
+            try {
+                targetFragment = fragmentClass.newInstance();
+                // Add với TAG để sau này tìm lại được
+                transaction.add(R.id.fragment_container, targetFragment, tag);
+            } catch (Exception e) {
+                e.printStackTrace();
+                return;
+            }
+        }
+
+        // 3. Ẩn fragment hiện tại
+        if (currentFragment != null && currentFragment != targetFragment) {
             transaction.hide(currentFragment);
-            // Set max lifecycle to STARTED for hidden fragment (not destroyed)
             transaction.setMaxLifecycle(currentFragment, Lifecycle.State.STARTED);
         }
-        
-        if (cachedFragment != null) {
-            // Fragment already exists, show it
-            transaction.show(cachedFragment);
-            transaction.setMaxLifecycle(cachedFragment, Lifecycle.State.RESUMED);
-            currentFragment = cachedFragment;
-        } else {
-            // Fragment doesn't exist, add it
-            transaction.add(R.id.fragment_container, fragment, String.valueOf(fragmentKey));
-            transaction.setMaxLifecycle(fragment, Lifecycle.State.RESUMED);
-            fragmentCache.put(fragmentKey, fragment);
-            currentFragment = fragment;
-        }
-        
+
+        // 4. Hiện fragment đích
+        transaction.show(targetFragment);
+        transaction.setMaxLifecycle(targetFragment, Lifecycle.State.RESUMED);
+
+        currentFragment = targetFragment;
         transaction.commit();
     }
 
-    private boolean shouldShowDashboard() {
-        // Check for active session - if none, show dashboard
-        // TaskFragment will also check and navigate if needed
-        return false; // Let TaskFragment handle the logic initially
-    }
-    
-    /**
-     * Show dashboard fragment (called from TaskFragment when no active session)
-     */
-    public void showDashboard() {
-        Fragment dashboardFragment = new SessionDashboardFragment();
-        // Clear cached orders fragment and replace with dashboard
-        fragmentCache.remove(R.id.nav_orders);
-        switchFragment(R.id.nav_orders, dashboardFragment);
-    }
+    // ... giữ nguyên onActivityResult, onProposalReceived, onDestroy ...
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        Log.d("MainActivity", "onActivityResult - Request Code: " + requestCode + ", Result Code: " + resultCode);
-
-        // 💡 QUAN TRỌNG: KHÔNG XÓA DÒNG NÀY.
-        // Dòng super.onActivityResult(...) này sẽ tự động chuyển tiếp sự kiện
-        // đến các Fragment đang được host (ví dụ: MapFragment),
-        // sau đó MapFragment sẽ chuyển tiếp cho (TaskListDialogFragment).
+        Log.d("MainActivity", "onActivityResult: " + requestCode);
         super.onActivityResult(requestCode, resultCode, data);
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-    }
-
-    /**
-     * Navigate to Tasks fragment (used by SessionDashboardFragment after creating session)
-     * Force reload TaskFragment to check for new session
-     */
-    public void navigateToTasks() {
-        // Clear cached orders fragment to force reload
-        fragmentCache.remove(R.id.nav_orders);
-        
-        // Create new TaskFragment (will check for active session)
-        Fragment taskFragment = new TaskFragment();
-        switchFragment(R.id.nav_orders, taskFragment);
-        
-        // Update bottom navigation selection
-        BottomNavigationView bottomNavigation = findViewById(R.id.bottomNavigation);
-        bottomNavigation.setSelectedItemId(R.id.nav_orders);
     }
 
     @Override
@@ -176,7 +138,6 @@ public class MainActivity extends AppCompatActivity implements GlobalChatService
 
     @Override
     public void onProposalUpdate(com.ds.deliveryapp.clients.req.ProposalUpdateDTO update) {
-        // Handle proposal updates if needed
     }
 
     @Override

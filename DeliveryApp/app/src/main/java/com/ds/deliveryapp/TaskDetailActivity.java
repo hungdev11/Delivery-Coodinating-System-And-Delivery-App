@@ -31,6 +31,7 @@ import com.ds.deliveryapp.enums.DeliveryType;
 import com.ds.deliveryapp.model.DeliveryAssignment;
 import com.ds.deliveryapp.model.DeliveryProof;
 import com.ds.deliveryapp.utils.FormaterUtil;
+import com.ds.deliveryapp.utils.SessionManager;
 import com.ds.deliveryapp.utils.TaskActionHandler;
 
 import java.util.ArrayList;
@@ -43,10 +44,11 @@ import retrofit2.Response;
 
 public class TaskDetailActivity extends AppCompatActivity implements TaskActionHandler.TaskUpdateListener{
     private TextView tvParcelCode, tvStatus, tvReceiverName, tvDeliveryLocation;
-    private Button btnCallReceiver, btnMainAction, btnFailAction, btnChatReceiver, btnReturnToWarehouse;
+    private Button btnCallReceiver, btnMainAction, btnFailAction, btnChatReceiver, btnReturnToWarehouse, btnAcceptTask;
     private TextView tvParcelValue;
 
-    private static final int REQUEST_CODE_PROOF = 9001; // Mã request mới
+    private static final int REQUEST_CODE_PROOF = 9001;
+    private static final int REQUEST_CODE_ACCEPT_TASK = 9003; // Mã request mới cho việc nhận task
 
     // View từ card_details_and_route_info.xml (included)
     private TextView tvDeliveryType, tvWeight, tvParcelId;
@@ -64,6 +66,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
     private TaskActionHandler actionHandler;
     private String sessionStatus; // CREATED, IN_PROGRESS, etc.
     private SessionClient sessionClient;
+    private SessionManager sessionManager; // Thêm SessionManager để lấy DriverId
 
     private boolean hasUnfinishedTasks;
 
@@ -72,6 +75,9 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_task_detail);
+
+        // Khởi tạo SessionManager
+        sessionManager = new SessionManager(this);
 
         initViews();
 
@@ -114,6 +120,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         btnMainAction = findViewById(R.id.btn_main_action);
         btnChatReceiver = findViewById(R.id.btn_chat_receiver_detail);
         btnReturnToWarehouse = findViewById(R.id.btn_return_to_warehouse);
+        btnAcceptTask = findViewById(R.id.btn_scan_verify);
         tvDeliveryType = findViewById(R.id.tv_delivery_type);
         tvWeight = findViewById(R.id.tv_weight);
         tvParcelId = findViewById(R.id.tv_parcel_id);
@@ -244,14 +251,27 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
     private void updateMainActionButton(String status) {
         int green = getResources().getColor(android.R.color.holo_green_dark);
         int gray = getResources().getColor(android.R.color.darker_gray);
+        int blue = getResources().getColor(android.R.color.holo_blue_dark); // Màu cho nút Assign
+
         if (btnMainAction == null) return;
         switch (status) {
+            case "ASSIGNED": // Trường hợp mới
+                btnMainAction.setText("NHẬN NHIỆM VỤ");
+                btnMainAction.setEnabled(true);
+                btnMainAction.setVisibility(VISIBLE);
+                btnFailAction.setVisibility(GONE); // Ẩn nút thất bại khi chưa nhận
+                btnMainAction.setBackgroundTintList(android.content.res.ColorStateList.valueOf(blue));
+                break;
             case "IN_PROGRESS":
                 btnMainAction.setText("HOÀN TẤT GIAO HÀNG");
+                btnMainAction.setEnabled(true);
+                btnMainAction.setVisibility(VISIBLE);
+                btnFailAction.setVisibility(VISIBLE);
                 btnMainAction.setBackgroundTintList(android.content.res.ColorStateList.valueOf(green));
                 break;
             case "COMPLETED":
-            case "FAILED", "DELAYED":
+            case "FAILED":
+            case "DELAYED":
                 btnMainAction.setText("ĐÃ HOÀN TẤT");
                 btnMainAction.setEnabled(false);
                 btnFailAction.setVisibility(GONE);
@@ -281,8 +301,7 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
             // 👉 GIỮ NGUYÊN HÀNH VI CŨ
             btnReturnToWarehouse.setVisibility(GONE);
 
-            btnMainAction.setVisibility(VISIBLE);
-            btnFailAction.setVisibility(VISIBLE);
+            // Logic hiển thị đã được xử lý trong updateMainActionButton
         }
     }
 
@@ -293,14 +312,21 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
      */
     private void updateButtonsBasedOnSessionStatus() {
         boolean isSessionActive = "IN_PROGRESS".equals(sessionStatus);
+        boolean isAssignedTask = currentTask != null && "ASSIGNED".equals(currentTask.getStatus());
 
         if (!isSessionActive) {
-            // Session not started - disable completion action
+            // Session not started - disable completion action UNLESS it is an ASSIGNED task waiting to be accepted
             if (btnMainAction != null) {
-                btnMainAction.setEnabled(false);
-                btnMainAction.setText("BẮT ĐẦU PHIÊN ĐỂ GIAO HÀNG");
-                btnMainAction.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                    getResources().getColor(android.R.color.darker_gray)));
+                if (isAssignedTask) {
+                    // Allow accepting task even if session is not IN_PROGRESS (or not started yet)
+                    btnMainAction.setEnabled(true);
+                    // updateMainActionButton will handle text and color
+                } else {
+                    btnMainAction.setEnabled(false);
+                    btnMainAction.setText("BẮT ĐẦU PHIÊN ĐỂ GIAO HÀNG");
+                    btnMainAction.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                            getResources().getColor(android.R.color.darker_gray)));
+                }
             }
             // btnFailAction is allowed (for DELAY/cancel)
             // btnCallReceiver is allowed
@@ -334,9 +360,21 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
         if (btnMainAction != null) {
             btnMainAction.setOnClickListener(v -> {
                 if (currentTask != null && btnMainAction.isEnabled()) {
-                    if ("IN_PROGRESS".equals(task.getStatus())) {
+                    String status = currentTask.getStatus();
+
+                    if ("ASSIGNED".equals(status)) {
+                        // Logic Nhận nhiệm vụ: Mở QrScanActivity để quét xác nhận
+                        Intent intent = new Intent(TaskDetailActivity.this, QrScanActivity.class);
+                        // Truyền các thông tin cần thiết để accept
+                        intent.putExtra("SCAN_MODE", "ACCEPT_TASK");
+                        intent.putExtra("PARCEL_CODE", currentTask.getParcelCode()); // ID để so khớp
+                        intent.putExtra("ASSIGNMENT_ID", currentTask.getAssignmentId());
+                        intent.putExtra("DRIVER_ID", sessionManager.getDriverId());
+
+                        startActivityForResult(intent, REQUEST_CODE_ACCEPT_TASK);
+
+                    } else if ("IN_PROGRESS".equals(status)) {
                         actionHandler.completeTaskWithProof(currentTask);
-                    } else {
                     }
                 }
             });
@@ -379,7 +417,19 @@ public class TaskDetailActivity extends AppCompatActivity implements TaskActionH
             }
             // Hide return button if proof exists
             updateReturnToWarehouseButton(currentTask);
-        } else if (actionHandler != null) {
+        }
+        else if (requestCode == REQUEST_CODE_ACCEPT_TASK && resultCode == RESULT_OK) {
+            // Xử lý sau khi accept thành công từ QR Scan
+            Toast.makeText(this, "Đã nhận nhiệm vụ thành công!", Toast.LENGTH_SHORT).show();
+
+            // Cập nhật trạng thái local và UI
+            currentTask.setStatus("IN_PROGRESS");
+            displayData(currentTask);
+
+            // Báo cho Activity cha (TaskFragment) biết để cập nhật list
+            onStatusUpdated("IN_PROGRESS");
+        }
+        else if (actionHandler != null) {
             // CHUYỂN TIẾP KẾT QUẢ CHO HANDLER XỬ LÝ
             actionHandler.processProofResult(requestCode, resultCode, data);
         }

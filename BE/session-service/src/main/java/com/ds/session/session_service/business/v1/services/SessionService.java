@@ -75,12 +75,12 @@ public class SessionService implements ISessionService {
         ParcelResponse parcelInfo = parcelApiClient.fetchParcelResponse(parcelId);
         log.debug("Fetched parcel info in {}ms", System.currentTimeMillis() - fetchStart);
         if (parcelInfo == null) {
-            throw new IllegalStateException("Parcel " + parcelId + " does not exist.");
+            throw new IllegalArgumentException("Parcel " + parcelId + " does not exist.");
         }
         // Allow accepting parcels with status IN_WAREHOUSE or DELAYED
         String parcelStatus = parcelInfo.getStatus();
         if (!"IN_WAREHOUSE".equals(parcelStatus) && !"DELAYED".equals(parcelStatus)) {
-            throw new IllegalStateException("Parcel " + parcelId + " is not IN_WAREHOUSE or DELAYED. Current status: " + parcelStatus);
+            throw new IllegalArgumentException("Parcel " + parcelId + " is not IN_WAREHOUSE or DELAYED. Current status: " + parcelStatus);
         }
 
         // 2. Kiểm tra xem đơn hàng này đã thuộc một phiên (session) ĐANG HOẠT ĐỘNG (CREATED hoặc IN_PROGRESS)
@@ -101,7 +101,7 @@ public class SessionService implements ISessionService {
                 return toAssignmentResponse(assignment);
             }
             // Nếu đơn hàng bị gán cho shipper khác
-            throw new IllegalStateException("Parcel " + parcelId + " is already in an active session (status: " 
+            throw new IllegalArgumentException("Parcel " + parcelId + " is already in an active session (status: " 
                 + assignment.getSession().getStatus() + ") of another delivery man: " 
                 + assignment.getSession().getDeliveryManId());
         }
@@ -142,7 +142,7 @@ public class SessionService implements ISessionService {
         // if (isSessionExpired(sessionToUse)) {
         //     log.debug("[session-service] [SessionService.acceptParcelToSession] Session {} is expired. Auto-failing session before adding parcel.", sessionToUse.getId());
         //     failSession(sessionToUse.getId(), "Phiên giao hết hạn");
-        //     throw new IllegalStateException("Session has expired. Please create a new session.");
+        //     throw new IllegalArgumentException("Session has expired. Please create a new session.");
         // }
 
         // 7. Validation: Nếu số đơn > 5, kiểm tra routing time
@@ -177,7 +177,6 @@ public class SessionService implements ISessionService {
         return toAssignmentResponse(newAssignment);
     }
 
-
     @Override
     @Transactional
     public SessionResponse createSession(CreateSessionRequest request) {
@@ -186,11 +185,11 @@ public class SessionService implements ISessionService {
         // 1. Kiểm tra xem shipper đã có phiên IN_PROGRESS hoặc CREATED nào chưa
         sessionRepository.findByDeliveryManIdAndStatus(request.getDeliveryManId(), SessionStatus.IN_PROGRESS)
             .ifPresent(session -> {
-                throw new IllegalStateException("Delivery man " + request.getDeliveryManId() + " already has an IN_PROGRESS session.");
+                throw new IllegalArgumentException("Delivery man " + request.getDeliveryManId() + " already has an IN_PROGRESS session.");
             });
         sessionRepository.findByDeliveryManIdAndStatus(request.getDeliveryManId(), SessionStatus.CREATED)
             .ifPresent(session -> {
-                throw new IllegalStateException("Delivery man " + request.getDeliveryManId() + " already has a CREATED session.");
+                throw new IllegalArgumentException("Delivery man " + request.getDeliveryManId() + " already has a CREATED session.");
             });
             
         // 2. Tạo Session cha với trạng thái IN_PROGRESS (batch creation goes directly to IN_PROGRESS)
@@ -200,22 +199,27 @@ public class SessionService implements ISessionService {
             .startTime(LocalDateTime.now())
             .build();
 
-        // 3. Tạo các Assignment (Task) con
-        for (String parcelId : request.getParcelIds()) {
-            DeliveryAssignment assignment = DeliveryAssignment.builder()
-                .parcelId(parcelId)
-                .status(AssignmentStatus.IN_PROGRESS)
-                .scanedAt(LocalDateTime.now())
-                .build();
+        // 3. kiểm tra các task
+        for (String assignmentId : request.getAssignmentsIds()) {
+            var assignment = assignmentRepository.findById(UUID.fromString(assignmentId))
+                .orElseThrow(() -> new ResourceNotFound("Assignment not found: " + assignmentId));
             
+            if (!assignment.getStatus().equals(AssignmentStatus.ASSIGNED)) {
+                throw new IllegalArgumentException("Assignment " + assignmentId + " is not in ASSIGNED status. Current status: " + assignment.getStatus());
+            }
+            if (!assignment.getShipperId().equals(request.getDeliveryManId())) {
+                throw new IllegalArgumentException("Assignment " + assignmentId + " does not belong to delivery man " + request.getDeliveryManId());
+            }
+
+            assignment.startTask(session);
             // Dùng hàm helper để liên kết 2 chiều
             session.addAssignment(assignment);
 
             // 4. TODO: Báo cho Parcel-Service biết đơn hàng này đã ON_ROUTE
             try {
-                parcelEventPublisher.publish(parcelId, ParcelEvent.SCAN_QR);
+                parcelEventPublisher.publish(assignment.getParcelId(), ParcelEvent.SCAN_QR);
             } catch (Exception e) {
-                log.error("Failed to publish parcel status event for parcel {}: {}", parcelId, e.getMessage());
+                log.error("Failed to publish parcel status event for parcel {}: {}", assignment.getParcelId(), e.getMessage());
                 throw new RuntimeException("Failed to publish parcel status event: " + e.getMessage(), e);
             }
         }
@@ -235,11 +239,11 @@ public class SessionService implements ISessionService {
         // 1. Kiểm tra xem shipper đã có phiên CREATED hoặc IN_PROGRESS nào chưa
         sessionRepository.findByDeliveryManIdAndStatus(deliveryManId, SessionStatus.CREATED)
             .ifPresent(session -> {
-                throw new IllegalStateException("Delivery man " + deliveryManId + " already has a CREATED session.");
+                throw new IllegalArgumentException("Delivery man " + deliveryManId + " already has a CREATED session.");
             });
         sessionRepository.findByDeliveryManIdAndStatus(deliveryManId, SessionStatus.IN_PROGRESS)
             .ifPresent(session -> {
-                throw new IllegalStateException("Delivery man " + deliveryManId + " already has an IN_PROGRESS session.");
+                throw new IllegalArgumentException("Delivery man " + deliveryManId + " already has an IN_PROGRESS session.");
             });
 
         // 2. Tạo Session ở trạng thái CREATED
@@ -263,7 +267,7 @@ public class SessionService implements ISessionService {
             .orElseThrow(() -> new ResourceNotFound("Session not found: " + sessionId));
 
         if (session.getStatus() != SessionStatus.CREATED) {
-            throw new IllegalStateException("Session " + sessionId + " must be in CREATED status to start. Current status: " + session.getStatus());
+            throw new IllegalArgumentException("Session " + sessionId + " must be in CREATED status to start. Current status: " + session.getStatus());
         }
 
         // Save start location if provided
@@ -320,13 +324,13 @@ public class SessionService implements ISessionService {
         // Only IN_PROGRESS or CREATED sessions can be completed
         if (session.getStatus() != SessionStatus.IN_PROGRESS && session.getStatus() != SessionStatus.CREATED) {
             log.debug("[session-service] [SessionService.completeSession] Session {} is not IN_PROGRESS or CREATED (current: {}). Cannot complete.", sessionId, session.getStatus());
-            throw new IllegalStateException("Session " + sessionId + " must be IN_PROGRESS or CREATED to complete. Current status: " + session.getStatus());
+            throw new IllegalArgumentException("Session " + sessionId + " must be IN_PROGRESS or CREATED to complete. Current status: " + session.getStatus());
         }
         
         // Kiểm tra lại (phòng hờ): Đảm bảo tất cả task đã xong (CREATED hoặc IN_PROGRESS)
         long pendingTasks = assignmentRepository.countPendingTasksBySessionId(session.getId());
         if (pendingTasks > 0) {
-            throw new IllegalStateException("Cannot complete session " + sessionId + ": " + pendingTasks + " tasks are still pending.");
+            throw new IllegalArgumentException("Cannot complete session " + sessionId + ": " + pendingTasks + " tasks are still pending.");
         }
 
         session.setStatus(SessionStatus.COMPLETED);
@@ -372,7 +376,7 @@ public class SessionService implements ISessionService {
     //     // NOT when individual parcels fail
     //     if (session.getStatus() != SessionStatus.IN_PROGRESS && session.getStatus() != SessionStatus.CREATED) {
     //         log.debug("[session-service] [SessionService.failSession] Session {} is already in state {}. Cannot fail.", sessionId, session.getStatus());
-    //         throw new IllegalStateException("Session " + sessionId + " must be in IN_PROGRESS or CREATED status to fail. Current status: " + session.getStatus());
+    //         throw new IllegalArgumentException("Session " + sessionId + " must be in IN_PROGRESS or CREATED status to fail. Current status: " + session.getStatus());
     //     }
         
     //     session.setStatus(SessionStatus.FAILED);
@@ -413,7 +417,7 @@ public class SessionService implements ISessionService {
 
         if (session.getStatus() != SessionStatus.IN_PROGRESS
             && session.getStatus() != SessionStatus.CREATED) {
-            throw new IllegalStateException(
+            throw new IllegalArgumentException(
                 "Session must be IN_PROGRESS or CREATED to fail. Current: "
                     + session.getStatus());
         }
@@ -453,14 +457,14 @@ public class SessionService implements ISessionService {
         // =====================
         // PHASE 2: hard-close
         // =====================
-        if (session.getStatus() == SessionStatus.FAILED) {
+        if (session.getStatus() == SessionStatus.COMPLETED) {
             // idempotent safety
             return toSessionResponse(session);
         }
 
         log.info("FailSession phase 2: closing session {}", sessionId);
 
-        session.setStatus(SessionStatus.FAILED);
+        session.setStatus(SessionStatus.COMPLETED);
         session.setEndTime(LocalDateTime.now());
 
         DeliverySession saved = sessionRepository.save(session);
@@ -755,7 +759,7 @@ public class SessionService implements ISessionService {
 
             // Kiểm tra 1: Tổng thời gian > 5 tiếng
             if (totalDurationHours > MAX_DELIVERY_HOURS) {
-                throw new IllegalStateException(
+                throw new IllegalArgumentException(
                     String.format("Không thể nhận thêm đơn: Tổng thời gian giao hàng (%.2f giờ) vượt quá giới hạn %d giờ.", 
                         totalDurationHours, MAX_DELIVERY_HOURS));
             }
@@ -766,7 +770,7 @@ public class SessionService implements ISessionService {
             LocalDateTime sessionEndTime = session.getStartTime().toLocalDate().atTime(SESSION_END_TIME);
             
             if (estimatedEndTime.isAfter(sessionEndTime)) {
-                throw new IllegalStateException(
+                throw new IllegalArgumentException(
                     String.format("Không thể nhận thêm đơn: Thời gian giao hàng ước tính (%.2f giờ) sẽ vượt quá thời gian kết thúc phiên (21:00).", 
                         totalDurationHours));
             }
@@ -774,7 +778,7 @@ public class SessionService implements ISessionService {
             log.debug("[session-service] [SessionService.validateRoutingForSession] Routing validation passed for session {}: {} hours, estimated end: {}", 
                 session.getId(), totalDurationHours, estimatedEndTime);
 
-        } catch (IllegalStateException e) {
+        } catch (IllegalArgumentException e) {
             // Re-throw validation errors
             throw e;
         } catch (Exception e) {
@@ -957,7 +961,7 @@ public class SessionService implements ISessionService {
             waypoints.addAll(moveToEndWaypoints);
             
             if (waypoints.isEmpty()) {
-                throw new IllegalStateException("No valid parcels with location information found");
+                throw new IllegalArgumentException("No valid parcels with location information found");
             }
             
             // 2. Add current location as starting point if provided
@@ -994,7 +998,7 @@ public class SessionService implements ISessionService {
             RouteResponse routeResponse = zoneServiceClient.calculateRoute(routeRequest);
             
             if (routeResponse == null || routeResponse.getRoute() == null) {
-                throw new IllegalStateException("Failed to calculate route from zone service");
+                throw new IllegalArgumentException("Failed to calculate route from zone service");
             }
             
             // 4. Get route duration
@@ -1047,10 +1051,10 @@ public class SessionService implements ISessionService {
         // 1. Verify parcel exists and is ON_ROUTE
         ParcelResponse parcelInfo = parcelApiClient.fetchParcelResponse(request.getParcelId());
         if (parcelInfo == null) {
-            throw new IllegalStateException("Parcel " + request.getParcelId() + " does not exist.");
+            throw new IllegalArgumentException("Parcel " + request.getParcelId() + " does not exist.");
         }
         if (!"ON_ROUTE".equals(parcelInfo.getStatus())) {
-            throw new IllegalStateException("Parcel " + request.getParcelId() + " must be ON_ROUTE to transfer. Current status: " + parcelInfo.getStatus());
+            throw new IllegalArgumentException("Parcel " + request.getParcelId() + " must be ON_ROUTE to transfer. Current status: " + parcelInfo.getStatus());
         }
         
         // 2. Find IN_PROGRESS assignment of fromDeliveryManId for this parcel
@@ -1060,7 +1064,7 @@ public class SessionService implements ISessionService {
         
         // 3. Verify assignment belongs to fromDeliveryManId
         if (!sourceAssignment.getSession().getDeliveryManId().equals(fromDeliveryManId)) {
-            throw new IllegalStateException("Assignment does not belong to shipper " + fromDeliveryManId);
+            throw new IllegalArgumentException("Assignment does not belong to shipper " + fromDeliveryManId);
         }
         
         // 4. Find target session
@@ -1070,10 +1074,10 @@ public class SessionService implements ISessionService {
         
         // 5. Verify target session is active and belongs to different shipper
         if (targetSession.getStatus() != SessionStatus.CREATED && targetSession.getStatus() != SessionStatus.IN_PROGRESS) {
-            throw new IllegalStateException("Target session must be CREATED or IN_PROGRESS. Current status: " + targetSession.getStatus());
+            throw new IllegalArgumentException("Target session must be CREATED or IN_PROGRESS. Current status: " + targetSession.getStatus());
         }
         if (targetSession.getDeliveryManId().equals(fromDeliveryManId)) {
-            throw new IllegalStateException("Cannot transfer parcel to your own session");
+            throw new IllegalArgumentException("Cannot transfer parcel to your own session");
         }
         
         // 6. Mark source assignment as FAILED
@@ -1116,10 +1120,10 @@ public class SessionService implements ISessionService {
         // 1. Verify parcel exists and is ON_ROUTE
         ParcelResponse parcelInfo = parcelApiClient.fetchParcelResponse(request.getParcelId());
         if (parcelInfo == null) {
-            throw new IllegalStateException("Parcel " + request.getParcelId() + " does not exist.");
+            throw new IllegalArgumentException("Parcel " + request.getParcelId() + " does not exist.");
         }
         if (!"ON_ROUTE".equals(parcelInfo.getStatus())) {
-            throw new IllegalStateException("Parcel " + request.getParcelId() + " must be ON_ROUTE to accept transfer. Current status: " + parcelInfo.getStatus());
+            throw new IllegalArgumentException("Parcel " + request.getParcelId() + " must be ON_ROUTE to accept transfer. Current status: " + parcelInfo.getStatus());
         }
         
         // 2. Find source session
@@ -1134,7 +1138,7 @@ public class SessionService implements ISessionService {
         
         // 4. Verify source assignment is IN_PROGRESS
         if (sourceAssignment.getStatus() != AssignmentStatus.IN_PROGRESS) {
-            throw new IllegalStateException("Source assignment is not IN_PROGRESS. Current status: " + sourceAssignment.getStatus());
+            throw new IllegalArgumentException("Source assignment is not IN_PROGRESS. Current status: " + sourceAssignment.getStatus());
         }
         
         // 5. Mark source assignment as FAILED

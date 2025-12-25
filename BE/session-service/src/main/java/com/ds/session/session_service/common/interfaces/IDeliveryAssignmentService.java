@@ -4,8 +4,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.springframework.web.multipart.MultipartFile;
-
 import com.ds.session.session_service.common.entities.dto.request.CompleteTaskRequest;
 import com.ds.session.session_service.common.entities.dto.request.PagingRequestV0;
 import com.ds.session.session_service.common.entities.dto.request.PagingRequestV2;
@@ -19,6 +17,8 @@ import com.ds.session.session_service.common.entities.dto.response.ShipperInfo;
  * Interface (đã chính xác từ lần trước)
  */
 public interface IDeliveryAssignmentService {
+
+    DeliveryAssignmentResponse acceptTask(UUID deliveryManId,UUID assignmentId);
     
     DeliveryAssignmentResponse completeTask(UUID parcelId, UUID deliveryManId, CompleteTaskRequest request);
     
@@ -39,11 +39,11 @@ public interface IDeliveryAssignmentService {
      */
     DeliveryAssignmentResponse returnToWarehouse(UUID assignmentId, CompleteTaskRequest request);
     
-    DeliveryAssignmentResponse deliveryFailed(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
+    DeliveryAssignmentResponse deliveryFailed(UUID assignmentId, String reason, RouteInfo routeInfo);
     
-    DeliveryAssignmentResponse rejectedByCustomer(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
+    DeliveryAssignmentResponse rejectedByCustomer(UUID assignmentId, String reason, RouteInfo routeInfo);
 
-    DeliveryAssignmentResponse postponeByCustomer(UUID parcelId, UUID deliveryManId, String reason, RouteInfo routeInfo);
+    //DeliveryAssignmentResponse postponeByCustomer(UUID assignmentId, String reason, RouteInfo routeInfo);
     
     /**
      * Postpone assignment directly by assignmentId.
@@ -79,6 +79,14 @@ public interface IDeliveryAssignmentService {
         int page, 
         int size
     );
+
+    PageResponse<DeliveryAssignmentResponse> getAssignedTaskForShipper(
+        UUID deliveryManId, 
+        int page, 
+        int size
+    );
+
+
     
     /**
      * Lấy các task của một session cụ thể theo sessionId (phân trang).
