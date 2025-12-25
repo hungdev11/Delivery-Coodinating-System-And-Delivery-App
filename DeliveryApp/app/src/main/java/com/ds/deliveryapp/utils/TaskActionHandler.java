@@ -255,7 +255,7 @@ public class TaskActionHandler {
         TaskFailRequest body = new TaskFailRequest(finalReason, routeInfo);
 
         SessionClient service = RetrofitClient.getRetrofitInstance(activity).create(SessionClient.class);
-        service.failTask(driverId, assignment.getParcelId(), body).enqueue(new Callback<BaseResponse<DeliveryAssignment>>() {
+        service.failTask(assignment.getAssignmentId(), body).enqueue(new Callback<BaseResponse<DeliveryAssignment>>() {
             @Override
             public void onResponse(Call<BaseResponse<DeliveryAssignment>> call, Response<BaseResponse<DeliveryAssignment>> response) {
                 if(response.isSuccessful()) listener.onStatusUpdated("FAILED");

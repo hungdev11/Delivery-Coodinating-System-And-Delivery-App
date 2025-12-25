@@ -149,10 +149,9 @@ public interface SessionClient {
      * Ánh xạ tới: DeliveryAssignmentController.completeTask
      */
     @Multipart
-    @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/complete")
+    @POST("/api/v1/assignments/{assignmentId}/complete")
     Call<BaseResponse<DeliveryAssignment>> completeTask(
-            @Path("deliveryManId") String deliveryManId,
-            @Path("parcelId") String parcelId,
+            @Path("assignmentId") String assignmentId,
             // JSON Object phải được gửi như một Part
             @Part("routeInfo") RequestBody routeInfo,
             // Danh sách file
@@ -163,10 +162,9 @@ public interface SessionClient {
      * Shipper báo giao hàng THẤT BẠI.
      * Ánh xạ tới: DeliveryAssignmentController.failTask
      */
-    @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/fail")
+    @POST("/api/v1/assignments/{assignmentId}/fail")
     Call<BaseResponse<DeliveryAssignment>> failTask(
-            @Path("deliveryManId") String deliveryManId,
-            @Path("parcelId") String parcelId,
+            @Path("assignmentId") String assignmentId,
             @Body TaskFailRequest request // Body này chứa reason + routeInfo
     );
 
@@ -174,10 +172,9 @@ public interface SessionClient {
      * Shipper báo khách TỪ CHỐI nhận hàng.
      * Ánh xạ tới: DeliveryAssignmentController.refuseTask
      */
-    @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/refuse")
+    @POST("/api/v1/assignments/{assignmentId}/refuse")
     Call<BaseResponse<DeliveryAssignment>> refuseTask(
-            @Path("deliveryManId") String deliveryManId,
-            @Path("parcelId") String parcelId,
+            @Path("assignmentId") String assignmentId,
             @Body TaskFailRequest request // Body này chứa reason + routeInfo
     );
 
