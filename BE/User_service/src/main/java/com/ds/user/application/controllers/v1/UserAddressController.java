@@ -212,4 +212,14 @@ public class UserAddressController {
         userAddressService.deleteUserAddressForUser(userId, addressId);
         return ResponseEntity.ok(BaseResponse.success(null));
     }
+
+    @GetMapping("/addresses/{addressId}")
+    @Operation(summary = "Get user address by ID (Admin)", description = "Admin endpoint - returns a user address by ID without requiring userId")
+    public ResponseEntity<BaseResponse<UserAddressDto>> getUserAddressById(
+            @PathVariable String addressId) {
+        log.debug("Get address {} by ID (Admin)", addressId);
+
+        UserAddressDto address = userAddressService.getUserAddressById(addressId);
+        return ResponseEntity.ok(BaseResponse.success(address));
+    }
 }

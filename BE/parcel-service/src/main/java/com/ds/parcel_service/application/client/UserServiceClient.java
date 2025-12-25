@@ -65,6 +65,41 @@ public class UserServiceClient {
     }
 
     /**
+     * Get UserAddress information by address ID from User Service
+     * @param addressId The UserAddress ID
+     * @return UserAddressInfo or null if not found
+     */
+    public UserAddressInfo getUserAddressById(String addressId) {
+        if (addressId == null || addressId.isBlank()) {
+            return null;
+        }
+        
+        try {
+            String uri = UriComponentsBuilder.fromHttpUrl(userServiceBaseUrl)
+                    .path("/api/v1/users/addresses/{id}")
+                    .buildAndExpand(addressId)
+                    .toUriString();
+
+            log.debug("[parcel-service] [UserServiceClient.getUserAddressById] Calling User Service for address {}", addressId);
+            ParameterizedTypeReference<BaseResponse<UserAddressInfo>> type = new ParameterizedTypeReference<>() {
+            };
+            ResponseEntity<BaseResponse<UserAddressInfo>> response = restTemplate.exchange(uri, HttpMethod.GET, null, type);
+            BaseResponse<UserAddressInfo> body = response.getBody();
+            if (body != null && body.getResult() != null) {
+                return body.getResult();
+            }
+            log.debug("[parcel-service] [UserServiceClient.getUserAddressById] Address {} not found in User Service", addressId);
+            return null;
+        } catch (RestClientException e) {
+            log.debug("[parcel-service] [UserServiceClient.getUserAddressById] Failed to get address {} from User Service: {}", addressId, e.getMessage());
+            return null;
+        } catch (Exception e) {
+            log.error("[parcel-service] [UserServiceClient.getUserAddressById] Unexpected error getting address {}: {}", addressId, e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
      * DTO for user information from User Service
      */
     @Data
@@ -92,5 +127,18 @@ public class UserServiceClient {
             }
             return "User " + (id != null ? id.substring(0, Math.min(4, id.length())) : "Unknown");
         }
+    }
+
+    /**
+     * DTO for UserAddress information from User Service
+     */
+    @Data
+    public static class UserAddressInfo {
+        private String id;
+        private String userId;
+        private String destinationId; // Reference to zone_service addresses table
+        private String note;
+        private String tag;
+        private Boolean isPrimary;
     }
 }

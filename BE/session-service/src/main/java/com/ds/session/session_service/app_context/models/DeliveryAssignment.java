@@ -23,8 +23,8 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn; // Thêm import
-import jakarta.persistence.ManyToOne; // Thêm import
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -64,8 +64,20 @@ public class DeliveryAssignment {
     @JoinColumn(name = "session_id")
     private DeliverySession session;
 
-    @Column(name = "parcel_id", nullable = false, updatable = false)
+    /**
+     * @deprecated Use parcels relationship instead. Kept for backward compatibility.
+     * Will be removed in future version.
+     */
+    @Deprecated
+    @Column(name = "parcel_id", nullable = true, updatable = false)
     private String parcelId;
+
+    /**
+     * Delivery address ID (UserAddress ID) - all parcels in this assignment share this delivery address
+     */
+    @Column(name = "delivery_address_id", length = 36, nullable = false, updatable = false)
+    @JdbcTypeCode(Types.VARCHAR)
+    private String deliveryAddressId;
 
     @Column(name = "shipper_id", nullable = false, updatable = false)
     private String shipperId;
@@ -92,6 +104,19 @@ public class DeliveryAssignment {
     @LastModifiedDate
     @Column(nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * One-to-Many relationship with DeliveryAssignmentParcel.
+     * An assignment can contain multiple parcels that share the same delivery address.
+     */
+    @OneToMany(
+        mappedBy = "assignment",
+        fetch = FetchType.LAZY,
+        cascade = CascadeType.ALL,
+        orphanRemoval = true
+    )
+    @Builder.Default
+    private List<DeliveryAssignmentParcel> parcels = new ArrayList<>();
 
     @OneToMany(
         mappedBy = "assignment",
@@ -124,19 +149,38 @@ public class DeliveryAssignment {
             .contains(this.status);
     }
 
+    /**
+     * Accept task - called when shipper accepts the assignment
+     * Status transition: PENDING -> ACCEPTED (or ASSIGNED -> ACCEPTED for backward compatibility)
+     */
     public void acceptTask() {
-        if (this.status != AssignmentStatus.ASSIGNED) {
-            throw new IllegalArgumentException("Only assignments in ASSIGNED status can be accepted");
+        if (this.status != AssignmentStatus.PENDING && this.status != AssignmentStatus.ASSIGNED) {
+            throw new IllegalArgumentException("Only assignments in PENDING or ASSIGNED status can be accepted. Current status: " + this.status);
         }
         this.status = AssignmentStatus.ACCEPTED;
         this.scanedAt = LocalDateTime.now();
     }
 
+    /**
+     * Start task - called when shipper starts the delivery session
+     * Status transition: ACCEPTED -> IN_PROGRESS
+     */
     public void startTask(DeliverySession session) {
         if (this.status != AssignmentStatus.ACCEPTED) {
-            throw new IllegalArgumentException("Only assignments in ACCEPTED status can be started");
+            throw new IllegalArgumentException("Only assignments in ACCEPTED status can be started. Current status: " + this.status);
         }
         this.status = AssignmentStatus.IN_PROGRESS;
         this.session = session;
+    }
+
+    /**
+     * Helper method to add a parcel to this assignment
+     */
+    public void addParcel(DeliveryAssignmentParcel parcel) {
+        if (parcels == null) {
+            parcels = new ArrayList<>();
+        }
+        parcels.add(parcel);
+        parcel.setAssignment(this);
     }
 }

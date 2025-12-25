@@ -33,11 +33,17 @@ public class ParcelCreateRequest {
     @EnumValue(name = "deliveryType", enumClass = DeliveryType.class, message = "deliveryType must be a valid enum value")
     private String deliveryType;
 
-    @NotBlank(message = "receiveFrom must not be blank")
-    private String receiveFrom;
+    /**
+     * UserAddress ID from user-service for sender address
+     */
+    @NotBlank(message = "senderAddressId must not be blank")
+    private String senderAddressId;
 
-    @NotBlank(message = "sendTo must not be blank")
-    private String sendTo;
+    /**
+     * UserAddress ID from user-service for receiver address
+     */
+    @NotBlank(message = "receiverAddressId must not be blank")
+    private String receiverAddressId;
 
     @DecimalMin(value = "0.0", inclusive = true, message = "weight must be greater than or equal to 0")
     private double weight;
@@ -48,10 +54,4 @@ public class ParcelCreateRequest {
 
     private LocalTime windowStart;
     private LocalTime windowEnd;
-
-    @NotBlank(message = "senderDestinationId must not be blank")
-    private String senderDestinationId;
-    
-    @NotBlank(message = "receiverDestinationId must not be blank")
-    private String receiverDestinationId;
 }

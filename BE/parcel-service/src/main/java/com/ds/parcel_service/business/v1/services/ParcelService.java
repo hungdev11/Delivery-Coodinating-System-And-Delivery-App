@@ -308,12 +308,23 @@ public class ParcelService implements IParcelService{
     public ParcelResponse createParcel(ParcelCreateRequest request) {
         validateUniqueCode(request.getCode());
         
-        // Validate destination IDs are provided
-        if (request.getSenderDestinationId() == null || request.getSenderDestinationId().isBlank()) {
-            throw new IllegalArgumentException("Sender destination ID is required");
+        // Validate address IDs are provided
+        if (request.getSenderAddressId() == null || request.getSenderAddressId().isBlank()) {
+            throw new IllegalArgumentException("Sender address ID is required");
         }
-        if (request.getReceiverDestinationId() == null || request.getReceiverDestinationId().isBlank()) {
-            throw new IllegalArgumentException("Receiver destination ID is required");
+        if (request.getReceiverAddressId() == null || request.getReceiverAddressId().isBlank()) {
+            throw new IllegalArgumentException("Receiver address ID is required");
+        }
+        
+        // Fetch UserAddress to get destinationId for ParcelDestination
+        UserServiceClient.UserAddressInfo senderAddress = userServiceClient.getUserAddressById(request.getSenderAddressId());
+        if (senderAddress == null) {
+            throw new IllegalArgumentException("Sender address not found: " + request.getSenderAddressId());
+        }
+        
+        UserServiceClient.UserAddressInfo receiverAddress = userServiceClient.getUserAddressById(request.getReceiverAddressId());
+        if (receiverAddress == null) {
+            throw new IllegalArgumentException("Receiver address not found: " + request.getReceiverAddressId());
         }
         
         Parcel parcel = Parcel.builder()
@@ -321,8 +332,8 @@ public class ParcelService implements IParcelService{
                             .deliveryType(DeliveryType.valueOf(request.getDeliveryType()))
                             .senderId(request.getSenderId())
                             .receiverId(request.getReceiverId())
-                            .receiveFrom(request.getReceiveFrom())
-                            .sendTo(request.getSendTo())
+                            .senderAddressId(request.getSenderAddressId())
+                            .receiverAddressId(request.getReceiverAddressId())
                             .status(ParcelStatus.IN_WAREHOUSE) 
                             .weight(request.getWeight())
                             .value(request.getValue())
@@ -334,7 +345,7 @@ public class ParcelService implements IParcelService{
 
         // Link parcel to receiver destination (PRIMARY) - this is the current destination
         ParcelDestination receiverPd = ParcelDestination.builder()
-            .destinationId(request.getReceiverDestinationId())
+            .destinationId(receiverAddress.getDestinationId())
             .destinationType(DestinationType.PRIMARY)
             .isCurrent(true)
             .isOriginal(true)
@@ -342,11 +353,11 @@ public class ParcelService implements IParcelService{
             .build();
 
         parcelDestinationRepository.save(receiverPd);
-        log.debug("[parcel-service] [ParcelService.createParcel] Linked parcel {} to receiver destination {} (PRIMARY, current)", savedParcel.getId(), request.getReceiverDestinationId());
+        log.debug("[parcel-service] [ParcelService.createParcel] Linked parcel {} to receiver destination {} (PRIMARY, current)", savedParcel.getId(), receiverAddress.getDestinationId());
 
         // Link parcel to sender destination (SECONDARY) - not current
         ParcelDestination senderPd = ParcelDestination.builder()
-            .destinationId(request.getSenderDestinationId())
+            .destinationId(senderAddress.getDestinationId())
             .destinationType(DestinationType.SECONDARY)
             .isCurrent(false)
             .isOriginal(true)
@@ -354,7 +365,7 @@ public class ParcelService implements IParcelService{
             .build();
 
         parcelDestinationRepository.save(senderPd);
-        log.debug("[parcel-service] [ParcelService.createParcel] Linked parcel {} to sender destination {} (SECONDARY)", savedParcel.getId(), request.getSenderDestinationId());
+        log.debug("[parcel-service] [ParcelService.createParcel] Linked parcel {} to sender destination {} (SECONDARY)", savedParcel.getId(), senderAddress.getDestinationId());
         
         // Validate: Ensure only one destination is current
         validateSingleCurrentDestination(savedParcel);
@@ -573,8 +584,8 @@ public class ParcelService implements IParcelService{
                             .receiverId(parcel.getReceiverId())
                             .receiverName(finalReceiverName)
                             .receiverPhoneNumber(finalReceiverPhoneNumber)
-                            .receiveFrom(parcel.getReceiveFrom())
-                            .targetDestination(parcel.getSendTo())
+                            .senderAddressId(parcel.getSenderAddressId())
+                            .receiverAddressId(parcel.getReceiverAddressId())
                             .weight(parcel.getWeight())
                             .value(parcel.getValue())
                             .status(parcel.getStatus())

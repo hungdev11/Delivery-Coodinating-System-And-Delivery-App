@@ -166,6 +166,13 @@ public class UserAddressService implements IUserAddressService {
         return getUserAddresses(targetUserId);
     }
 
+    @Override
+    public UserAddressDto getUserAddressById(String addressId) {
+        UserAddress userAddress = userAddressRepository.findById(addressId)
+                .orElseThrow(() -> new ResourceNotFoundException("User address not found: " + addressId));
+        return toDto(userAddress);
+    }
+
     private UserAddressDto toDto(UserAddress userAddress) {
         UserAddressDto.UserAddressDtoBuilder builder = UserAddressDto.builder()
                 .id(userAddress.getId())

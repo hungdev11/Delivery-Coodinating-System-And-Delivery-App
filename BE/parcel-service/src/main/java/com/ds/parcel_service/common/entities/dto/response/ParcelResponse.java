@@ -25,8 +25,17 @@ public class ParcelResponse {
     private String receiverName; // Full name from User Service
     private String receiverPhoneNumber;
     private DeliveryType deliveryType;
-    private String receiveFrom;
-    private String targetDestination;
+    
+    /**
+     * UserAddress ID from user-service for sender address
+     */
+    private String senderAddressId;
+    
+    /**
+     * UserAddress ID from user-service for receiver address
+     */
+    private String receiverAddressId;
+    
     private ParcelStatus status;
     private double weight;
     private BigDecimal value;

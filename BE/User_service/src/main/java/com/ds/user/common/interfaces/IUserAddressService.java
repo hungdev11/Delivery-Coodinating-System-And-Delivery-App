@@ -68,4 +68,9 @@ public interface IUserAddressService {
      * Admin: Get all addresses for any user
      */
     List<UserAddressDto> getUserAddressesForUser(String targetUserId);
+    
+    /**
+     * Admin: Get user address by ID (without userId requirement)
+     */
+    UserAddressDto getUserAddressById(String addressId);
 }
