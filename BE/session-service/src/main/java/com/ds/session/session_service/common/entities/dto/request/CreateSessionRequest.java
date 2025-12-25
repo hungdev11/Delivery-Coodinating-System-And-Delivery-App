@@ -11,6 +11,6 @@ public class CreateSessionRequest {
     @NotNull(message = "deliveryManId is required")
     private String deliveryManId;
 
-    @NotEmpty(message = "parcelIds list cannot be empty")
-    private List<String> parcelIds;
+    @NotEmpty(message = "assignmentsIds list cannot be empty")
+    private List<String> assignmentsIds;
 }

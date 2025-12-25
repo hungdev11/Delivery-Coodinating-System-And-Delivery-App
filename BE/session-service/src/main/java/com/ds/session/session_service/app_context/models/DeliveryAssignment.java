@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import org.springframework.expression.spel.ast.Assign;
 
 import com.ds.session.session_service.common.enums.AssignmentStatus;
 
@@ -35,8 +36,8 @@ import lombok.Setter;
 
 @Entity
 @Table(
-    name = "delivery_assignments", 
-    uniqueConstraints = {@UniqueConstraint(columnNames = {"session_id", "parcel_id"})}
+    name = "delivery_assignments"
+    //uniqueConstraints = {@UniqueConstraint(columnNames = {"session_id", "parcel_id"})}
 )
 @EntityListeners(AuditingEntityListener.class)
 @Getter
@@ -60,13 +61,19 @@ public class DeliveryAssignment {
      * là "session_id".
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "session_id", nullable = false, updatable = false)
+    @JoinColumn(name = "session_id")
     private DeliverySession session;
 
     @Column(name = "parcel_id", nullable = false, updatable = false)
     private String parcelId;
 
-    @Column(name = "scaned_at", nullable = false)
+    @Column(name = "shipper_id", nullable = false, updatable = false)
+    private String shipperId;
+
+    @Column(name = "assigned_at", nullable = false, updatable = false)
+    private LocalDateTime assignedAt;
+
+    @Column(name = "scaned_at")
     private LocalDateTime scanedAt;
 
     private double distanceM;
@@ -93,9 +100,43 @@ public class DeliveryAssignment {
     )
     private List<DeliveryProof> proofs = new ArrayList<>();
 
+    // Thời gian hết hạn để shipper phản hồi (accept/reject)
+    @Column(name = "expired_at")
+    private LocalDateTime expiredAt;
+
+    // Thời gian chờ trước khi có thể assign đơn cho shipper này lại (tính bằng phút)
+    private int expiredCooldown;
+
     // helper method (rất quan trọng)
     public void addProof(DeliveryProof proof) {
+        if (!inExecuteStatus()) {
+            throw new IllegalArgumentException("Cannot add proof when assignment is not in execute status");
+        }
         proofs.add(proof);
         proof.setAssignment(this);
+    }
+
+    private boolean inExecuteStatus() {
+        return List.of(
+            AssignmentStatus.IN_PROGRESS,
+            AssignmentStatus.COMPLETED,
+            AssignmentStatus.FAILED)
+            .contains(this.status);
+    }
+
+    public void acceptTask() {
+        if (this.status != AssignmentStatus.ASSIGNED) {
+            throw new IllegalArgumentException("Only assignments in ASSIGNED status can be accepted");
+        }
+        this.status = AssignmentStatus.ACCEPTED;
+        this.scanedAt = LocalDateTime.now();
+    }
+
+    public void startTask(DeliverySession session) {
+        if (this.status != AssignmentStatus.ACCEPTED) {
+            throw new IllegalArgumentException("Only assignments in ACCEPTED status can be started");
+        }
+        this.status = AssignmentStatus.IN_PROGRESS;
+        this.session = session;
     }
 }
