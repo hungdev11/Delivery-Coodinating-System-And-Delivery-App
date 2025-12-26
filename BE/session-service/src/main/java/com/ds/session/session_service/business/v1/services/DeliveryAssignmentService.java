@@ -114,35 +114,53 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     }
 
     @Override
-    public DeliveryAssignmentResponse acceptTask(UUID deliveryManId,UUID assignmentId) {
+    public DeliveryAssignmentResponse acceptTask(UUID deliveryManId, UUID assignmentId) {
+        log.debug("[DeliveryAssignmentService] Shipper {} accepting task {}", deliveryManId, assignmentId);
+        
         DeliveryAssignment assignment = deliveryAssignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new ResourceNotFound("Assignment not found: " + assignmentId));
-        if (assignment.getStatus() != AssignmentStatus.ASSIGNED) {
-            throw new IllegalStateException("Assignment is not in ASSIGNED status. Current status: " + assignment.getStatus());
+        
+        // Accept PENDING or ASSIGNED assignments (backward compatibility)
+        if (assignment.getStatus() != AssignmentStatus.PENDING && 
+            assignment.getStatus() != AssignmentStatus.ASSIGNED) {
+            throw new IllegalStateException("Assignment is not in PENDING or ASSIGNED status. Current status: " + assignment.getStatus());
         }
         if (!assignment.getShipperId().equals(deliveryManId.toString())) {
             throw new IllegalArgumentException("Assignment does not belong to delivery man: " + deliveryManId);
         }
 
-        ParcelInfo parcel = null;
-        String receiverName = null;
+        // Accept the task (PENDING/ASSIGNED -> ACCEPTED)
         assignment.acceptTask();
         deliveryAssignmentRepository.save(assignment);
-        try {
-            ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(assignment.getParcelId().toString());
-            if (parcelResponse != null) {
-                parcel = parcelMapper.toParcelInfo(parcelResponse);
-                receiverName = parcel != null ? parcel.getReceiverName() : null;
+        
+        log.debug("[DeliveryAssignmentService] Assignment {} accepted by shipper {}. Status: {}", 
+            assignmentId, deliveryManId, assignment.getStatus());
+
+        // Fetch parcel info for response (use first parcel if multiple)
+        ParcelInfo parcel = null;
+        String receiverName = null;
+        String parcelId = null;
+        
+        if (assignment.getParcels() != null && !assignment.getParcels().isEmpty()) {
+            parcelId = assignment.getParcels().get(0).getParcelId();
+        } else if (assignment.getParcelId() != null) {
+            parcelId = assignment.getParcelId(); // Backward compatibility
+        }
+        
+        if (parcelId != null) {
+            try {
+                ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(parcelId);
+                if (parcelResponse != null) {
+                    parcel = parcelMapper.toParcelInfo(parcelResponse);
+                    receiverName = parcel != null ? parcel.getReceiverName() : null;
+                }
+            } catch (Exception e) {
+                log.debug("[DeliveryAssignmentService] Failed to fetch parcel info for parcel {}: {}", 
+                    parcelId, e.getMessage());
+                // Continue without parcel info - response will have null parcel info
             }
-        } catch (Exception e) {
-            log.debug("[session-service] [DeliveryAssignmentService.returnToWarehouse] Failed to fetch parcel info for parcel {}: {}", 
-            assignment.getParcelId(), e.getMessage());
-            // Continue without parcel info - response will have null parcel info
         }
 
-        log.debug("Recorded return to warehouse for assignment {}, parcel {}", assignmentId, assignment.getParcelId());
-
-        // Return response without changing assignment status
         return DeliveryAssignmentResponse.from(assignment, parcel, assignment.getSession(), null, receiverName);    
     }
 
@@ -1310,5 +1328,156 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
+    }
+
+    @Override
+    public List<DeliveryAssignmentResponse> getAssignmentsByIds(List<UUID> assignmentIds) {
+        if (assignmentIds == null || assignmentIds.isEmpty()) {
+            return List.of();
+        }
+        log.debug("Getting assignments by IDs: count={}", assignmentIds.size());
+        List<DeliveryAssignment> assignments = deliveryAssignmentRepository.findByIdIn(assignmentIds);
+        return convertAssignmentsToResponse(assignments);
+    }
+
+    @Override
+    public List<DeliveryAssignmentResponse> getAssignmentsByParcelIds(List<String> parcelIds) {
+        if (parcelIds == null || parcelIds.isEmpty()) {
+            return List.of();
+        }
+        log.debug("Getting assignments by parcel IDs: count={}", parcelIds.size());
+        List<DeliveryAssignment> assignments = deliveryAssignmentRepository.findByParcelIdIn(parcelIds);
+        return convertAssignmentsToResponse(assignments);
+    }
+
+    @Override
+    public List<DeliveryAssignmentResponse> getAssignmentsBySessionIds(List<UUID> sessionIds) {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return List.of();
+        }
+        log.debug("Getting assignments by session IDs: count={}", sessionIds.size());
+        List<DeliveryAssignment> assignments = deliveryAssignmentRepository.findBySession_IdIn(sessionIds);
+        return convertAssignmentsToResponse(assignments);
+    }
+
+    @Override
+    public List<DeliveryAssignmentResponse> getAssignmentsByShipperIds(List<UUID> shipperIds) {
+        if (shipperIds == null || shipperIds.isEmpty()) {
+            return List.of();
+        }
+        log.debug("Getting assignments by shipper IDs: count={}", shipperIds.size());
+        List<DeliveryAssignment> assignments = deliveryAssignmentRepository.findByShipperIdIn(shipperIds);
+        return convertAssignmentsToResponse(assignments);
+    }
+
+    /**
+     * Helper method to convert list of assignments to response DTOs
+     * Fetches parcel info in bulk for efficiency
+     */
+    private List<DeliveryAssignmentResponse> convertAssignmentsToResponse(List<DeliveryAssignment> assignments) {
+        if (assignments == null || assignments.isEmpty()) {
+            return List.of();
+        }
+
+        // Fetch parcel info in bulk
+        List<String> parcelIds = assignments.stream()
+                .map(DeliveryAssignment::getParcelId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<String, ParcelInfo> parcelInfoMap = new HashMap<>();
+        for (String parcelId : parcelIds) {
+            try {
+                ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(parcelId);
+                if (parcelResponse != null) {
+                    parcelInfoMap.put(parcelId, parcelMapper.toParcelInfo(parcelResponse));
+                }
+            } catch (Exception e) {
+                log.debug("Failed to fetch parcel info for parcelId {}: {}", parcelId, e.getMessage());
+            }
+        }
+
+        // Convert assignments to responses
+        return assignments.stream()
+                .map(assignment -> {
+                    ParcelInfo parcelInfo = parcelInfoMap.get(assignment.getParcelId());
+                    String receiverName = parcelInfo != null ? parcelInfo.getReceiverName() : null;
+                    return DeliveryAssignmentResponse.from(assignment, parcelInfo, assignment.getSession(), null, receiverName);
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public PageResponse<DeliveryAssignmentResponse> getAssignmentsByIdsPaged(List<UUID> assignmentIds, int page, int size) {
+        if (assignmentIds == null || assignmentIds.isEmpty()) {
+            return PageResponse.empty(page, size);
+        }
+        log.debug("Getting assignments by IDs with paging: count={}, page={}, size={}", assignmentIds.size(), page, size);
+        
+        List<DeliveryAssignment> allAssignments = deliveryAssignmentRepository.findByIdIn(assignmentIds);
+        
+        // Apply pagination
+        int start = page * size;
+        int end = Math.min(start + size, allAssignments.size());
+        List<DeliveryAssignment> pagedAssignments = start < allAssignments.size() ? allAssignments.subList(start, end) : List.of();
+        
+        // Convert with join support (fetch parcel info in bulk)
+        List<DeliveryAssignmentResponse> content = convertAssignmentsToResponse(pagedAssignments);
+        
+        return PageResponse.from(content, allAssignments.size(), page, size);
+    }
+
+    @Override
+    public PageResponse<DeliveryAssignmentResponse> getAssignmentsByParcelIdsPaged(List<String> parcelIds, int page, int size) {
+        if (parcelIds == null || parcelIds.isEmpty()) {
+            return PageResponse.empty(page, size);
+        }
+        log.debug("Getting assignments by parcel IDs with paging: count={}, page={}, size={}", parcelIds.size(), page, size);
+        
+        List<DeliveryAssignment> allAssignments = deliveryAssignmentRepository.findByParcelIdIn(parcelIds);
+        
+        int start = page * size;
+        int end = Math.min(start + size, allAssignments.size());
+        List<DeliveryAssignment> pagedAssignments = start < allAssignments.size() ? allAssignments.subList(start, end) : List.of();
+        
+        List<DeliveryAssignmentResponse> content = convertAssignmentsToResponse(pagedAssignments);
+        
+        return PageResponse.from(content, allAssignments.size(), page, size);
+    }
+
+    @Override
+    public PageResponse<DeliveryAssignmentResponse> getAssignmentsBySessionIdsPaged(List<UUID> sessionIds, int page, int size) {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return PageResponse.empty(page, size);
+        }
+        log.debug("Getting assignments by session IDs with paging: count={}, page={}, size={}", sessionIds.size(), page, size);
+        
+        List<DeliveryAssignment> allAssignments = deliveryAssignmentRepository.findBySession_IdIn(sessionIds);
+        
+        int start = page * size;
+        int end = Math.min(start + size, allAssignments.size());
+        List<DeliveryAssignment> pagedAssignments = start < allAssignments.size() ? allAssignments.subList(start, end) : List.of();
+        
+        List<DeliveryAssignmentResponse> content = convertAssignmentsToResponse(pagedAssignments);
+        
+        return PageResponse.from(content, allAssignments.size(), page, size);
+    }
+
+    @Override
+    public PageResponse<DeliveryAssignmentResponse> getAssignmentsByShipperIdsPaged(List<UUID> shipperIds, int page, int size) {
+        if (shipperIds == null || shipperIds.isEmpty()) {
+            return PageResponse.empty(page, size);
+        }
+        log.debug("Getting assignments by shipper IDs with paging: count={}, page={}, size={}", shipperIds.size(), page, size);
+        
+        List<DeliveryAssignment> allAssignments = deliveryAssignmentRepository.findByShipperIdIn(shipperIds);
+        
+        int start = page * size;
+        int end = Math.min(start + size, allAssignments.size());
+        List<DeliveryAssignment> pagedAssignments = start < allAssignments.size() ? allAssignments.subList(start, end) : List.of();
+        
+        List<DeliveryAssignmentResponse> content = convertAssignmentsToResponse(pagedAssignments);
+        
+        return PageResponse.from(content, allAssignments.size(), page, size);
     }
 }

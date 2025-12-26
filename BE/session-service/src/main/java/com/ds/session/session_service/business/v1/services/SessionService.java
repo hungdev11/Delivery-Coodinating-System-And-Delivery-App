@@ -204,23 +204,48 @@ public class SessionService implements ISessionService {
             var assignment = assignmentRepository.findById(UUID.fromString(assignmentId))
                 .orElseThrow(() -> new ResourceNotFound("Assignment not found: " + assignmentId));
             
-            if (!assignment.getStatus().equals(AssignmentStatus.ASSIGNED)) {
-                throw new IllegalArgumentException("Assignment " + assignmentId + " is not in ASSIGNED status. Current status: " + assignment.getStatus());
+            // Accept PENDING or ASSIGNED assignments (backward compatibility)
+            if (assignment.getStatus() != AssignmentStatus.PENDING && 
+                assignment.getStatus() != AssignmentStatus.ASSIGNED) {
+                throw new IllegalArgumentException("Assignment " + assignmentId + " is not in PENDING or ASSIGNED status. Current status: " + assignment.getStatus());
             }
             if (!assignment.getShipperId().equals(request.getDeliveryManId())) {
                 throw new IllegalArgumentException("Assignment " + assignmentId + " does not belong to delivery man " + request.getDeliveryManId());
             }
 
+            // If PENDING, accept it first (PENDING -> ACCEPTED)
+            if (assignment.getStatus() == AssignmentStatus.PENDING) {
+                assignment.acceptTask(); // PENDING -> ACCEPTED
+            }
+
+            // Start the task (ACCEPTED/ASSIGNED -> IN_PROGRESS)
             assignment.startTask(session);
             // Dùng hàm helper để liên kết 2 chiều
             session.addAssignment(assignment);
 
-            // 4. TODO: Báo cho Parcel-Service biết đơn hàng này đã ON_ROUTE
-            try {
-                parcelEventPublisher.publish(assignment.getParcelId(), ParcelEvent.SCAN_QR);
-            } catch (Exception e) {
-                log.error("Failed to publish parcel status event for parcel {}: {}", assignment.getParcelId(), e.getMessage());
-                throw new RuntimeException("Failed to publish parcel status event: " + e.getMessage(), e);
+            // 4. Update all parcels in assignment to ON_ROUTE
+            // For assignments with multiple parcels (1-n relationship)
+            if (assignment.getParcels() != null && !assignment.getParcels().isEmpty()) {
+                for (var assignmentParcel : assignment.getParcels()) {
+                    try {
+                        parcelEventPublisher.publish(assignmentParcel.getParcelId(), ParcelEvent.SCAN_QR);
+                        log.debug("Published SCAN_QR event for parcel {} to update to ON_ROUTE", assignmentParcel.getParcelId());
+                    } catch (Exception e) {
+                        log.error("Failed to publish parcel status event for parcel {}: {}", assignmentParcel.getParcelId(), e.getMessage());
+                        // Don't throw - continue with other parcels
+                    }
+                }
+            } else {
+                // Backward compatibility: use deprecated parcelId field
+                if (assignment.getParcelId() != null) {
+                    try {
+                        parcelEventPublisher.publish(assignment.getParcelId(), ParcelEvent.SCAN_QR);
+                        log.debug("Published SCAN_QR event for parcel {} to update to ON_ROUTE", assignment.getParcelId());
+                    } catch (Exception e) {
+                        log.error("Failed to publish parcel status event for parcel {}: {}", assignment.getParcelId(), e.getMessage());
+                        throw new RuntimeException("Failed to publish parcel status event: " + e.getMessage(), e);
+                    }
+                }
             }
         }
         
@@ -284,26 +309,58 @@ public class SessionService implements ISessionService {
         }
 
         session.setStatus(SessionStatus.IN_PROGRESS);
-        DeliverySession savedSession = sessionRepository.save(session);
         
-        // Update all parcels in the session to ON_ROUTE status
-        List<DeliveryAssignment> assignments = savedSession.getAssignments().stream()
-            .filter(a -> a.getStatus() == AssignmentStatus.IN_PROGRESS)
+        // Update all ACCEPTED assignments to IN_PROGRESS and parcels to ON_ROUTE
+        List<DeliveryAssignment> acceptedAssignments = session.getAssignments().stream()
+            .filter(a -> a.getStatus() == AssignmentStatus.ACCEPTED)
             .toList();
         
-        log.debug("[session-service] [SessionService.startSession] Session {} started. Updating {} parcels to ON_ROUTE status", sessionId, assignments.size());
+        log.debug("[session-service] [SessionService.startSession] Session {} starting. Updating {} ACCEPTED assignments to IN_PROGRESS", 
+            sessionId, acceptedAssignments.size());
         
-        for (DeliveryAssignment assignment : assignments) {
-            try {
-                parcelEventPublisher.publish(assignment.getParcelId(), ParcelEvent.SCAN_QR);
-                log.debug("Published SCAN_QR event for parcel {} to update to ON_ROUTE", assignment.getParcelId());
-            } catch (Exception e) {
-                log.error("Failed to publish SCAN_QR event for parcel {}: {}", assignment.getParcelId(), e.getMessage());
-                // Don't throw - continue with other parcels
+        for (DeliveryAssignment assignment : acceptedAssignments) {
+            assignment.startTask(session); // ACCEPTED -> IN_PROGRESS
+            
+            // Update all parcels in assignment to ON_ROUTE
+            if (assignment.getParcels() != null && !assignment.getParcels().isEmpty()) {
+                for (var assignmentParcel : assignment.getParcels()) {
+                    try {
+                        parcelEventPublisher.publish(assignmentParcel.getParcelId(), ParcelEvent.SCAN_QR);
+                        log.debug("Published SCAN_QR event for parcel {} to update to ON_ROUTE", assignmentParcel.getParcelId());
+                    } catch (Exception e) {
+                        log.error("Failed to publish SCAN_QR event for parcel {}: {}", assignmentParcel.getParcelId(), e.getMessage());
+                        // Don't throw - continue with other parcels
+                    }
+                }
+            } else {
+                // Backward compatibility: use deprecated parcelId field
+                if (assignment.getParcelId() != null) {
+                    try {
+                        parcelEventPublisher.publish(assignment.getParcelId(), ParcelEvent.SCAN_QR);
+                        log.debug("Published SCAN_QR event for parcel {} to update to ON_ROUTE", assignment.getParcelId());
+                    } catch (Exception e) {
+                        log.error("Failed to publish SCAN_QR event for parcel {}: {}", assignment.getParcelId(), e.getMessage());
+                        // Don't throw - continue with other assignments
+                    }
+                }
             }
         }
         
-        log.debug("[session-service] [SessionService.startSession] Session {} started successfully. {} parcels updated to ON_ROUTE", sessionId, assignments.size());
+        DeliverySession savedSession = sessionRepository.save(session);
+        
+        int totalParcels = savedSession.getAssignments().stream()
+            .mapToInt(a -> {
+                if (a.getParcels() != null && !a.getParcels().isEmpty()) {
+                    return a.getParcels().size();
+                } else if (a.getParcelId() != null) {
+                    return 1; // Backward compatibility
+                }
+                return 0;
+            })
+            .sum();
+        
+        log.debug("[session-service] [SessionService.startSession] Session {} started successfully. {} assignments updated to IN_PROGRESS, {} parcels updated to ON_ROUTE", 
+            sessionId, acceptedAssignments.size(), totalParcels);
 
         return toSessionResponse(savedSession);
     }

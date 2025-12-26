@@ -259,10 +259,9 @@ keycloak:
                     clientRoles:
                         frontend-client: [user-service]
                     address:
-                        name: My Shop - Primary Address
-                        addressText: 123 Nguyen Hue Street, District 1, Ho Chi Minh City
-                        lat: 10.762622
-                        lon: 106.660172
+                        addressText: 455 Lê Văn Việt, Tăng Nhơn Phú A, Thủ Đức, TP.HCM
+                        lat: 10.84587
+                        lon: 106.79548
 
                   - username: shop02
                     email: shop02@delivery-system.com
@@ -275,10 +274,9 @@ keycloak:
                     clientRoles:
                         frontend-client: [user-service]
                     address:
-                        name: Fast Mart - Primary Address
-                        addressText: 456 Le Loi Street, District 1, Ho Chi Minh City
-                        lat: 10.770000
-                        lon: 106.670000
+                        addressText: 95 đường 385, Tăng Nhơn Phú A, Thủ Đức, TP.HCM
+                        lat: 10.84277
+                        lon: 106.78696
 
                   - username: shop03
                     email: shop03@delivery-system.com
@@ -291,10 +289,9 @@ keycloak:
                     clientRoles:
                         frontend-client: [user-service]
                     address:
-                        name: Quick Store - Primary Address
-                        addressText: 789 Dong Khoi Street, District 1, Ho Chi Minh City
-                        lat: 10.775000
-                        lon: 106.675000
+                        addressText: 155 đường số 2, Tăng Nhơn Phú B, Thủ Đức, TP.HCM
+                        lat: 10.83842
+                        lon: 106.78393
 
                   - username: shop04
                     email: shop04@delivery-system.com
@@ -307,10 +304,9 @@ keycloak:
                     clientRoles:
                         frontend-client: [user-service]
                     address:
-                        name: Best Shop - Primary Address
-                        addressText: 321 Pasteur Street, District 3, Ho Chi Minh City
-                        lat: 10.785000
-                        lon: 106.685000
+                        addressText: 1A đường số 22, Phước Long B, Thủ Đức, TP.HCM
+                        lat: 10.82425
+                        lon: 106.76997
 
                   - username: shop05
                     email: shop05@delivery-system.com
@@ -323,10 +319,9 @@ keycloak:
                     clientRoles:
                         frontend-client: [user-service]
                     address:
-                        name: Mega Market - Primary Address
-                        addressText: 654 Vo Van Tan Street, District 3, Ho Chi Minh City
-                        lat: 10.790000
-                        lon: 106.690000
+                        addressText: 793a Phạm Văn Đồng, Linh Đông, Thủ Đức, TP.HCM
+                        lat: 10.83547
+                        lon: 106.74614
 
                   - username: staff02
                     email: staff02@delivery-system.com
@@ -349,11 +344,22 @@ keycloak:
                     realmRoles: [CLIENT]
                     clientRoles:
                         frontend-client: [user-service]
-                    address:
-                        name: Jane Customer - Primary Address
-                        addressText: Đại học Sư phạm Kỹ thuật TP.HCM, Võ Văn Ngân, Linh Chiểu, Thủ Đức, TP.HCM
-                        lat: 10.860000
-                        lon: 106.770000
+                    addresses:
+                        - addressText: 285 Tô Ngọc Vân, Linh Đông, Thủ Đức, TP.HCM
+                          lat: 10.85695
+                          lon: 106.73587
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 163 Đặng Văn Bi, Trường Thọ, Thủ Đức, TP.HCM
+                          lat: 10.83693
+                          lon: 106.76443
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 01 Hai Bà Trưng, Hiệp Phú, Thủ Đức, TP.HCM
+                          lat: 10.84711
+                          lon: 106.77587
+                          tag: Company
+                          isPrimary: false
 
                   - username: client02
                     email: client02@delivery-system.com
@@ -365,11 +371,22 @@ keycloak:
                     realmRoles: [CLIENT]
                     clientRoles:
                         frontend-client: [user-service]
-                    address:
-                        name: Minh Le - Primary Address
-                        addressText: 123 Lê Văn Việt, Bình Thọ, Thủ Đức, TP.HCM
-                        lat: 10.850000
-                        lon: 106.760000
+                    addresses:
+                        - addressText: 63 Dân Chủ, Bình Thọ, Thủ Đức, TP.HCM
+                          lat: 10.84883
+                          lon: 106.76751
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 52E Ngô Quyền, Hiệp Phú, Thủ Đức, TP.HCM
+                          lat: 10.84478
+                          lon: 106.77443
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 47 Nam Cao, Tân Phú, Thủ Đức, TP.HCM
+                          lat: 10.85741
+                          lon: 106.81534
+                          tag: Company
+                          isPrimary: false
 
                   - username: client03
                     email: client03@delivery-system.com
@@ -381,11 +398,22 @@ keycloak:
                     realmRoles: [CLIENT]
                     clientRoles:
                         frontend-client: [user-service]
-                    address:
-                        name: Lan Tran - Primary Address
-                        addressText: 456 Võ Văn Ngân, Bình Thọ, Thủ Đức, TP.HCM
-                        lat: 10.862000
-                        lon: 106.772000
+                    addresses:
+                        - addressText: 219 Võ Văn Ngân, Linh Chiểu, Thủ Đức, TP.HCM
+                          lat: 10.84928
+                          lon: 106.76101
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 152 Nam Cao, Tân Phú, Thủ Đức, TP.HCM
+                          lat: 10.85215
+                          lon: 106.82001
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 263 Lã Xuân Oai, Tăng Nhơn Phú A, Thủ Đức, TP.HCM
+                          lat: 10.83467
+                          lon: 106.79093
+                          tag: Company
+                          isPrimary: false
 
                   - username: client04
                     email: client04@delivery-system.com
@@ -397,11 +425,22 @@ keycloak:
                     realmRoles: [CLIENT]
                     clientRoles:
                         frontend-client: [user-service]
-                    address:
-                        name: Duc Nguyen - Primary Address
-                        addressText: Đường Huy Cận, Phường Phước Long, Thủ Đức, TP.HCM
-                        lat: 10.830000
-                        lon: 106.750000
+                    addresses:
+                        - addressText: 30 đường D1, Hiệp Phú, Thủ Đức, TP.HCM
+                          lat: 10.84956
+                          lon: 106.77665
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 39/20 Đường 102, Lã Xuân Oai, Thủ Đức, TP.HCM
+                          lat: 10.83151
+                          lon: 106.79244
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 27 Hồ Bá Phần, Phước Long A, Thủ Đức, TP.HCM
+                          lat: 10.82565
+                          lon: 106.76587
+                          tag: Company
+                          isPrimary: false
 
                   - username: client05
                     email: client05@delivery-system.com
@@ -413,11 +452,22 @@ keycloak:
                     realmRoles: [CLIENT]
                     clientRoles:
                         frontend-client: [user-service]
-                    address:
-                        name: An Pham - Primary Address
-                        addressText: 789 Lê Văn Việt, Hiệp Phú, Thủ Đức, TP.HCM
-                        lat: 10.848000
-                        lon: 106.758000
+                    addresses:
+                        - addressText: 162 đường Linh Trung, Linh Trung, Thủ Đức, TP.HCM
+                          lat: 10.87136
+                          lon: 106.76472
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 9/10 Đường 128, Phước Long A, Thủ Đức, TP.HCM
+                          lat: 10.82245
+                          lon: 106.77112
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 81 Tây Hòa, Phước Long A, Thủ Đức, TP.HCM
+                          lat: 10.82587
+                          lon: 106.76241
+                          tag: Company
+                          isPrimary: false
 
                   - username: client06
                     email: client06@delivery-system.com
@@ -429,11 +479,22 @@ keycloak:
                     realmRoles: [CLIENT]
                     clientRoles:
                         frontend-client: [user-service]
-                    address:
-                        name: Hoa Vo - Primary Address
-                        addressText: 321 Võ Văn Ngân, Linh Chiểu, Thủ Đức, TP.HCM
-                        lat: 10.864000
-                        lon: 106.774000
+                    addresses:
+                        - addressText: 593 Đỗ Xuân Hợp, Phước Long B, Thủ Đức, TP.HCM
+                          lat: 10.81231
+                          lon: 106.78168
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 271 Nam Hòa, Phước Long A, Thủ Đức, TP.HCM
+                          lat: 10.82312
+                          lon: 106.76114
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 8/59 đường 147, Phước Long B, Thủ Đức, TP.HCM
+                          lat: 10.82015
+                          lon: 106.77352
+                          tag: Company
+                          isPrimary: false
 
                   - username: client07
                     email: client07@delivery-system.com
@@ -445,11 +506,336 @@ keycloak:
                     realmRoles: [CLIENT]
                     clientRoles:
                         frontend-client: [user-service]
-                    address:
-                        name: Hung Hoang - Primary Address
-                        addressText: 654 Lê Văn Việt, Tăng Nhơn Phú A, Thủ Đức, TP.HCM
-                        lat: 10.852000
-                        lon: 106.762000
+                    addresses:
+                        - addressText: 23A đường số 2, Trường Thọ, Thủ Đức, TP.HCM
+                          lat: 10.83689
+                          lon: 106.76569
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 20 Trương Văn Hải, Hiệp Phú, Thủ Đức, TP.HCM
+                          lat: 10.84712
+                          lon: 106.77789
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 04 Tú Xương, Hiệp Phú, Thủ Đức, TP.HCM
+                          lat: 10.84789
+                          lon: 106.77312
+                          tag: Company
+                          isPrimary: false
+
+                  - username: client08
+                    email: client08@delivery-system.com
+                    firstName: Thao
+                    lastName: Phan
+                    password: client123
+                    enabled: true
+                    emailVerified: true
+                    realmRoles: [CLIENT]
+                    clientRoles:
+                        frontend-client: [user-service]
+                    addresses:
+                        - addressText: 07 Phan Châu Trinh, Hiệp Phú, Thủ Đức, TP.HCM
+                          lat: 10.84815
+                          lon: 106.77456
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 63 Trần Hưng Đạo, Hiệp Phú, Thủ Đức, TP.HCM
+                          lat: 10.84912
+                          lon: 106.77287
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 20 Khổng Tử, Hiệp Phú, Thủ Đức, TP.HCM
+                          lat: 10.84541
+                          lon: 106.76915
+                          tag: Company
+                          isPrimary: false
+
+                  - username: client09
+                    email: client09@delivery-system.com
+                    firstName: Binh
+                    lastName: Do
+                    password: client123
+                    enabled: true
+                    emailVerified: true
+                    realmRoles: [CLIENT]
+                    clientRoles:
+                        frontend-client: [user-service]
+                    addresses:
+                        - addressText: 11 Quang Trung, Hiệp Phú, Thủ Đức, TP.HCM
+                          lat: 10.84887
+                          lon: 106.77512
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 16/15/7 đường 22, Linh Đông, Thủ Đức, TP.HCM
+                          lat: 10.84121
+                          lon: 106.74412
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 70 Man Thiện, Tăng Nhơn Phú A, Thủ Đức, TP.HCM
+                          lat: 10.84687
+                          lon: 106.78651
+                          tag: Company
+                          isPrimary: false
+
+                  - username: client10
+                    email: client10@delivery-system.com
+                    firstName: Quang
+                    lastName: Vu
+                    password: client123
+                    enabled: true
+                    emailVerified: true
+                    realmRoles: [CLIENT]
+                    clientRoles:
+                        frontend-client: [user-service]
+                    addresses:
+                        - addressText: 306 Hoàng Hữu Nam, Long Thạnh Mỹ, Thủ Đức, TP.HCM
+                          lat: 10.86541
+                          lon: 106.82412
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 150 Nguyễn Văn Tăng, Long Thạnh Mỹ, Thủ Đức, TP.HCM
+                          lat: 10.84231
+                          lon: 106.82074
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 849 Nguyễn Xiển, Long Thạnh Mỹ, Thủ Đức, TP.HCM
+                          lat: 10.84151
+                          lon: 106.84012
+                          tag: Company
+                          isPrimary: false
+
+                  - username: client11
+                    email: client11@delivery-system.com
+                    firstName: Mai
+                    lastName: Bui
+                    password: client123
+                    enabled: true
+                    emailVerified: true
+                    realmRoles: [CLIENT]
+                    clientRoles:
+                        frontend-client: [user-service]
+                    addresses:
+                        - addressText: 343A Quốc lộ 13, Hiệp Bình Phước, Thủ Đức, TP.HCM
+                          lat: 10.83012
+                          lon: 106.71351
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 419 Kha Vạn Cân, Hiệp Bình Chánh, Thủ Đức, TP.HCM
+                          lat: 10.82451
+                          lon: 106.73241
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 213 Hiệp Bình, Hiệp Bình Chánh, Thủ Đức, TP.HCM
+                          lat: 10.83541
+                          lon: 106.72651
+                          tag: Company
+                          isPrimary: false
+
+                  - username: client12
+                    email: client12@delivery-system.com
+                    firstName: Long
+                    lastName: Ho
+                    password: client123
+                    enabled: true
+                    emailVerified: true
+                    realmRoles: [CLIENT]
+                    clientRoles:
+                        frontend-client: [user-service]
+                    addresses:
+                        - addressText: 172 Tam Bình, Tam Phú, Thủ Đức, TP.HCM
+                          lat: 10.85241
+                          lon: 106.74112
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 172 Gò dưa, Tam Bình, Thủ Đức, TP.HCM
+                          lat: 10.86451
+                          lon: 106.73912
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 118 Kha Vạn Cân, Linh Tây, Thủ Đức, TP.HCM
+                          lat: 10.85112
+                          lon: 106.75514
+                          tag: Company
+                          isPrimary: false
+
+                  - username: client13
+                    email: client13@delivery-system.com
+                    firstName: Linh
+                    lastName: Dang
+                    password: client123
+                    enabled: true
+                    emailVerified: true
+                    realmRoles: [CLIENT]
+                    clientRoles:
+                        frontend-client: [user-service]
+                    addresses:
+                        - addressText: 56 đường số 4, Tam Phú, Thủ Đức, TP.HCM
+                          lat: 10.85651
+                          lon: 106.74412
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 90 Nguyễn Thị Nhung, Hiệp Bình Phước, Thủ Đức, TP.HCM
+                          lat: 10.84412
+                          lon: 106.71121
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 75 đường số 8, Linh Xuân, Thủ Đức, TP.HCM
+                          lat: 10.87112
+                          lon: 106.77851
+                          tag: Company
+                          isPrimary: false
+
+                  - username: client14
+                    email: client14@delivery-system.com
+                    firstName: Khanh
+                    lastName: Ly
+                    password: client123
+                    enabled: true
+                    emailVerified: true
+                    realmRoles: [CLIENT]
+                    clientRoles:
+                        frontend-client: [user-service]
+                    addresses:
+                        - addressText: 134 đường số 11, Tam Bình, Thủ Đức, TP.HCM
+                          lat: 10.86121
+                          lon: 106.74512
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 28 đường số 6, Linh Trung, Thủ Đức, TP.HCM
+                          lat: 10.86412
+                          lon: 106.77121
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 301 Quốc lộ 1K, Linh Xuân, Thủ Đức, TP.HCM
+                          lat: 10.87541
+                          lon: 106.78112
+                          tag: Company
+                          isPrimary: false
+
+                  - username: client15
+                    email: client15@delivery-system.com
+                    firstName: Tuan
+                    lastName: Ngo
+                    password: client123
+                    enabled: true
+                    emailVerified: true
+                    realmRoles: [CLIENT]
+                    clientRoles:
+                        frontend-client: [user-service]
+                    addresses:
+                        - addressText: 19 đường số 10, Bình Thọ, Thủ Đức, TP.HCM
+                          lat: 10.84412
+                          lon: 106.76541
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 88 đường số 20, Linh Chiểu, Thủ Đức, TP.HCM
+                          lat: 10.84512
+                          lon: 106.75912
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 67 đường số 9, Phước Bình, Thủ Đức, TP.HCM
+                          lat: 10.81486
+                          lon: 106.76966
+                          tag: Company
+                          isPrimary: false
+
+                  - username: client16
+                    email: client16@delivery-system.com
+                    firstName: Ha
+                    lastName: Tran
+                    password: client123
+                    enabled: true
+                    emailVerified: true
+                    realmRoles: [CLIENT]
+                    clientRoles:
+                        frontend-client: [user-service]
+                    addresses:
+                        - addressText: 144 đường số 5, Phước Long A, Thủ Đức, TP.HCM
+                          lat: 10.82412
+                          lon: 106.76451
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 52 đường số 1, Hiệp Bình Phước, Thủ Đức, TP.HCM
+                          lat: 10.84651
+                          lon: 106.71651
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 233 đường số 7, Tân Phú, Thủ Đức, TP.HCM
+                          lat: 10.86112
+                          lon: 106.81412
+                          tag: Company
+                          isPrimary: false
+
+                  - username: client17
+                    email: client17@delivery-system.com
+                    firstName: Nam
+                    lastName: Le
+                    password: client123
+                    enabled: true
+                    emailVerified: true
+                    realmRoles: [CLIENT]
+                    clientRoles:
+                        frontend-client: [user-service]
+                    addresses:
+                        - addressText: 101 đường số 13, Linh Tây, Thủ Đức, TP.HCM
+                          lat: 10.85412
+                          lon: 106.75121
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 64 đường số 15, Trường Thọ, Thủ Đức, TP.HCM
+                          lat: 10.83241
+                          lon: 106.76112
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 17 đường số 18, Linh Đông, Thủ Đức, TP.HCM
+                          lat: 10.83751
+                          lon: 106.74121
+                          tag: Company
+                          isPrimary: false
+
+                  - username: client18
+                    email: client18@delivery-system.com
+                    firstName: Phuong
+                    lastName: Vo
+                    password: client123
+                    enabled: true
+                    emailVerified: true
+                    realmRoles: [CLIENT]
+                    clientRoles:
+                        frontend-client: [user-service]
+                    addresses:
+                        - addressText: 289 đường số 2, Tam Phú, Thủ Đức, TP.HCM
+                          lat: 10.85841
+                          lon: 106.74121
+                          tag: Home
+                          isPrimary: true
+                        - addressText: 140 đường số 14, Phước Bình, Thủ Đức, TP.HCM
+                          lat: 10.81651
+                          lon: 106.77121
+                          tag: Other
+                          isPrimary: false
+                        - addressText: 211 Phạm Văn Đồng, Hiệp Bình Chánh, Thủ Đức, TP.HCM
+                          lat: 10.82412
+                          lon: 106.72121
+                          tag: Company
+                          isPrimary: false
+
+                  - username: client19
+                    email: client19@delivery-system.com
+                    firstName: Hieu
+                    lastName: Nguyen
+                    password: client123
+                    enabled: true
+                    emailVerified: true
+                    realmRoles: [CLIENT]
+                    clientRoles:
+                        frontend-client: [user-service]
+                    addresses:
+                        - addressText: 42 đường số 3, Linh Xuân, Thủ Đức, TP.HCM
+                          lat: 10.87412
+                          lon: 106.78451
+                          tag: Home
+                          isPrimary: true
 
 # External Services
 services:

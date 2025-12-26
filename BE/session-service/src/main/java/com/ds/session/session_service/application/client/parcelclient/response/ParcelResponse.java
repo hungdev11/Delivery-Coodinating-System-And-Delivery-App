@@ -23,6 +23,8 @@ public class ParcelResponse {
     private String deliveryType;
     private String receiveFrom;
     private String targetDestination;
+    private String senderAddressId; // Reference to UserAddress ID
+    private String receiverAddressId; // Reference to UserAddress ID
     private String status;
     private double weight;
     private BigDecimal value;

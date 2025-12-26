@@ -121,4 +121,44 @@ public interface IDeliveryAssignmentService {
     Optional<ShipperInfo> getLatestDriverIdForParcel(String parcelId);
 
     Optional<LatestAssignmentResponse> getLatestAssignmentForParcel(String parcelId);
+    
+    /**
+     * Bulk query: Get assignments by list of IDs
+     */
+    List<DeliveryAssignmentResponse> getAssignmentsByIds(List<UUID> assignmentIds);
+    
+    /**
+     * Bulk query: Get assignments by list of parcel IDs
+     */
+    List<DeliveryAssignmentResponse> getAssignmentsByParcelIds(List<String> parcelIds);
+    
+    /**
+     * Bulk query: Get assignments by list of session IDs
+     */
+    List<DeliveryAssignmentResponse> getAssignmentsBySessionIds(List<UUID> sessionIds);
+    
+    /**
+     * Bulk query: Get assignments by list of shipper IDs
+     */
+    List<DeliveryAssignmentResponse> getAssignmentsByShipperIds(List<UUID> shipperIds);
+    
+    /**
+     * Bulk query with paging: Get assignments by list of IDs (with pagination and join support)
+     */
+    PageResponse<DeliveryAssignmentResponse> getAssignmentsByIdsPaged(List<UUID> assignmentIds, int page, int size);
+    
+    /**
+     * Bulk query with paging: Get assignments by list of parcel IDs (with pagination and join support)
+     */
+    PageResponse<DeliveryAssignmentResponse> getAssignmentsByParcelIdsPaged(List<String> parcelIds, int page, int size);
+    
+    /**
+     * Bulk query with paging: Get assignments by list of session IDs (with pagination and join support)
+     */
+    PageResponse<DeliveryAssignmentResponse> getAssignmentsBySessionIdsPaged(List<UUID> sessionIds, int page, int size);
+    
+    /**
+     * Bulk query with paging: Get assignments by list of shipper IDs (with pagination and join support)
+     */
+    PageResponse<DeliveryAssignmentResponse> getAssignmentsByShipperIdsPaged(List<UUID> shipperIds, int page, int size);
 }

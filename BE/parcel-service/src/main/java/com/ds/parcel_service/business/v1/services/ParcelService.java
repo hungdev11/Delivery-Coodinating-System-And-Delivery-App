@@ -841,6 +841,132 @@ public class ParcelService implements IParcelService{
         return toDto(updatedParcel);
     }
 
+    @Override
+    public List<ParcelResponse> getParcelsByIds(List<UUID> parcelIds) {
+        if (parcelIds == null || parcelIds.isEmpty()) {
+            return List.of();
+        }
+        log.debug("Getting parcels by IDs: count={}", parcelIds.size());
+        List<Parcel> parcels = parcelRepository.findByIdIn(parcelIds);
+        return parcels.stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ParcelResponse> getParcelsBySenderIds(List<String> senderIds) {
+        if (senderIds == null || senderIds.isEmpty()) {
+            return List.of();
+        }
+        log.debug("Getting parcels by sender IDs: count={}", senderIds.size());
+        List<Parcel> parcels = parcelRepository.findBySenderIdIn(senderIds);
+        return parcels.stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ParcelResponse> getParcelsByReceiverIds(List<String> receiverIds) {
+        if (receiverIds == null || receiverIds.isEmpty()) {
+            return List.of();
+        }
+        log.debug("Getting parcels by receiver IDs: count={}", receiverIds.size());
+        List<Parcel> parcels = parcelRepository.findByReceiverIdIn(receiverIds);
+        return parcels.stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public PageResponse<ParcelResponse> getParcelsByIdsPaged(List<UUID> parcelIds, int page, int size, String sortBy, String direction) {
+        if (parcelIds == null || parcelIds.isEmpty()) {
+            return PageResponse.empty(page, size);
+        }
+        log.debug("Getting parcels by IDs with paging: count={}, page={}, size={}", parcelIds.size(), page, size);
+        
+        // Fetch all matching parcels
+        List<Parcel> allParcels = parcelRepository.findByIdIn(parcelIds);
+        
+        // Apply sorting if provided
+        if (sortBy != null && !sortBy.isEmpty()) {
+            Pageable pageable = PageUtil.build(page, size, sortBy, direction, Parcel.class);
+            // Note: For bulk queries, we apply sorting manually after fetching
+            // This is less efficient but necessary for bulk queries
+            allParcels = allParcels.stream()
+                    .sorted((p1, p2) -> {
+                        // Simple sorting - can be enhanced
+                        return p1.getCreatedAt().compareTo(p2.getCreatedAt());
+                    })
+                    .collect(Collectors.toList());
+        }
+        
+        // Apply pagination
+        int start = page * size;
+        int end = Math.min(start + size, allParcels.size());
+        List<Parcel> pagedParcels = start < allParcels.size() ? allParcels.subList(start, end) : List.of();
+        
+        // Convert to DTOs with join support (fetch user info, destination info)
+        List<ParcelResponse> content = pagedParcels.stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+        
+        return PageResponse.from(content, allParcels.size(), page, size);
+    }
+
+    @Override
+    public PageResponse<ParcelResponse> getParcelsBySenderIdsPaged(List<String> senderIds, int page, int size, String sortBy, String direction) {
+        if (senderIds == null || senderIds.isEmpty()) {
+            return PageResponse.empty(page, size);
+        }
+        log.debug("Getting parcels by sender IDs with paging: count={}, page={}, size={}", senderIds.size(), page, size);
+        
+        List<Parcel> allParcels = parcelRepository.findBySenderIdIn(senderIds);
+        
+        // Apply sorting if provided
+        if (sortBy != null && !sortBy.isEmpty()) {
+            allParcels = allParcels.stream()
+                    .sorted((p1, p2) -> p1.getCreatedAt().compareTo(p2.getCreatedAt()))
+                    .collect(Collectors.toList());
+        }
+        
+        int start = page * size;
+        int end = Math.min(start + size, allParcels.size());
+        List<Parcel> pagedParcels = start < allParcels.size() ? allParcels.subList(start, end) : List.of();
+        
+        List<ParcelResponse> content = pagedParcels.stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+        
+        return PageResponse.from(content, allParcels.size(), page, size);
+    }
+
+    @Override
+    public PageResponse<ParcelResponse> getParcelsByReceiverIdsPaged(List<String> receiverIds, int page, int size, String sortBy, String direction) {
+        if (receiverIds == null || receiverIds.isEmpty()) {
+            return PageResponse.empty(page, size);
+        }
+        log.debug("Getting parcels by receiver IDs with paging: count={}, page={}, size={}", receiverIds.size(), page, size);
+        
+        List<Parcel> allParcels = parcelRepository.findByReceiverIdIn(receiverIds);
+        
+        // Apply sorting if provided
+        if (sortBy != null && !sortBy.isEmpty()) {
+            allParcels = allParcels.stream()
+                    .sorted((p1, p2) -> p1.getCreatedAt().compareTo(p2.getCreatedAt()))
+                    .collect(Collectors.toList());
+        }
+        
+        int start = page * size;
+        int end = Math.min(start + size, allParcels.size());
+        List<Parcel> pagedParcels = start < allParcels.size() ? allParcels.subList(start, end) : List.of();
+        
+        List<ParcelResponse> content = pagedParcels.stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+        
+        return PageResponse.from(content, allParcels.size(), page, size);
+    }
+
     //update address
     // parcel staticstic
 }

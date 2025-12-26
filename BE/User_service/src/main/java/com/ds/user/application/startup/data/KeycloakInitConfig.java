@@ -153,7 +153,8 @@ public class KeycloakInitConfig {
         private List<String> realmRoles = List.of();
         private Map<String, List<String>> clientRoles = Map.of();
         private DeliveryManConfig deliveryMan;
-        private AddressConfig address;
+        private AddressConfig address; // Backward compatibility - single address
+        private List<AddressConfig> addresses; // Multiple addresses support
         
         public void setUsername(String username) {
             this.username = username;
@@ -198,6 +199,10 @@ public class KeycloakInitConfig {
         public void setAddress(AddressConfig address) {
             this.address = address;
         }
+        
+        public void setAddresses(List<AddressConfig> addresses) {
+            this.addresses = addresses;
+        }
     }
     
     @Getter
@@ -206,6 +211,8 @@ public class KeycloakInitConfig {
         private String addressText;
         private Double lat;
         private Double lon;
+        private String tag; // "Home", "Work", "Company", "Other", "Primary"
+        private Boolean isPrimary; // true for primary address
         
         public void setName(String name) {
             this.name = name;
@@ -221,6 +228,14 @@ public class KeycloakInitConfig {
         
         public void setLon(Double lon) {
             this.lon = lon;
+        }
+        
+        public void setTag(String tag) {
+            this.tag = tag;
+        }
+        
+        public void setIsPrimary(Boolean isPrimary) {
+            this.isPrimary = isPrimary;
         }
     }
     

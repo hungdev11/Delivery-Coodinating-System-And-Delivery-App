@@ -1,0 +1,50 @@
+{
+	"instruction_purpose": "Xây dựng dịch vụ phân đơn và tối ưu hóa thứ tự giao hàng (VRP) sử dụng Java Spring Boot, JSPRIT và OSRM API.",
+	"context": {
+		"framework": "Spring Boot",
+		"libraries": [
+			"jsprit-core",
+			"google-maps-services (optional)",
+			"WebClient"
+		],
+		"external_api": "OSRM API (service /table)",
+		"problem_type": "Capacitated Vehicle Routing Problem with Time Windows (CVRPTW) and Workload Balancing"
+	},
+	"requirements": [
+		{
+			"step": 1,
+			"task": "OSRM Matrix Integration",
+			"details": "Viết OSRMService gọi API `/table/v1/driving/` để lấy ma trận thời gian (durations) giữa danh sách các tọa độ (Shippers + Orders). Trả về một `VehicleRoutingTransportCostsMatrix` của JSPRIT."
+		},
+		{
+			"step": 2,
+			"task": "Data Modeling",
+			"details": "Định nghĩa Order (ID, lat, lng, serviceTime) và Shipper (ID, lat, lng, shiftStart, shiftEnd, maxSessionTime). Lưu ý shiftEnd được tính bằng shiftStart + maxSessionTime (3.5h cho sáng, 4.5h cho chiều)."
+		},
+		{
+			"step": 3,
+			"task": "Solver Logic with JSPRIT",
+			"details": "Sử dụng JSPRIT để xây dựng bài toán: 1. Add Vehicles (Shippers) với start/end location và ca làm việc. 2. Add Services (Orders) với thời gian phục vụ. 3. Sử dụng FastVehicleRoutingTransportCostsMatrix từ bước 1."
+		},
+		{
+			"step": 4,
+			"task": "Workload Balancing (Fairness Constraint)",
+			"details": "Cấu hình thuật toán để cân bằng khối lượng công việc. Hãy thêm một 'Soft Constraint' hoặc điều chỉnh 'Objective Function' của JSPRIT để phạt (penalty) các giải pháp có độ lệch tổng thời gian di chuyển giữa các shipper quá lớn. Mục tiêu là các shipper có tổng quãng đường và thời gian tương đương nhau."
+		},
+		{
+			"step": 5,
+			"task": "Session Truncation",
+			"details": "Thiết lập ràng buộc cứng: Nếu việc thêm một đơn hàng khiến tổng thời gian của Shipper vượt quá maxSessionTime (ví dụ 4h), đơn hàng đó phải được đánh dấu là 'Unassigned' để chờ phiên sau hoặc chuyển shipper khác."
+		}
+	],
+	"output_format": {
+		"structure": "API trả về JSON Map<String, List<Task>>",
+		"fields": [
+			"order_id",
+			"sequence_index",
+			"estimated_arrival_time",
+			"travel_time_from_previous_stop"
+		]
+	},
+	"prompt_for_agent": "Hãy viết code Java hoàn chỉnh cho các yêu cầu trên. Chia thành các lớp: OSRMService, RoutingService (chứa logic JSPRIT), và RoutingController. Đảm bảo code sạch, có comment giải thích phần xử lý cân bằng tải và ràng buộc thời gian ca làm việc."
+}

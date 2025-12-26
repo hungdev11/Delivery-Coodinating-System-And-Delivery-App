@@ -311,6 +311,198 @@ public class CommunicationController {
         return proxyCommunication(HttpMethod.PUT, "/api/v1/messages/" + messageId + "/status", requestBody);
     }
 
+    // ============================================
+    // Ticket Endpoints
+    // ============================================
+
+    /**
+     * Create a new ticket
+     * POST /api/v1/tickets
+     */
+    @PostMapping("/tickets")
+    @AuthRequired
+    public ResponseEntity<?> createTicket(@RequestBody Object request) {
+        log.debug("[api-gateway] [CommunicationController.createTicket] POST /api/v1/tickets - Proxying to Communication Service");
+        return proxyCommunication(HttpMethod.POST, "/api/v1/tickets", request);
+    }
+
+    /**
+     * Get ticket by ID
+     * GET /api/v1/tickets/{ticketId}
+     */
+    @GetMapping("/tickets/{ticketId}")
+    @AuthRequired
+    public ResponseEntity<?> getTicketById(@PathVariable String ticketId) {
+        log.debug("[api-gateway] [CommunicationController.getTicketById] GET /api/v1/tickets/{} - Proxying to Communication Service", ticketId);
+        return proxyCommunication(HttpMethod.GET, "/api/v1/tickets/" + ticketId, null);
+    }
+
+    /**
+     * Get all tickets with filters
+     * GET /api/v1/tickets
+     */
+    @GetMapping("/tickets")
+    @AuthRequired
+    public ResponseEntity<?> getTickets(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String reporterId,
+            @RequestParam(required = false) String assignedAdminId,
+            @RequestParam(required = false) String parcelId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            HttpServletRequest request) {
+        log.debug("[api-gateway] [CommunicationController.getTickets] GET /api/v1/tickets - Proxying to Communication Service");
+        
+        // Build path with query parameters
+        StringBuilder path = new StringBuilder("/api/v1/tickets?page=" + page + "&size=" + size);
+        if (status != null) path.append("&status=").append(status);
+        if (type != null) path.append("&type=").append(type);
+        if (reporterId != null) path.append("&reporterId=").append(reporterId);
+        if (assignedAdminId != null) path.append("&assignedAdminId=").append(assignedAdminId);
+        if (parcelId != null) path.append("&parcelId=").append(parcelId);
+        
+        return proxyCommunication(HttpMethod.GET, path.toString(), null);
+    }
+
+    /**
+     * Get open tickets
+     * GET /api/v1/tickets/open
+     */
+    @GetMapping("/tickets/open")
+    @AuthRequired
+    public ResponseEntity<?> getOpenTickets(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        log.debug("[api-gateway] [CommunicationController.getOpenTickets] GET /api/v1/tickets/open - Proxying to Communication Service");
+        String path = "/api/v1/tickets/open?page=" + page + "&size=" + size;
+        return proxyCommunication(HttpMethod.GET, path, null);
+    }
+
+    /**
+     * Get tickets by reporter ID
+     * GET /api/v1/tickets/reporter/{reporterId}
+     */
+    @GetMapping("/tickets/reporter/{reporterId}")
+    @AuthRequired
+    public ResponseEntity<?> getTicketsByReporter(
+            @PathVariable String reporterId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        log.debug("[api-gateway] [CommunicationController.getTicketsByReporter] GET /api/v1/tickets/reporter/{} - Proxying to Communication Service", reporterId);
+        String path = "/api/v1/tickets/reporter/" + reporterId + "?page=" + page + "&size=" + size;
+        return proxyCommunication(HttpMethod.GET, path, null);
+    }
+
+    /**
+     * Get tickets by assigned admin ID
+     * GET /api/v1/tickets/admin/{adminId}
+     */
+    @GetMapping("/tickets/admin/{adminId}")
+    @AuthRequired
+    public ResponseEntity<?> getTicketsByAdmin(
+            @PathVariable String adminId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        log.debug("[api-gateway] [CommunicationController.getTicketsByAdmin] GET /api/v1/tickets/admin/{} - Proxying to Communication Service", adminId);
+        String path = "/api/v1/tickets/admin/" + adminId + "?page=" + page + "&size=" + size;
+        return proxyCommunication(HttpMethod.GET, path, null);
+    }
+
+    /**
+     * Get tickets by parcel ID
+     * GET /api/v1/tickets/parcel/{parcelId}
+     */
+    @GetMapping("/tickets/parcel/{parcelId}")
+    @AuthRequired
+    public ResponseEntity<?> getTicketsByParcel(@PathVariable String parcelId) {
+        log.debug("[api-gateway] [CommunicationController.getTicketsByParcel] GET /api/v1/tickets/parcel/{} - Proxying to Communication Service", parcelId);
+        return proxyCommunication(HttpMethod.GET, "/api/v1/tickets/parcel/" + parcelId, null);
+    }
+
+    /**
+     * Update ticket (admin actions)
+     * PUT /api/v1/tickets/{ticketId}
+     */
+    @PutMapping("/tickets/{ticketId}")
+    @AuthRequired
+    public ResponseEntity<?> updateTicket(
+            @PathVariable String ticketId,
+            @RequestBody Object request) {
+        log.debug("[api-gateway] [CommunicationController.updateTicket] PUT /api/v1/tickets/{} - Proxying to Communication Service", ticketId);
+        return proxyCommunication(HttpMethod.PUT, "/api/v1/tickets/" + ticketId, request);
+    }
+
+    /**
+     * Delete ticket
+     * DELETE /api/v1/tickets/{ticketId}
+     */
+    @DeleteMapping("/tickets/{ticketId}")
+    @AuthRequired
+    public ResponseEntity<?> deleteTicket(@PathVariable String ticketId) {
+        log.debug("[api-gateway] [CommunicationController.deleteTicket] DELETE /api/v1/tickets/{} - Proxying to Communication Service", ticketId);
+        return proxyCommunication(HttpMethod.DELETE, "/api/v1/tickets/" + ticketId, null);
+    }
+
+    /**
+     * Get count of open tickets
+     * GET /api/v1/tickets/open/count
+     */
+    @GetMapping("/tickets/open/count")
+    @AuthRequired
+    public ResponseEntity<?> countOpenTickets() {
+        log.debug("[api-gateway] [CommunicationController.countOpenTickets] GET /api/v1/tickets/open/count - Proxying to Communication Service");
+        return proxyCommunication(HttpMethod.GET, "/api/v1/tickets/open/count", null);
+    }
+
+    // ============================================
+    // Bulk Ticket Query Endpoints
+    // ============================================
+
+    /**
+     * Bulk query: Get tickets by list of IDs
+     * POST /api/v1/tickets/bulk/ids
+     */
+    @PostMapping("/tickets/bulk/ids")
+    @AuthRequired
+    public ResponseEntity<?> getTicketsByIds(@RequestBody Object request) {
+        log.debug("[api-gateway] [CommunicationController.getTicketsByIds] POST /api/v1/tickets/bulk/ids - Proxying to Communication Service");
+        return proxyCommunication(HttpMethod.POST, "/api/v1/tickets/bulk/ids", request);
+    }
+
+    /**
+     * Bulk query: Get tickets by list of parcel IDs
+     * POST /api/v1/tickets/bulk/parcels
+     */
+    @PostMapping("/tickets/bulk/parcels")
+    @AuthRequired
+    public ResponseEntity<?> getTicketsByParcelIds(@RequestBody Object request) {
+        log.debug("[api-gateway] [CommunicationController.getTicketsByParcelIds] POST /api/v1/tickets/bulk/parcels - Proxying to Communication Service");
+        return proxyCommunication(HttpMethod.POST, "/api/v1/tickets/bulk/parcels", request);
+    }
+
+    /**
+     * Bulk query: Get tickets by list of assignment IDs
+     * POST /api/v1/tickets/bulk/assignments
+     */
+    @PostMapping("/tickets/bulk/assignments")
+    @AuthRequired
+    public ResponseEntity<?> getTicketsByAssignmentIds(@RequestBody Object request) {
+        log.debug("[api-gateway] [CommunicationController.getTicketsByAssignmentIds] POST /api/v1/tickets/bulk/assignments - Proxying to Communication Service");
+        return proxyCommunication(HttpMethod.POST, "/api/v1/tickets/bulk/assignments", request);
+    }
+
+    /**
+     * Bulk query: Get tickets by list of reporter IDs
+     * POST /api/v1/tickets/bulk/reporters
+     */
+    @PostMapping("/tickets/bulk/reporters")
+    @AuthRequired
+    public ResponseEntity<?> getTicketsByReporterIds(@RequestBody Object request) {
+        log.debug("[api-gateway] [CommunicationController.getTicketsByReporterIds] POST /api/v1/tickets/bulk/reporters - Proxying to Communication Service");
+        return proxyCommunication(HttpMethod.POST, "/api/v1/tickets/bulk/reporters", request);
+    }
+
     private ResponseEntity<Object> proxyCommunication(HttpMethod method, String path, Object body) {
         String url = communicationServiceUrl + path;
         ProxyLogContext context = proxyRequestLogger.start(method, COMMUNICATION_SERVICE, url, body);

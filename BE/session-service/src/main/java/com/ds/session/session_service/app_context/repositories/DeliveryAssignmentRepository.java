@@ -99,4 +99,24 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
     long countPendingTasksBySessionId(UUID sessionId);
 
     List<DeliveryAssignment> findAllByParcelId(String parcelId);
+    
+    /**
+     * Bulk query: Find assignments by list of IDs
+     */
+    List<DeliveryAssignment> findByIdIn(List<UUID> ids);
+    
+    /**
+     * Bulk query: Find assignments by list of parcel IDs
+     */
+    List<DeliveryAssignment> findByParcelIdIn(List<String> parcelIds);
+    
+    /**
+     * Bulk query: Find assignments by list of session IDs
+     */
+    List<DeliveryAssignment> findBySession_IdIn(List<UUID> sessionIds);
+    
+    /**
+     * Bulk query: Find assignments by list of shipper IDs
+     */
+    List<DeliveryAssignment> findByShipperIdIn(List<UUID> shipperIds);
 }

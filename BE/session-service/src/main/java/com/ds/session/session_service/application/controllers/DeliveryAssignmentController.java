@@ -277,6 +277,28 @@ public class DeliveryAssignmentController {
         return ResponseEntity.ok(BaseResponse.success(response));
     }
 
+    /**
+     * Accept task by assignment ID (QR code scan)
+     * Status transition: PENDING -> ACCEPTED
+     * 
+     * POST /api/v1/assignments/{assignmentId}/accept
+     * 
+     * This endpoint is used when shipper scans QR code on assignment to confirm receiving the task.
+     * The assignment must be in PENDING status and belong to the shipper.
+     */
+    @PostMapping("/{assignmentId}/accept")
+    public ResponseEntity<BaseResponse<DeliveryAssignmentResponse>> acceptTaskByQR(
+            @PathVariable UUID assignmentId,
+            @RequestParam String deliveryManId) {
+        log.debug("Shipper {} accepting task {} via QR code scan", deliveryManId, assignmentId);
+        DeliveryAssignmentResponse response = assignmentService.acceptTask(UUID.fromString(deliveryManId), assignmentId);
+        return ResponseEntity.ok(BaseResponse.success(response));
+    }
+    
+    /**
+     * @deprecated Use POST /api/v1/assignments/{assignmentId}/accept instead
+     */
+    @Deprecated
     @PatchMapping("/{assignmentId}/drivers/{deliveryManId}/accept")
     public DeliveryAssignmentResponse acceptTask(@PathVariable UUID assignmentId, @PathVariable UUID deliveryManId) {
         log.debug("Accepting task for assignment {} by delivery man {}", assignmentId, deliveryManId);

@@ -52,3 +52,17 @@ routingRouter.post('/switch-instance', RoutingController.switchOSRMInstance);
  * For demo/testing page with express/fast/normal/economy priority groups
  */
 routingRouter.post('/demo-route', RoutingController.calculateDemoRoute);
+
+/**
+ * POST /routing/table-matrix
+ * Get OSRM table matrix (distance/duration matrix) for VRP solving
+ * Used by session-service for auto assignment
+ */
+routingRouter.post('/table-matrix', RoutingController.getTableMatrix);
+
+/**
+ * POST /routing/vrp-assignment
+ * Solve VRP assignment problem (assign orders to shippers)
+ * Returns optimized assignments with workload balancing
+ */
+routingRouter.post('/vrp-assignment', RoutingController.solveVRPAssignment);

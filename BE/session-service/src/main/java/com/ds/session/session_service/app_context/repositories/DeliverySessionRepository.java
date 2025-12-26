@@ -38,4 +38,14 @@ public interface DeliverySessionRepository extends JpaRepository<DeliverySession
             SessionStatus status,
             LocalDateTime startTime,
             LocalDateTime endTime);
+    
+    /**
+     * Bulk query: Find sessions by list of IDs
+     */
+    List<DeliverySession> findByIdIn(List<UUID> ids);
+    
+    /**
+     * Bulk query: Find sessions by list of delivery man IDs
+     */
+    List<DeliverySession> findByDeliveryManIdIn(List<String> deliveryManIds);
 }

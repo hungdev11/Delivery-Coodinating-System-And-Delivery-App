@@ -26,4 +26,19 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID>, JpaSpecif
     Page<Parcel> findBySenderId(String senderId, Pageable pageable);
 
     Page<Parcel> findByReceiverId(String receiverId, Pageable pageable);
+    
+    /**
+     * Bulk query: Find parcels by list of IDs
+     */
+    List<Parcel> findByIdIn(List<UUID> ids);
+    
+    /**
+     * Bulk query: Find parcels by list of sender IDs
+     */
+    List<Parcel> findBySenderIdIn(List<String> senderIds);
+    
+    /**
+     * Bulk query: Find parcels by list of receiver IDs
+     */
+    List<Parcel> findByReceiverIdIn(List<String> receiverIds);
 }
