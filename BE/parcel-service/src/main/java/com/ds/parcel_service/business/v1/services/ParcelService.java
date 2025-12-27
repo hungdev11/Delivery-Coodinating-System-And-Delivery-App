@@ -131,8 +131,13 @@ public class ParcelService implements IParcelService{
             parcel.setDeliveredAt(LocalDateTime.now());
         }
 
+        if (event == ParcelEvent.POSTPONE) {
+            parcel.setFailCount(parcel.getFailCount() + 1);
+            parcel.setIsDelayed(true);
+        }
+
         // mark as it failed when moving back to IN_WAREHOUSE from FAILED distinguishes from normal return
-        if (currentStatus == ParcelStatus.FAILED && nextStatus == ParcelStatus.IN_WAREHOUSE) {
+        if (parcel.getFailCount() > 3 || currentStatus == ParcelStatus.FAILED && nextStatus == ParcelStatus.IN_WAREHOUSE ) {
             parcel.setIsFail(true);
         }
         

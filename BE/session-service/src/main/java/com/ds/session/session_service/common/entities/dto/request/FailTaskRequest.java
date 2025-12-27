@@ -1,23 +1,21 @@
-package com.ds.deliveryapp.clients.req;
-
+package com.ds.session.session_service.common.entities.dto.request;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TaskFailRequest {
-    private String reason;
-
+public class FailTaskRequest {
+    private String failReason;
     private RouteInfo routeInfo;
-    private List<String> proofImageUrls; // Danh sách URL từ Cloudinary
+    private List<String> proofImageUrls;
     private Double currentLat; // Vị trí hiện tại của shipper khi xác nhận
     private Double currentLon;
-    /**
-     * ISO-8601 string, parsed as LocalDateTime on backend
-     */
-    private String currentTimestamp;
+    private LocalDateTime currentTimestamp;
 }

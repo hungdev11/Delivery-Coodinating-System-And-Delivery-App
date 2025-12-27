@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ds.session.session_service.common.entities.dto.common.BaseResponse;
 import com.ds.session.session_service.common.entities.dto.request.CompleteTaskRequest;
+import com.ds.session.session_service.common.entities.dto.request.FailTaskRequest;
 import com.ds.session.session_service.common.entities.dto.request.PostponeAssignmentRequest;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
 import com.ds.session.session_service.common.entities.dto.request.TaskFailRequest;
@@ -130,6 +131,21 @@ public class DeliveryAssignmentController {
             @Valid @RequestBody CompleteTaskRequest request) {
         log.debug("Completing assignment {} with proof images: {}", assignmentId, request.getProofImageUrls());
         DeliveryAssignmentResponse response = assignmentService.completeTaskByAssignmentId(
+                assignmentId,
+                request);
+        return ResponseEntity.ok(BaseResponse.success(response));
+    }
+
+    /**
+     * API shipper gọi khi giao HÀNG THẤT BẠI một task bằng assignmentId.
+     * Accepts FailTaskRequest with routeInfo and proofImageUrls, failReason.
+     */
+    @PostMapping("/{assignmentId}/fail")
+    public ResponseEntity<BaseResponse<DeliveryAssignmentResponse>> failTaskByAssignmentId(
+            @PathVariable UUID assignmentId,
+            @Valid @RequestBody FailTaskRequest request) {
+        log.debug("Failing assignment {} with proof images: {}", assignmentId, request.getProofImageUrls());
+        DeliveryAssignmentResponse response = assignmentService.failTaskByAssignmentId(
                 assignmentId,
                 request);
         return ResponseEntity.ok(BaseResponse.success(response));

@@ -48,6 +48,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 import com.ds.session.session_service.app_context.repositories.DeliveryProofRepository;
+import com.ds.session.session_service.common.entities.dto.request.FailTaskRequest;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -166,6 +167,38 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 AssignmentStatus.COMPLETED,
                 ParcelEvent.DELIVERY_SUCCESSFUL,
                 null
+        );
+    }
+
+    @Override
+    public DeliveryAssignmentResponse failTaskByAssignmentId(UUID assignmentId, FailTaskRequest request) {
+        DeliveryAssignment assignment = deliveryAssignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new ResourceNotFound("Assignment not found: " + assignmentId));
+        
+        // Validate assignment is in progress
+        if (assignment.getStatus() != AssignmentStatus.IN_PROGRESS) {
+            throw new IllegalStateException("Assignment is not in IN_PROGRESS status. Current status: " + assignment.getStatus());
+        }
+
+        uploadProof(assignment, ProofType.FAILED, request.getProofImageUrls());
+
+        // Save confirmation point if location provided
+        if (request.getCurrentLat() != null && request.getCurrentLon() != null) {
+            saveConfirmationPoint(assignment, request.getCurrentLat(), request.getCurrentLon(), 
+                request.getCurrentTimestamp(), "FAILED");
+        }
+
+        // Get parcelId and deliveryManId from assignment
+        UUID parcelId = UUID.fromString(assignment.getParcelId());
+        UUID deliveryManId = UUID.fromString(assignment.getSession().getDeliveryManId());
+
+        return updateTaskState(
+                parcelId,
+                deliveryManId,
+                request.getRouteInfo(),
+                AssignmentStatus.FAILED,
+                ParcelEvent.POSTPONE,
+                request.getFailReason()
         );
     }
 
