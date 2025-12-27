@@ -99,7 +99,11 @@ public class Parcel {
     @Column(name = "is_fail", nullable = false)
     @Builder.Default
     private Boolean isFail = false;
-    
+
+    @Builder.Default
+    @Column(name = "fail_count", nullable = false)
+    private Integer failCount = 0;
+
     // When parcel should be available for routing again
     @Column(name = "delayed_until")
     private LocalDateTime delayedUntil;

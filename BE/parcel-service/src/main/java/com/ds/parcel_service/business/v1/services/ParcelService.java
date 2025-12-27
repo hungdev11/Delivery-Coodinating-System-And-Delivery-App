@@ -589,6 +589,7 @@ public class ParcelService implements IParcelService{
                             .priority(parcel.getPriority())
                             .isDelayed(parcel.getIsDelayed())
                             .delayedUntil(parcel.getDelayedUntil())
+                            .failCount(parcel.getFailCount())
                             .build();
     }
 

@@ -36,4 +36,5 @@ public class Parcel implements Serializable {
     private String windowStart;
     private String windowEnd;
     private String deliveredAt;
+    private Integer failCount;
 }
