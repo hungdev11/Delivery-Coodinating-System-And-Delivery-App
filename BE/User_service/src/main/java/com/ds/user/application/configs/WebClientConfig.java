@@ -28,4 +28,13 @@ public class WebClientConfig {
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 10MB
                 .build();
     }
+
+    @Bean("sessionServiceWebClient")
+    public WebClient sessionServiceWebClient(
+            @Value("${services.session.base-url:http://localhost:21505}") String baseUrl) {
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 10MB
+                .build();
+    }
 }

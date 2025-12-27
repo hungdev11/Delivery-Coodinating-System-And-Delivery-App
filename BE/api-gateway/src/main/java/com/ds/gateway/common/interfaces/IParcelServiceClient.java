@@ -22,4 +22,7 @@ public interface IParcelServiceClient {
     ResponseEntity<?> retractDispute(UUID parcelId);
     ResponseEntity<?> resolveDisputeAsMisunderstanding(UUID parcelId);
     ResponseEntity<?> resolveDisputeAsFault(UUID parcelId);
+    
+    // Auto seed parcels
+    ResponseEntity<?> autoSeedParcels();
 }

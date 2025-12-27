@@ -3,12 +3,15 @@
     <RouterView />
     <!-- Global Proposal Popup -->
     <ProposalPopup />
+    <!-- Global Progress Tracker Container -->
+    <GlobalProgressTrackerContainer />
   </SidebarPart>
 </template>
 
 <script setup lang="ts">
 import SidebarPart from '@/common/components/SidebarPart.vue'
 import ProposalPopup from '@/modules/Communication/components/ProposalPopup.vue'
+import GlobalProgressTrackerContainer from '@/common/components/GlobalProgressTrackerContainer.vue'
 
 // Initialize global chat service when layout mounts
 import { useGlobalChat } from '@/modules/Communication/composables'

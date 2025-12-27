@@ -48,8 +48,8 @@ export function useProposals() {
       const response = await createProposal(data)
       if (response.result) {
         toast.add({
-          title: 'Success',
-          description: 'Proposal created successfully',
+          title: 'Thành công',
+          description: 'Đã tạo đề xuất thành công',
           color: 'success',
         })
         return response.result
@@ -58,8 +58,8 @@ export function useProposals() {
     } catch (error) {
       console.error('Failed to create proposal:', error)
       toast.add({
-        title: 'Error',
-        description: 'Failed to create proposal',
+        title: 'Lỗi',
+        description: 'Không thể tạo đề xuất',
         color: 'error',
       })
       return null
@@ -77,8 +77,8 @@ export function useProposals() {
       const response = await respondToProposal(proposalId, userId, data)
       if (response.result) {
         toast.add({
-          title: 'Success',
-          description: 'Proposal response sent successfully',
+          title: 'Thành công',
+          description: 'Đã gửi phản hồi đề xuất thành công',
           color: 'success',
         })
         return response.result
@@ -87,8 +87,8 @@ export function useProposals() {
     } catch (error) {
       console.error('Failed to respond to proposal:', error)
       toast.add({
-        title: 'Error',
-        description: 'Failed to respond to proposal',
+        title: 'Lỗi',
+        description: 'Không thể phản hồi đề xuất',
         color: 'error',
       })
       return null
@@ -197,8 +197,8 @@ export function useProposals() {
     } catch (error) {
       console.error('Failed to load available configs:', error)
       toast.add({
-        title: 'Error',
-        description: 'Failed to load available proposal configs',
+        title: 'Lỗi',
+        description: 'Không thể tải danh sách cấu hình đề xuất',
         color: 'error',
       })
     } finally {
@@ -219,8 +219,8 @@ export function useProposals() {
     } catch (error) {
       console.error('Failed to load proposal configs:', error)
       toast.add({
-        title: 'Error',
-        description: 'Failed to load proposal configs',
+        title: 'Lỗi',
+        description: 'Không thể tải cấu hình đề xuất',
         color: 'error',
       })
     } finally {
@@ -237,8 +237,8 @@ export function useProposals() {
       const response = await createProposalConfig(data)
       if (response.result) {
         toast.add({
-          title: 'Success',
-          description: 'Proposal config created successfully',
+          title: 'Thành công',
+          description: 'Đã tạo cấu hình đề xuất thành công',
           color: 'success',
         })
         await loadProposalConfigs()
@@ -248,8 +248,8 @@ export function useProposals() {
     } catch (error) {
       console.error('Failed to create proposal config:', error)
       toast.add({
-        title: 'Error',
-        description: 'Failed to create proposal config',
+        title: 'Lỗi',
+        description: 'Không thể tạo cấu hình đề xuất',
         color: 'error',
       })
       return null
@@ -267,8 +267,8 @@ export function useProposals() {
       const response = await updateProposalConfig(configId, data)
       if (response.result) {
         toast.add({
-          title: 'Success',
-          description: 'Proposal config updated successfully',
+          title: 'Thành công',
+          description: 'Đã cập nhật cấu hình đề xuất thành công',
           color: 'success',
         })
         await loadProposalConfigs()
@@ -278,8 +278,8 @@ export function useProposals() {
     } catch (error) {
       console.error('Failed to update proposal config:', error)
       toast.add({
-        title: 'Error',
-        description: 'Failed to update proposal config',
+        title: 'Lỗi',
+        description: 'Không thể cập nhật cấu hình đề xuất',
         color: 'error',
       })
       return null
@@ -296,8 +296,8 @@ export function useProposals() {
     try {
       await deleteProposalConfig(configId)
       toast.add({
-        title: 'Success',
-        description: 'Proposal config deleted successfully',
+        title: 'Thành công',
+        description: 'Đã xóa cấu hình đề xuất thành công',
         color: 'success',
       })
       await loadProposalConfigs()
@@ -305,8 +305,8 @@ export function useProposals() {
     } catch (error) {
       console.error('Failed to delete proposal config:', error)
       toast.add({
-        title: 'Error',
-        description: 'Failed to delete proposal config',
+        title: 'Lỗi',
+        description: 'Không thể xóa cấu hình đề xuất',
         color: 'error',
       })
       return false

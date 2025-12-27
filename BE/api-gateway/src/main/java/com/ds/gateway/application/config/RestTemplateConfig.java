@@ -17,8 +17,8 @@ public class RestTemplateConfig {
         // Use SimpleClientHttpRequestFactory to avoid chunked encoding issues
         // This ensures responses are fully buffered before being sent
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(5000);
-        factory.setReadTimeout(30000);
+        factory.setConnectTimeout(10000); // 10 seconds connect timeout
+        factory.setReadTimeout(180000); // 180 seconds (3 minutes) read timeout - matches nginx config
         
         RestTemplate restTemplate = new RestTemplate(factory);
         return restTemplate;

@@ -5,7 +5,7 @@ spring:
     application:
         name: communication_service
     datasource:
-        url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${COMMUNICATION_DB_NAME:ds_communication_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+        url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${COMMUNICATION_DB_NAME:ds_communication_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh&zeroDateTimeBehavior=CONVERT_TO_NULL
         username: ${DB_USERNAME:root}
         password: ${DB_PASSWORD:root}
         driver-class-name: com.mysql.cj.jdbc.Driver

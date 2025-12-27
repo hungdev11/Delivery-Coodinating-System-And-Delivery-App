@@ -16,7 +16,13 @@ import {
   DemoRouteRequestDto,
   DemoRouteResponseDto,
   WaypointDto,
+  TableMatrixRequestDto,
+  TableMatrixResponseDto,
+  VRPAssignmentRequestDto,
+  VRPAssignmentResponseDto,
 } from './routing.model';
+import { VRPSolverService } from './vrp-solver.service';
+import { Coordinate } from '../../services/osrm/osrm-router.service';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -1272,6 +1278,114 @@ export class RoutingService {
     } catch (error: any) {
       logger.error(`Failed to fetch OSRM table from ${baseUrl}:`, error.message);
       throw new Error(`Failed to fetch OSRM table: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get OSRM table matrix (distance/duration matrix) for VRP solving
+   * Public method to expose table API
+   */
+  public static async getTableMatrix(data: TableMatrixRequestDto): Promise<TableMatrixResponseDto> {
+    try {
+      if (!data.coordinates || data.coordinates.length === 0) {
+        throw createError('At least one coordinate is required', 400);
+      }
+
+      const vehicle = data.vehicle || 'motorbike';
+      const mode = data.mode || 'v2-full';
+
+      // Convert CoordinateDto[] to Coordinate[]
+      const coordinates: Coordinate[] = data.coordinates.map(c => ({
+        lat: c.lat,
+        lon: c.lon,
+      }));
+
+      // Use OSRMRouterService.getMatrix() - but it uses legacy instance routing
+      // For V2 modes, we need to call OSRM directly with proper vehicle type
+      const vehicleType = vehicle === 'motorbike' ? 'motorbike' : 'driving';
+      const coordString = coordinates.map(c => `${c.lon},${c.lat}`).join(';');
+
+      // V2 Models URLs
+      const modeUrls: Record<string, string> = {
+        'v2-full': process.env.OSRM_V2_FULL_URL || 'http://osrm-v2-full:5000',
+        'v2-rating-only': process.env.OSRM_V2_RATING_URL || 'http://osrm-v2-rating-only:5000',
+        'v2-blocking-only': process.env.OSRM_V2_BLOCKING_URL || 'http://osrm-v2-blocking-only:5000',
+        'v2-base': process.env.OSRM_V2_BASE_URL || 'http://osrm-v2-base:5000',
+        'v2-car-full': process.env.OSRM_V2_CAR_FULL_URL || 'http://osrm-v2-car-full:5000',
+        'v2-car-rating-only': process.env.OSRM_V2_CAR_RATING_URL || 'http://osrm-v2-car-rating-only:5000',
+        'v2-car-blocking-only': process.env.OSRM_V2_CAR_BLOCKING_URL || 'http://osrm-v2-car-blocking-only:5000',
+        'v2-car-base': process.env.OSRM_V2_CAR_BASE_URL || 'http://osrm-v2-car-base:5000',
+      };
+      const baseUrl = modeUrls[mode] || modeUrls['v2-full'] || 'http://osrm-v2-full:5000';
+
+      const url = `${baseUrl}/table/v1/${vehicleType}/${coordString}?annotations=duration,distance`;
+
+      logger.info(`Fetching OSRM table matrix: ${coordinates.length} coordinates, vehicle=${vehicle}, mode=${mode}`);
+
+      const axios = await import('axios');
+      const response = await axios.default.get(url);
+
+      if (response.data.code !== 'Ok') {
+        throw createError(`OSRM table API error: ${response.data.code}`, 500);
+      }
+
+      return {
+        code: response.data.code || 'Ok',
+        durations: response.data.durations || [],
+        distances: response.data.distances || [],
+        sources: response.data.sources,
+        destinations: response.data.destinations,
+      };
+    } catch (error: any) {
+      logger.error(`Failed to fetch OSRM table matrix: ${error.message}`, error);
+      throw createError(`Failed to fetch OSRM table matrix: ${error.message}`, 500);
+    }
+  }
+
+  /**
+   * Solve VRP assignment problem
+   * Assigns orders to shippers with workload balancing and time constraints
+   */
+  public static async solveVRPAssignment(request: VRPAssignmentRequestDto): Promise<VRPAssignmentResponseDto> {
+    try {
+      logger.info(`Solving VRP assignment: ${request.shippers.length} shippers, ${request.orders.length} orders`);
+
+      const vehicle = request.vehicle || 'motorbike';
+      const mode = request.mode || 'v2-full';
+
+      const result = await VRPSolverService.solveVRP(
+        request.shippers,
+        request.orders,
+        vehicle,
+        mode
+      );
+
+      // Calculate statistics
+      const totalAssigned = Object.values(result.assignments)
+        .reduce((sum, tasks) => sum + tasks.length, 0);
+      const avgOrdersPerShipper = Object.keys(result.assignments).length > 0
+        ? totalAssigned / Object.keys(result.assignments).length
+        : 0;
+
+      // Calculate workload variance (for balancing metric)
+      const taskCounts = Object.values(result.assignments).map(tasks => tasks.length);
+      const mean = taskCounts.reduce((sum, count) => sum + count, 0) / taskCounts.length;
+      const variance = taskCounts.reduce((sum, count) => sum + Math.pow(count - mean, 2), 0) / taskCounts.length;
+
+      return {
+        assignments: result.assignments,
+        unassignedOrders: result.unassignedOrders,
+        statistics: {
+          totalShippers: request.shippers.length,
+          totalOrders: request.orders.length,
+          assignedOrders: totalAssigned,
+          averageOrdersPerShipper: avgOrdersPerShipper,
+          workloadVariance: taskCounts.length > 0 ? variance : 0
+        }
+      };
+    } catch (error: any) {
+      logger.error(`Failed to solve VRP assignment: ${error.message}`, error);
+      throw createError(`Failed to solve VRP assignment: ${error.message}`, 500);
     }
   }
 

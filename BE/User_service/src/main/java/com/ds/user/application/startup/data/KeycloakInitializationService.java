@@ -23,7 +23,7 @@ public class KeycloakInitializationService {
     private final ClientInitializationService clientInitializationService;
     private final UserInitializationService userInitializationService;
     private final UserAddressSeedService userAddressSeedService;
-    private final ParcelSeedService parcelSeedService;
+    private final WorkingShiftSeedService workingShiftSeedService;
 
     /**
      * Initialize all Keycloak data based on configuration
@@ -123,15 +123,16 @@ public class KeycloakInitializationService {
                 // Don't fail entire initialization if address seeding fails
             }
 
-            // Seed parcels (orders) for shops and clients
-            // Note: This is done after addresses are seeded to ensure addresses exist
+            // Seed working shifts for delivery men
+            // Note: This is done after users and delivery men are created
             try {
-                parcelSeedService.seedParcels();
+                workingShiftSeedService.seedShiftsForAllDeliveryMen(realmConfig);
             } catch (Exception e) {
-                log.error("Failed to seed parcels for realm '{}': {}",
+                log.error("Failed to seed working shifts for realm '{}': {}",
                         realmConfig.getName(), e.getMessage(), e);
-                // Don't fail entire initialization if parcel seeding fails
+                // Don't fail entire initialization if shift seeding fails
             }
+
 
         } catch (Exception e) {
             log.error("Failed to initialize realm '{}': {}", realmConfig.getName(), e.getMessage(), e);

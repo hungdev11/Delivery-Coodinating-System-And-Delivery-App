@@ -67,6 +67,48 @@ export class RouteRequestDto {
 }
 
 /**
+ * Table Matrix Request DTO
+ */
+export class TableMatrixRequestDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CoordinateDto)
+  coordinates!: CoordinateDto[];
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['car', 'motorbike'])
+  vehicle?: 'car' | 'motorbike' = 'motorbike';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['v2-full', 'v2-rating-only', 'v2-blocking-only', 'v2-base', 'v2-car-full', 'v2-car-rating-only', 'v2-car-blocking-only', 'v2-car-base'])
+  mode?: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base' | 'v2-car-full' | 'v2-car-rating-only' | 'v2-car-blocking-only' | 'v2-car-base' = 'v2-full';
+}
+
+/**
+ * Coordinate DTO
+ */
+export class CoordinateDto {
+  @IsNumber()
+  lat!: number;
+
+  @IsNumber()
+  lon!: number;
+}
+
+/**
+ * Table Matrix Response DTO
+ */
+export interface TableMatrixResponseDto {
+  code: string;
+  durations: number[][];
+  distances: number[][];
+  sources?: Array<{ hint: string; distance: number; name: string; location: [number, number] }>;
+  destinations?: Array<{ hint: string; distance: number; name: string; location: [number, number] }>;
+}
+
+/**
  * Maneuver DTO
  */
 export interface ManeuverDto {
@@ -215,5 +257,116 @@ export interface DemoRouteResponseDto {
     totalDuration: number;
     totalWaypoints: number;
     priorityCounts: Record<string, number>;
+  };
+}
+
+/**
+ * VRP Order (Parcel) DTO
+ */
+export class VRPOrderDto {
+  @IsString()
+  orderId!: string; // Parcel ID
+
+  @IsNumber()
+  lat!: number;
+
+  @IsNumber()
+  lon!: number;
+
+  @IsNumber()
+  serviceTime!: number; // Service time in seconds
+
+  @IsNumber()
+  priority!: number; // 0 = urgent (P0), higher = less urgent
+
+  @IsOptional()
+  @IsString()
+  zoneId?: string; // Zone ID for zone-based filtering
+
+  @IsOptional()
+  @IsString()
+  deliveryAddressId?: string; // All parcels with same deliveryAddressId should be in same assignment
+}
+
+/**
+ * VRP Shipper (DeliveryMan) DTO
+ */
+export class VRPShipperDto {
+  @IsString()
+  shipperId!: string; // DeliveryMan ID
+
+  @IsNumber()
+  lat!: number; // Start location latitude
+
+  @IsNumber()
+  lon!: number; // Start location longitude
+
+  @IsString()
+  shiftStart!: string; // Shift start time (ISO format or HH:mm:ss)
+
+  @IsNumber()
+  maxSessionTime!: number; // Maximum session time in hours (3.5 for morning, 4.5 for afternoon)
+
+  @IsNumber()
+  capacity!: number; // Vehicle capacity (number of parcels)
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  zoneIds?: string[]; // Working zone IDs (ordered by priority)
+
+  @IsOptional()
+  @IsString()
+  vehicle?: 'car' | 'motorbike'; // Vehicle type
+}
+
+/**
+ * VRP Assignment Request DTO
+ */
+export class VRPAssignmentRequestDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => VRPShipperDto)
+  shippers!: VRPShipperDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => VRPOrderDto)
+  orders!: VRPOrderDto[];
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['car', 'motorbike'])
+  vehicle?: 'car' | 'motorbike' = 'motorbike';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['v2-full', 'v2-rating-only', 'v2-blocking-only', 'v2-base', 'v2-car-full', 'v2-car-rating-only', 'v2-car-blocking-only', 'v2-car-base'])
+  mode?: 'v2-full' | 'v2-rating-only' | 'v2-blocking-only' | 'v2-base' | 'v2-car-full' | 'v2-car-rating-only' | 'v2-car-blocking-only' | 'v2-car-base' = 'v2-full';
+}
+
+/**
+ * VRP Task DTO (Assigned order in route)
+ */
+export interface VRPTaskDto {
+  orderId: string;
+  sequenceIndex: number; // 0 = first stop, 1 = second stop, etc.
+  estimatedArrivalTime: string; // ISO datetime format
+  travelTimeFromPreviousStop?: number; // in seconds
+}
+
+/**
+ * VRP Assignment Response DTO
+ * Map of shipperId -> List of Tasks
+ */
+export interface VRPAssignmentResponseDto {
+  assignments: Record<string, VRPTaskDto[]>; // Map<shipperId, List<Task>>
+  unassignedOrders: string[]; // Order IDs that could not be assigned
+  statistics?: {
+    totalShippers: number;
+    totalOrders: number;
+    assignedOrders: number;
+    averageOrdersPerShipper: number;
+    workloadVariance?: number; // Workload balancing metric
   };
 }

@@ -117,11 +117,11 @@ watch(
 const submitting = ref(false)
 
 const deliveryTypeOptions = [
-  { label: 'Economy', value: 'ECONOMY' },
-  { label: 'Normal', value: 'NORMAL' },
-  { label: 'Fast', value: 'FAST' },
-  { label: 'Express', value: 'EXPRESS' },
-  { label: 'Urgent', value: 'URGENT' },
+  { label: 'Tiết kiệm', value: 'ECONOMY' },
+  { label: 'Thường', value: 'NORMAL' },
+  { label: 'Nhanh', value: 'FAST' },
+  { label: 'Hỏa tốc', value: 'EXPRESS' },
+  { label: 'Khẩn cấp', value: 'URGENT' },
 ]
 
 const isEditMode = computed(() => props.mode === 'edit')
@@ -130,8 +130,8 @@ const handleSubmit = async () => {
   // Stage 1: Get or create destinations for sender and receiver
   if (!receiveFromAddress.value.lat || !receiveFromAddress.value.lon) {
     toast.add({
-      title: 'Error',
-      description: 'Please select sender address coordinates (Receive From)',
+      title: 'Lỗi',
+      description: 'Vui lòng chọn tọa độ địa chỉ người gửi (Nhận từ)',
       color: 'error',
     })
     return
@@ -139,8 +139,8 @@ const handleSubmit = async () => {
 
   if (!sendToAddress.value.lat || !sendToAddress.value.lon) {
     toast.add({
-      title: 'Error',
-      description: 'Please select receiver address coordinates (Send To)',
+      title: 'Lỗi',
+      description: 'Vui lòng chọn tọa độ địa chỉ người nhận (Gửi đến)',
       color: 'error',
     })
     return
@@ -158,8 +158,8 @@ const handleSubmit = async () => {
 
     if (!senderResponse.result?.id) {
       toast.add({
-        title: 'Error',
-        description: 'Failed to get or create sender destination',
+      title: 'Lỗi',
+      description: 'Không thể lấy hoặc tạo điểm đến người gửi',
         color: 'error',
       })
       return
@@ -175,8 +175,8 @@ const handleSubmit = async () => {
 
     if (!receiverResponse.result?.id) {
       toast.add({
-        title: 'Error',
-        description: 'Failed to get or create receiver destination',
+      title: 'Lỗi',
+      description: 'Không thể lấy hoặc tạo điểm đến người nhận',
         color: 'error',
       })
       return
@@ -192,7 +192,7 @@ const handleSubmit = async () => {
     console.error('Failed to get or create destinations:', error)
     const errorMessage = error instanceof Error ? error.message : 'Failed to process addresses'
     toast.add({
-      title: 'Error',
+      title: 'Lỗi',
       description: errorMessage,
       color: 'error',
     })
@@ -208,8 +208,8 @@ const handleCancel = () => {
 
 <template>
   <UModal
-    :title="isEditMode ? 'Edit Parcel' : 'Create Parcel'"
-    :description="isEditMode ? 'Update parcel information' : 'Create a new parcel'"
+    :title="isEditMode ? 'Chỉnh sửa đơn hàng' : 'Tạo đơn hàng'"
+    :description="isEditMode ? 'Cập nhật thông tin đơn hàng' : 'Tạo đơn hàng mới'"
     :close="{ onClick: handleCancel }"
     :ui="{ content: 'sm:max-w-md md:max-w-lg', footer: 'justify-end' }"
   >
@@ -289,10 +289,10 @@ const handleCancel = () => {
 
     <template #footer>
       <UButton :disabled="submitting" variant="outline" color="neutral" @click="handleCancel">
-        Cancel
+        Hủy
       </UButton>
       <UButton :loading="submitting" @click="handleSubmit">
-        {{ isEditMode ? 'Update' : 'Create' }}
+        {{ isEditMode ? 'Cập nhật' : 'Tạo' }}
       </UButton>
     </template>
   </UModal>

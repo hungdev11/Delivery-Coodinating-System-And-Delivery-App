@@ -31,7 +31,10 @@
     "osrm:status": "node scripts/osrm-manager.js status",
     "osrm:health": "node scripts/osrm-manager.js health",
     "clean": "rimraf dist",
-    "prebuild": "npm run clean && npm run prisma:generate"
+    "prebuild": "npm run clean && npm run prisma:generate",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
   },
   "keywords": [
     "microservice",
@@ -45,11 +48,13 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/node": "^22.10.5",
+    "@vitest/ui": "^4.0.16",
     "prisma": "^6.16.3",
     "rimraf": "^6.0.1",
     "tsc-alias": "^1.8.10",
     "tsx": "^4.19.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
   },
   "dependencies": {
     "@prisma/client": "^6.16.3",

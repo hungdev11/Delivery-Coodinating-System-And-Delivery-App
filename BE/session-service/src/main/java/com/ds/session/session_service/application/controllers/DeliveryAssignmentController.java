@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ds.session.session_service.app_context.models.DeliveryAssignment;
 import com.ds.session.session_service.common.entities.dto.common.BaseResponse;
 import com.ds.session.session_service.common.entities.dto.request.CompleteTaskRequest;
 import com.ds.session.session_service.common.entities.dto.request.PostponeAssignmentRequest;
@@ -138,15 +140,13 @@ public class DeliveryAssignmentController {
     /**
      * API shipper gọi khi GIAO HÀNG THẤT BẠI một task.
      */
-    @PostMapping("/drivers/{deliveryManId}/parcels/{parcelId}/fail")
+    @PostMapping("/{assignmentId}/fail")
     public ResponseEntity<BaseResponse<DeliveryAssignmentResponse>> failTask(
-            @PathVariable UUID deliveryManId,
-            @PathVariable UUID parcelId,
+            @PathVariable UUID assignmentId,
             @Valid @RequestBody TaskFailRequest request) {
-        log.debug("Shipper {} failing task for parcel {} (Reason: {})", deliveryManId, parcelId, request.getReason());
+        log.debug("Shipper failing task for assignment {} (Reason: {})", assignmentId, request.getReason());
         DeliveryAssignmentResponse response = assignmentService.deliveryFailed(
-                parcelId,
-                deliveryManId,
+                assignmentId,
                 request.getReason(),
                 request.getRouteInfo());
         return ResponseEntity.ok(BaseResponse.success(response));
@@ -155,14 +155,12 @@ public class DeliveryAssignmentController {
     /**
      * API shipper gọi khi khách từ chối một task.
      */
-    @PostMapping("/drivers/{deliveryManId}/parcels/{parcelId}/refuse")
+    @PostMapping("/{assignmentId}/refuse")
     public ResponseEntity<BaseResponse<DeliveryAssignmentResponse>> refuseTask(
-            @PathVariable UUID deliveryManId,
-            @PathVariable UUID parcelId) {
-        log.debug("Shipper {} flagging parcel {} as REFUSED and accept by both side", deliveryManId, parcelId);
+            @PathVariable UUID assignmentId) {
+        log.debug("Shipper flagging assignment {} as REFUSED and accept by both side", assignmentId);
         DeliveryAssignmentResponse response = assignmentService.rejectedByCustomer(
-                parcelId,
-                deliveryManId,
+                assignmentId,
                 "Khách từ chối nhận",
                 new RouteInfo());
         return ResponseEntity.ok(BaseResponse.success(response));
@@ -188,19 +186,17 @@ public class DeliveryAssignmentController {
      * API shipper gọi khi khách báo hoãn (loại thẳng khỏi danh sách đang giao nếu
      * shipper chấp nhận - k xử lý các case thời gian).
      */
-    @PostMapping("/drivers/{deliveryManId}/parcels/{parcelId}/postpone")
-    public ResponseEntity<BaseResponse<DeliveryAssignmentResponse>> postponeTask(
-            @PathVariable UUID deliveryManId,
-            @PathVariable UUID parcelId,
-            @RequestBody String addInfo) {
-        log.debug("Shipper {} flagging parcel {} as POSTPONE and accept by both side", deliveryManId, parcelId);
-        DeliveryAssignmentResponse response = assignmentService.postponeByCustomer(
-                parcelId,
-                deliveryManId,
-                "Khách yêu cầu hoãn với thời gian: " + addInfo,
-                new RouteInfo());
-        return ResponseEntity.ok(BaseResponse.success(response));
-    }
+//     @PostMapping("/drivers/{deliveryManId}/parcels/{parcelId}/postpone")
+//     public ResponseEntity<BaseResponse<DeliveryAssignmentResponse>> postponeTask(
+//             @PathVariable UUID assignmentId,
+//             @RequestBody String addInfo) {
+//         log.debug("Shipper flagging assignment {} as POSTPONE and accept by both side", assignmentId);
+//         DeliveryAssignmentResponse response = assignmentService.postponeByCustomer(
+//                 assignmentId,
+//                 "Khách yêu cầu hoãn với thời gian: " + addInfo,
+//                 new RouteInfo());
+//         return ResponseEntity.ok(BaseResponse.success(response));
+//     }
 
     @GetMapping("/current-shipper/parcels/{parcelId}")
     public ResponseEntity<BaseResponse<ShipperInfo>> getCurrentShipperInfoForParcel(@PathVariable String parcelId) {
@@ -280,4 +276,44 @@ public class DeliveryAssignmentController {
         );
         return ResponseEntity.ok(BaseResponse.success(response));
     }
+
+    /**
+     * Accept task by assignment ID (QR code scan)
+     * Status transition: PENDING -> ACCEPTED
+     * 
+     * POST /api/v1/assignments/{assignmentId}/accept
+     * 
+     * This endpoint is used when shipper scans QR code on assignment to confirm receiving the task.
+     * The assignment must be in PENDING status and belong to the shipper.
+     */
+    @PostMapping("/{assignmentId}/accept")
+    public ResponseEntity<BaseResponse<DeliveryAssignmentResponse>> acceptTaskByQR(
+            @PathVariable UUID assignmentId,
+            @RequestParam String deliveryManId) {
+        log.debug("Shipper {} accepting task {} via QR code scan", deliveryManId, assignmentId);
+        DeliveryAssignmentResponse response = assignmentService.acceptTask(UUID.fromString(deliveryManId), assignmentId);
+        return ResponseEntity.ok(BaseResponse.success(response));
+    }
+    
+    /**
+     * @deprecated Use POST /api/v1/assignments/{assignmentId}/accept instead
+     */
+    @Deprecated
+    @PatchMapping("/{assignmentId}/drivers/{deliveryManId}/accept")
+    public DeliveryAssignmentResponse acceptTask(@PathVariable UUID assignmentId, @PathVariable UUID deliveryManId) {
+        log.debug("Accepting task for assignment {} by delivery man {}", assignmentId, deliveryManId);
+        return assignmentService.acceptTask(deliveryManId, assignmentId);
+    }
+
+    @GetMapping("/drivers/{deliveryManId}/assigned-task")
+    public ResponseEntity<BaseResponse<PageResponse<DeliveryAssignmentResponse>>> getAssignedTask(
+        @PathVariable UUID deliveryManId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        log.debug("Getting assigned task for delivery man {}", deliveryManId);
+        return ResponseEntity.ok(BaseResponse.success(
+            assignmentService.getAssignedTaskForShipper(deliveryManId, page, size)
+        ));
+    }
+    
 }

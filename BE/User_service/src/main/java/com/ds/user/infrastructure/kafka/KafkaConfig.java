@@ -1,12 +1,10 @@
 package com.ds.user.infrastructure.kafka;
 
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
@@ -20,16 +18,12 @@ import java.util.Map;
 
 /**
  * Kafka configuration for User Service
- * Publishes user events (created, updated, deleted) for snapshot synchronization
  */
 @Configuration
 public class KafkaConfig {
 
     @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
     private String bootstrapServers;
-
-    // Topic names
-    public static final String TOPIC_USER_EVENTS = "user-events";
 
     /**
      * Producer configuration
@@ -74,17 +68,4 @@ public class KafkaConfig {
         return new KafkaTemplate<>(producerFactory());
     }
 
-    /**
-     * Topic creation bean
-     * Topic is created automatically if it doesn't exist
-     */
-    @Bean
-    public NewTopic userEventsTopic() {
-        return TopicBuilder.name(TOPIC_USER_EVENTS)
-                .partitions(3) // Partition by userId
-                .replicas(1)
-                .config("retention.ms", "604800000") // 7 days
-                .config("cleanup.policy", "delete")
-                .build();
-    }
 }

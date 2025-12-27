@@ -35,7 +35,7 @@ public interface UserAddressRepository extends JpaRepository<UserAddress, String
     /**
      * Set all addresses for a user as non-primary
      */
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE UserAddress ua SET ua.isPrimary = false WHERE ua.userId = :userId")
     void setAllNonPrimaryByUserId(@Param("userId") String userId);
     

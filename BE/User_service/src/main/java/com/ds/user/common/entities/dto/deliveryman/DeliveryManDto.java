@@ -27,4 +27,11 @@ public class DeliveryManDto {
     private String lastName;
     private String phone;
     private String status;
+    
+    // Session information (enriched from session-service)
+    private Boolean hasActiveSession;
+    private LocalDateTime lastSessionStartTime;
+    
+    // Zone information (primary zone from working zones - zone with order = 1)
+    private String zoneId;
 }

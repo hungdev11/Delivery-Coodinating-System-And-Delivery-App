@@ -1,13 +1,21 @@
 package com.ds.gateway.application.controllers.v1;
 
+import com.ds.gateway.annotations.AuthRequired;
 import com.ds.gateway.common.interfaces.ISessionServiceClient;
+import com.ds.gateway.infrastructure.http.ProxyHttpClient;
+import com.ds.gateway.infrastructure.logging.ProxyLogContext;
+import com.ds.gateway.infrastructure.logging.ProxyRequestLogger;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.util.List;
 import java.util.UUID;
@@ -20,6 +28,12 @@ import java.util.UUID;
 public class DeliveryAssignmentController {
 
     private final ISessionServiceClient assignmentClient;
+    
+    private final ProxyHttpClient proxyHttpClient;
+    private final ProxyRequestLogger proxyRequestLogger;
+
+    @Value("${services.session.base-url}")
+    private String sessionServiceUrl;
 
     @GetMapping("/session/delivery-man/{deliveryManId}/tasks/today")
     public ResponseEntity<?> getDailyTasks(
@@ -123,5 +137,38 @@ public class DeliveryAssignmentController {
     public ResponseEntity<?> getLatestAssignmentForParcel(@PathVariable String parcelId) {
         log.debug("[api-gateway] [DeliveryAssignmentController.getLatestAssignmentForParcel] GET /api/v1/assignments/parcels/{}/latest-assignment", parcelId);
         return assignmentClient.getLatestAssignmentForParcel(parcelId);
+    }
+
+    /**
+     * Accept task by assignment ID (QR code scan)
+     * POST /api/v1/assignments/{assignmentId}/accept?deliveryManId={deliveryManId}
+     * Status transition: PENDING -> ACCEPTED
+     */
+    @PostMapping("/{assignmentId}/accept")
+    @AuthRequired
+    public ResponseEntity<?> acceptTaskByQR(
+            @PathVariable UUID assignmentId,
+            @RequestParam String deliveryManId) {
+        log.debug("[api-gateway] [DeliveryAssignmentController.acceptTaskByQR] POST /api/v1/assignments/{}/accept?deliveryManId={} - Proxying to Session Service", assignmentId, deliveryManId);
+        return proxySession(HttpMethod.POST, "/api/v1/assignments/" + assignmentId + "/accept?deliveryManId=" + deliveryManId, null);
+    }
+
+    private ResponseEntity<Object> proxySession(HttpMethod method, String path, Object body) {
+        String url = sessionServiceUrl + path;
+        ProxyLogContext context = proxyRequestLogger.start(method, "session-service", url, body);
+        try {
+            ResponseEntity<Object> response = proxyHttpClient.exchange(method, url, body, Object.class);
+            proxyRequestLogger.success(context, response.getStatusCode().value());
+            return response;
+        } catch (ResourceAccessException e) {
+            proxyRequestLogger.failure(context, 502, e.getMessage(), e);
+            return ResponseEntity.status(502).body("{\"error\":\"Bad Gateway: Session Service unavailable\"}");
+        } catch (HttpStatusCodeException e) {
+            proxyRequestLogger.failure(context, e.getStatusCode().value(), e.getResponseBodyAsString(), e);
+            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        } catch (Exception e) {
+            proxyRequestLogger.failure(context, 500, e.getMessage(), e);
+            return ResponseEntity.status(500).body("{\"error\":\"Internal Server Error: " + e.getMessage() + "\"}");
+        }
     }
 }

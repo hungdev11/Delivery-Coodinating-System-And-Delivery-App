@@ -27,8 +27,8 @@ import TableFilters from '@/common/components/table/TableFilters.vue'
 import type { DeliveryManDto } from './model.type'
 
 const PageHeader = defineAsyncComponent(() => import('@/common/components/PageHeader.vue'))
-const ShipperSessionsModal = defineAsyncComponent(
-  () => import('./components/ShipperSessionsModal.vue'),
+const ShipperShiftManagementModal = defineAsyncComponent(
+  () => import('./components/ShipperShiftManagementModal.vue'),
 )
 
 const overlay = useOverlay()
@@ -190,7 +190,7 @@ const columns = [
         column,
         config: {
           variant: 'ghost',
-          label: 'Vehicle Type',
+          label: 'Loại xe',
           class: '-mx-2.5',
           filterable: true,
         },
@@ -203,7 +203,7 @@ const columns = [
         column,
         config: {
           variant: 'ghost',
-          label: 'Capacity (kg)',
+          label: 'Tải trọng (kg)',
           class: '-mx-2.5',
           filterable: true,
         },
@@ -211,15 +211,15 @@ const columns = [
   },
   {
     accessorKey: 'status',
-    header: 'Status',
+    header: 'Trạng thái',
   },
   {
     accessorKey: 'createdAt',
-    header: 'Created At',
+    header: 'Ngày tạo',
   },
   {
     accessorKey: 'actions',
-    header: 'Actions',
+    header: 'Thao tác',
     cell: ({ row }: { row: { original: DeliveryManDto } }) => {
       const shipper = row.original
       return h('div', { class: 'flex gap-2' }, [
@@ -227,8 +227,8 @@ const columns = [
           icon: 'i-heroicons-arrow-path',
           size: 'sm',
           variant: 'ghost',
-          title: 'View sessions',
-          onClick: () => openSessionsModal(shipper),
+          title: 'Quản lý ca làm việc',
+          onClick: () => openShiftManagementModal(shipper),
         }),
       ])
     },
@@ -260,8 +260,8 @@ const formatDate = (value?: string) => {
   }).format(new Date(value))
 }
 
-const openSessionsModal = (shipper: DeliveryManDto) => {
-  const modal = overlay.create(ShipperSessionsModal)
+const openShiftManagementModal = (shipper: DeliveryManDto) => {
+  const modal = overlay.create(ShipperShiftManagementModal)
   modal.open({ shipper })
 }
 
@@ -284,10 +284,10 @@ const handleClearSorting = () => {
 const getColumnLabel = (columnId: string): string => {
   const labelMap: Record<string, string> = {
     displayName: 'Shipper',
-    vehicleType: 'Vehicle Type',
-    capacityKg: 'Capacity',
-    status: 'Status',
-    createdAt: 'Created At',
+    vehicleType: 'Loại xe',
+    capacityKg: 'Tải trọng',
+    status: 'Trạng thái',
+    createdAt: 'Ngày tạo',
   }
   return labelMap[columnId] || columnId
 }
@@ -352,8 +352,30 @@ onMounted(async () => {
 
 <template>
   <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
-    <PageHeader title="Delivery" description="Manage shippers and their delivery sessions">
+    <PageHeader title="Giao hàng" description="Quản lý Shipper và các phiên giao hàng của họ">
       <template #actions>
+        <UButton
+          variant="soft"
+          color="primary"
+          icon="i-heroicons-clipboard-document-list"
+          size="sm"
+          class="md:size-md"
+          @click="router.push({ name: 'delivery-tasks' })"
+        >
+          <span class="hidden sm:inline">Quản lý nhiệm vụ</span>
+          <span class="sm:hidden">Nhiệm vụ</span>
+        </UButton>
+        <UButton
+          variant="soft"
+          color="primary"
+          icon="i-heroicons-calendar-days"
+          size="sm"
+          class="md:size-md"
+          @click="router.push({ name: 'delivery-shift-calendar' })"
+        >
+          <span class="hidden sm:inline">Lịch ca làm việc</span>
+          <span class="sm:hidden">Lịch</span>
+        </UButton>
         <UButton
           variant="soft"
           color="primary"
@@ -362,8 +384,8 @@ onMounted(async () => {
           class="md:size-md"
           @click="router.push('/zones/map/demo-routing')"
         >
-          <span class="hidden sm:inline">Demo Routing</span>
-          <span class="sm:hidden">Routing</span>
+          <span class="hidden sm:inline">Demo tuyến đường</span>
+          <span class="sm:hidden">Tuyến đường</span>
         </UButton>
       </template>
     </PageHeader>
@@ -371,7 +393,7 @@ onMounted(async () => {
     <!-- Table Filters (includes Search + Filters + Sort) -->
     <TableFilters
       :search-value="searchValue"
-      search-placeholder="Search shippers..."
+      search-placeholder="Tìm kiếm Shipper..."
       :active-filters="getAllActiveFilters()"
       :filter-structure="getFilterStructure()"
       :sorting="sorting"
@@ -401,9 +423,31 @@ onMounted(async () => {
         }"
       >
         <template #cell(displayName)="{ row }">
-          <div class="flex flex-col">
-            <span class="font-medium">{{ row.original.displayName }}</span>
-            <span class="text-xs text-gray-500">{{ row.original.email || 'No email' }}</span>
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center gap-2">
+              <span class="font-medium">{{ row.original.displayName }}</span>
+              <UBadge
+                v-if="row.original.hasActiveSession"
+                variant="solid"
+                color="success"
+                class="text-xs"
+              >
+                ACTIVE
+              </UBadge>
+            </div>
+            <span v-if="row.original.email" class="text-xs text-gray-500">{{ row.original.email }}</span>
+            <span
+              v-if="row.original.lastSessionStartTime"
+              class="text-xs text-gray-400"
+            >
+              Phiên cuối:
+              {{
+                new Intl.DateTimeFormat('en-GB', {
+                  dateStyle: 'short',
+                  timeStyle: 'short',
+                }).format(new Date(row.original.lastSessionStartTime))
+              }}
+            </span>
           </div>
         </template>
 
@@ -444,10 +488,10 @@ onMounted(async () => {
             <UIcon name="i-heroicons-truck" class="h-12 w-12" />
           </div>
           <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-            No shippers found
+            Không tìm thấy Shipper
           </h3>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Try adjusting your search or filter criteria.
+            Thử điều chỉnh tiêu chí tìm kiếm hoặc lọc của bạn.
           </p>
         </div>
       </template>
@@ -458,8 +502,8 @@ onMounted(async () => {
       class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4"
     >
       <div class="text-sm text-gray-700 dark:text-gray-300 text-center sm:text-left">
-        Showing {{ page * pageSize + 1 }} to {{ Math.min((page + 1) * pageSize, total) }} of
-        {{ total }} results
+        Hiển thị {{ page * pageSize + 1 }} đến {{ Math.min((page + 1) * pageSize, total) }} trong tổng số
+        {{ total }} kết quả
       </div>
       <UPagination
         :model-value="page + 1"

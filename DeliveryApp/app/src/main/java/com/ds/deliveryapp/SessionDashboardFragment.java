@@ -122,7 +122,7 @@ public class SessionDashboardFragment extends Fragment {
                         // Navigate to TaskFragment to show the session
                         if (getActivity() instanceof MainActivity) {
                             MainActivity mainActivity = (MainActivity) getActivity();
-                            mainActivity.navigateToTasks();
+                            //mainActivity.navigateToTasks();
                         }
                     } else {
                         String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể tạo phiên";

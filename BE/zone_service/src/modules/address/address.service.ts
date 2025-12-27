@@ -30,6 +30,119 @@ export class AddressService {
   constructor(private prisma: PrismaClient) {}
 
   /**
+   * Check if a point (lat, lon) is inside a polygon ring
+   * Uses ray-casting algorithm (point-in-polygon)
+   */
+  private isPointInPolygonRing(point: { lat: number; lon: number }, ring: number[][]): boolean {
+    const x = point.lon
+    const y = point.lat
+    let inside = false
+
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const ringI = ring[i]
+      const ringJ = ring[j]
+      if (!ringI || !ringJ || ringI.length < 2 || ringJ.length < 2) continue
+
+      const xi = ringI[0]
+      const yi = ringI[1]
+      const xj = ringJ[0]
+      const yj = ringJ[1]
+
+      if (xi === undefined || yi === undefined || xj === undefined || yj === undefined) continue
+
+      const denom = (yj - yi)
+      if (Math.abs(denom) < Number.EPSILON) continue // Skip if denominator is too small
+
+      const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / denom + xi)
+      if (intersect) inside = !inside
+    }
+
+    return inside
+  }
+
+  /**
+   * Check if a point is inside a GeoJSON polygon
+   */
+  private isPointInGeoJSONPolygon(point: { lat: number; lon: number }, polygon: any): boolean {
+    if (!polygon || polygon.type !== 'Polygon' || !polygon.coordinates || !polygon.coordinates[0]) {
+      return false
+    }
+
+    // For Polygon, first ring is exterior, others are holes
+    const exteriorRing = polygon.coordinates[0]
+    if (!exteriorRing || exteriorRing.length < 3) {
+      return false
+    }
+
+    // Check if point is in exterior ring
+    const inExterior = this.isPointInPolygonRing(point, exteriorRing)
+    if (!inExterior) {
+      return false
+    }
+
+    // Check if point is in any hole (if so, it's not in the polygon)
+    if (polygon.coordinates.length > 1) {
+      for (let i = 1; i < polygon.coordinates.length; i++) {
+        const hole = polygon.coordinates[i]
+        if (hole && hole.length >= 3 && this.isPointInPolygonRing(point, hole)) {
+          return false // Point is in a hole
+        }
+      }
+    }
+
+    return true
+  }
+
+  /**
+   * Find zone containing a point (lat, lon) using point-in-polygon algorithm
+   * Returns zone_id or null if no zone contains the point
+   */
+  private async findZoneContainingPoint(lat: number, lon: number): Promise<string | null> {
+    try {
+      // Load all zones with polygons (may be slow if many zones, but necessary for point-in-polygon check)
+      // Filter out zones with null polygon after fetching (Prisma JSON filter limitation)
+      const allZones = await this.prisma.zones.findMany({
+        select: {
+          zone_id: true,
+          polygon: true
+        }
+      })
+      
+      const zones = allZones.filter(zone => zone.polygon != null)
+
+      const point = { lat, lon }
+
+      // Check each zone to see if point is inside its polygon
+      for (const zone of zones) {
+        if (zone.polygon && typeof zone.polygon === 'object' && 'type' in zone.polygon) {
+          const polygon = zone.polygon as { type: string; coordinates?: any }
+          
+          // Handle both Polygon and MultiPolygon types
+          if (polygon.type === 'Polygon') {
+            if (this.isPointInGeoJSONPolygon(point, polygon as any)) {
+              return zone.zone_id
+            }
+          } else if (polygon.type === 'MultiPolygon' && polygon.coordinates && Array.isArray(polygon.coordinates)) {
+            // For MultiPolygon, check if point is in any of the polygons
+            for (const polygonCoords of polygon.coordinates) {
+              const subPolygon = { type: 'Polygon', coordinates: polygonCoords }
+              if (this.isPointInGeoJSONPolygon(point, subPolygon)) {
+                return zone.zone_id
+              }
+            }
+          }
+        }
+      }
+
+      return null
+    } catch (error: any) {
+      // If error occurs, return null but don't fail address creation
+      console.error('[AddressService.findZoneContainingPoint] Error finding zone:', error.message)
+      return null
+    }
+  }
+
+  /**
    * Create a new address
    * - Auto-calculates geohash
    * - Auto-finds nearest road segment if not provided
@@ -48,7 +161,11 @@ export class AddressService {
       },
       include: {
         road_segment: true,
-        zones: true
+        zones: {
+          include: {
+            centers: true
+          }
+        }
       }
     })
 
@@ -59,6 +176,13 @@ export class AddressService {
 
     // Calculate geohash for fast proximity searches (precision 7 = ~76m)
     const addressGeohash = geohash.encode(dto.lat, dto.lon, 7)
+
+    // Find zone if not provided - automatically find zone containing the point
+    let zoneId = dto.zoneId
+    if (!zoneId) {
+      const foundZoneId = await this.findZoneContainingPoint(dto.lat, dto.lon)
+      zoneId = foundZoneId || undefined
+    }
 
     // Find nearest segment if not provided
     let segmentId = dto.segmentId
@@ -128,7 +252,7 @@ export class AddressService {
           distance_to_segment: distanceToSegment || null,
           projected_lat: projectedLat || null,
           projected_lon: projectedLon || null,
-          zone_id: dto.zoneId || null,
+          zone_id: zoneId || null,
           ward_name: enrichedWard || dto.wardName || null,
           district_name: enrichedDistrict || dto.districtName || null,
           address_type: dto.addressType || 'GENERAL'
@@ -292,6 +416,16 @@ export class AddressService {
     let projectedLat = existing.projected_lat
     let projectedLon = existing.projected_lon
 
+    // Find zone if location changed and zoneId not explicitly provided
+    let zoneId = dto.zoneId !== undefined ? dto.zoneId : existing.zone_id
+    if (locationChanged && dto.zoneId === undefined) {
+      // Auto-find zone for new location
+      const foundZoneId = await this.findZoneContainingPoint(newLat, newLon)
+      if (foundZoneId) {
+        zoneId = foundZoneId
+      }
+    }
+
     if (locationChanged) {
       // Recalculate geohash
       addressGeohash = geohash.encode(newLat, newLon, 7)
@@ -345,7 +479,7 @@ export class AddressService {
           distance_to_segment: distanceToSegment,
           projected_lat: projectedLat,
           projected_lon: projectedLon,
-          zone_id: dto.zoneId !== undefined ? dto.zoneId : existing.zone_id,
+          zone_id: zoneId,
           ward_name: dto.wardName !== undefined ? dto.wardName : existing.ward_name,
           district_name: dto.districtName !== undefined ? dto.districtName : existing.district_name,
           address_type: dto.addressType !== undefined ? dto.addressType : existing.address_type,
@@ -361,6 +495,7 @@ export class AddressService {
       if (dto.addressText !== undefined) updateData.address_text = dto.addressText
       if (segmentId !== undefined) updateData.segment_id = segmentId
       if (dto.zoneId !== undefined) updateData.zone_id = dto.zoneId
+      else if (locationChanged && zoneId) updateData.zone_id = zoneId // Update zone_id if location changed and zone was auto-found
       if (dto.wardName !== undefined) updateData.ward_name = dto.wardName
       if (dto.districtName !== undefined) updateData.district_name = dto.districtName
       if (dto.addressType !== undefined) updateData.address_type = dto.addressType
@@ -375,7 +510,11 @@ export class AddressService {
       where: { address_id: id },
       include: {
         road_segment: true,
-        zones: true
+        zones: {
+          include: {
+            centers: true
+          }
+        }
       }
     })
 
@@ -420,7 +559,11 @@ export class AddressService {
       where,
       include: {
         road_segment: true,
-        zones: true
+        zones: {
+          include: {
+            centers: true
+          }
+        }
       }
     })
 
@@ -484,7 +627,11 @@ export class AddressService {
       },
       include: {
         road_segment: true,
-        zones: true
+        zones: {
+          include: {
+            centers: true
+          }
+        }
       }
     })
 
@@ -601,7 +748,14 @@ export class AddressService {
       },
       take: limit,
       orderBy: { updated_at: 'desc' },
-      include: { road_segment: true, zones: true },
+      include: { 
+        road_segment: true, 
+        zones: {
+          include: {
+            centers: true
+          }
+        }
+      },
     })
 
     const local = localMatches.map(a => this.toDto(a))
@@ -628,7 +782,11 @@ export class AddressService {
       where: { address_id: id },
       include: {
         road_segment: true,
-        zones: true
+        zones: {
+          include: {
+            centers: true
+          }
+        }
       }
     })
 
@@ -764,6 +922,57 @@ export class AddressService {
   }
 
   /**
+   * [TROUBLESHOOTING ONLY] Fix addresses without zone_id by finding zones from coordinates
+   * This endpoint should only be used for one-time data migration/repair
+   */
+  async fixAddressesWithoutZone(): Promise<{ fixed: number; total: number; errors: Array<{ addressId: string; error: string }> }> {
+    const result = {
+      fixed: 0,
+      total: 0,
+      errors: [] as Array<{ addressId: string; error: string }>
+    }
+
+    try {
+      // Find all addresses without zone_id
+      const addresses = await this.prisma.addresses.findMany({
+        where: {
+          zone_id: null
+        },
+        select: {
+          address_id: true,
+          lat: true,
+          lon: true
+        }
+      })
+
+      result.total = addresses.length
+
+      // Process each address
+      for (const address of addresses) {
+        try {
+          const zoneId = await this.findZoneContainingPoint(address.lat, address.lon)
+          if (zoneId) {
+            await this.prisma.addresses.update({
+              where: { address_id: address.address_id },
+              data: { zone_id: zoneId }
+            })
+            result.fixed++
+          }
+        } catch (error: any) {
+          result.errors.push({
+            addressId: address.address_id,
+            error: error.message || 'Unknown error'
+          })
+        }
+      }
+
+      return result
+    } catch (error: any) {
+      throw new Error(`Failed to fix addresses without zone: ${error.message}`)
+    }
+  }
+
+  /**
    * Convert database model to DTO
    */
   private toDto(address: any): AddressDto {
@@ -782,6 +991,22 @@ export class AddressService {
       distanceToSegment: address.distance_to_segment,
       projectedLat: address.projected_lat,
       projectedLon: address.projected_lon,
+      // Nested zone object
+      zone: address.zones ? {
+        id: address.zones.zone_id,
+        code: address.zones.code,
+        name: address.zones.name,
+        center: address.zones.centers ? {
+          id: address.zones.center_id,
+          code: address.zones.centers.code || '',
+          name: address.zones.centers.name || '',
+          address: address.zones.centers.address,
+          lat: address.zones.centers.lat,
+          lon: address.zones.centers.lon,
+          polygon: address.zones.centers.polygon,
+        } : null,
+      } : null,
+      // Legacy fields for backward compatibility
       zoneId: address.zone_id,
       zoneName: address.zones?.name,
       wardName: address.ward_name,

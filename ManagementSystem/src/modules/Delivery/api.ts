@@ -5,7 +5,9 @@
  */
 
 import { AxiosHttpClient } from '@/common/utils/axios'
-import type { QueryPayload } from '@/common/types/filter'
+import type { QueryPayload, FilterGroup } from '@/common/types/filter'
+import type { FilterGroupItemV2 } from '@/common/types/filter-v2'
+import { convertV1ToV2Filter } from '@/common/utils/filter-v2-converter'
 import type { DemoRouteResponse } from '@/modules/Zones/routing.type'
 import type {
   GetDeliveryManResponse,
@@ -15,10 +17,15 @@ import type {
   UpdateDeliveryManRequest,
   UpdateDeliveryManResponse,
   GetDeliverySessionsResponse,
-  GetDeliverySessionDetailResponse,
   UpdateAssignmentStatusRequestPayload,
   DeliveryAssignmentTaskResponse,
   DeliverySessionDto,
+  ManualAssignmentRequest,
+  ManualAssignmentResponse,
+  AutoAssignmentRequest,
+  AutoAssignmentResponse,
+  CreateSessionRequest,
+  SessionResponse,
 } from './model.type'
 import type { IApiResponse } from '@/common/types'
 
@@ -74,11 +81,26 @@ export const deleteDeliveryMan = async (id: string) => {
 /**
  * Get delivery sessions with V2 enhanced filtering (Admin/Shipper)
  * Uses v2 endpoint for search functionality
+ * Automatically converts V1 filter format to V2 format if needed
  */
 export const getDeliverySessions = async (
   params: QueryPayload,
 ): Promise<GetDeliverySessionsResponse> => {
-  return apiClient.post<GetDeliverySessionsResponse, QueryPayload>('/v2/delivery-sessions', params)
+  // Convert V1 filter format to V2 if needed (V2 endpoint requires V2 format)
+  let v2Params: QueryPayload = { ...params }
+  if (params.filters) {
+    // Check if it's V1 format (has 'logic' and 'conditions' properties, but no 'type' property)
+    const isV1Format = 'logic' in params.filters && 'conditions' in params.filters && !('type' in params.filters)
+    if (isV1Format) {
+      // Convert V1 FilterGroup to V2 FilterGroupItemV2
+      v2Params = {
+        ...params,
+        filters: convertV1ToV2Filter(params.filters as FilterGroup),
+      }
+    }
+    // If it's already V2 format (has 'type' property), use it as is
+  }
+  return apiClient.post<GetDeliverySessionsResponse, QueryPayload>('/v2/delivery-sessions', v2Params)
 }
 
 /**
@@ -244,7 +266,7 @@ export const getAssignmentHistoryForDeliveryMan = async (
 export const getActiveSessionForDeliveryMan = async (
   deliveryManId: string,
 ): Promise<IApiResponse<DeliverySessionDto>> => {
-  return apiClient.get<GetDeliverySessionDetailResponse>(
+  return apiClient.get<IApiResponse<DeliverySessionDto>>(
     `/v1/sessions/drivers/${deliveryManId}/active`,
   )
 }
@@ -310,5 +332,62 @@ export const getProofsByParcel = async (
 ): Promise<{ result: DeliveryProofDto[] }> => {
   return apiClient.get<{ result: DeliveryProofDto[] }>(
     `/v1/delivery-proofs/parcels/${parcelId}`,
+  )
+}
+
+/**
+ * =============================
+ * Admin Assignment & Session Endpoints
+ * =============================
+ */
+
+/**
+ * Create session prepared (CREATED status) for a delivery man
+ * Must be called before creating assignments
+ */
+export const createSessionPrepared = async (
+  deliveryManId: string,
+): Promise<IApiResponse<DeliverySessionDto>> => {
+  return apiClient.post<IApiResponse<DeliverySessionDto>, undefined>(
+    `/v1/admin/sessions/prepared/${deliveryManId}`,
+    undefined,
+  )
+}
+
+/**
+ * Create a manual assignment for a shipper
+ * IMPORTANT: Session must be created first (status CREATED) before calling this
+ */
+export const createManualAssignment = async (
+  data: ManualAssignmentRequest,
+): Promise<IApiResponse<ManualAssignmentResponse>> => {
+  return apiClient.post<IApiResponse<ManualAssignmentResponse>, ManualAssignmentRequest>(
+    '/v1/admin/assignments/manual',
+    data,
+  )
+}
+
+/**
+ * Create auto assignment using VRP solver
+ * IMPORTANT: Sessions must be created first (status CREATED) for each shipper before calling this
+ */
+export const createAutoAssignment = async (
+  data: AutoAssignmentRequest,
+): Promise<IApiResponse<AutoAssignmentResponse>> => {
+  return apiClient.post<IApiResponse<AutoAssignmentResponse>, AutoAssignmentRequest>(
+    '/v1/admin/assignments/auto',
+    data,
+  )
+}
+
+/**
+ * Create session with assignments (admin workflow)
+ */
+export const createSessionWithAssignments = async (
+  data: CreateSessionRequest,
+): Promise<IApiResponse<DeliverySessionDto>> => {
+  return apiClient.post<IApiResponse<DeliverySessionDto>, CreateSessionRequest>(
+    '/v1/admin/sessions',
+    data,
   )
 }

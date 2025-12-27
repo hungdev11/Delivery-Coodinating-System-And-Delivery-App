@@ -42,6 +42,36 @@ public interface IParcelService {
     PagedData<ParcelResponse> getParcelsForReceiver(String receiverId, PagingRequestV2 request);
     
     Map<String, ParcelResponse> fetchParcelsBulk(List<UUID> parcelIds);
+    
+    /**
+     * Bulk query: Get parcels by list of IDs (returns list instead of map)
+     */
+    List<ParcelResponse> getParcelsByIds(List<UUID> parcelIds);
+    
+    /**
+     * Bulk query: Get parcels by list of sender IDs
+     */
+    List<ParcelResponse> getParcelsBySenderIds(List<String> senderIds);
+    
+    /**
+     * Bulk query: Get parcels by list of receiver IDs
+     */
+    List<ParcelResponse> getParcelsByReceiverIds(List<String> receiverIds);
+    
+    /**
+     * Bulk query with paging: Get parcels by list of IDs (with pagination and join support)
+     */
+    PageResponse<ParcelResponse> getParcelsByIdsPaged(List<UUID> parcelIds, int page, int size, String sortBy, String direction);
+    
+    /**
+     * Bulk query with paging: Get parcels by list of sender IDs (with pagination and join support)
+     */
+    PageResponse<ParcelResponse> getParcelsBySenderIdsPaged(List<String> senderIds, int page, int size, String sortBy, String direction);
+    
+    /**
+     * Bulk query with paging: Get parcels by list of receiver IDs (with pagination and join support)
+     */
+    PageResponse<ParcelResponse> getParcelsByReceiverIdsPaged(List<String> receiverIds, int page, int size, String sortBy, String direction);
 
     ParcelResponse confirmParcelByClient(UUID parcelId, String userId, ParcelConfirmRequest request);
 

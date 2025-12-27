@@ -523,6 +523,18 @@ const handleUpdateNotification = (updateNotification: UpdateNotification) => {
     // Refresh session assignments to reflect parcel status changes
     loadActiveSessionAndAssignments()
   }
+
+  // Handle TICKET_UPDATE: log ticket notifications (tickets are related to assignments)
+  if (entityType === 'ASSIGNMENT' && updateNotification.data && (updateNotification.data as any).ticketId) {
+    const ticketData = updateNotification.data as any
+    console.log('🎫 Ticket update notification received:', {
+      ticketId: ticketData.ticketId,
+      ticketType: ticketData.ticketType,
+      ticketStatus: ticketData.ticketStatus,
+      action,
+    })
+    // Tickets are related to assignments, so proposals will be updated via WebSocket proposal-updates
+  }
 }
 
 /**

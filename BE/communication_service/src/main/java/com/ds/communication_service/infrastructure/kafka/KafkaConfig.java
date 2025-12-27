@@ -76,6 +76,11 @@ public class KafkaConfig {
      */
     public static final String TOPIC_AUDIT_EVENTS = "audit-events";
     public static final String TOPIC_AUDIT_EVENTS_DLQ = "audit-events-dlq"; // Dead Letter Queue
+    /**
+     * Topic for parcel seed progress events
+     * Published by parcel-service, consumed by communication-service and broadcast via WebSocket
+     */
+    public static final String TOPIC_SEED_PROGRESS = "seed-progress-events";
 
     /**
      * Producer configuration
@@ -138,7 +143,8 @@ public class KafkaConfig {
         jsonDeserializer.setRemoveTypeHeaders(true);
         jsonDeserializer.addTrustedPackages("com.ds.communication_service.common.dto", 
                 "com.ds.communication_service.infrastructure.kafka.dto",
-                "com.ds.session.session_service.common.entities.dto.event");
+                "com.ds.session.session_service.common.entities.dto.event",
+                "com.ds.parcel_service.infrastructure.kafka.dto");
         
         // Wrap with ErrorHandlingDeserializer
         ErrorHandlingDeserializer<Object> errorHandlingDeserializer = 
@@ -273,6 +279,16 @@ public class KafkaConfig {
                 .partitions(3) // Partition by sessionId for ordering
                 .replicas(1)
                 .config("retention.ms", "259200000") // 3 days
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+    
+    @Bean
+    public NewTopic seedProgressTopic() {
+        return TopicBuilder.name(TOPIC_SEED_PROGRESS)
+                .partitions(3) // Partition by sessionKey for ordering
+                .replicas(1)
+                .config("retention.ms", "3600000") // 1 hour (short retention for progress events)
                 .config("cleanup.policy", "delete")
                 .build();
     }

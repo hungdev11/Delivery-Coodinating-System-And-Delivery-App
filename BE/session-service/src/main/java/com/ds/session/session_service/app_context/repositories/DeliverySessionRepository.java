@@ -7,6 +7,8 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.ds.session.session_service.app_context.models.DeliverySession;
@@ -38,4 +40,25 @@ public interface DeliverySessionRepository extends JpaRepository<DeliverySession
             SessionStatus status,
             LocalDateTime startTime,
             LocalDateTime endTime);
+    
+    /**
+     * Bulk query: Find sessions by list of IDs
+     */
+    List<DeliverySession> findByIdIn(List<UUID> ids);
+    
+    /**
+     * Bulk query: Find sessions by list of delivery man IDs
+     */
+    List<DeliverySession> findByDeliveryManIdIn(List<String> deliveryManIds);
+    
+    /**
+     * Find the last session (most recent startTime) for a delivery man
+     */
+    Optional<DeliverySession> findFirstByDeliveryManIdOrderByStartTimeDesc(String deliveryManId);
+    
+    /**
+     * Find active session (CREATED or IN_PROGRESS) for a delivery man
+     */
+    @Query("SELECT s FROM DeliverySession s WHERE s.deliveryManId = :deliveryManId AND s.status IN ('CREATED', 'IN_PROGRESS') ORDER BY s.startTime DESC")
+    Optional<DeliverySession> findActiveSessionByDeliveryManId(@Param("deliveryManId") String deliveryManId);
 }

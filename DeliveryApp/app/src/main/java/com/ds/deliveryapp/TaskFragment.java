@@ -29,6 +29,7 @@ import com.google.android.material.snackbar.Snackbar;
 import com.ds.deliveryapp.ReturnToWarehouseActivity;
 import com.ds.deliveryapp.adapter.TasksAdapter;
 import com.ds.deliveryapp.clients.SessionClient;
+import com.ds.deliveryapp.clients.req.AssignmentList;
 import com.ds.deliveryapp.clients.req.SessionFailRequest;
 import com.ds.deliveryapp.clients.res.BaseResponse;
 import com.ds.deliveryapp.clients.res.DeliverySession;
@@ -43,7 +44,6 @@ import com.ds.deliveryapp.utils.SessionManager;
 import com.google.gson.Gson;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -123,9 +123,10 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
         swipeRefreshLayout.setOnRefreshListener(() -> {
             // Pull-to-refresh: reset and fetch tasks
-            resetAndFetchTasks();
+            // Khi refresh thì kiểm tra lại từ đầu (Active Session -> Assigned Tasks)
+            checkActiveSession();
         });
-        
+
         rvTasks = view.findViewById(R.id.recyclerOrders);
         layoutManager = new LinearLayoutManager(getContext());
         rvTasks.setLayoutManager(layoutManager);
@@ -161,16 +162,11 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         setupSessionMenu();
 
         setupPaginationScrollListener();
-        
-        // Check for existing session first, show dashboard if none
-        checkAndShowDashboardOrTasks();
+
+        // Check for existing session first
+        checkActiveSession();
 
         return view;
-    }
-
-    private void checkAndShowDashboardOrTasks() {
-        // First check if there's an active session
-        checkActiveSession();
     }
 
     private boolean hasUnfinishedTasks() {
@@ -192,10 +188,11 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private void checkActiveSession() {
         SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
         Call<BaseResponse<DeliverySession>> call = service.getActiveSession(driverId);
-        
+
         call.enqueue(new Callback<BaseResponse<DeliverySession>>() {
             @Override
             public void onResponse(Call<BaseResponse<DeliverySession>> call, Response<BaseResponse<DeliverySession>> response) {
+                swipeRefreshLayout.setRefreshing(false);
                 if (response.isSuccessful() && response.body() != null) {
                     BaseResponse<DeliverySession> baseResponse = response.body();
                     // Check if result exists (active session found)
@@ -204,47 +201,117 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                         DeliverySession session = baseResponse.getResult();
                         activeSessionId = session.getId() != null ? session.getId().toString() : null;
                         activeSessionStatus = session.getStatus() != null ? session.getStatus() : "UNKNOWN";
-                        
-                        // If session is COMPLETED or FAILED, navigate to dashboard
+
+                        // If session is COMPLETED or FAILED, treat as no active session
                         if ("COMPLETED".equals(activeSessionStatus) || "FAILED".equals(activeSessionStatus)) {
-                            Log.d(TAG, "Session is " + activeSessionStatus + ", navigating to dashboard");
-                            activeSessionId = null;
-                            activeSessionStatus = null;
-                            navigateToDashboard();
+                            Log.d(TAG, "Session is " + activeSessionStatus + ", checking assigned tasks");
+                            activeSessionId = null; // Clear ID to prevent fetchSessionTasks using old ID
+                            getAssignedTask();
                             return;
                         }
-                        
+
                         Log.d(TAG, "Active session found: " + activeSessionId + ", Status: " + activeSessionStatus);
                         resetAndFetchTasks();
                     } else {
-                        // No active session (result is null, message indicates no session)
-                        Log.d(TAG, "No active session found: " + baseResponse.getMessage());
-                        navigateToDashboard();
+                        // No active session -> Fetch assigned tasks instead of showing empty state immediately
+                        Log.d(TAG, "No active session found: " + baseResponse.getMessage() + ". Fetching assigned tasks.");
+                        getAssignedTask();
                     }
                 } else {
-                    // Error - navigate to dashboard
+                    // Error -> Try to fetch assigned tasks anyway (fallback)
                     Log.w(TAG, "Error checking active session: " + response.code());
-                    navigateToDashboard();
+                    getAssignedTask();
                 }
             }
 
             @Override
             public void onFailure(Call<BaseResponse<DeliverySession>> call, Throwable t) {
                 Log.e(TAG, "Network error checking active session: " + t.getMessage());
-                // On error, navigate to dashboard
-                navigateToDashboard();
+                swipeRefreshLayout.setRefreshing(false);
+                // If network fails, maybe we can't fetch assigned tasks either, but let's try or show error
+                getAssignedTask();
             }
         });
     }
-    
+
+    private void getAssignedTask() {
+        // Reset state for assigned tasks view
+        activeSessionId = null;
+        activeSessionStatus = null;
+        tasks.clear();
+        adapter.setShowSkeleton(true); // Show skeleton while loading assigned tasks
+        if (tvEmptyState != null) tvEmptyState.setVisibility(View.GONE);
+
+        SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
+        Call<BaseResponse<PageResponse<DeliveryAssignment>>> call = service.getAssignedTasks(driverId, 0, 100);
+
+        call.enqueue(new Callback<BaseResponse<PageResponse<DeliveryAssignment>>>() {
+            @Override
+            public void onResponse(Call<BaseResponse<PageResponse<DeliveryAssignment>>> call, Response<BaseResponse<PageResponse<DeliveryAssignment>>> response) {
+                adapter.setShowSkeleton(false);
+                if (response.isSuccessful() && response.body() != null) {
+                    BaseResponse<PageResponse<DeliveryAssignment>> baseResponse = response.body();
+                    if (baseResponse.getResult() != null && baseResponse.getResult().content() != null && !baseResponse.getResult().content().isEmpty()) {
+                        // Display assigned tasks
+                        List<DeliveryAssignment> assignedTasks = baseResponse.getResult().content();
+                        tasks.addAll(assignedTasks);
+                        adapter.notifyDataSetChanged();
+
+                        // Hide session-specific buttons/UI since we don't have a session yet
+                        if (btnSessionMenu != null) btnSessionMenu.setVisibility(View.GONE);
+                        if (btnStartDelivery != null) btnStartDelivery.setVisibility(View.GONE);
+                        if (btnScanOrder != null) btnScanOrder.setVisibility(View.GONE);
+                        if (routeCard != null) routeCard.setVisibility(View.GONE);
+
+                        // Stop tracking
+                        stopLocationTrackingService();
+
+                        Log.d(TAG, "Found " + assignedTasks.size() + " assigned tasks.");
+
+                    } else {
+                        // No assigned tasks either
+                        showNoSessionState();
+                        if (tvEmptyState != null) {
+                            tvEmptyState.setText("Không có nhiệm vụ nào.");
+                        }
+                    }
+                } else {
+                    // Error
+                    Log.w(TAG, "Error getting assigned tasks: " + response.code());
+                    showNoSessionState();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<BaseResponse<PageResponse<DeliveryAssignment>>> call, Throwable t) {
+                Log.e(TAG, "Network error getting assigned tasks: " + t.getMessage());
+                adapter.setShowSkeleton(false);
+                showNoSessionState();
+            }
+        });
+
+    }
+
     /**
-     * Navigate to dashboard when no active session
+     * Display UI when there is no active session AND no assigned tasks
      */
-    private void navigateToDashboard() {
-        if (getActivity() instanceof MainActivity) {
-            ((MainActivity) getActivity()).showDashboard();
+    private void showNoSessionState() {
+        activeSessionId = null;
+        activeSessionStatus = null;
+        tasks.clear();
+        adapter.notifyDataSetChanged();
+
+        if (tvEmptyState != null) {
+            tvEmptyState.setVisibility(View.VISIBLE);
+            tvEmptyState.setText("Hiện không có nhiệm vụ nào.");
         }
-        // Ensure tracking service is stopped when leaving session dashboard
+
+        if (btnSessionMenu != null) btnSessionMenu.setVisibility(View.GONE);
+        if (btnStartDelivery != null) btnStartDelivery.setVisibility(View.GONE);
+        if (btnScanOrder != null) btnScanOrder.setVisibility(View.GONE);
+        if (routeCard != null) routeCard.setVisibility(View.GONE);
+        if (adapter != null) adapter.setShowSkeleton(false);
+
         stopLocationTrackingService();
     }
 
@@ -267,17 +334,23 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             if (data != null && data.hasExtra("UPDATED_TASK")) {
                 DeliveryAssignment updatedTask = (DeliveryAssignment) data.getSerializableExtra("UPDATED_TASK");
                 String newStatus = data.getStringExtra("NEW_STATUS");
-                
+
                 if (updatedTask != null && newStatus != null) {
                     // Update local task immediately (optimistic update)
                     updateLocalTaskStatus(updatedTask.getParcelId(), newStatus);
                     Log.d(TAG, "✅ Task updated locally: parcelId=" + updatedTask.getParcelId() + ", status=" + newStatus);
+
+                    // 🛠 CHECK IF ALL ASSIGNED TASKS ARE "IN_PROGRESS" -> CREATE NEW SESSION
+                    if ("IN_PROGRESS".equals(newStatus) && activeSessionId == null) {
+                        checkAndCreateSessionIfAllAccepted();
+                    }
                 }
             }
-            
+
             // Refresh tasks from server to ensure consistency
             Toast.makeText(getContext(), "Cập nhật danh sách nhiệm vụ...", Toast.LENGTH_SHORT).show();
-            resetAndFetchTasks();
+            // checkActiveSession để refresh đúng context
+            checkActiveSession();
         } else if (requestCode == SCAN_TRANSFER_REQUEST_CODE && resultCode == getActivity().RESULT_OK) {
             // Transfer parcel accepted successfully
             Toast.makeText(getContext(), "Đã nhận đơn chuyển giao thành công.", Toast.LENGTH_SHORT).show();
@@ -289,18 +362,74 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         }
     }
 
+    /**
+     * Checks if all currently displayed tasks (which are assumed to be assigned tasks)
+     * are now in "IN_PROGRESS" status. If so, calls createSession.
+     */
+    private void checkAndCreateSessionIfAllAccepted() {
+        if (tasks == null || tasks.isEmpty()) return;
+
+        boolean allAccepted = true;
+        List<String> assignmentIds = new ArrayList<>();
+
+        for (DeliveryAssignment task : tasks) {
+            if (!"ACCEPTED".equals(task.getStatus())) {
+                allAccepted = false;
+            }
+            assignmentIds.add(task.getAssignmentId());
+        }
+
+        if (allAccepted && !assignmentIds.isEmpty()) {
+            createNewSession(assignmentIds);
+        }
+    }
+
+    private void createNewSession(List<String> assignmentIds) {
+        // Show loading
+        if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
+        Toast.makeText(getContext(), "Tất cả đơn đã nhận. Đang tạo phiên làm việc...", Toast.LENGTH_SHORT).show();
+
+        SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
+
+        AssignmentList request = new AssignmentList();
+        request.setDeliveryManId(driverId);
+        request.setAssignmentsIds(assignmentIds);
+
+        Call<BaseResponse<DeliverySession>> call = service.createSession(request);
+        call.enqueue(new Callback<BaseResponse<DeliverySession>>() {
+            @Override
+            public void onResponse(Call<BaseResponse<DeliverySession>> call, Response<BaseResponse<DeliverySession>> response) {
+                if (progressBar != null) progressBar.setVisibility(View.GONE);
+
+                if (response.isSuccessful() && response.body() != null) {
+                    BaseResponse<DeliverySession> res = response.body();
+                    if (res.getResult() != null) {
+                        Toast.makeText(getContext(), "Tạo phiên thành công!", Toast.LENGTH_SHORT).show();
+                        // Refresh to switch to Active Session view
+                        checkActiveSession();
+                    } else {
+                        Toast.makeText(getContext(), "Lỗi tạo phiên: " + res.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(getContext(), "Lỗi tạo phiên: " + response.code(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<BaseResponse<DeliverySession>> call, Throwable t) {
+                if (progressBar != null) progressBar.setVisibility(View.GONE);
+                Toast.makeText(getContext(), "Lỗi kết nối khi tạo phiên.", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
     public void fetchSessionTasks(int page) {
         if (isLoading || isLastPage) return;
-        
+
         // Need activeSessionId to fetch tasks by sessionId
         if (activeSessionId == null) {
             Log.w(TAG, "No active session ID. Cannot fetch tasks.");
-            // Don't call checkActiveSession again to avoid infinite loop
-            // Show empty state instead
-            if (tvEmptyState != null) {
-                tvEmptyState.setVisibility(View.VISIBLE);
-                tvEmptyState.setText("Chưa có phiên làm việc.");
-            }
+            showNoSessionState();
             return;
         }
 
@@ -355,7 +484,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     // 1. DELIVERED/COMPLETED tasks (already delivered)
                     // 2. FAILED tasks with RETURNED proof (already returned to warehouse)
                     filterAndAddTasks(newTasks);
-                    
+
                     // Ẩn skeleton khi đã có data
                     if (page == 0 && adapter != null) {
                         adapter.setShowSkeleton(false);
@@ -372,7 +501,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     if (tasks.isEmpty() && page == 0) {
                         // No tasks - mark as last page to prevent infinite loading
                         isLastPage = true;
-                        
+
                         // Check if there's an active session
                         if (activeSessionId != null) {
                             // Active session exists but no tasks - show appropriate UI
@@ -392,8 +521,8 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                                 checkForCreatedSession();
                             }
                         } else {
-                            // No active session - navigate to dashboard
-                            navigateToDashboard();
+                            // No active session
+                            showNoSessionState();
                         }
                     } else {
                         // Hide empty state UI when there are tasks
@@ -536,36 +665,36 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                 failedOrDelayedTasks.add(task);
             }
         }
-        
+
         if (failedOrDelayedTasks.isEmpty()) {
             // No failed/delayed tasks, proceed with completion
             showCompleteConfirmationDialog();
             return;
         }
-        
+
         // Check proofs for each failed/delayed task
         checkProofsForTasks(failedOrDelayedTasks, 0);
     }
-    
+
     private void checkProofsForTasks(List<DeliveryAssignment> tasksToCheck, int index) {
         if (index >= tasksToCheck.size()) {
             // All tasks checked, proceed with completion
             showCompleteConfirmationDialog();
             return;
         }
-        
+
         DeliveryAssignment task = tasksToCheck.get(index);
         if (task.getAssignmentId() == null || task.getAssignmentId().isEmpty()) {
             // Skip if no assignmentId
             checkProofsForTasks(tasksToCheck, index + 1);
             return;
         }
-        
+
         SessionClient service = RetrofitClient.getRetrofitInstance(getContext()).create(SessionClient.class);
         service.getProofsByAssignment(task.getAssignmentId()).enqueue(new retrofit2.Callback<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>>() {
             @Override
-            public void onResponse(retrofit2.Call<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> call, 
-                                 retrofit2.Response<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> response) {
+            public void onResponse(retrofit2.Call<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> call,
+                                   retrofit2.Response<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
                     List<com.ds.deliveryapp.model.DeliveryProof> proofs = response.body().getResult();
                     boolean hasReturnedProof = false;
@@ -575,18 +704,18 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                             break;
                         }
                     }
-                    
+
                     if (!hasReturnedProof) {
                         // Found a task without RETURNED proof
                         showReturnToWarehouseRequiredDialog(task);
                         return;
                     }
                 }
-                
+
                 // Check next task
                 checkProofsForTasks(tasksToCheck, index + 1);
             }
-            
+
             @Override
             public void onFailure(retrofit2.Call<com.ds.deliveryapp.clients.res.BaseResponse<java.util.List<com.ds.deliveryapp.model.DeliveryProof>>> call, Throwable t) {
                 Log.e(TAG, "Failed to check proofs for task " + task.getAssignmentId(), t);
@@ -595,7 +724,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             }
         });
     }
-    
+
     private void showReturnToWarehouseRequiredDialog(DeliveryAssignment task) {
         new AlertDialog.Builder(getContext())
                 .setTitle("Chưa xác nhận trả hàng về kho")
@@ -610,7 +739,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                 .setCancelable(false)
                 .show();
     }
-    
+
     private void showCompleteConfirmationDialog() {
         new AlertDialog.Builder(getContext())
                 .setTitle("Hoàn tất phiên")
@@ -640,10 +769,8 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     BaseResponse<DeliverySession> baseResponse = response.body();
                     if (baseResponse.getResult() != null) {
                         Toast.makeText(getContext(), "Đã hoàn tất phiên.", Toast.LENGTH_LONG).show();
-                        // Navigate to dashboard after completing session
-                        activeSessionId = null;
-                        activeSessionStatus = null;
-                        navigateToDashboard();
+                        // Reset to no session state
+                        showNoSessionState();
                     } else {
                         String errorMsg = baseResponse.getMessage() != null ? baseResponse.getMessage() : "Không thể hoàn tất phiên";
                         Toast.makeText(getContext(), errorMsg, Toast.LENGTH_SHORT).show();
@@ -661,31 +788,6 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             }
         });
     }
-    
-    /**
-     * Show QR code for transferring parcels
-     */
-    private void showTransferQRCode() {
-        if (activeSessionId == null) {
-            Toast.makeText(getContext(), "Không tìm thấy phiên hoạt động.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        
-        Intent intent = new Intent(getContext(), SessionQRDisplayActivity.class);
-        intent.putExtra(SessionQRDisplayActivity.EXTRA_SESSION_ID, activeSessionId);
-        startActivity(intent);
-    }
-    
-    /**
-     * Show dialog to scan QR and accept transferred parcels
-     * Flow: Scan QR -> Show list of ON_ROUTE parcels from scanned session -> Select to accept
-     */
-    private void showSelectParcelForTransferDialog() {
-        // Start QR scan activity (no need to select parcel first)
-        Intent intent = new Intent(getContext(), SessionQRScanActivity.class);
-        startActivityForResult(intent, SCAN_TRANSFER_REQUEST_CODE);
-    }
-
 
     private boolean hasInProgressTasks() {
         for (DeliveryAssignment task : tasks) {
@@ -851,9 +953,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                 }
 
                 // ===== PHASE 2 =====
-                activeSessionId = null;
-                activeSessionStatus = null;
-                navigateToDashboard();
+                showNoSessionState();
             }
 
             @Override
@@ -887,14 +987,8 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             }
             Log.d(TAG, "Active session found but no tasks. Session ID: " + activeSessionId + ", Status: " + activeSessionStatus);
         } else {
-            // No active session - should navigate to dashboard (handled by checkActiveSession)
-            if (tvEmptyState != null) {
-                tvEmptyState.setVisibility(View.VISIBLE);
-                tvEmptyState.setText("Chưa có phiên làm việc.\nVui lòng bắt đầu phiên để tiếp tục.");
-            }
-            if (btnSessionMenu != null) btnSessionMenu.setVisibility(View.GONE);
-            if (btnStartDelivery != null) btnStartDelivery.setVisibility(View.GONE);
-            Log.d(TAG, "No active session found.");
+            // No active session
+            showNoSessionState();
         }
     }
 
@@ -912,22 +1006,20 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     if (baseResponse.getResult() != null) {
                         DeliverySession session = baseResponse.getResult();
                         activeSessionStatus = session.getStatus() != null ? session.getStatus() : "UNKNOWN";
-                        
-                        // If session is completed/failed, navigate to dashboard
+
+                        // If session is completed/failed, show no session state
                         if ("COMPLETED".equals(activeSessionStatus) || "FAILED".equals(activeSessionStatus)) {
-                            Log.d(TAG, "Session " + activeSessionId + " is " + activeSessionStatus + ". Navigating to dashboard.");
+                            Log.d(TAG, "Session " + activeSessionId + " is " + activeSessionStatus + ". Resetting UI.");
                             showLightNotification("Phiên giao hàng đã kết thúc");
-                            activeSessionId = null;
-                            activeSessionStatus = null;
-                            navigateToDashboard();
+                            showNoSessionState();
                             return;
                         }
-                        
+
                         updateUIForSessionStatus();
 
                         // Trigger pre-start route calc for CREATED
                         maybeCalculatePreRoute();
-                        
+
                         // Check if all tasks are complete for IN_PROGRESS session
                         if ("IN_PROGRESS".equals(activeSessionStatus) && tasks.isEmpty()) {
                             // Show message to complete session
@@ -1049,11 +1141,11 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         }
         double durationSec = route.getRoute().getDuration();
         double distanceM = route.getRoute().getDistance();
-        
+
         // Tính thời gian giao: thời gian route + số đơn * 5 phút
         int numberOfOrders = (tasks != null) ? tasks.size() : 0;
         double deliveryTimeMinutes = (durationSec / 60.0) + (numberOfOrders * 5.0);
-        
+
         String etaText = "Thời gian: ~" + Math.round(deliveryTimeMinutes) + " phút";
         String distText = "Quãng đường: " + String.format(java.util.Locale.getDefault(), "%.2f km", distanceM / 1000.0);
 
@@ -1247,7 +1339,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     }
 
     // ==================== GlobalChatService.UpdateNotificationListener ====================
-    
+
     @Override
     public void onMessageReceived(com.ds.deliveryapp.clients.res.Message message) {
         // Not used in TaskFragment
@@ -1285,12 +1377,12 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
 
     @Override
     public void onUpdateNotificationReceived(UpdateNotification updateNotification) {
-        Log.d(TAG, String.format("📥 Update notification received: type=%s, entityType=%s, entityId=%s, action=%s", 
-            updateNotification.getUpdateType(), 
-            updateNotification.getEntityType(), 
-            updateNotification.getEntityId(), 
-            updateNotification.getAction()));
-        
+        Log.d(TAG, String.format("📥 Update notification received: type=%s, entityType=%s, entityId=%s, action=%s",
+                updateNotification.getUpdateType(),
+                updateNotification.getEntityType(),
+                updateNotification.getEntityId(),
+                updateNotification.getAction()));
+
         // Handle update notification on UI thread
         if (getActivity() != null) {
             getActivity().runOnUiThread(() -> {
@@ -1298,7 +1390,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             });
         }
     }
-    
+
     /**
      * Handle update notification and refresh data accordingly
      */
@@ -1306,19 +1398,19 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         if (updateNotification == null) {
             return;
         }
-        
+
         UpdateNotification.EntityType entityType = updateNotification.getEntityType();
         UpdateNotification.ActionType action = updateNotification.getAction();
         String entityId = updateNotification.getEntityId();
-        
+
         // Handle SESSION_UPDATE: refresh session status and tasks
         if (entityType == UpdateNotification.EntityType.SESSION) {
-            if (action == UpdateNotification.ActionType.COMPLETED || 
-                action == UpdateNotification.ActionType.FAILED || 
-                action == UpdateNotification.ActionType.CANCELLED) {
-                // Session ended - check session status and navigate to dashboard if needed
+            if (action == UpdateNotification.ActionType.COMPLETED ||
+                    action == UpdateNotification.ActionType.FAILED ||
+                    action == UpdateNotification.ActionType.CANCELLED) {
+                // Session ended - check session status and show no session state if needed
                 Log.d(TAG, "Session ended (action: " + action + "). Checking session status...");
-                
+
                 // Show notification
                 String sessionMessage;
                 if (action == UpdateNotification.ActionType.COMPLETED) {
@@ -1327,10 +1419,10 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     sessionMessage = "Phiên giao hàng đã bị hủy";
                 }
                 showLightNotification(sessionMessage);
-                
+
                 checkActiveSession();
-            } else if (action == UpdateNotification.ActionType.CREATED || 
-                       action == UpdateNotification.ActionType.STATUS_CHANGED) {
+            } else if (action == UpdateNotification.ActionType.CREATED ||
+                    action == UpdateNotification.ActionType.STATUS_CHANGED) {
                 // Session created or status changed - refresh tasks
                 Log.d(TAG, "Session updated (action: " + action + "). Refreshing tasks...");
                 if (activeSessionId == null || activeSessionId.equals(entityId)) {
@@ -1341,14 +1433,14 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         }
         // Handle ASSIGNMENT_UPDATE: refresh tasks list
         else if (entityType == UpdateNotification.EntityType.ASSIGNMENT) {
-            if (action == UpdateNotification.ActionType.CREATED || 
-                action == UpdateNotification.ActionType.UPDATED || 
-                action == UpdateNotification.ActionType.STATUS_CHANGED ||
-                action == UpdateNotification.ActionType.COMPLETED ||
-                action == UpdateNotification.ActionType.FAILED) {
+            if (action == UpdateNotification.ActionType.CREATED ||
+                    action == UpdateNotification.ActionType.UPDATED ||
+                    action == UpdateNotification.ActionType.STATUS_CHANGED ||
+                    action == UpdateNotification.ActionType.COMPLETED ||
+                    action == UpdateNotification.ActionType.FAILED) {
                 // Assignment updated - refresh tasks
                 Log.d(TAG, "Assignment updated (action: " + action + "). Refreshing tasks...");
-                
+
                 // Show light notification (Snackbar)
                 String message;
                 if (action == UpdateNotification.ActionType.COMPLETED) {
@@ -1357,7 +1449,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     message = "Cập nhật đơn hàng";
                 }
                 showLightNotification(message);
-                
+
                 if (activeSessionId != null) {
                     // Refresh tasks for current session
                     resetAndFetchTasks();
@@ -1366,8 +1458,8 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         }
         // Handle PARCEL_UPDATE: refresh tasks list (if parcel status changed)
         else if (entityType == UpdateNotification.EntityType.PARCEL) {
-            if (action == UpdateNotification.ActionType.STATUS_CHANGED || 
-                action == UpdateNotification.ActionType.UPDATED) {
+            if (action == UpdateNotification.ActionType.STATUS_CHANGED ||
+                    action == UpdateNotification.ActionType.UPDATED) {
                 // Parcel updated - refresh tasks (parcel status might affect assignment status)
                 Log.d(TAG, "Parcel updated (action: " + action + "). Refreshing tasks...");
                 if (activeSessionId != null) {
@@ -1377,7 +1469,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             }
         }
     }
-    
+
     /**
      * Show light notification (Snackbar) when update notification is received
      */
@@ -1390,7 +1482,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             snackbar.show();
         }
     }
-    
+
     /**
      * Update local task status in memory immediately (optimistic update)
      * This ensures UI reflects the change immediately while API call is in progress
@@ -1399,7 +1491,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
         if (parcelId == null || tasks == null || adapter == null) {
             return;
         }
-        
+
         // Find and update task in local list
         for (DeliveryAssignment task : tasks) {
             if (parcelId.equals(task.getParcelId())) {
@@ -1415,7 +1507,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             }
         }
     }
-    
+
     /**
      * Filter out tasks that should be hidden from the list:
      * 1. DELIVERED/COMPLETED tasks (already delivered successfully) - filtered immediately
@@ -1424,15 +1516,15 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
     private void filterAndAddTasks(List<DeliveryAssignment> newTasks) {
         List<DeliveryAssignment> visibleTasks = new ArrayList<>();
         List<DeliveryAssignment> failedTasksToCheck = new ArrayList<>();
-        
+
         for (DeliveryAssignment task : newTasks) {
             String status = task.getStatus();
-            
+
             // Hide DELIVERED/COMPLETED tasks immediately
             if ("DELIVERED".equals(status) || "COMPLETED".equals(status)) {
                 continue; // Skip this task
             }
-            
+
             // For FAILED/DELAYED tasks, check if they have RETURNED proof async
             if ("FAILED".equals(status) || "DELAYED".equals(status)) {
                 failedTasksToCheck.add(task);
@@ -1441,20 +1533,20 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                 visibleTasks.add(task);
             }
         }
-        
+
         // Add visible tasks immediately
         if (!visibleTasks.isEmpty()) {
             tasks.addAll(visibleTasks);
             adapter.updateTasks(tasks);
             adapter.notifyDataSetChanged();
         }
-        
+
         // Check proofs for FAILED tasks async and add only if no RETURNED proof
         if (!failedTasksToCheck.isEmpty()) {
             checkAndAddFailedTasks(failedTasksToCheck);
         }
     }
-    
+
     /**
      * Check proofs for FAILED tasks and add them to the list only if they don't have RETURNED proof.
      * This is done async to avoid blocking the UI.
@@ -1469,14 +1561,14 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                     if (response.isSuccessful() && response.body() != null && response.body().getResult() != null) {
                         List<DeliveryProof> proofs = response.body().getResult();
                         boolean hasReturnedProof = false;
-                        
+
                         for (DeliveryProof proof : proofs) {
                             if ("RETURNED".equals(proof.getType())) {
                                 hasReturnedProof = true;
                                 break;
                             }
                         }
-                        
+
                         // Only add task if it doesn't have RETURNED proof
                         if (!hasReturnedProof) {
                             if (getActivity() != null) {
@@ -1484,13 +1576,13 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                                     // Check if task is not already in the list
                                     boolean exists = false;
                                     for (DeliveryAssignment existingTask : tasks) {
-                                        if (existingTask.getAssignmentId() != null && 
-                                            existingTask.getAssignmentId().equals(task.getAssignmentId())) {
+                                        if (existingTask.getAssignmentId() != null &&
+                                                existingTask.getAssignmentId().equals(task.getAssignmentId())) {
                                             exists = true;
                                             break;
                                         }
                                     }
-                                    
+
                                     if (!exists) {
                                         tasks.add(task);
                                         adapter.updateTasks(tasks);
@@ -1506,13 +1598,13 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                             getActivity().runOnUiThread(() -> {
                                 boolean exists = false;
                                 for (DeliveryAssignment existingTask : tasks) {
-                                    if (existingTask.getAssignmentId() != null && 
-                                        existingTask.getAssignmentId().equals(task.getAssignmentId())) {
+                                    if (existingTask.getAssignmentId() != null &&
+                                            existingTask.getAssignmentId().equals(task.getAssignmentId())) {
                                         exists = true;
                                         break;
                                     }
                                 }
-                                
+
                                 if (!exists) {
                                     tasks.add(task);
                                     adapter.updateTasks(tasks);
@@ -1522,7 +1614,7 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                         }
                     }
                 }
-                
+
                 @Override
                 public void onFailure(Call<BaseResponse<List<DeliveryProof>>> call, Throwable t) {
                     Log.e(TAG, "Failed to check proofs for task " + task.getAssignmentId(), t);
@@ -1531,13 +1623,13 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                         getActivity().runOnUiThread(() -> {
                             boolean exists = false;
                             for (DeliveryAssignment existingTask : tasks) {
-                                if (existingTask.getAssignmentId() != null && 
-                                    existingTask.getAssignmentId().equals(task.getAssignmentId())) {
+                                if (existingTask.getAssignmentId() != null &&
+                                        existingTask.getAssignmentId().equals(task.getAssignmentId())) {
                                     exists = true;
                                     break;
                                 }
                             }
-                            
+
                             if (!exists) {
                                 tasks.add(task);
                                 adapter.updateTasks(tasks);
@@ -1549,19 +1641,18 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
             });
         }
     }
-    
+
     /**
      * Get vehicle type for routing API call.
      * Maps database format (BIKE/CAR) to API format (bicycle/car).
      * Default: "bicycle"
-     * 
-     * Gets vehicleType from SessionManager (saved from user profile) or falls back to SharedPreferences.
+     * * Gets vehicleType from SessionManager (saved from user profile) or falls back to SharedPreferences.
      */
     private String getVehicleForRouting() {
         // First, try to get from SessionManager (from user profile)
         SessionManager sessionManager = new SessionManager(getContext());
         String vehicleTypeFromSession = sessionManager.getVehicleType();
-        
+
         if (vehicleTypeFromSession != null && !vehicleTypeFromSession.isEmpty()) {
             // Map database format (BIKE/CAR) to API format (bicycle/car)
             String upperVehicle = vehicleTypeFromSession.toUpperCase();
@@ -1571,22 +1662,22 @@ public class TaskFragment extends Fragment implements TasksAdapter.OnTaskClickLi
                 return "bicycle";
             }
         }
-        
+
         // Fallback to SharedPreferences (for backward compatibility)
         android.content.SharedPreferences prefs = getContext().getSharedPreferences("routing_prefs", android.content.Context.MODE_PRIVATE);
         String vehicleFromPrefs = prefs.getString("vehicle", "bicycle");
-        
+
         if (vehicleFromPrefs == null) {
             return "bicycle";
         }
-        
+
         String upperVehicle = vehicleFromPrefs.toUpperCase();
         if ("CAR".equals(upperVehicle)) {
             return "car";
         } else if ("BIKE".equals(upperVehicle) || "MOTORBIKE".equals(upperVehicle)) {
             return "bicycle";
         }
-        
+
         // If already in API format (bicycle/car), return as-is
         return vehicleFromPrefs.toLowerCase();
     }

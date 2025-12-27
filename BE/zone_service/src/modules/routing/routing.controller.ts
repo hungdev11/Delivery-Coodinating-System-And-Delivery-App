@@ -6,7 +6,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { plainToClass } from 'class-transformer';
 import { RoutingService } from './routing.service';
-import { RouteRequestDto, DemoRouteRequestDto } from './routing.model';
+import { RouteRequestDto, DemoRouteRequestDto, TableMatrixRequestDto, VRPAssignmentRequestDto } from './routing.model';
 import { BaseResponse } from '../../common/types/restful';
 
 export class RoutingController {
@@ -139,6 +139,51 @@ export class RoutingController {
       }
 
       const result = await RoutingService.calculateDemoRoute(data);
+      res.json(BaseResponse.success(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get OSRM table matrix (distance/duration matrix) for VRP solving
+   * POST /routing/table-matrix
+   */
+  public static async getTableMatrix(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const data = plainToClass(TableMatrixRequestDto, req.body);
+
+      if (!data.coordinates || data.coordinates.length === 0) {
+        res.status(400).json(BaseResponse.error('At least one coordinate is required'));
+        return;
+      }
+
+      const result = await RoutingService.getTableMatrix(data);
+      res.json(BaseResponse.success(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Solve VRP assignment problem
+   * POST /routing/vrp-assignment
+   */
+  public static async solveVRPAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const data = plainToClass(VRPAssignmentRequestDto, req.body);
+
+      if (!data.shippers || data.shippers.length === 0) {
+        res.status(400).json(BaseResponse.error('At least one shipper is required'));
+        return;
+      }
+
+      if (!data.orders || data.orders.length === 0) {
+        res.status(400).json(BaseResponse.error('At least one order is required'));
+        return;
+      }
+
+      const result = await RoutingService.solveVRPAssignment(data);
       res.json(BaseResponse.success(result));
     } catch (error) {
       next(error);

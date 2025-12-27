@@ -160,28 +160,44 @@ export const getLatestAssignmentForParcel = async (
 }
 
 /**
- * Seed Parcels API
+ * Auto Seed Parcels API
  */
-export interface SeedParcelsRequest {
-  count?: number
-  shopId?: string
-  clientId?: string
-}
-
-export interface SeedParcelsResponse {
+export interface AutoSeedParcelsResponse {
   result: {
-    successCount: number
-    failCount: number
-    total: number
-    message: string
+    failedOldParcelsCount: number
+    seededParcelsCount: number
+    skippedAddressesCount: number
+    errorMessage?: string
   }
   success: boolean
   message?: string
 }
 
 /**
- * Seed parcels randomly or with specific shop/client
+ * Auto seed parcels:
+ * - Fail parcels older than 48 hours
+ * - Seed parcels for addresses without parcels in DELAYED/IN_WAREHOUSE/ON_ROUTE status
+ * 
+ * @param sessionKey Optional session key for progress tracking. If provided, process runs async and returns immediately.
  */
-export const seedParcels = async (data?: SeedParcelsRequest): Promise<SeedParcelsResponse> => {
-  return apiClient.post<SeedParcelsResponse, SeedParcelsRequest>('/v1/parcels/seed', data || {})
+export const autoSeedParcels = async (
+  sessionKey?: string,
+): Promise<AutoSeedParcelsResponse> => {
+  const url = sessionKey
+    ? `/v1/parcels/auto-seed?sessionKey=${encodeURIComponent(sessionKey)}`
+    : '/v1/parcels/auto-seed'
+  return apiClient.post<AutoSeedParcelsResponse, null>(url, null)
+}
+
+/**
+ * Auto seed parcels response with session key (when sessionKey is provided)
+ */
+export interface AutoSeedParcelsWithSessionResponse {
+  result: {
+    sessionKey: string
+    status: string
+    message: string
+  }
+  success: boolean
+  message?: string
 }

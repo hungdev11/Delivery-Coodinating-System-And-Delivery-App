@@ -85,7 +85,7 @@ export class ZoneService {
       const totalElements = await prisma.zones.count({ where });
 
       // Get paginated data
-      const data = await prisma.zones.findMany({
+      const zones = await prisma.zones.findMany({
         where,
         orderBy,
         skip,
@@ -94,6 +94,9 @@ export class ZoneService {
           centers: true,
         }
       });
+
+      // Map to DTOs
+      const data = zones.map(zone => this.mapToDto(zone));
 
       const totalPages = Math.ceil(totalElements / take);
 
@@ -445,14 +448,22 @@ export class ZoneService {
    * Map database entity to DTO
    */
   private static mapToDto(zone: any): ZoneDto {
+    const center = zone.centers ? {
+      id: zone.center_id,
+      code: zone.centers.code || '',
+      name: zone.centers.name || '',
+      address: zone.centers.address,
+      lat: zone.centers.lat,
+      lon: zone.centers.lon,
+      polygon: zone.centers.polygon,
+    } : null;
+
     return {
       id: zone.zone_id,
       code: zone.code,
       name: zone.name,
       polygon: zone.polygon,
-      centerId: zone.center_id,
-      centerCode: zone.centers?.code,
-      centerName: zone.centers?.name,
+      center: center,
     };
   }
 }

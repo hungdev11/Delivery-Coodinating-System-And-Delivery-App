@@ -32,6 +32,11 @@ export class DeliveryManDto {
   lastName?: string
   phone?: string
   status?: string
+  // Session information (enriched from session-service)
+  hasActiveSession?: boolean | null
+  lastSessionStartTime?: string | null
+  // Zone information (from primary address or working zone)
+  zoneId?: string | null
 
   constructor(data: DeliveryManDto) {
     this.id = data.id
@@ -47,6 +52,11 @@ export class DeliveryManDto {
     this.lastName = data.lastName
     this.phone = data.phone
     this.status = data.status
+    // Session fields
+    this.hasActiveSession = data.hasActiveSession
+    this.lastSessionStartTime = data.lastSessionStartTime
+    // Zone field
+    this.zoneId = data.zoneId
   }
 
   get displayName(): string {
@@ -222,4 +232,74 @@ export interface DeliveryAssignmentTaskResponse {
   totalElements: number
   totalPages: number
   last: boolean
+}
+
+/**
+ * Manual Assignment Request/Response
+ */
+export interface ManualAssignmentRequest {
+  sessionId?: string // Optional: if not provided, session will be created automatically (status CREATED)
+  shipperId: string
+  parcelIds: string[]
+  zoneId?: string
+}
+
+export interface ManualAssignmentResponse {
+  assignmentId: string
+  sessionId: string
+  shipperId: string
+  deliveryAddressId: string
+  parcelIds: string[] // Changed from assignedParcelIds to parcelIds
+  status: string
+  assignedAt: string
+  zoneId?: string
+}
+
+/**
+ * Auto Assignment Request/Response
+ */
+export interface AutoAssignmentRequest {
+  shipperSessionMap?: Record<string, string> // Map of shipperId -> sessionId (sessions must be created first - status CREATED)
+  shipperIds?: string[] // Optional: specific shippers, if not provided, all available shippers
+  parcelIds?: string[] // Optional: specific parcels, if not provided, all unassigned parcels
+  zoneId?: string // Optional: filter by zone
+  vehicle?: string // "car" or "motorbike"
+  mode?: string // "v2-full", "v2-rating-only", etc.
+}
+
+export interface AutoAssignmentResponse {
+  assignments: Record<string, Array<{
+    // Map of shipperId -> List of assignments
+    assignmentId: string
+    deliveryAddressId: string
+    parcelIds: string[]
+    status: string
+  }>>
+  unassignedParcels?: string[]
+  statistics: {
+    totalShippers: number
+    totalParcels: number
+    assignedParcels: number
+    averageParcelsPerShipper: number
+    workloadVariance: number
+  }
+}
+
+/**
+ * Create Session Request/Response
+ */
+export interface CreateSessionRequest {
+  deliveryManId: string
+  assignmentsIds: string[]
+}
+
+export interface SessionResponse {
+  id: string
+  deliveryManId: string
+  status: string
+  startTime?: string
+  endTime?: string
+  totalTasks: number
+  completedTasks: number
+  failedTasks: number
 }

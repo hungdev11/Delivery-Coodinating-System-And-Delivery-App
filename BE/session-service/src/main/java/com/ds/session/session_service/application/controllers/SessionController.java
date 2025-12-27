@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ds.session.session_service.common.entities.dto.common.BaseResponse;
+import com.ds.session.session_service.common.entities.dto.request.BulkDeliveryManSessionInfoRequest;
 import com.ds.session.session_service.common.entities.dto.request.CalculateDeliveryTimeRequest;
 import com.ds.session.session_service.common.entities.dto.request.CreateSessionRequest;
 import com.ds.session.session_service.common.entities.dto.request.ScanParcelRequest;
@@ -163,6 +164,31 @@ public class SessionController {
         java.util.List<SessionResponse> sessions = sessionService.getAllSessionsForDeliveryMan(deliveryManId,
                 excludeParcelId);
         return ResponseEntity.ok(BaseResponse.success(sessions));
+    }
+
+    /**
+     * Get session information for a delivery man (active session status and last session start time)
+     * Used to enrich delivery man list with session data
+     */
+    @GetMapping("/drivers/{deliveryManId}/session-info")
+    public ResponseEntity<BaseResponse<com.ds.session.session_service.common.entities.dto.response.DeliveryManSessionInfo>> getDeliveryManSessionInfo(
+            @PathVariable("deliveryManId") String deliveryManId) {
+        log.debug("Getting session info for delivery man {}", deliveryManId);
+        com.ds.session.session_service.common.entities.dto.response.DeliveryManSessionInfo sessionInfo = sessionService.getDeliveryManSessionInfo(deliveryManId);
+        return ResponseEntity.ok(BaseResponse.success(sessionInfo));
+    }
+    
+    /**
+     * Bulk get session information for multiple delivery men (active session status and last session start time)
+     * Used to enrich delivery man list with session data efficiently
+     */
+    @PostMapping("/drivers/session-info/bulk")
+    public ResponseEntity<BaseResponse<java.util.Map<String, com.ds.session.session_service.common.entities.dto.response.DeliveryManSessionInfo>>> getDeliveryManSessionInfoBulk(
+            @Valid @RequestBody com.ds.session.session_service.common.entities.dto.request.BulkDeliveryManSessionInfoRequest request) {
+        log.debug("Getting session info for {} delivery men", request.getDeliveryManIds() != null ? request.getDeliveryManIds().size() : 0);
+        java.util.Map<String, com.ds.session.session_service.common.entities.dto.response.DeliveryManSessionInfo> sessionInfoMap = 
+                sessionService.getDeliveryManSessionInfoBulk(request.getDeliveryManIds());
+        return ResponseEntity.ok(BaseResponse.success(sessionInfoMap));
     }
 
     /**

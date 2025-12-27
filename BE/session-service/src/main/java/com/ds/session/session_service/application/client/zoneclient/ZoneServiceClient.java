@@ -9,7 +9,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import com.ds.session.session_service.application.client.zoneclient.request.RouteRequest;
+import com.ds.session.session_service.application.client.zoneclient.request.TableMatrixRequest;
 import com.ds.session.session_service.application.client.zoneclient.response.RouteResponse;
+import com.ds.session.session_service.application.client.zoneclient.response.TableMatrixResponse;
 
 @FeignClient(name = "zone-service", url = "${services.zone.base-url}")
 public interface ZoneServiceClient {
@@ -37,5 +39,25 @@ public interface ZoneServiceClient {
         @RequestParam("lat") Double lat,
         @RequestParam("lon") Double lon,
         @RequestParam(value = "radius", defaultValue = "100") Double radius
+    );
+    
+    /**
+     * Get OSRM table matrix (distance/duration matrix) for VRP solving
+     * POST /api/v1/routing/table-matrix
+     * Note: Response is wrapped in BaseResponse, but Feign will auto-unwrap if configured
+     */
+    @PostMapping("/api/v1/routing/table-matrix")
+    com.ds.session.session_service.application.client.zoneclient.response.BaseResponse<TableMatrixResponse> getTableMatrix(
+        @RequestBody TableMatrixRequest request
+    );
+    
+    /**
+     * Solve VRP assignment problem
+     * POST /api/v1/routing/vrp-assignment
+     * Returns assignments of orders to shippers with workload balancing and constraints
+     */
+    @PostMapping("/api/v1/routing/vrp-assignment")
+    com.ds.session.session_service.application.client.zoneclient.response.BaseResponse<com.ds.session.session_service.application.client.zoneclient.response.VRPAssignmentResponse> solveVRPAssignment(
+        @RequestBody com.ds.session.session_service.application.client.zoneclient.request.VRPAssignmentRequest request
     );
 }

@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -31,6 +33,9 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
     List<DeliveryAssignment> findBySession_IdAndStatus(UUID sessionId, AssignmentStatus status);
 
     List<DeliveryAssignment> findBySession_IdAndStatusIn(UUID sessionId, List<AssignmentStatus> statusList);
+
+    Optional<DeliveryAssignment> findByIdAndStatus(UUID assignmentId, AssignmentStatus status);
+    Page<DeliveryAssignment> findByShipperIdAndStatus(UUID shipperId, AssignmentStatus status, Pageable pageable);
 
     /**
      * Tìm một assignment (task) dựa trên session_id và parcel_id.
@@ -94,4 +99,24 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
     long countPendingTasksBySessionId(UUID sessionId);
 
     List<DeliveryAssignment> findAllByParcelId(String parcelId);
+    
+    /**
+     * Bulk query: Find assignments by list of IDs
+     */
+    List<DeliveryAssignment> findByIdIn(List<UUID> ids);
+    
+    /**
+     * Bulk query: Find assignments by list of parcel IDs
+     */
+    List<DeliveryAssignment> findByParcelIdIn(List<String> parcelIds);
+    
+    /**
+     * Bulk query: Find assignments by list of session IDs
+     */
+    List<DeliveryAssignment> findBySession_IdIn(List<UUID> sessionIds);
+    
+    /**
+     * Bulk query: Find assignments by list of shipper IDs
+     */
+    List<DeliveryAssignment> findByShipperIdIn(List<UUID> shipperIds);
 }

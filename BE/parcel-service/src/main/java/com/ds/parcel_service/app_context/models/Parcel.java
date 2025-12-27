@@ -22,6 +22,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.*;
@@ -54,11 +56,19 @@ public class Parcel {
     @Enumerated(EnumType.STRING)
     private DeliveryType deliveryType;
 
-    @Column(nullable = false)
-    private String receiveFrom;
+    /**
+     * Reference to UserAddress ID in user-service for sender address
+     */
+    @Column(name = "sender_address_id", length = 36, nullable = false)
+    @JdbcTypeCode(Types.VARCHAR)
+    private String senderAddressId;
 
-    @Column(nullable = false)
-    private String sendTo;
+    /**
+     * Reference to UserAddress ID in user-service for receiver address
+     */
+    @Column(name = "receiver_address_id", length = 36, nullable = false)
+    @JdbcTypeCode(Types.VARCHAR)
+    private String receiverAddressId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -86,8 +96,11 @@ public class Parcel {
     private LocalTime windowStart;
     private LocalTime windowEnd;
     
-    // Priority for delivery routing (higher = more urgent)
-    // Maps to DeliveryType priorities: URGENT=10, EXPRESS=4, FAST=3, NORMAL=2, ECONOMY=1
+    /**
+     * Priority for delivery routing (higher = more urgent)
+     * Automatically calculated from DeliveryType:
+     * ECONOMY=0, NORMAL=3, FAST=5, EXPRESS=8, URGENT=10
+     */
     @Column(name = "priority")
     private Integer priority;
     
@@ -99,8 +112,24 @@ public class Parcel {
     @Column(name = "is_fail", nullable = false)
     @Builder.Default
     private Boolean isFail = false;
+
+    @Column(name = "attempts", nullable = false)
+    @Builder.Default
+    private int attempts = 0;
     
     // When parcel should be available for routing again
     @Column(name = "delayed_until")
     private LocalDateTime delayedUntil;
+
+    /**
+     * Calculate and set priority from DeliveryType
+     * Called before persisting to ensure priority is always in sync with DeliveryType
+     */
+    @PrePersist
+    @PreUpdate
+    public void calculatePriority() {
+        if (this.deliveryType != null) {
+            this.priority = this.deliveryType.getPriority();
+        }
+    }
 }

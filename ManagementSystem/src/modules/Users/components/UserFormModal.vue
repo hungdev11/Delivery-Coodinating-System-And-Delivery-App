@@ -82,8 +82,8 @@ const handleCancel = () => {
 
 <template>
   <UModal
-    :title="isEditMode ? 'Edit User' : 'Create User'"
-    :description="isEditMode ? 'Update user information' : 'Create a new user account'"
+    :title="isEditMode ? 'Chỉnh sửa người dùng' : 'Tạo người dùng'"
+    :description="isEditMode ? 'Cập nhật thông tin người dùng' : 'Tạo tài khoản người dùng mới'"
     :close="{ onClick: handleCancel }"
     :ui="{ width: 'sm:max-w-md md:max-w-lg', footer: 'justify-end' }"
   >
@@ -140,10 +140,10 @@ const handleCancel = () => {
 
     <template #footer>
       <UButton :disabled="submitting" variant="outline" color="neutral" @click="handleCancel">
-        Cancel
+        Hủy
       </UButton>
       <UButton :loading="submitting" @click="handleSubmit">
-        {{ isEditMode ? 'Update' : 'Create' }}
+        {{ isEditMode ? 'Cập nhật' : 'Tạo' }}
       </UButton>
     </template>
   </UModal>

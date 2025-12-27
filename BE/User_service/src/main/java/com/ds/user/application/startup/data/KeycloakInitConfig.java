@@ -153,7 +153,8 @@ public class KeycloakInitConfig {
         private List<String> realmRoles = List.of();
         private Map<String, List<String>> clientRoles = Map.of();
         private DeliveryManConfig deliveryMan;
-        private AddressConfig address;
+        private AddressConfig address; // Backward compatibility - single address
+        private List<AddressConfig> addresses; // Multiple addresses support
         
         public void setUsername(String username) {
             this.username = username;
@@ -198,6 +199,10 @@ public class KeycloakInitConfig {
         public void setAddress(AddressConfig address) {
             this.address = address;
         }
+        
+        public void setAddresses(List<AddressConfig> addresses) {
+            this.addresses = addresses;
+        }
     }
     
     @Getter
@@ -206,6 +211,8 @@ public class KeycloakInitConfig {
         private String addressText;
         private Double lat;
         private Double lon;
+        private String tag; // "Home", "Work", "Company", "Other", "Primary"
+        private Boolean isPrimary; // true for primary address
         
         public void setName(String name) {
             this.name = name;
@@ -222,6 +229,14 @@ public class KeycloakInitConfig {
         public void setLon(Double lon) {
             this.lon = lon;
         }
+        
+        public void setTag(String tag) {
+            this.tag = tag;
+        }
+        
+        public void setIsPrimary(Boolean isPrimary) {
+            this.isPrimary = isPrimary;
+        }
     }
     
     @Getter
@@ -229,6 +244,7 @@ public class KeycloakInitConfig {
         private boolean enabled = true;
         private String vehicleType = "MOTORBIKE";
         private Double capacityKg = 120.0;
+        private List<ShiftConfig> shifts; // Working shifts for this delivery man
 
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
@@ -240,6 +256,39 @@ public class KeycloakInitConfig {
 
         public void setCapacityKg(Double capacityKg) {
             this.capacityKg = capacityKg;
+        }
+
+        public void setShifts(List<ShiftConfig> shifts) {
+            this.shifts = shifts;
+        }
+    }
+    
+    @Getter
+    public static class ShiftConfig {
+        private Integer dayOfWeek; // 1-7 (Monday-Sunday)
+        private String startTime; // HH:mm format (e.g., "08:00")
+        private String endTime; // HH:mm format (e.g., "18:00")
+        private Double maxSessionTimeHours; // Optional, default 4.0
+        private Boolean isActive; // Optional, default true
+
+        public void setDayOfWeek(Integer dayOfWeek) {
+            this.dayOfWeek = dayOfWeek;
+        }
+
+        public void setStartTime(String startTime) {
+            this.startTime = startTime;
+        }
+
+        public void setEndTime(String endTime) {
+            this.endTime = endTime;
+        }
+
+        public void setMaxSessionTimeHours(Double maxSessionTimeHours) {
+            this.maxSessionTimeHours = maxSessionTimeHours;
+        }
+
+        public void setIsActive(Boolean isActive) {
+            this.isActive = isActive;
         }
     }
     

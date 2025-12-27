@@ -2,6 +2,7 @@ package com.ds.session.session_service.business.v1.services;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -19,6 +20,7 @@ import com.ds.session.session_service.app_context.models.DeliveryProof;
 import com.ds.session.session_service.app_context.models.DeliverySession;
 import com.ds.session.session_service.app_context.repositories.DeliveryAssignmentRepository;
 import com.ds.session.session_service.app_context.repositories.DeliverySessionRepository;
+import com.ds.session.session_service.application.client.communicationclient.CommunicationServiceClient;
 import com.ds.session.session_service.application.client.parcelclient.ParcelServiceClient;
 import com.ds.session.session_service.application.client.parcelclient.response.ParcelResponse;
 import com.ds.session.session_service.infrastructure.kafka.ParcelEventPublisher;
@@ -61,6 +63,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     private final DeliveryAssignmentRepository deliveryAssignmentRepository;
     private final DeliverySessionRepository deliverySessionRepository;
     private final ParcelServiceClient parcelServiceClient;
+    private final CommunicationServiceClient communicationServiceClient;
     private final ParcelEventPublisher parcelEventPublisher;
     private final EventProducer eventProducer;
     private final ParcelMapper parcelMapper;
@@ -87,7 +90,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             .orElseThrow(() -> new IllegalStateException("Assignment not found: " + assignment.getId()));
 
         // Get deliveryManId from session (ensure session is loaded)
-        String deliveryManId = managedAssignment.getSession().getDeliveryManId();
+        String deliveryManId = managedAssignment.getShipperId();
 
         // Persist proofs directly to ensure assignment_id is set correctly
         for (String url : imageUrls) {
@@ -114,6 +117,57 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     }
 
     @Override
+    public DeliveryAssignmentResponse acceptTask(UUID deliveryManId, UUID assignmentId) {
+        log.debug("[DeliveryAssignmentService] Shipper {} accepting task {}", deliveryManId, assignmentId);
+        
+        DeliveryAssignment assignment = deliveryAssignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new ResourceNotFound("Assignment not found: " + assignmentId));
+        
+        // Accept PENDING or ASSIGNED assignments (backward compatibility)
+        if (assignment.getStatus() != AssignmentStatus.PENDING && 
+            assignment.getStatus() != AssignmentStatus.ASSIGNED) {
+            throw new IllegalStateException("Assignment is not in PENDING or ASSIGNED status. Current status: " + assignment.getStatus());
+        }
+        if (!assignment.getShipperId().equals(deliveryManId.toString())) {
+            throw new IllegalArgumentException("Assignment does not belong to delivery man: " + deliveryManId);
+        }
+
+        // Accept the task (PENDING/ASSIGNED -> ACCEPTED)
+        assignment.acceptTask();
+        deliveryAssignmentRepository.save(assignment);
+        
+        log.debug("[DeliveryAssignmentService] Assignment {} accepted by shipper {}. Status: {}", 
+            assignmentId, deliveryManId, assignment.getStatus());
+
+        // Fetch parcel info for response (use first parcel if multiple)
+        ParcelInfo parcel = null;
+        String receiverName = null;
+        String parcelId = null;
+        
+        if (assignment.getParcels() != null && !assignment.getParcels().isEmpty()) {
+            parcelId = assignment.getParcels().get(0).getParcelId();
+        } else if (assignment.getParcelId() != null) {
+            parcelId = assignment.getParcelId(); // Backward compatibility
+        }
+        
+        if (parcelId != null) {
+            try {
+                ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(parcelId);
+                if (parcelResponse != null) {
+                    parcel = parcelMapper.toParcelInfo(parcelResponse);
+                    receiverName = parcel != null ? parcel.getReceiverName() : null;
+                }
+            } catch (Exception e) {
+                log.debug("[DeliveryAssignmentService] Failed to fetch parcel info for parcel {}: {}", 
+                    parcelId, e.getMessage());
+                // Continue without parcel info - response will have null parcel info
+            }
+        }
+
+        return DeliveryAssignmentResponse.from(assignment, parcel, assignment.getSession(), null, receiverName);    
+    }
+
+    @Override
     public DeliveryAssignmentResponse completeTask(UUID parcelId, UUID deliveryManId, CompleteTaskRequest request) {
         Optional<DeliveryAssignment> assignmentOpt = deliveryAssignmentRepository
                     .findInProgressAssignmentByParcelIdAndDeliveryManId(parcelId.toString(), deliveryManId.toString());
@@ -128,8 +182,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         uploadProof(assignment, ProofType.DELIVERED, request.getProofImageUrls());
 
         return updateTaskState(
-                parcelId,
-                deliveryManId,
+                assignment.getId(),
                 request.getRouteInfo(),
                 AssignmentStatus.COMPLETED,
                 ParcelEvent.DELIVERY_SUCCESSFUL,
@@ -155,13 +208,8 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 request.getCurrentTimestamp(), "DELIVERED");
         }
 
-        // Get parcelId and deliveryManId from assignment
-        UUID parcelId = UUID.fromString(assignment.getParcelId());
-        UUID deliveryManId = UUID.fromString(assignment.getSession().getDeliveryManId());
-
         return updateTaskState(
-                parcelId,
-                deliveryManId,
+                assignmentId,
                 request.getRouteInfo(),
                 AssignmentStatus.COMPLETED,
                 ParcelEvent.DELIVERY_SUCCESSFUL,
@@ -212,11 +260,10 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     }
 
     @Override
-    public DeliveryAssignmentResponse deliveryFailed(UUID parcelId, UUID deliveryManId, String reason,
+    public DeliveryAssignmentResponse deliveryFailed(UUID assignmentId, String reason,
             RouteInfo routeInfo) {
         return updateTaskState(
-                parcelId,
-                deliveryManId,
+                assignmentId,
                 routeInfo,
                 AssignmentStatus.FAILED, // newStatus
                 ParcelEvent.CAN_NOT_DELIVERY, // parcelEvent
@@ -225,11 +272,10 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     }
 
     @Override
-    public DeliveryAssignmentResponse rejectedByCustomer(UUID parcelId, UUID deliveryManId, String reason,
+    public DeliveryAssignmentResponse rejectedByCustomer(UUID assignmentId, String reason,
             RouteInfo routeInfo) {
         return updateTaskState(
-                parcelId,
-                deliveryManId,
+                assignmentId,
                 routeInfo,
                 AssignmentStatus.FAILED, // newStatus
                 ParcelEvent.CUSTOMER_REJECT, // parcelEvent
@@ -237,124 +283,123 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         );
     }
 
-    @Override
-    public DeliveryAssignmentResponse postponeByCustomer(UUID parcelId, UUID deliveryManId, String reason,
-            RouteInfo routeInfo) {
-        log.debug("Postponing parcel {} for delivery man {} with reason: {}", parcelId, deliveryManId, reason);
-        try {
-            // First, try to find IN_PROGRESS assignment
-            Optional<DeliveryAssignment> assignmentOpt = deliveryAssignmentRepository
-                    .findInProgressAssignmentByParcelIdAndDeliveryManId(parcelId.toString(), deliveryManId.toString());
+    // @Override
+    // public DeliveryAssignmentResponse postponeByCustomer(UUID assignmentId, String reason,
+    //         RouteInfo routeInfo) {
+    //     log.debug("Postponing assignment {} with reason: {}", assignmentId, reason);
+    //     try {
+    //         // First, try to find IN_PROGRESS assignment
+    //         Optional<DeliveryAssignment> assignmentOpt = deliveryAssignmentRepository
+    //                 .findByIdAndStatus(assignmentId, AssignmentStatus.IN_PROGRESS);
 
-            if (assignmentOpt.isPresent()) {
-                // Found IN_PROGRESS assignment, proceed with postpone
-                // Set assignment to FAILED when client accepts postpone request
-                return updateTaskState(
-                        parcelId,
-                        deliveryManId,
-                        routeInfo,
-                        AssignmentStatus.FAILED, // newStatus - Set to FAILED when client accepts postpone
-                        ParcelEvent.POSTPONE, // parcelEvent - Changes parcel from ON_ROUTE to DELAY
-                        reason // failReason
-                );
-            } else {
-                // No IN_PROGRESS assignment found, check if already DELAYED (idempotent)
-                Optional<DeliveryAssignment> delayedAssignmentOpt = deliveryAssignmentRepository
-                        .findFirstByParcelIdOrderByUpdatedAtDesc(parcelId.toString())
-                        .filter(da -> da.getSession().getDeliveryManId().equals(deliveryManId.toString()))
-                        .filter(da -> da.getStatus() == AssignmentStatus.DELAYED);
+    //         if (assignmentOpt.isPresent()) {
+    //             // Found IN_PROGRESS assignment, proceed with postpone
+    //             // Set assignment to FAILED when client accepts postpone request
+    //             return updateTaskState(
+    //                     assignmentId,
+    //                     routeInfo,
+    //                     AssignmentStatus.FAILED, // newStatus - Set to FAILED when client accepts postpone
+    //                     ParcelEvent.POSTPONE, // parcelEvent - Changes parcel from ON_ROUTE to DELAY
+    //                     reason // failReason
+    //             );
+    //         } else {
+    //             // No IN_PROGRESS assignment found, check if already DELAYED (idempotent)
+    //             Optional<DeliveryAssignment> delayedAssignmentOpt = deliveryAssignmentRepository
+    //                     .findFirstByParcelIdOrderByUpdatedAtDesc(parcelId.toString())
+    //                     .filter(da -> da.getSession().getDeliveryManId().equals(deliveryManId.toString()))
+    //                     .filter(da -> da.getStatus() == AssignmentStatus.DELAYED);
 
-                if (delayedAssignmentOpt.isPresent()) {
-                    DeliveryAssignment delayedAssignment = delayedAssignmentOpt.get();
-                    log.debug(
-                            "Assignment {} for parcel {} is already DELAYED. Returning existing assignment (idempotent operation).",
-                            delayedAssignment.getId(), parcelId);
-                    // Update reason if provided
-                    if (reason != null && !reason.isEmpty()) {
-                        delayedAssignment.setFailReason(reason);
-                        deliveryAssignmentRepository.save(delayedAssignment);
-                    }
-                    // Fetch parcel info to create response
-                    ParcelInfo parcel = null;
-                    String receiverName = null;
-                    try {
-                        ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(parcelId.toString());
-                        if (parcelResponse != null) {
-                            parcel = parcelMapper.toParcelInfo(parcelResponse);
-                            receiverName = parcel != null ? parcel.getReceiverName() : null;
-                        }
-                    } catch (Exception e) {
-                        log.debug("[session-service] [DeliveryAssignmentService.postponeParcel] Failed to fetch parcel info for already DELAYED assignment: {}", e.getMessage());
-                    }
-                    return DeliveryAssignmentResponse.from(delayedAssignment, parcel, delayedAssignment.getSession(),
-                            null, receiverName);
-                }
+    //             if (delayedAssignmentOpt.isPresent()) {
+    //                 DeliveryAssignment delayedAssignment = delayedAssignmentOpt.get();
+    //                 log.debug(
+    //                         "Assignment {} for parcel {} is already DELAYED. Returning existing assignment (idempotent operation).",
+    //                         delayedAssignment.getId(), parcelId);
+    //                 // Update reason if provided
+    //                 if (reason != null && !reason.isEmpty()) {
+    //                     delayedAssignment.setFailReason(reason);
+    //                     deliveryAssignmentRepository.save(delayedAssignment);
+    //                 }
+    //                 // Fetch parcel info to create response
+    //                 ParcelInfo parcel = null;
+    //                 String receiverName = null;
+    //                 try {
+    //                     ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(parcelId.toString());
+    //                     if (parcelResponse != null) {
+    //                         parcel = parcelMapper.toParcelInfo(parcelResponse);
+    //                         receiverName = parcel != null ? parcel.getReceiverName() : null;
+    //                     }
+    //                 } catch (Exception e) {
+    //                     log.debug("[session-service] [DeliveryAssignmentService.postponeParcel] Failed to fetch parcel info for already DELAYED assignment: {}", e.getMessage());
+    //                 }
+    //                 return DeliveryAssignmentResponse.from(delayedAssignment, parcel, delayedAssignment.getSession(),
+    //                         null, receiverName);
+    //             }
 
-                // NEW: Check if there is a FAILED assignment that can be transitioned to
-                // DELAYED
-                // This handles cases where driver marked as FAILED, but then Customer requests
-                // Postpone
-                Optional<DeliveryAssignment> failedAssignmentOpt = deliveryAssignmentRepository
-                        .findFirstByParcelIdOrderByUpdatedAtDesc(parcelId.toString())
-                        .filter(da -> da.getSession().getDeliveryManId().equals(deliveryManId.toString()))
-                        .filter(da -> da.getStatus() == AssignmentStatus.FAILED);
+    //             // NEW: Check if there is a FAILED assignment that can be transitioned to
+    //             // DELAYED
+    //             // This handles cases where driver marked as FAILED, but then Customer requests
+    //             // Postpone
+    //             Optional<DeliveryAssignment> failedAssignmentOpt = deliveryAssignmentRepository
+    //                     .findFirstByParcelIdOrderByUpdatedAtDesc(parcelId.toString())
+    //                     .filter(da -> da.getSession().getDeliveryManId().equals(deliveryManId.toString()))
+    //                     .filter(da -> da.getStatus() == AssignmentStatus.FAILED);
 
-                if (failedAssignmentOpt.isPresent()) {
-                    DeliveryAssignment failedAssignment = failedAssignmentOpt.get();
-                    log.debug(
-                            "[session-service] [DeliveryAssignmentService.postponeParcel] Found FAILED assignment {} for parcel {}. Keeping as FAILED (client accepted postpone).",
-                            failedAssignment.getId(), parcelId);
+    //             if (failedAssignmentOpt.isPresent()) {
+    //                 DeliveryAssignment failedAssignment = failedAssignmentOpt.get();
+    //                 log.debug(
+    //                         "[session-service] [DeliveryAssignmentService.postponeParcel] Found FAILED assignment {} for parcel {}. Keeping as FAILED (client accepted postpone).",
+    //                         failedAssignment.getId(), parcelId);
 
-                    // Keep assignment as FAILED when client accepts postpone request
-                    // Just update failReason and routeInfo if needed
-                    failedAssignment.setFailReason(reason);
-                    if (routeInfo != null) {
-                        setRouteInfo(failedAssignment, routeInfo);
-                    }
+    //                 // Keep assignment as FAILED when client accepts postpone request
+    //                 // Just update failReason and routeInfo if needed
+    //                 failedAssignment.setFailReason(reason);
+    //                 if (routeInfo != null) {
+    //                     setRouteInfo(failedAssignment, routeInfo);
+    //                 }
 
-                    deliveryAssignmentRepository.save(failedAssignment);
+    //                 deliveryAssignmentRepository.save(failedAssignment);
 
-                    // Publish event to change parcel status to DELAY
-                    try {
-                        parcelEventPublisher.publish(parcelId.toString(), ParcelEvent.POSTPONE);
-                    } catch (Exception e) {
-                        log.error("[session-service] [DeliveryAssignmentService.postponeParcel] Failed to publish POSTPONE event for FAILED assignment", e);
-                    }
+    //                 // Publish event to change parcel status to DELAY
+    //                 try {
+    //                     parcelEventPublisher.publish(parcelId.toString(), ParcelEvent.POSTPONE);
+    //                 } catch (Exception e) {
+    //                     log.error("[session-service] [DeliveryAssignmentService.postponeParcel] Failed to publish POSTPONE event for FAILED assignment", e);
+    //                 }
 
-                    // Fetch parcel info
-                    ParcelInfo parcel = null;
-                    String receiverName = null;
-                    try {
-                        ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(parcelId.toString());
-                        if (parcelResponse != null) {
-                            parcel = parcelMapper.toParcelInfo(parcelResponse);
-                            receiverName = parcel != null ? parcel.getReceiverName() : null;
-                        }
-                    } catch (Exception e) {
-                        log.debug("[session-service] [DeliveryAssignmentService.postponeParcel] Failed to fetch parcel info: {}", e.getMessage());
-                    }
+    //                 // Fetch parcel info
+    //                 ParcelInfo parcel = null;
+    //                 String receiverName = null;
+    //                 try {
+    //                     ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(parcelId.toString());
+    //                     if (parcelResponse != null) {
+    //                         parcel = parcelMapper.toParcelInfo(parcelResponse);
+    //                         receiverName = parcel != null ? parcel.getReceiverName() : null;
+    //                     }
+    //                 } catch (Exception e) {
+    //                     log.debug("[session-service] [DeliveryAssignmentService.postponeParcel] Failed to fetch parcel info: {}", e.getMessage());
+    //                 }
 
-                    return DeliveryAssignmentResponse.from(failedAssignment, parcel, failedAssignment.getSession(),
-                            null, receiverName);
-                }
+    //                 return DeliveryAssignmentResponse.from(failedAssignment, parcel, failedAssignment.getSession(),
+    //                         null, receiverName);
+    //             }
 
-                // No assignment found at all
-                throw new ResourceNotFound(
-                        "No IN_PROGRESS, DELAYED, or FAILED assignment found for parcel " + parcelId
-                                + " and delivery man "
-                                + deliveryManId);
-            }
-        } catch (Exception e) {
-            log.error("[session-service] [DeliveryAssignmentService.postponeParcel] Error postponing parcel {} for delivery man {}", parcelId, deliveryManId, e);
-            throw e;
-        }
-    }
+    //             // No assignment found at all
+    //             throw new ResourceNotFound(
+    //                     "No IN_PROGRESS, DELAYED, or FAILED assignment found for parcel " + parcelId
+    //                             + " and delivery man "
+    //                             + deliveryManId);
+    //         }
+    //     } catch (Exception e) {
+    //         log.error("[session-service] [DeliveryAssignmentService.postponeParcel] Error postponing parcel {} for delivery man {}", parcelId, deliveryManId, e);
+    //         throw e;
+    //     }
+    // }
 
-    private DeliveryAssignmentResponse updateTaskState(UUID parcelId, UUID deliveryManId, RouteInfo routeInfo,
+    private DeliveryAssignmentResponse updateTaskState(UUID assignmentId, RouteInfo routeInfo,
             AssignmentStatus newStatus, ParcelEvent parcelEvent, String failReason) {
 
-        log.debug("Updating task state: parcelId={}, deliveryManId={}, newStatus={}, parcelEvent={}",
-                parcelId, deliveryManId, newStatus, parcelEvent);
+        log.debug("Updating task state: assignmentId={}, newStatus={}, parcelEvent={}",
+                assignmentId, newStatus, parcelEvent);
 
         // 1. Tìm assignment IN_PROGRESS trực tiếp theo parcelId và deliveryManId (không
         // cần active session)
@@ -363,14 +408,13 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         DeliveryAssignment assignment;
         try {
             assignment = deliveryAssignmentRepository
-                    .findInProgressAssignmentByParcelIdAndDeliveryManId(parcelId.toString(), deliveryManId.toString())
+                    .findByIdAndStatus(assignmentId, AssignmentStatus.IN_PROGRESS)
                     .orElseThrow(() -> new ResourceNotFound(
-                            "IN_PROGRESS assignment for parcel " + parcelId + " not found for delivery man "
-                                    + deliveryManId));
-            log.debug("Found assignment: {} for parcel: {} and delivery man: {}",
-                    assignment.getId(), parcelId, deliveryManId);
+                            "IN_PROGRESS assignment for id " + assignmentId + " not found"));
+            log.debug("Found assignment: {} ",
+                    assignment.getId());
         } catch (Exception e) {
-            log.error("[session-service] [DeliveryAssignmentService.updateTaskState] Failed to find IN_PROGRESS assignment for parcel {} and delivery man {}", parcelId, deliveryManId, e);
+            log.error("[session-service] [DeliveryAssignmentService.updateTaskState] Failed to find IN_PROGRESS assignment for id {}", assignmentId, e);
             throw e;
         }
 
@@ -403,11 +447,11 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         // 5. Đồng bộ với Parcel service
         // publish event to parcel-service instead of direct REST call
         try {
-            log.debug("Publishing parcel event: {} for parcel: {}", parcelEvent, parcelId);
-            parcelEventPublisher.publish(parcelId.toString(), parcelEvent);
-            log.debug("Successfully published parcel event: {} for parcel: {}", parcelEvent, parcelId);
+            log.debug("Publishing parcel event: {} for parcel: {}", parcelEvent, assignment.getParcelId());
+            parcelEventPublisher.publish(assignment.getParcelId().toString(), parcelEvent);
+            log.debug("Successfully published parcel event: {} for parcel: {}", parcelEvent, assignment.getParcelId());
         } catch (Exception e) {
-            log.error("[session-service] [DeliveryAssignmentService.updateTaskState] Failed to publish parcel status event for parcel {}", parcelId, e);
+            log.error("[session-service] [DeliveryAssignmentService.updateTaskState] Failed to publish parcel status event for parcel {}", assignment.getParcelId(), e);
             // Don't throw - allow assignment status update to proceed even if event publish
             // fails
             // The event can be retried or handled separately
@@ -416,6 +460,9 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         // 6. Cập nhật trạng thái (tham số hóa)
         assignment.setStatus(newStatus);
         assignment.setFailReason(failReason);
+
+        // 6.5. Tạo ticket tự động nếu cần thiết
+        createTicketIfNeeded(assignment, session, parcelEvent, failReason);
 
         // 7. Lưu
         try {
@@ -426,31 +473,29 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             throw new RuntimeException("Failed to save assignment: " + e.getMessage(), e);
         }
 
-        // 8. Fetch parcel information for response (includes receiver info from
-        // UserSnapshot)
+        // 8. Fetch parcel information for response (includes receiver info from User Service)
         ParcelInfo parcel = null;
         String receiverName = null;
         String receiverId = null;
         String receiverPhone = null;
         String parcelCode = null;
         try {
-            log.debug("Fetching parcel information for parcelId: {}", parcelId);
-            ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(parcelId.toString());
+            log.debug("Fetching parcel information for parcelId: {}", assignment.getParcelId());
+            ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(assignment.getParcelId().toString());
             if (parcelResponse != null) {
                 parcel = parcelMapper.toParcelInfo(parcelResponse);
-                // Extract receiver info from parcel response (already includes UserSnapshot
-                // data)
+                // Extract receiver info from parcel response (already includes User Service data)
                 receiverName = parcel != null ? parcel.getReceiverName() : null;
                 receiverId = parcel != null ? parcel.getReceiverId() : null;
                 receiverPhone = parcel != null ? parcel.getReceiverPhoneNumber() : null;
                 parcelCode = parcel != null ? parcel.getCode() : null;
-                log.debug("Successfully fetched parcel information for parcelId: {}, receiverName: {}", parcelId,
+                log.debug("Successfully fetched parcel information for parcelId: {}, receiverName: {}", assignment.getParcelId(),
                         receiverName);
             } else {
-                log.debug("[session-service] [DeliveryAssignmentService.fetchParcelInfo] Parcel response is null for parcelId: {}", parcelId);
+                log.debug("[session-service] [DeliveryAssignmentService.fetchParcelInfo] Parcel response is null for parcelId: {}", assignment.getParcelId());
             }
         } catch (Exception e) {
-            log.error("[session-service] [DeliveryAssignmentService.fetchParcelInfo] Failed to fetch parcel information for parcelId {}. Response will have null parcel info.", parcelId, e);
+            log.error("[session-service] [DeliveryAssignmentService.fetchParcelInfo] Failed to fetch parcel information for parcelId {}. Response will have null parcel info.", assignment.getParcelId(), e);
             // Don't throw - allow response to be created with null parcel info
             // This is a fallback to prevent the entire request from failing
         }
@@ -461,10 +506,10 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 AssignmentCompletedEvent completedEvent = AssignmentCompletedEvent.builder()
                         .eventId(java.util.UUID.randomUUID().toString())
                         .assignmentId(assignment.getId().toString())
-                        .parcelId(parcelId.toString())
+                        .parcelId(assignment.getParcelId().toString())
                         .parcelCode(parcelCode)
                         .sessionId(session.getId().toString())
-                        .deliveryManId(deliveryManId.toString())
+                        .deliveryManId(assignment.getShipperId().toString())
                         .deliveryManName(null) // Will be enriched by communication-service if needed
                         .receiverId(receiverId)
                         .receiverName(receiverName)
@@ -475,11 +520,11 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                         .createdAt(java.time.Instant.now())
                         .build();
 
-                eventProducer.publishAssignmentCompleted(parcelId.toString(), completedEvent);
-                log.debug("Published AssignmentCompletedEvent for parcel: {}, assignment: {}", parcelId,
+                eventProducer.publishAssignmentCompleted(assignment.getParcelId().toString(), completedEvent);
+                log.debug("Published AssignmentCompletedEvent for parcel: {}, assignment: {}", assignment.getParcelId(),
                         assignment.getId());
             } catch (Exception e) {
-                log.error("[session-service] [DeliveryAssignmentService.completeTask] Failed to publish AssignmentCompletedEvent for parcel {}. Continuing...", parcelId, e);
+                log.error("[session-service] [DeliveryAssignmentService.completeTask] Failed to publish AssignmentCompletedEvent for parcel {}. Continuing...", assignment.getParcelId(), e);
                 // Don't throw - notification is not critical for task completion
             }
         }
@@ -489,8 +534,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         //     checkAndAutoCompleteSession(session);
         // }
 
-        // 11. Trả về DTO (receiverName comes from parcel which already includes
-        // UserSnapshot data)
+        // 11. Trả về DTO (receiverName comes from parcel which already includes User Service data)
         // Note: deliveryManPhone is not needed - the shipper already knows their own
         // phone number
         return DeliveryAssignmentResponse.from(assignment, parcel, assignment.getSession(), null, receiverName);
@@ -499,38 +543,38 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     /**
      * Check if session has no more pending tasks and auto-complete it
      */
-    private void checkAndAutoCompleteSession(DeliverySession session) {
-        if (session == null) {
-            return;
-        }
+    // private void checkAndAutoCompleteSession(DeliverySession session) {
+    //     if (session == null) {
+    //         return;
+    //     }
         
-        // Only auto-complete sessions that are CREATED or IN_PROGRESS
-        if (session.getStatus() != SessionStatus.CREATED && session.getStatus() != SessionStatus.IN_PROGRESS) {
-            log.debug("[session-service] [DeliveryAssignmentService.checkAndAutoCompleteSession] Session {} is already {}. Skipping auto-complete check.", 
-                session.getId(), session.getStatus());
-            return;
-        }
+    //     // Only auto-complete sessions that are CREATED or IN_PROGRESS
+    //     if (session.getStatus() != SessionStatus.CREATED && session.getStatus() != SessionStatus.IN_PROGRESS) {
+    //         log.debug("[session-service] [DeliveryAssignmentService.checkAndAutoCompleteSession] Session {} is already {}. Skipping auto-complete check.", 
+    //             session.getId(), session.getStatus());
+    //         return;
+    //     }
         
-        // Count pending tasks (CREATED or IN_PROGRESS)
-        long pendingCount = deliveryAssignmentRepository.countPendingTasksBySessionId(session.getId());
-        log.debug("[session-service] [DeliveryAssignmentService.checkAndAutoCompleteSession] Session {} has {} pending tasks", 
-            session.getId(), pendingCount);
+    //     // Count pending tasks (CREATED or IN_PROGRESS)
+    //     long pendingCount = deliveryAssignmentRepository.countPendingTasksBySessionId(session.getId());
+    //     log.debug("[session-service] [DeliveryAssignmentService.checkAndAutoCompleteSession] Session {} has {} pending tasks", 
+    //         session.getId(), pendingCount);
         
-        if (pendingCount == 0) {
-            log.info("[session-service] [DeliveryAssignmentService.checkAndAutoCompleteSession] Session {} has no more pending tasks. Auto-completing session.", 
-                session.getId());
+    //     if (pendingCount == 0) {
+    //         log.info("[session-service] [DeliveryAssignmentService.checkAndAutoCompleteSession] Session {} has no more pending tasks. Auto-completing session.", 
+    //             session.getId());
             
-            try {
-                // Use SessionService.completeSession to properly publish events
-                sessionService.completeSession(session.getId());
-                log.info("[session-service] [DeliveryAssignmentService.checkAndAutoCompleteSession] Session {} auto-completed successfully.", 
-                    session.getId());
-            } catch (Exception e) {
-                log.error("[session-service] [DeliveryAssignmentService.checkAndAutoCompleteSession] Failed to auto-complete session {}", 
-                    session.getId(), e);
-            }
-        }
-    }
+    //         try {
+    //             // Use SessionService.completeSession to properly publish events
+    //             sessionService.completeSession(session.getId());
+    //             log.info("[session-service] [DeliveryAssignmentService.checkAndAutoCompleteSession] Session {} auto-completed successfully.", 
+    //                 session.getId());
+    //         } catch (Exception e) {
+    //             log.error("[session-service] [DeliveryAssignmentService.checkAndAutoCompleteSession] Failed to auto-complete session {}", 
+    //                 session.getId(), e);
+    //         }
+    //     }
+    // }
 
     /**
      * getDailyTasks giờ sẽ trả về các task của SESSION ĐANG HOẠT ĐỘNG
@@ -577,6 +621,34 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         // 4. Gọi Repository
         log.debug("Querying database for tasks...");
         Page<DeliveryAssignment> tasksPage = deliveryAssignmentRepository.findAll(spec, pageable);
+        log.debug("Found {} tasks from database (total: {})", tasksPage.getNumberOfElements(),
+                tasksPage.getTotalElements());
+
+        // 5. Ánh xạ kết quả sang DTO
+        log.debug("Enriching tasks with parcel information...");
+        PageResponse<DeliveryAssignmentResponse> response = getEnrichedTasks(tasksPage);
+        log.debug("Returning {} enriched tasks", response.getContent().size());
+        return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true) // Dùng readOnly cho các hàm GET
+    public PageResponse<DeliveryAssignmentResponse> getAssignedTaskForShipper(
+            UUID deliveryManId, int page, int size) {
+        log.debug("Starting getAssignedTaskForShipper for deliveryManId: {}, page: {}, size: {}",
+                deliveryManId, page, size);
+
+        // 1. Xây dựng đối tượng phân trang
+        // (Mặc định sắp xếp theo thời gian gán (assignedAt) mới nhất)
+        Pageable pageable = PageUtil.build(page, size, "assignedAt", "desc", DeliveryAssignment.class);
+        log.debug("Pageable created: page={}, size={}", page, size);
+
+        // 4. Gọi Repository
+        log.debug("Querying database for tasks...");
+        Page<DeliveryAssignment> tasksPage = deliveryAssignmentRepository.findByShipperIdAndStatus(
+            deliveryManId, 
+            AssignmentStatus.ASSIGNED, 
+            pageable);
         log.debug("Found {} tasks from database (total: {})", tasksPage.getNumberOfElements(),
                 tasksPage.getTotalElements());
 
@@ -693,8 +765,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                         entry -> parcelMapper.toParcelInfo(entry.getValue())));
 
         // 3. Map dữ liệu - only include tasks where we successfully fetched parcel info
-        // Note: Receiver info (name, phone) comes from parcel response which already
-        // includes UserSnapshot data
+        // Note: Receiver info (name, phone) comes from parcel response which already includes User Service data
         // Note: deliveryManPhone is not needed - the shipper already knows their own
         // phone number
         List<DeliveryAssignmentResponse> dtoList = tasks.stream().map(t -> {
@@ -703,8 +774,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 log.debug("[session-service] [DeliveryAssignmentService.getEnrichedTasks] Parcel info not available for parcelId: {}. Skipping task.", t.getParcelId());
                 return null;
             }
-            // Extract receiver name from parcel info (already includes UserSnapshot data
-            // from parcel-service)
+            // Extract receiver name from parcel info (already includes User Service data from parcel-service)
             String receiverName = parcelInfo.getReceiverName();
             return DeliveryAssignmentResponse.from(t, parcelInfo, t.getSession(), null, receiverName);
 
@@ -933,7 +1003,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         //     checkAndAutoCompleteSessionIfOnlyPostponedRemain(session);
         // }
 
-        // 10. Fetch parcel information (includes receiver info from UserSnapshot)
+        // 10. Fetch parcel information (includes receiver info from User Service)
         ParcelInfo parcel = null;
         String receiverName = null;
         try {
@@ -1182,12 +1252,84 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         // 6. Save
         deliveryAssignmentRepository.save(assignment);
 
-        // 7. Extract receiver info from parcel (already includes UserSnapshot data from
-        // parcel-service)
+        // 7. Extract receiver info from parcel (already includes User Service data from parcel-service)
         String receiverName = parcel != null ? parcel.getReceiverName() : null;
 
         // 8. Return DTO (deliveryManPhone not needed - shipper knows their own phone)
         return DeliveryAssignmentResponse.from(assignment, parcel, assignment.getSession(), null, receiverName);
+    }
+
+    /**
+     * Create ticket automatically when certain parcel events occur:
+     * - CAN_NOT_DELIVERY → DELIVERY_FAILED ticket (reporter: shipper)
+     * - CUSTOMER_REJECT → DELIVERY_FAILED ticket (reporter: shipper)
+     * - CUSTOMER_CONFIRM_NOT_RECEIVED → NOT_RECEIVED ticket (reporter: client)
+     * 
+     * Note: CUSTOMER_CONFIRM_NOT_RECEIVED is typically handled by client-side, but we include it here for completeness
+     */
+    private void createTicketIfNeeded(DeliveryAssignment assignment, DeliverySession session, 
+                                     ParcelEvent parcelEvent, String failReason) {
+        try {
+            String ticketType = null;
+            String reporterId = null;
+            String description = null;
+            
+            // Determine ticket type and reporter based on event
+            switch (parcelEvent) {
+                case CAN_NOT_DELIVERY:
+                    ticketType = "DELIVERY_FAILED";
+                    reporterId = session.getDeliveryManId(); // Shipper reports failure
+                    description = "Shipper báo giao thất bại: " + (failReason != null ? failReason : "Không thể giao hàng");
+                    break;
+                    
+                case CUSTOMER_REJECT:
+                    ticketType = "DELIVERY_FAILED";
+                    reporterId = session.getDeliveryManId(); // Shipper reports customer rejection
+                    description = "Khách hàng từ chối nhận hàng: " + (failReason != null ? failReason : "Customer rejected");
+                    break;
+                    
+                case CUSTOMER_CONFIRM_NOT_RECEIVED:
+                    // This event is typically created by client, but if it comes through here, we'll handle it
+                    // We need to get receiver ID from parcel
+                    ticketType = "NOT_RECEIVED";
+                    try {
+                        ParcelResponse parcel = parcelServiceClient.fetchParcelResponse(assignment.getParcelId());
+                        if (parcel != null && parcel.getReceiverId() != null) {
+                            reporterId = parcel.getReceiverId(); // Client reports not received
+                            description = "Khách hàng xác nhận chưa nhận được hàng";
+                        } else {
+                            log.warn("[DeliveryAssignmentService] Cannot create NOT_RECEIVED ticket: parcel receiverId not found for parcel {}", assignment.getParcelId());
+                            return;
+                        }
+                    } catch (Exception e) {
+                        log.warn("[DeliveryAssignmentService] Cannot create NOT_RECEIVED ticket: failed to fetch parcel {}", assignment.getParcelId(), e);
+                        return;
+                    }
+                    break;
+                    
+                default:
+                    // No ticket needed for other events
+                    return;
+            }
+            
+            // Create ticket via communication service
+            CommunicationServiceClient.CreateTicketRequest ticketRequest = 
+                new CommunicationServiceClient.CreateTicketRequest(
+                    ticketType,
+                    assignment.getParcelId(),
+                    assignment.getId().toString(),
+                    description
+                );
+            
+            communicationServiceClient.createTicket(ticketRequest, reporterId);
+            log.info("[DeliveryAssignmentService] Created ticket automatically: type={}, parcelId={}, assignmentId={}, reporterId={}", 
+                ticketType, assignment.getParcelId(), assignment.getId(), reporterId);
+                
+        } catch (Exception e) {
+            // Don't throw - ticket creation failure should not block assignment status update
+            log.error("[DeliveryAssignmentService] Failed to create ticket automatically for parcel {}: {}", 
+                assignment.getParcelId(), e.getMessage(), e);
+        }
     }
 
     private ParcelInfo updateParcelStatusAndMap(UUID parcelId, ParcelEvent event) {
@@ -1259,5 +1401,230 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
+    }
+
+    @Override
+    public List<DeliveryAssignmentResponse> getAssignmentsByIds(List<UUID> assignmentIds) {
+        if (assignmentIds == null || assignmentIds.isEmpty()) {
+            return List.of();
+        }
+        log.debug("Getting assignments by IDs: count={}", assignmentIds.size());
+        List<DeliveryAssignment> assignments = deliveryAssignmentRepository.findByIdIn(assignmentIds);
+        return convertAssignmentsToResponse(assignments);
+    }
+
+    @Override
+    public List<DeliveryAssignmentResponse> getAssignmentsByParcelIds(List<String> parcelIds) {
+        if (parcelIds == null || parcelIds.isEmpty()) {
+            return List.of();
+        }
+        log.debug("Getting assignments by parcel IDs: count={}", parcelIds.size());
+        List<DeliveryAssignment> assignments = deliveryAssignmentRepository.findByParcelIdIn(parcelIds);
+        return convertAssignmentsToResponse(assignments);
+    }
+
+    @Override
+    public List<DeliveryAssignmentResponse> getAssignmentsBySessionIds(List<UUID> sessionIds) {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return List.of();
+        }
+        log.debug("Getting assignments by session IDs: count={}", sessionIds.size());
+        List<DeliveryAssignment> assignments = deliveryAssignmentRepository.findBySession_IdIn(sessionIds);
+        return convertAssignmentsToResponse(assignments);
+    }
+
+    @Override
+    public List<DeliveryAssignmentResponse> getAssignmentsByShipperIds(List<UUID> shipperIds) {
+        if (shipperIds == null || shipperIds.isEmpty()) {
+            return List.of();
+        }
+        log.debug("Getting assignments by shipper IDs: count={}", shipperIds.size());
+        List<DeliveryAssignment> assignments = deliveryAssignmentRepository.findByShipperIdIn(shipperIds);
+        return convertAssignmentsToResponse(assignments);
+    }
+
+    /**
+     * Helper method to convert list of assignments to response DTOs
+     * Fetches parcel info in bulk for efficiency
+     */
+    private List<DeliveryAssignmentResponse> convertAssignmentsToResponse(List<DeliveryAssignment> assignments) {
+        if (assignments == null || assignments.isEmpty()) {
+            return List.of();
+        }
+
+        // Fetch parcel info in bulk
+        List<UUID> parcelIds = assignments.stream()
+                .map(a -> UUID.fromString(a.getParcelId()))
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<String, ParcelInfo> parcelInfoMap = new HashMap<>();
+        if (!parcelIds.isEmpty()) {
+            try {
+                Map<String, ParcelResponse> parcelResponseMap = parcelServiceClient.fetchParcelsBulk(parcelIds);
+                for (Map.Entry<String, ParcelResponse> entry : parcelResponseMap.entrySet()) {
+                    if (entry.getValue() != null) {
+                        parcelInfoMap.put(entry.getKey(), parcelMapper.toParcelInfo(entry.getValue()));
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[session-service] [DeliveryAssignmentService.convertAssignmentsToResponse] Failed to fetch parcels in bulk: {}", e.getMessage());
+            }
+        }
+
+        // Convert assignments to responses
+        return assignments.stream()
+                .map(assignment -> {
+                    ParcelInfo parcelInfo = parcelInfoMap.get(assignment.getParcelId());
+                    String receiverName = parcelInfo != null ? parcelInfo.getReceiverName() : null;
+                    return DeliveryAssignmentResponse.from(assignment, parcelInfo, assignment.getSession(), null, receiverName);
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public PageResponse<DeliveryAssignmentResponse> getAssignmentsByIdsPaged(List<UUID> assignmentIds, int page, int size) {
+        if (assignmentIds == null || assignmentIds.isEmpty()) {
+            return PageResponse.<DeliveryAssignmentResponse>builder()
+                    .content(Collections.emptyList())
+                    .pageNo(page)
+                    .pageSize(size)
+                    .totalElements(0)
+                    .totalPages(0)
+                    .last(true)
+                    .build();
+        }
+        log.debug("Getting assignments by IDs with paging: count={}, page={}, size={}", assignmentIds.size(), page, size);
+        
+        List<DeliveryAssignment> allAssignments = deliveryAssignmentRepository.findByIdIn(assignmentIds);
+        
+        // Apply pagination
+        int start = page * size;
+        int end = Math.min(start + size, allAssignments.size());
+        List<DeliveryAssignment> pagedAssignments = start < allAssignments.size() ? allAssignments.subList(start, end) : List.of();
+        
+        // Convert with join support (fetch parcel info in bulk)
+        List<DeliveryAssignmentResponse> content = convertAssignmentsToResponse(pagedAssignments);
+        
+        long totalElements = allAssignments.size();
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
+        boolean last = page >= totalPages - 1;
+        
+        return PageResponse.<DeliveryAssignmentResponse>builder()
+                .content(content)
+                .pageNo(page)
+                .pageSize(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last(last)
+                .build();
+    }
+
+    @Override
+    public PageResponse<DeliveryAssignmentResponse> getAssignmentsByParcelIdsPaged(List<String> parcelIds, int page, int size) {
+        if (parcelIds == null || parcelIds.isEmpty()) {
+            return PageResponse.<DeliveryAssignmentResponse>builder()
+                    .content(Collections.emptyList())
+                    .pageNo(page)
+                    .pageSize(size)
+                    .totalElements(0)
+                    .totalPages(0)
+                    .last(true)
+                    .build();
+        }
+        log.debug("Getting assignments by parcel IDs with paging: count={}, page={}, size={}", parcelIds.size(), page, size);
+        
+        List<DeliveryAssignment> allAssignments = deliveryAssignmentRepository.findByParcelIdIn(parcelIds);
+        
+        int start = page * size;
+        int end = Math.min(start + size, allAssignments.size());
+        List<DeliveryAssignment> pagedAssignments = start < allAssignments.size() ? allAssignments.subList(start, end) : List.of();
+        
+        List<DeliveryAssignmentResponse> content = convertAssignmentsToResponse(pagedAssignments);
+        
+        long totalElements = allAssignments.size();
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
+        boolean last = page >= totalPages - 1;
+        
+        return PageResponse.<DeliveryAssignmentResponse>builder()
+                .content(content)
+                .pageNo(page)
+                .pageSize(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last(last)
+                .build();
+    }
+
+    @Override
+    public PageResponse<DeliveryAssignmentResponse> getAssignmentsBySessionIdsPaged(List<UUID> sessionIds, int page, int size) {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return PageResponse.<DeliveryAssignmentResponse>builder()
+                    .content(Collections.emptyList())
+                    .pageNo(page)
+                    .pageSize(size)
+                    .totalElements(0)
+                    .totalPages(0)
+                    .last(true)
+                    .build();
+        }
+        log.debug("Getting assignments by session IDs with paging: count={}, page={}, size={}", sessionIds.size(), page, size);
+        
+        List<DeliveryAssignment> allAssignments = deliveryAssignmentRepository.findBySession_IdIn(sessionIds);
+        
+        int start = page * size;
+        int end = Math.min(start + size, allAssignments.size());
+        List<DeliveryAssignment> pagedAssignments = start < allAssignments.size() ? allAssignments.subList(start, end) : List.of();
+        
+        List<DeliveryAssignmentResponse> content = convertAssignmentsToResponse(pagedAssignments);
+        
+        long totalElements = allAssignments.size();
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
+        boolean last = page >= totalPages - 1;
+        
+        return PageResponse.<DeliveryAssignmentResponse>builder()
+                .content(content)
+                .pageNo(page)
+                .pageSize(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last(last)
+                .build();
+    }
+
+    @Override
+    public PageResponse<DeliveryAssignmentResponse> getAssignmentsByShipperIdsPaged(List<UUID> shipperIds, int page, int size) {
+        if (shipperIds == null || shipperIds.isEmpty()) {
+            return PageResponse.<DeliveryAssignmentResponse>builder()
+                    .content(Collections.emptyList())
+                    .pageNo(page)
+                    .pageSize(size)
+                    .totalElements(0)
+                    .totalPages(0)
+                    .last(true)
+                    .build();
+        }
+        log.debug("Getting assignments by shipper IDs with paging: count={}, page={}, size={}", shipperIds.size(), page, size);
+        
+        List<DeliveryAssignment> allAssignments = deliveryAssignmentRepository.findByShipperIdIn(shipperIds);
+        
+        int start = page * size;
+        int end = Math.min(start + size, allAssignments.size());
+        List<DeliveryAssignment> pagedAssignments = start < allAssignments.size() ? allAssignments.subList(start, end) : List.of();
+        
+        List<DeliveryAssignmentResponse> content = convertAssignmentsToResponse(pagedAssignments);
+        
+        long totalElements = allAssignments.size();
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
+        boolean last = page >= totalPages - 1;
+        
+        return PageResponse.<DeliveryAssignmentResponse>builder()
+                .content(content)
+                .pageNo(page)
+                .pageSize(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last(last)
+                .build();
     }
 }

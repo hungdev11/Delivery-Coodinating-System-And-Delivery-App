@@ -149,3 +149,22 @@ export const deleteProposalConfig = async (
 ): Promise<DeleteProposalConfigResponse> => {
   return apiClient.delete<DeleteProposalConfigResponse>(`/v1/admin/proposals/configs/${configId}`)
 }
+
+/**
+ * Generate session key for seed progress tracking
+ */
+export interface GenerateSeedSessionKeyResponse {
+  result: {
+    sessionKey: string
+    websocketTopic: string
+  }
+  success: boolean
+  message?: string
+}
+
+export const generateSeedSessionKey = async (): Promise<GenerateSeedSessionKeyResponse> => {
+  return apiClient.post<GenerateSeedSessionKeyResponse, null>(
+    '/v1/seed-progress/session-key',
+    null,
+  )
+}
