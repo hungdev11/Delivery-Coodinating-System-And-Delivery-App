@@ -8,41 +8,34 @@ import {
   onMounted,
   defineAsyncComponent,
   ref,
-  computed,
-  watch,
-  reactive,
   resolveComponent,
   h,
 } from 'vue'
 import { useRouter } from 'vue-router'
 import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
-import { useTemplateRef } from 'vue'
-import type { SortingState, Column } from '@tanstack/table-core'
-import type { FilterCondition, FilterGroup, SortConfig } from '@/common/types/filter'
+import type { Column } from '@tanstack/table-core'
+import type { FilterGroup, SortConfig } from '@/common/types/filter'
 import { useTaskManagement } from '../composables/useTaskManagement'
 import { getParcelsV2 } from '../../Parcels/api'
 import { getDeliveryMenV2 } from '../api'
 import TableHeaderCell from '@/common/components/TableHeaderCell.vue'
-import AdvancedFilterDrawer from '@/common/components/filters/AdvancedFilterDrawer.vue'
-import TableFilters from '@/common/components/table/TableFilters.vue'
-import type { ParcelDto } from '../../Parcels/model.type'
+import { ParcelDto, type ParcelStatus } from '../../Parcels/model.type'
 import { DeliveryManDto } from '../model.type'
-import type { ManualAssignmentRequest, AutoAssignmentRequest } from '../model.type'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import type { QueryPayload } from '@/common/types/filter'
-import { createSortConfig } from '@/common/utils/query-builder'
+import type { TableColumn } from '@nuxt/ui'
 
 const PageHeader = defineAsyncComponent(() => import('@/common/components/PageHeader.vue'))
-const ManualAssignmentModal = defineAsyncComponent(
+const LazyManualAssignmentModal = defineAsyncComponent(
   () => import('./ManualAssignmentModal.vue'),
 )
-const AutoAssignmentModal = defineAsyncComponent(() => import('./AutoAssignmentModal.vue'))
+const LazyAutoAssignmentModal = defineAsyncComponent(() => import('./AutoAssignmentModal.vue'))
 
 const overlay = useOverlay()
 const router = useRouter()
-const table = useTemplateRef('table')
 const toast = useToast()
 
+const UCheckbox = resolveComponent('UCheckbox')
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 const UCard = resolveComponent('UCard')
@@ -52,8 +45,6 @@ const {
   assignManually,
   assignAutomatically,
   loading: taskLoading,
-  manualAssigning,
-  autoAssigning,
 } = useTaskManagement()
 
 // Parcels state
@@ -68,23 +59,253 @@ const selectedParcelIds = ref<string[]>([])
 const shippers = ref<DeliveryManDto[]>([])
 const shippersLoading = ref(false)
 
-// Modal state
-const manualAssignmentModalData = ref<{
-  selectedParcels: string[]
-  availableShippers: Array<{ id: string; name: string }>
-  zoneId?: string
-} | null>(null)
-
-const autoAssignmentModalData = ref<{
-  selectedParcels: string[]
-  availableShippers: Array<{ id: string; name: string }>
-  zoneId?: string
-} | null>(null)
 
 // Filters
 const filters = ref<FilterGroup | undefined>(undefined)
 const sorts = ref<SortConfig[]>([])
-const searchQuery = ref('')
+
+
+/**
+ * Get status color
+ */
+const getStatusColor = (status: ParcelStatus): string => {
+  const colorMap: Record<ParcelStatus, string> = {
+    IN_WAREHOUSE: 'blue',
+    ON_ROUTE: 'yellow',
+    DELIVERED: 'green',
+    SUCCEEDED: 'green',
+    FAILED: 'red',
+    DELAYED: 'orange',
+    DISPUTE: 'purple',
+    LOST: 'gray',
+  }
+  return colorMap[status] || 'gray'
+}
+
+/**
+ * Get display status
+ */
+const getDisplayStatus = (status: ParcelStatus): string => {
+  const statusMap: Record<ParcelStatus, string> = {
+    IN_WAREHOUSE: 'In Warehouse',
+    ON_ROUTE: 'On Route',
+    DELIVERED: 'Delivered',
+    SUCCEEDED: 'Succeeded',
+    FAILED: 'Failed',
+    DELAYED: 'Delayed',
+    DISPUTE: 'Dispute',
+    LOST: 'Lost',
+  }
+  return statusMap[status] || status
+}
+
+/**
+ * Setup header component for table columns
+ */
+type HeaderConfig = {
+  variant: 'ghost' | 'outline' | 'solid' | 'soft' | 'link'
+  label: string
+  class: string
+  activeColor?: string
+  inactiveColor?: string
+  filterable?: boolean
+}
+
+type HeaderColumn = Column<ParcelDto, unknown>
+
+const setupHeader = ({ column, config }: { column: HeaderColumn; config: HeaderConfig }) =>
+  h(TableHeaderCell<ParcelDto>, {
+    column,
+    config,
+    filterableColumns: [],
+    activeFilters: [],
+    'onUpdate:filters': () => {},
+  })
+
+/**
+ * Wrap cell with click handler for selection
+ */
+const wrapCellWithClickHandler = (content: ReturnType<typeof h>, parcel: ParcelDto) => {
+  return h(
+    'div',
+    {
+      onClick: () => toggleParcelSelection(parcel.id),
+      style: { cursor: 'pointer' },
+    },
+    content,
+  )
+}
+
+// Table columns configuration
+const columns: TableColumn<ParcelDto>[] = [
+  {
+    accessorKey: 'select',
+    header: ({ table }) =>
+      h(UCheckbox, {
+        modelValue: parcels.value.length > 0 && parcels.value.every((p) => selectedParcelIds.value.includes(p.id))
+          ? true
+          : parcels.value.some((p) => selectedParcelIds.value.includes(p.id))
+            ? 'indeterminate'
+            : false,
+        'onUpdate:modelValue': (value: boolean | 'indeterminate') => {
+          if (value) {
+            // Select all
+            selectedParcelIds.value = parcels.value.map((p) => p.id)
+          } else {
+            // Deselect all
+            selectedParcelIds.value = []
+          }
+        },
+        'aria-label': 'Select all',
+      }),
+    cell: ({ row }) => {
+      const parcel = row.original
+      return h(UCheckbox, {
+        modelValue: selectedParcelIds.value.includes(parcel.id),
+        'onUpdate:modelValue': () => toggleParcelSelection(parcel.id),
+        'aria-label': 'Select row',
+        onClick: (e: MouseEvent) => e.stopPropagation(),
+      })
+    },
+  },
+  {
+    accessorKey: 'code',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost' as const,
+          label: 'Mã đơn',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: false,
+        },
+      }),
+    cell: ({ row }) => {
+      const parcel = row.original
+      return h(
+        'span',
+        {
+          class: 'font-mono text-sm',
+          onClick: (e: MouseEvent) => {
+            e.stopPropagation()
+            toggleParcelSelection(parcel.id)
+          },
+          style: { cursor: 'pointer' },
+        },
+        parcel.code,
+      )
+    },
+  },
+  {
+    accessorKey: 'receiverId',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost' as const,
+          label: 'Người nhận',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: false,
+        },
+      }),
+    cell: ({ row }) => {
+      const parcel = row.original
+      // Use nested object if available, fallback to old fields
+      const receiverName = parcel.receiver?.fullName || parcel.receiverName || parcel.receiverId || 'N/A'
+      return wrapCellWithClickHandler(h('span', receiverName), parcel)
+    },
+  },
+  {
+    accessorKey: 'targetDestination',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost' as const,
+          label: 'Địa chỉ giao',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: false,
+        },
+      }),
+    cell: ({ row }) => {
+      const parcel = row.original
+      // Use nested address object if available, fallback to targetDestination
+      const address = parcel.receiverAddress?.note || parcel.targetDestination || 'N/A'
+      return wrapCellWithClickHandler(h('span', { class: 'line-clamp-1' }, address), parcel)
+    },
+  },
+  {
+    accessorKey: 'status',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost' as const,
+          label: 'Trạng thái',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: false,
+        },
+      }),
+    cell: ({ row }) => {
+      const parcel = row.original
+      const status = row.getValue('status') as ParcelStatus
+      const color = getStatusColor(status)
+      const displayStatus = getDisplayStatus(status)
+      const badge = h(UBadge, { class: 'capitalize', variant: 'soft', color }, () => displayStatus)
+      return wrapCellWithClickHandler(badge, parcel)
+    },
+  },
+  {
+    accessorKey: 'deliveryType',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost' as const,
+          label: 'Loại giao hàng',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: false,
+        },
+      }),
+    cell: ({ row }) => {
+      const parcel = row.original
+      const deliveryType = row.getValue('deliveryType') as string
+      const badge = h(UBadge, { variant: 'soft', color: 'primary', size: 'sm' }, () => deliveryType)
+      return wrapCellWithClickHandler(badge, parcel)
+    },
+  },
+  {
+    accessorKey: 'zoneId',
+    header: ({ column }) =>
+      setupHeader({
+        column,
+        config: {
+          variant: 'ghost' as const,
+          label: 'Zone ID',
+          class: '-mx-2.5',
+          activeColor: 'primary',
+          inactiveColor: 'neutral',
+          filterable: false,
+        },
+      }),
+    cell: ({ row }) => {
+      const parcel = row.original
+      // Get zoneId from receiverAddress or direct zoneId field
+      const zoneId = parcel.zoneId || parcel.receiverAddress?.zoneId || 'N/A'
+      return wrapCellWithClickHandler(h('span', { class: 'font-mono text-xs' }, zoneId), parcel)
+    },
+  },
+]
 
 /**
  * Load parcels (unassigned or all)
@@ -95,13 +316,13 @@ const loadParcels = async () => {
     const payload: QueryPayload = {
       page: parcelsPage.value,
       size: parcelsPageSize.value,
-      filters: filters.value ? { conditions: [filters.value] } : undefined,
+      filters: filters.value ? { logic: 'AND', conditions: [filters.value] } : undefined,
       sorts: sorts.value.length > 0 ? sorts.value : undefined,
     }
 
     const response = await getParcelsV2(payload)
     if (response.result?.data) {
-      parcels.value = response.result.data.map((p: any) => new ParcelDto(p))
+      parcels.value = response.result.data.map((p: unknown) => new ParcelDto(p as ParcelDto))
       parcelsTotal.value = response.result.page?.totalElements || 0
     }
   } catch (error: any) {
@@ -128,7 +349,7 @@ const loadShippers = async () => {
 
     const response = await getDeliveryMenV2(payload)
     if (response.result?.data) {
-      shippers.value = response.result.data.map((s: any) => new DeliveryManDto(s))
+      shippers.value = response.result.data.map((s: unknown) => new DeliveryManDto(s as DeliveryManDto))
     }
   } catch (error: any) {
     toast.add({
@@ -144,7 +365,7 @@ const loadShippers = async () => {
 /**
  * Open manual assignment modal
  */
-const openManualAssignmentModal = () => {
+const openManualAssignmentModal = async () => {
   if (selectedParcelIds.value.length === 0) {
     toast.add({
       title: 'Chưa chọn đơn hàng',
@@ -154,78 +375,61 @@ const openManualAssignmentModal = () => {
     return
   }
 
-  manualAssignmentModalData.value = {
+  // Get zoneId from first selected parcel's receiver address
+  const firstSelectedParcel = parcels.value.find((p) => selectedParcelIds.value.includes(p.id))
+  const parcelZoneId = firstSelectedParcel?.zoneId || firstSelectedParcel?.receiverAddress?.zoneId
+
+  const modal = overlay.create(LazyManualAssignmentModal)
+  const instance = modal.open({
     selectedParcels: [...selectedParcelIds.value],
-    availableShippers: shippers.value.map((s) => ({ id: s.id, name: s.displayName })),
-  }
-}
+    availableShippers: shippers.value.map((s) => ({ id: s.id, name: s.displayName, zoneId: s.zoneId || undefined })),
+    zoneId: parcelZoneId, // Pass parcel zoneId as default
+  })
+  const request = await instance.result
 
-/**
- * Handle manual assignment
- */
-const handleManualAssignment = async (request: ManualAssignmentRequest | null) => {
-  if (!request) {
-    manualAssignmentModalData.value = null
-    return
-  }
-
-  try {
-    await assignManually(request)
-    // Refresh parcels list
-    await loadParcels()
-    selectedParcelIds.value = []
-    manualAssignmentModalData.value = null
-  } catch (error) {
-    // Error already handled in composable
+  if (request) {
+    try {
+      await assignManually(request)
+      // Refresh parcels list
+      await loadParcels()
+      selectedParcelIds.value = []
+    } catch {
+      // Error already handled in composable
+    }
   }
 }
 
 /**
  * Open auto assignment modal
  */
-const openAutoAssignmentModal = () => {
-  autoAssignmentModalData.value = {
+const openAutoAssignmentModal = async () => {
+  // Get zoneId from first selected parcel's receiver address (if any selected)
+  const firstSelectedParcel = selectedParcelIds.value.length > 0
+    ? parcels.value.find((p) => selectedParcelIds.value.includes(p.id))
+    : null
+  const parcelZoneId = firstSelectedParcel?.zoneId || firstSelectedParcel?.receiverAddress?.zoneId
+
+  const modal = overlay.create(LazyAutoAssignmentModal)
+  const instance = modal.open({
     selectedParcels: selectedParcelIds.value.length > 0 ? [...selectedParcelIds.value] : [],
-    availableShippers: shippers.value.map((s) => ({ id: s.id, name: s.displayName })),
-  }
-}
+    availableShippers: shippers.value.map((s) => ({ id: s.id, name: s.displayName, zoneId: s.zoneId || undefined })),
+    zoneId: parcelZoneId, // Pass parcel zoneId as default
+  })
+  const request = await instance.result
 
-/**
- * Handle auto assignment
- */
-const handleAutoAssignment = async (request: AutoAssignmentRequest | null) => {
-  if (!request) {
-    autoAssignmentModalData.value = null
-    return
-  }
-
-  try {
-    const result = await assignAutomatically(request)
-    // Refresh parcels list
-    await loadParcels()
-    selectedParcelIds.value = []
-    autoAssignmentModalData.value = null
-    // Show result details
-    if (result) {
-      toast.add({
-        title: 'Chi tiết kết quả',
-        description: `Đã tạo assignments cho ${result.statistics.totalShippers} shippers`,
-        color: 'info',
-      })
+  if (request) {
+    try {
+      // Start assignment (non-blocking, progress shown in global tracker)
+      await assignAutomatically(request)
+      // Refresh parcels list after a short delay to allow process to complete
+      setTimeout(async () => {
+        await loadParcels()
+        selectedParcelIds.value = []
+      }, 2000)
+    } catch (error) {
+      // Error already handled in composable and global tracker
     }
-  } catch (error) {
-    // Error already handled in composable
   }
-}
-
-/**
- * Handle search
- */
-const handleSearch = (query: string) => {
-  searchQuery.value = query
-  // Add search filter
-  // TODO: Implement search filter
-  loadParcels()
 }
 
 /**
@@ -245,26 +449,6 @@ const toggleParcelSelection = (parcelId: string) => {
     selectedParcelIds.value.splice(index, 1)
   } else {
     selectedParcelIds.value.push(parcelId)
-  }
-}
-
-/**
- * Select all parcels on current page
- */
-const selectAllParcels = () => {
-  const currentPageIds = parcels.value.map((p) => p.id)
-  if (currentPageIds.every((id) => selectedParcelIds.value.includes(id))) {
-    // Deselect all
-    selectedParcelIds.value = selectedParcelIds.value.filter(
-      (id) => !currentPageIds.includes(id),
-    )
-  } else {
-    // Select all
-    currentPageIds.forEach((id) => {
-      if (!selectedParcelIds.value.includes(id)) {
-        selectedParcelIds.value.push(id)
-      }
-    })
   }
 }
 
@@ -338,65 +522,21 @@ onMounted(() => {
         </div>
       </template>
 
-      <div v-if="parcelsLoading" class="flex justify-center py-8">
-        <div class="text-gray-500">Đang tải...</div>
-      </div>
-      <div v-else-if="parcels.length === 0" class="py-8 text-center text-gray-500">
-        Không có đơn hàng nào
-      </div>
-      <div v-else class="overflow-x-auto">
-        <table class="w-full">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-4 py-2 text-left">
-                <input
-                  type="checkbox"
-                  :checked="
-                    parcels.length > 0 &&
-                    parcels.every((p) => selectedParcelIds.includes(p.id))
-                  "
-                  @change="selectAllParcels"
-                />
-              </th>
-              <th class="px-4 py-2 text-left">Mã đơn</th>
-              <th class="px-4 py-2 text-left">Người nhận</th>
-              <th class="px-4 py-2 text-left">Địa chỉ giao</th>
-              <th class="px-4 py-2 text-left">Trạng thái</th>
-              <th class="px-4 py-2 text-left">Loại giao hàng</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200">
-            <tr
-              v-for="parcel in parcels"
-              :key="parcel.id"
-              class="hover:bg-gray-50 cursor-pointer"
-              @click="toggleParcelSelection(parcel.id)"
-            >
-              <td class="px-4 py-2">
-                <input
-                  type="checkbox"
-                  :checked="selectedParcelIds.includes(parcel.id)"
-                  @click.stop="toggleParcelSelection(parcel.id)"
-                />
-              </td>
-              <td class="px-4 py-2 font-medium">{{ parcel.code }}</td>
-              <td class="px-4 py-2">{{ parcel.receiverName || 'N/A' }}</td>
-              <td class="px-4 py-2">{{ parcel.targetDestination || 'N/A' }}</td>
-              <td class="px-4 py-2">
-                <UBadge :color="parcel.status === 'IN_WAREHOUSE' ? 'blue' : 'gray'">
-                  {{ parcel.status }}
-                </UBadge>
-              </td>
-              <td class="px-4 py-2">{{ parcel.deliveryType || 'N/A' }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <UTable
+        :data="parcels"
+        :columns="columns"
+        :loading="parcelsLoading"
+        :ui="{
+          empty: 'text-center py-12',
+          root: 'h-[50vh]',
+          thead: 'sticky top-0 bg-white dark:bg-gray-800',
+        }"
+      />
 
       <!-- Pagination -->
       <div class="flex items-center justify-between p-4 border-t">
         <div class="text-sm text-gray-600">
-          Trang {{ parcelsPage + 1 }} / {{ Math.ceil(parcelsTotal / parcelsPageSize) }} (Tổng:
+          Trang {{ parcelsPage + 1 }} / {{ Math.max(1, Math.ceil(parcelsTotal / parcelsPageSize)) }} (Tổng:
           {{ parcelsTotal }})
         </div>
         <div class="flex gap-2">
@@ -420,22 +560,5 @@ onMounted(() => {
       </div>
     </UCard>
 
-    <!-- Manual Assignment Modal -->
-    <ManualAssignmentModal
-      v-if="manualAssignmentModalData"
-      :selected-parcels="manualAssignmentModalData.selectedParcels"
-      :available-shippers="manualAssignmentModalData.availableShippers"
-      :zone-id="manualAssignmentModalData.zoneId"
-      @close="handleManualAssignment"
-    />
-
-    <!-- Auto Assignment Modal -->
-    <AutoAssignmentModal
-      v-if="autoAssignmentModalData"
-      :selected-parcels="autoAssignmentModalData.selectedParcels"
-      :available-shippers="autoAssignmentModalData.availableShippers"
-      :zone-id="autoAssignmentModalData.zoneId"
-      @close="handleAutoAssignment"
-    />
   </div>
 </template>

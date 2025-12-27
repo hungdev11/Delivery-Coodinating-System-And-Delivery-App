@@ -19,8 +19,9 @@ import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
 import { useParcels } from './composables'
 import { useParcelExport } from './composables/useParcelExport'
 import { ParcelDto, type ParcelStatus, type ParcelEvent } from './model.type'
-import { seedParcels, type SeedParcelsRequest, changeParcelStatus } from './api'
-import UserSelect from '@/common/components/UserSelect.vue'
+import { changeParcelStatus } from './api'
+import { useSeedProgress } from './composables/useSeedProgress'
+import type { SeedProgressEvent } from './composables/useSeedProgress'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { useTemplateRef } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
@@ -129,14 +130,11 @@ const updateNotificationListener: GlobalChatListener = {
 // Export composable
 const { exportParcels } = useParcelExport()
 
-// Seed parcels state
-const showSeedModal = ref(false)
-const seeding = ref(false)
-const seedForm = ref<SeedParcelsRequest>({
-  count: 20,
-  shopId: undefined,
-  clientId: undefined,
-})
+// Auto seed state
+const autoSeeding = ref(false)
+
+// Seed progress composable
+const { startSeedWithProgress } = useSeedProgress()
 
 // Tab state - mỗi tab có state riêng
 type TabState = {
@@ -900,54 +898,49 @@ const openChat = async (parcel: ParcelDto) => {
 }
 
 /**
- * Handle seed parcels
+ * Handle auto seed parcels with progress tracking
  */
-const handleSeedParcels = async () => {
-  if (!seedForm.value.count || seedForm.value.count < 1) {
-    toast.add({
-      title: 'Error',
-      description: 'Please enter a valid count (at least 1)',
-      color: 'error',
-    })
-    return
-  }
+const handleAutoSeedParcels = async () => {
+  autoSeeding.value = true
 
-  seeding.value = true
   try {
-    const response = await seedParcels(seedForm.value)
-    if (response.success && response.result) {
-      toast.add({
-        title: 'Success',
-        description: `Successfully created ${response.result.successCount} parcel(s), ${response.result.failCount} failed`,
-        color: 'success',
-      })
-      showSeedModal.value = false
-      // Reset form
-      seedForm.value = {
-        count: 20,
-        shopId: undefined,
-        clientId: undefined,
-      }
-      // Reload parcels
+    // Start seed process with progress tracking (global tracker will show progress)
+    const sessionKey = await startSeedWithProgress({
+      onCompleted: async (event: SeedProgressEvent) => {
+        toast.add({
+          title: 'Thành công',
+          description: `Đã fail ${event.failedOldParcelsCount ?? 0} đơn cũ (>48h), tạo ${event.seededParcelsCount ?? 0} đơn mới, bỏ qua ${event.skippedAddressesCount ?? 0} địa chỉ`,
+          color: 'success',
+        })
+
+        // Reload parcels
         await loadParcelsForTab(activeTab.value)
-        // Refresh counts for all tabs after creating parcels
+        // Refresh counts for all tabs after auto seeding
         await loadAllTabCounts()
-    } else {
-      toast.add({
-        title: 'Error',
-        description: response.message || 'Failed to seed parcels',
-        color: 'error',
-      })
+      },
+      onError: (event: SeedProgressEvent) => {
+        toast.add({
+          title: 'Lỗi',
+          description: event.errorMessage || 'Failed to auto seed parcels',
+          color: 'error',
+        })
+      },
+    })
+
+    if (!sessionKey) {
+      throw new Error('Failed to start seed process')
     }
+
+    // Progress will be shown in global tracker automatically
   } catch (error) {
-    console.error('Failed to seed parcels:', error)
+    console.error('Failed to auto seed parcels:', error)
     toast.add({
       title: 'Error',
-      description: error instanceof Error ? error.message : 'Failed to seed parcels',
+      description: error instanceof Error ? error.message : 'Failed to auto seed parcels',
       color: 'error',
     })
   } finally {
-    seeding.value = false
+    autoSeeding.value = false
   }
 }
 
@@ -1436,15 +1429,17 @@ const tabItems = computed<TabsItem[]>(() => [
       <template #actions>
         <div class="flex gap-2">
           <UButton
-            icon="i-heroicons-sparkles"
+            icon="i-heroicons-arrow-path"
             color="primary"
             variant="soft"
             size="sm"
             class="md:size-md"
-            @click="showSeedModal = true"
+            :loading="autoSeeding"
+            :disabled="autoSeeding"
+            @click="handleAutoSeedParcels"
           >
-            <span class="hidden sm:inline">Tạo dữ liệu mẫu</span>
-            <span class="sm:hidden">Tạo mẫu</span>
+            <span class="hidden sm:inline">Tự động seed</span>
+            <span class="sm:hidden">Auto</span>
           </UButton>
           <UButton icon="i-heroicons-plus" size="sm" class="md:size-md" @click="openCreateModal">
             <span class="hidden sm:inline">Thêm đơn hàng</span>
@@ -1671,78 +1666,5 @@ const tabItems = computed<TabsItem[]>(() => [
       @clear="handleAdvancedFilterClear"
       @update:show="showAdvancedFilters = $event"
     />
-
-    <!-- Seed Parcels Modal -->
-    <UModal
-      v-model:open="showSeedModal"
-      title="Seed Parcels"
-      description="Create parcels randomly or with specific shop/client. Uses primary addresses automatically."
-      :ui="{ content: 'sm:max-w-md md:max-w-lg' }"
-    >
-      <template #body>
-        <form @submit.prevent="handleSeedParcels" class="space-y-4">
-          <UFormField label="Number of Parcels" required>
-            <UInput
-              v-model.number="seedForm.count"
-              type="number"
-              min="1"
-              placeholder="20"
-              :disabled="seeding"
-            />
-            <template #hint>
-              Number of parcels to create (randomly selects shop/client if not specified)
-            </template>
-          </UFormField>
-
-          <UFormField label="Shop (Optional)">
-            <UserSelect
-              v-model="seedForm.shopId"
-              placeholder="Select shop (or leave empty for random)"
-              :allow-seed-id="true"
-              :disabled="seeding"
-            />
-            <template #hint>
-              Select a specific shop as sender. If not selected, randomly selects from available
-              shops.
-            </template>
-          </UFormField>
-
-          <UFormField label="Client (Optional)">
-            <UserSelect
-              v-model="seedForm.clientId"
-              placeholder="Select client (or leave empty for random)"
-              :allow-seed-id="true"
-              :disabled="seeding"
-            />
-            <template #hint>
-              Select a specific client as receiver. If not selected, randomly selects from available
-              clients.
-            </template>
-          </UFormField>
-
-          <UAlert
-            color="info"
-            variant="soft"
-            title="Note"
-            description="Parcels will be created using the primary addresses of the selected shop and client. If shop/client is not specified, they will be randomly selected."
-          />
-        </form>
-      </template>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton
-            color="neutral"
-            variant="ghost"
-            :disabled="seeding"
-            @click="showSeedModal = false"
-          >
-            Cancel
-          </UButton>
-          <UButton color="primary" :loading="seeding" @click="handleSeedParcels">
-            {{ seeding ? 'Seeding...' : 'Seed Parcels' }}
-          </UButton>
-        </div>
-      </template>
-    </UModal>
   </div>
 </template>

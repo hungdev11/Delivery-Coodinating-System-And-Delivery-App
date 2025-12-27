@@ -13,7 +13,6 @@ services:
       dockerfile: Dockerfile
     container_name: dss-settings-service
     environment:
-      SPRING_PROFILES_ACTIVE: docker
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_USERNAME: ${DB_USERNAME}
@@ -39,7 +38,6 @@ services:
       dockerfile: Dockerfile
     container_name: dss-user-service
     environment:
-      SPRING_PROFILES_ACTIVE: docker
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_USERNAME: ${DB_USERNAME}
@@ -170,7 +168,6 @@ services:
       dockerfile: Dockerfile
     container_name: dss-parcel-service
     environment:
-      SPRING_PROFILES_ACTIVE: docker
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_USERNAME: ${DB_USERNAME}
@@ -206,7 +203,6 @@ services:
       dockerfile: Dockerfile
     container_name: dss-session-service
     environment:
-      SPRING_PROFILES_ACTIVE: docker
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_USERNAME: ${DB_USERNAME}
@@ -262,7 +258,6 @@ services:
       dockerfile: Dockerfile
     container_name: dss-communication-service
     environment:
-      SPRING_PROFILES_ACTIVE: docker
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_USERNAME: ${DB_USERNAME}
@@ -304,7 +299,6 @@ services:
       dockerfile: Dockerfile
     container_name: dss-api-gateway
     environment:
-      SPRING_PROFILES_ACTIVE: docker
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_URL}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-delivery-system}
       KEYCLOAK_CLIENT_ID: dss-client

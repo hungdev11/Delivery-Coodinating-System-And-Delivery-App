@@ -14,8 +14,8 @@ const UCheckbox = resolveComponent('UCheckbox')
 
 interface Props {
   selectedParcels?: string[] // Optional: specific parcels to assign
-  availableShippers?: Array<{ id: string; name: string }>
-  zoneId?: string
+  availableShippers?: Array<{ id: string; name: string; zoneId?: string }>
+  zoneId?: string // Default zoneId from parcels
 }
 
 interface Emits {

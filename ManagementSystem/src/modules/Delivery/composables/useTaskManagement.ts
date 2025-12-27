@@ -21,6 +21,7 @@ import type {
   AutoAssignmentResponse,
   DeliverySessionDto,
 } from '../model.type'
+import { useProgressTrackerStore, type ProgressTask } from '@/stores/progressTrackerStore'
 
 // Type alias for backward compatibility
 type SessionResponse = DeliverySessionDto
@@ -82,59 +83,151 @@ export function useTaskManagement() {
   /**
    * Create auto assignment using VRP solver
    * Automatically creates sessions (CREATED status) for each shipper if not provided
+   * Non-blocking: returns immediately, tracks progress in global tracker
    */
   const assignAutomatically = async (
     request: AutoAssignmentRequest,
-  ): Promise<AutoAssignmentResponse | null> => {
+  ): Promise<void> => {
     autoAssigning.value = true
+    
+    // Generate task ID
+    const taskId = `assignment-${Date.now()}`
+    const trackerStore = useProgressTrackerStore()
+    
     try {
-      // If shipperSessionMap not provided, create sessions for all shippers
-      let shipperSessionMap = request.shipperSessionMap
-      if (!shipperSessionMap && request.shipperIds && request.shipperIds.length > 0) {
-        shipperSessionMap = {}
-        // Create sessions for all shippers
-        for (const shipperId of request.shipperIds) {
-          try {
-            const sessionResponse = await createSessionPrepared(shipperId)
-            if (sessionResponse.result?.id) {
-              shipperSessionMap[shipperId] = sessionResponse.result.id
-            }
-          } catch (error: any) {
-            console.error(`Failed to create session for shipper ${shipperId}:`, error)
-            // Continue with other shippers even if one fails
-          }
-        }
-        
-        if (Object.keys(shipperSessionMap).length === 0) {
-          throw new Error('Không thể tạo sessions cho shippers')
-        }
-      }
+      // Add task to global tracker
+      trackerStore.addTask({
+        id: taskId,
+        type: 'assignment',
+        title: 'VRP Auto Assignment',
+        progress: 0,
+        status: 'running',
+        message: 'Đang tạo sessions cho shippers...',
+        details: {
+          currentStep: 1,
+          totalSteps: 3,
+          stepDescription: 'Tạo sessions cho shippers',
+        },
+        onClose: () => {
+          trackerStore.removeTask(taskId)
+        },
+      })
 
-      // Create assignment with shipperSessionMap
-      const assignmentRequest: AutoAssignmentRequest = {
-        ...request,
-        shipperSessionMap,
-      }
-      const response = await createAutoAssignment(assignmentRequest)
-      if (response.result) {
-        const stats = response.result.statistics
-        toast.add({
-          title: 'Gán task tự động thành công',
-          description: `Đã tạo assignments cho ${stats.totalParcels || 0} đơn hàng và ${stats.totalShippers || 0} shippers`,
-          color: 'success',
-        })
-        return response.result
-      }
-      return null
+      // Run assignment process asynchronously
+      ;(async () => {
+        try {
+          // Step 1: Create sessions for shippers
+          let shipperSessionMap = request.shipperSessionMap
+          if (!shipperSessionMap && request.shipperIds && request.shipperIds.length > 0) {
+            trackerStore.updateTask(taskId, {
+              progress: 10,
+              message: `Đang tạo sessions cho ${request.shipperIds.length} shippers...`,
+              details: {
+                currentStep: 1,
+                totalSteps: 3,
+                stepDescription: `Tạo sessions cho ${request.shipperIds.length} shippers`,
+              },
+            })
+            
+            shipperSessionMap = {}
+            const totalShippers = request.shipperIds.length
+            let completedShippers = 0
+            
+            // Create sessions for all shippers
+            for (const shipperId of request.shipperIds) {
+              try {
+                const sessionResponse = await createSessionPrepared(shipperId)
+                if (sessionResponse.result?.id) {
+                  shipperSessionMap[shipperId] = sessionResponse.result.id
+                }
+                completedShippers++
+                
+                // Update progress
+                const progress = 10 + Math.floor((completedShippers / totalShippers) * 30)
+                trackerStore.updateTask(taskId, {
+                  progress,
+                  message: `Đã tạo session cho ${completedShippers}/${totalShippers} shippers...`,
+                })
+              } catch (error: any) {
+                console.error(`Failed to create session for shipper ${shipperId}:`, error)
+                completedShippers++
+                // Continue with other shippers even if one fails
+              }
+            }
+            
+            if (Object.keys(shipperSessionMap).length === 0) {
+              throw new Error('Không thể tạo sessions cho shippers')
+            }
+          }
+
+          // Step 2: Run VRP assignment
+          trackerStore.updateTask(taskId, {
+            progress: 40,
+            message: 'Đang chạy VRP solver...',
+            details: {
+              currentStep: 2,
+              totalSteps: 3,
+              stepDescription: 'Chạy VRP solver để phân bổ tối ưu',
+            },
+          })
+
+          const assignmentRequest: AutoAssignmentRequest = {
+            ...request,
+            shipperSessionMap,
+          }
+          
+          const response = await createAutoAssignment(assignmentRequest)
+          
+          // Step 3: Completed
+          if (response.result) {
+            const stats = response.result.statistics
+            trackerStore.updateTask(taskId, {
+              progress: 100,
+              status: 'completed',
+              message: `Hoàn thành: ${stats.totalParcels || 0} đơn hàng, ${stats.totalShippers || 0} shippers`,
+              details: {
+                currentStep: 3,
+                totalSteps: 3,
+                stepDescription: 'Hoàn thành',
+              },
+            })
+            
+            toast.add({
+              title: 'Gán task tự động thành công',
+              description: `Đã tạo assignments cho ${stats.totalParcels || 0} đơn hàng và ${stats.totalShippers || 0} shippers`,
+              color: 'success',
+            })
+          } else {
+            throw new Error('Không nhận được kết quả từ server')
+          }
+        } catch (error: any) {
+          const message = error.response?.data?.message || error.message || 'Không thể gán task tự động'
+          trackerStore.updateTask(taskId, {
+            status: 'error',
+            message,
+          })
+          
+          toast.add({
+            title: 'Lỗi gán task tự động',
+            description: message,
+            color: 'error',
+          })
+        } finally {
+          autoAssigning.value = false
+        }
+      })()
     } catch (error: any) {
-      const message = error.response?.data?.message || error.message || 'Không thể gán task tự động'
+      const message = error.response?.data?.message || error.message || 'Không thể bắt đầu gán task tự động'
+      trackerStore.updateTask(taskId, {
+        status: 'error',
+        message,
+      })
+      
       toast.add({
-        title: 'Lỗi gán task tự động',
+        title: 'Lỗi',
         description: message,
         color: 'error',
       })
-      throw error
-    } finally {
       autoAssigning.value = false
     }
   }

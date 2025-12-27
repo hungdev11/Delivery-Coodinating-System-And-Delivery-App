@@ -13,8 +13,8 @@ const UInput = resolveComponent('UInput')
 
 interface Props {
   selectedParcels: string[] // Parcel IDs
-  availableShippers?: Array<{ id: string; name: string }>
-  zoneId?: string
+  availableShippers?: Array<{ id: string; name: string; zoneId?: string }>
+  zoneId?: string // Default zoneId from parcels (will be auto-filled if shipper has zoneId)
 }
 
 interface Emits {
@@ -30,6 +30,21 @@ const emit = defineEmits<Emits>()
 
 const selectedShipperId = ref<string>('')
 const zoneIdInput = ref<string>(props.zoneId || '')
+
+// Watch shipper selection and auto-fill zoneId if shipper has one
+watch(
+  () => selectedShipperId.value,
+  (shipperId) => {
+    if (shipperId && !zoneIdInput.value) {
+      const shipper = props.availableShippers?.find((s) => s.id === shipperId)
+      if (shipper?.zoneId) {
+        zoneIdInput.value = shipper.zoneId
+      } else if (props.zoneId) {
+        zoneIdInput.value = props.zoneId
+      }
+    }
+  },
+)
 
 const isValid = computed(() => {
   return selectedShipperId.value.trim() !== '' && props.selectedParcels.length > 0

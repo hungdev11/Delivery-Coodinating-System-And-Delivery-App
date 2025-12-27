@@ -12,7 +12,6 @@ services:
   # Settings Service - Debug enabled
   settings-service:
     environment:
-      SPRING_PROFILES_ACTIVE: docker,docker-debug
       JAVA_TOOL_OPTIONS: >-
         -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
     # Override ports: service port + debug port
@@ -23,7 +22,6 @@ services:
   # User Service - Debug enabled
   user-service:
     environment:
-      SPRING_PROFILES_ACTIVE: docker,docker-debug
       JAVA_TOOL_OPTIONS: >-
         -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006
     # Override ports: service port + debug port
@@ -44,7 +42,6 @@ services:
   # Parcel Service - Debug enabled
   parcel-service:
     environment:
-      SPRING_PROFILES_ACTIVE: docker,docker-debug
       JAVA_TOOL_OPTIONS: >-
         -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007
     # Override ports: service port + debug port
@@ -55,7 +52,6 @@ services:
   # Session Service - Debug enabled
   session-service:
     environment:
-      SPRING_PROFILES_ACTIVE: docker,docker-debug
       JAVA_TOOL_OPTIONS: >-
         -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5008
     # Override ports: service port + debug port
@@ -66,7 +62,6 @@ services:
   # Communication Service - Debug enabled
   communication-service:
     environment:
-      SPRING_PROFILES_ACTIVE: docker,docker-debug
       JAVA_TOOL_OPTIONS: >-
         -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5009
     # Override ports: service port + debug port
@@ -77,7 +72,6 @@ services:
   # API Gateway - Debug enabled
   api-gateway:
     environment:
-      SPRING_PROFILES_ACTIVE: docker,docker-debug
       JAVA_TOOL_OPTIONS: >-
         -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5010
     # Override ports: service port + debug port

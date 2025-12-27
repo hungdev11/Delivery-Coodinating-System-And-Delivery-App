@@ -35,6 +35,8 @@ export class DeliveryManDto {
   // Session information (enriched from session-service)
   hasActiveSession?: boolean | null
   lastSessionStartTime?: string | null
+  // Zone information (from primary address or working zone)
+  zoneId?: string | null
 
   constructor(data: DeliveryManDto) {
     this.id = data.id
@@ -53,6 +55,8 @@ export class DeliveryManDto {
     // Session fields
     this.hasActiveSession = data.hasActiveSession
     this.lastSessionStartTime = data.lastSessionStartTime
+    // Zone field
+    this.zoneId = data.zoneId
   }
 
   get displayName(): string {
