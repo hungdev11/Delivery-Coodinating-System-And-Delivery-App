@@ -1,9 +1,9 @@
 generator client {
-    provider        = "prisma-client-js"
-    previewFeatures = ["prismaSchemaFolder"]
+  provider        = "prisma-client-js"
+  previewFeatures = ["prismaSchemaFolder"]
 }
 
 datasource db {
-    provider = "mysql"
-    url      = env("ZONE_DB_CONNECTION")
+  provider = "mysql"
+  url      = env("ZONE_DB_CONNECTION")
 }

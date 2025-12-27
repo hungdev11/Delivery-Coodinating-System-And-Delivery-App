@@ -148,7 +148,7 @@ export const APP_CONFIG = {
   /**
    * Application name
    */
-  NAME: 'Management System',
+  NAME: 'DSS - Phân phối hàng hoá đầu cuối',
 
   /**
    * Application version

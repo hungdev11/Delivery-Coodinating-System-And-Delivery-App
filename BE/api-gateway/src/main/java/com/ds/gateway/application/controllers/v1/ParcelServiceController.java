@@ -85,4 +85,14 @@ public class ParcelServiceController {
     public ResponseEntity<?> resolveDisputeAsFault(@PathVariable UUID parcelId) {
         return parcelServiceClient.resolveDisputeAsFault(parcelId);
     }
+
+    /**
+     * Auto seed parcels:
+     * - Fail parcels older than 48 hours
+     * - Seed parcels for addresses without parcels in DELAYED/IN_WAREHOUSE/ON_ROUTE status
+     */
+    @PostMapping("/auto-seed")
+    public ResponseEntity<?> autoSeedParcels() {
+        return parcelServiceClient.autoSeedParcels();
+    }
 }

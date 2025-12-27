@@ -24,8 +24,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ds.session.session_service.app_context.models.DeliveryAssignment;
 import com.ds.session.session_service.app_context.models.DeliveryAssignmentParcel;
+import com.ds.session.session_service.app_context.models.DeliverySession;
 import com.ds.session.session_service.app_context.repositories.DeliveryAssignmentParcelRepository;
 import com.ds.session.session_service.app_context.repositories.DeliveryAssignmentRepository;
+import com.ds.session.session_service.app_context.repositories.DeliverySessionRepository;
 import com.ds.session.session_service.application.client.parcelclient.ParcelServiceClient;
 import com.ds.session.session_service.application.client.parcelclient.response.ParcelResponse;
 import com.ds.session.session_service.application.client.zoneclient.ZoneServiceClient;
@@ -36,6 +38,7 @@ import com.ds.session.session_service.common.entities.dto.request.ManualAssignme
 import com.ds.session.session_service.common.entities.dto.response.AutoAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.ManualAssignmentResponse;
 import com.ds.session.session_service.common.enums.AssignmentStatus;
+import com.ds.session.session_service.common.enums.SessionStatus;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AdminAssignmentService Tests")
@@ -53,6 +56,9 @@ class AdminAssignmentServiceTest {
     @Mock
     private ZoneServiceClient zoneServiceClient;
 
+    @Mock
+    private DeliverySessionRepository sessionRepository;
+
     @InjectMocks
     private AdminAssignmentService adminAssignmentService;
 
@@ -67,10 +73,19 @@ class AdminAssignmentServiceTest {
             .build();
     }
 
+    private DeliverySession createMockSession(UUID sessionId, String deliveryManId, SessionStatus status) {
+        DeliverySession session = DeliverySession.builder()
+            .id(sessionId)
+            .deliveryManId(deliveryManId)
+            .status(status)
+            .build();
+        return session;
+    }
+
     @BeforeEach
     void setUp() {
         // Reset mocks
-        reset(assignmentRepository, assignmentParcelRepository, parcelServiceClient, zoneServiceClient);
+        reset(assignmentRepository, assignmentParcelRepository, parcelServiceClient, zoneServiceClient, sessionRepository);
     }
 
     @Nested
@@ -85,8 +100,13 @@ class AdminAssignmentServiceTest {
             String parcelId1 = "parcel-1";
             String parcelId2 = "parcel-2";
             String deliveryAddressId = "address-1";
+            UUID sessionId = UUID.randomUUID();
+
+            DeliverySession session = createMockSession(sessionId, shipperId, SessionStatus.CREATED);
+            when(sessionRepository.findById(sessionId)).thenReturn(java.util.Optional.of(session));
 
             ManualAssignmentRequest request = ManualAssignmentRequest.builder()
+                .sessionId(sessionId.toString())
                 .shipperId(shipperId)
                 .parcelIds(Arrays.asList(parcelId1, parcelId2))
                 .build();
@@ -133,8 +153,13 @@ class AdminAssignmentServiceTest {
             String parcelId2 = "parcel-2";
             String address1 = "address-1";
             String address2 = "address-2";
+            UUID sessionId = UUID.randomUUID();
+
+            DeliverySession session = createMockSession(sessionId, shipperId, SessionStatus.CREATED);
+            when(sessionRepository.findById(sessionId)).thenReturn(java.util.Optional.of(session));
 
             ManualAssignmentRequest request = ManualAssignmentRequest.builder()
+                .sessionId(sessionId.toString())
                 .shipperId(shipperId)
                 .parcelIds(Arrays.asList(parcelId1, parcelId2))
                 .build();
@@ -161,8 +186,13 @@ class AdminAssignmentServiceTest {
             String shipperId = "shipper-1";
             String parcelId = "parcel-1";
             String deliveryAddressId = "address-1";
+            UUID sessionId = UUID.randomUUID();
+
+            DeliverySession session = createMockSession(sessionId, shipperId, SessionStatus.CREATED);
+            when(sessionRepository.findById(sessionId)).thenReturn(java.util.Optional.of(session));
 
             ManualAssignmentRequest request = ManualAssignmentRequest.builder()
+                .sessionId(sessionId.toString())
                 .shipperId(shipperId)
                 .parcelIds(Arrays.asList(parcelId))
                 .build();
@@ -197,7 +227,21 @@ class AdminAssignmentServiceTest {
             String parcelId3 = "parcel-3";
             String deliveryAddressId = "address-1";
 
+            UUID sessionId1 = UUID.randomUUID();
+            UUID sessionId2 = UUID.randomUUID();
+            
+            DeliverySession session1 = createMockSession(sessionId1, shipperId1, SessionStatus.CREATED);
+            DeliverySession session2 = createMockSession(sessionId2, shipperId2, SessionStatus.CREATED);
+            
+            when(sessionRepository.findById(sessionId1)).thenReturn(java.util.Optional.of(session1));
+            when(sessionRepository.findById(sessionId2)).thenReturn(java.util.Optional.of(session2));
+            
+            Map<String, String> shipperSessionMap = new HashMap<>();
+            shipperSessionMap.put(shipperId1, sessionId1.toString());
+            shipperSessionMap.put(shipperId2, sessionId2.toString());
+
             AutoAssignmentRequest request = AutoAssignmentRequest.builder()
+                .shipperSessionMap(shipperSessionMap)
                 .shipperIds(Arrays.asList(shipperId1, shipperId2))
                 .parcelIds(Arrays.asList(parcelId1, parcelId2, parcelId3))
                 .vehicle("motorbike")
@@ -318,7 +362,15 @@ class AdminAssignmentServiceTest {
             String parcelId2 = "parcel-2"; // Already assigned
             String deliveryAddressId = "address-1";
 
+            UUID sessionId = UUID.randomUUID();
+            DeliverySession session = createMockSession(sessionId, shipperId, SessionStatus.CREATED);
+            when(sessionRepository.findById(sessionId)).thenReturn(java.util.Optional.of(session));
+            
+            Map<String, String> shipperSessionMap = new HashMap<>();
+            shipperSessionMap.put(shipperId, sessionId.toString());
+
             AutoAssignmentRequest request = AutoAssignmentRequest.builder()
+                .shipperSessionMap(shipperSessionMap)
                 .shipperIds(Arrays.asList(shipperId))
                 .parcelIds(Arrays.asList(parcelId1, parcelId2))
                 .build();

@@ -642,6 +642,76 @@ public class SessionService implements ISessionService {
         log.debug("[session-service] [SessionService.getActiveSession] No active session found for delivery man {}", deliveryManId);
         return null; // No active session
     }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public com.ds.session.session_service.common.entities.dto.response.DeliveryManSessionInfo getDeliveryManSessionInfo(String deliveryManId) {
+        log.debug("[session-service] [SessionService.getDeliveryManSessionInfo] Getting session info for delivery man: {}", deliveryManId);
+        
+        // Check if there's an active session (CREATED or IN_PROGRESS)
+        Optional<DeliverySession> activeSession = sessionRepository.findActiveSessionByDeliveryManId(deliveryManId);
+        boolean hasActiveSession = activeSession.isPresent();
+        
+        // Get the last session (most recent startTime)
+        Optional<DeliverySession> lastSession = sessionRepository.findFirstByDeliveryManIdOrderByStartTimeDesc(deliveryManId);
+        LocalDateTime lastSessionStartTime = lastSession.map(DeliverySession::getStartTime).orElse(null);
+        
+        log.debug("[session-service] [SessionService.getDeliveryManSessionInfo] Delivery man {} - hasActiveSession: {}, lastSessionStartTime: {}", 
+                deliveryManId, hasActiveSession, lastSessionStartTime);
+        
+        return com.ds.session.session_service.common.entities.dto.response.DeliveryManSessionInfo.builder()
+                .hasActiveSession(hasActiveSession)
+                .lastSessionStartTime(lastSessionStartTime)
+                .build();
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Map<String, com.ds.session.session_service.common.entities.dto.response.DeliveryManSessionInfo> getDeliveryManSessionInfoBulk(java.util.List<String> deliveryManIds) {
+        log.debug("[session-service] [SessionService.getDeliveryManSessionInfoBulk] Getting session info for {} delivery men", deliveryManIds.size());
+        
+        if (deliveryManIds == null || deliveryManIds.isEmpty()) {
+            return new java.util.HashMap<>();
+        }
+        
+        // Remove duplicates
+        List<String> uniqueIds = deliveryManIds.stream().distinct().collect(Collectors.toList());
+        
+        // Bulk query: Get all sessions for all delivery men
+        List<DeliverySession> allSessions = sessionRepository.findByDeliveryManIdIn(uniqueIds);
+        
+        // Group sessions by deliveryManId
+        java.util.Map<String, List<DeliverySession>> sessionsByDeliveryMan = allSessions.stream()
+                .collect(Collectors.groupingBy(DeliverySession::getDeliveryManId));
+        
+        // Build result map
+        java.util.Map<String, com.ds.session.session_service.common.entities.dto.response.DeliveryManSessionInfo> result = new java.util.HashMap<>();
+        
+        for (String deliveryManId : uniqueIds) {
+            List<DeliverySession> sessions = sessionsByDeliveryMan.getOrDefault(deliveryManId, new java.util.ArrayList<>());
+            
+            // Check if there's an active session (CREATED or IN_PROGRESS)
+            boolean hasActiveSession = sessions.stream()
+                    .anyMatch(s -> s.getStatus() == SessionStatus.CREATED || s.getStatus() == SessionStatus.IN_PROGRESS);
+            
+            // Get the last session (most recent startTime)
+            Optional<LocalDateTime> lastSessionStartTime = sessions.stream()
+                    .filter(s -> s.getStartTime() != null)
+                    .map(DeliverySession::getStartTime)
+                    .max(LocalDateTime::compareTo);
+            
+            com.ds.session.session_service.common.entities.dto.response.DeliveryManSessionInfo sessionInfo = 
+                    com.ds.session.session_service.common.entities.dto.response.DeliveryManSessionInfo.builder()
+                            .hasActiveSession(hasActiveSession)
+                            .lastSessionStartTime(lastSessionStartTime.orElse(null))
+                            .build();
+            
+            result.put(deliveryManId, sessionInfo);
+        }
+        
+        log.debug("[session-service] [SessionService.getDeliveryManSessionInfoBulk] Processed session info for {} delivery men", result.size());
+        return result;
+    }
 
     @Override
     @Transactional(readOnly = true)

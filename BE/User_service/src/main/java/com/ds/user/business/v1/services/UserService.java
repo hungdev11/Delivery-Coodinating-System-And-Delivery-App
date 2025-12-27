@@ -14,7 +14,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import com.ds.user.common.utils.EnhancedQueryParser;
 import com.ds.user.common.utils.EnhancedQueryParserV2;
-import com.ds.user.infrastructure.kafka.UserEventPublisher;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -35,16 +34,9 @@ public class UserService implements IUserService {
     @Autowired
     private FilterableFieldRegistry fieldRegistry;
 
-    @Autowired(required = false)
-    private UserEventPublisher userEventPublisher;
-
     @Override
     public User createUser(User user) {
         User saved = userRepository.save(user);
-        // Publish event for snapshot synchronization
-        if (userEventPublisher != null) {
-            userEventPublisher.publishUserCreated(saved);
-        }
         return saved;
     }
 
@@ -58,19 +50,11 @@ public class UserService implements IUserService {
         existingUser.setPhone(user.getPhone());
         existingUser.setAddress(user.getAddress());
         User saved = userRepository.save(existingUser);
-        // Publish event for snapshot synchronization
-        if (userEventPublisher != null) {
-            userEventPublisher.publishUserUpdated(saved);
-        }
         return saved;
     }
 
     @Override
     public void deleteUser(String id) { // Changed from UUID to String
-        // Publish event before deletion
-        if (userEventPublisher != null) {
-            userEventPublisher.publishUserDeleted(id);
-        }
         userRepository.deleteById(id);
     }
 
@@ -183,10 +167,6 @@ public class UserService implements IUserService {
             existing.setFirstName(firstName != null ? firstName : existing.getFirstName());
             existing.setLastName(lastName != null ? lastName : existing.getLastName());
             User saved = userRepository.save(existing);
-            // Publish event for snapshot synchronization
-            if (userEventPublisher != null) {
-                userEventPublisher.publishUserUpdated(saved);
-            }
             return saved;
         }
 
@@ -200,10 +180,6 @@ public class UserService implements IUserService {
                 .status(User.UserStatus.ACTIVE)
                 .build();
         User saved = userRepository.save(user);
-        // Publish event for snapshot synchronization
-        if (userEventPublisher != null) {
-            userEventPublisher.publishUserCreated(saved);
-        }
         return saved;
     }
 

@@ -11,6 +11,8 @@ import lombok.NoArgsConstructor;
 
 /**
  * Request DTO for manual assignment creation by admin
+ * 
+ * IMPORTANT: Session must be created first (status CREATED), then assignments are created and linked to the session.
  */
 @Data
 @Builder
@@ -19,7 +21,13 @@ import lombok.NoArgsConstructor;
 public class ManualAssignmentRequest {
     
     /**
-     * Shipper ID (DeliveryMan ID) to assign parcels to
+     * Session ID - Session must be created first (status CREATED) before creating assignments
+     */
+    @NotNull(message = "Session ID is required. Session must be created first.")
+    private String sessionId;
+    
+    /**
+     * Shipper ID (DeliveryMan ID) - must match the session's deliveryManId
      */
     @NotNull(message = "Shipper ID is required")
     private String shipperId;

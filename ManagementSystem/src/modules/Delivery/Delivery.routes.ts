@@ -12,7 +12,7 @@ export const deliveryRoutes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       layout: 'default',
-      title: 'Delivery',
+      title: 'Giao hàng',
       roles: ['ADMIN'],
     },
   },
@@ -23,7 +23,7 @@ export const deliveryRoutes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       layout: 'default',
-      title: 'Shippers',
+      title: 'Shipper',
       roles: ['ADMIN'],
     },
   },
@@ -35,7 +35,40 @@ export const deliveryRoutes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       layout: 'default',
-      title: 'Session Detail',
+      title: 'Chi tiết phiên',
+      roles: ['ADMIN'],
+    },
+  },
+  {
+    path: '/delivery/tasks',
+    name: 'delivery-tasks',
+    component: () => import('./components/TaskManagementView.vue'),
+    meta: {
+      requiresAuth: true,
+      layout: 'default',
+      title: 'Quản lý nhiệm vụ',
+      roles: ['ADMIN'],
+    },
+  },
+  {
+    path: '/delivery/shifts/calendar',
+    name: 'delivery-shift-calendar',
+    component: () => import('./components/ShipperShiftCalendarView.vue'),
+    meta: {
+      requiresAuth: true,
+      layout: 'default',
+      title: 'Lịch ca làm việc',
+      roles: ['ADMIN'],
+    },
+  },
+  {
+    path: '/delivery/sessions',
+    name: 'delivery-sessions',
+    component: () => import('./components/AllSessionsView.vue'),
+    meta: {
+      requiresAuth: true,
+      layout: 'default',
+      title: 'Tất cả phiên',
       roles: ['ADMIN'],
     },
   },

@@ -160,8 +160,8 @@ const templatePlaceholder = computed(() => {
     </template>
 
     <template #footer>
-      <UButton variant="outline" color="neutral" @click="handleCancel"> Cancel </UButton>
-      <UButton :disabled="!isValid" @click="handleSubmit"> Save </UButton>
+      <UButton variant="outline" color="neutral" @click="handleCancel"> Hủy </UButton>
+      <UButton :disabled="!isValid" @click="handleSubmit"> Lưu </UButton>
     </template>
   </UModal>
 </template>

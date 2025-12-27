@@ -14,6 +14,7 @@ import com.ds.communication_service.business.v1.services.DisputeNotificationServ
 import com.ds.communication_service.infrastructure.kafka.dto.AssignmentCompletedEvent;
 import com.ds.communication_service.infrastructure.kafka.dto.ParcelPostponedEvent;
 import com.ds.communication_service.infrastructure.kafka.dto.SessionCompletedEvent;
+import com.ds.communication_service.common.dto.SeedProgressEvent;
 import com.ds.communication_service.app_context.repositories.ConversationRepository;
 import com.ds.communication_service.app_context.models.Conversation;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -807,6 +808,74 @@ public class MessageConsumer {
         } catch (Exception e) {
             log.error("[communication-service] [MessageConsumer.consumeSessionCompleted] Error consuming session completed event", e);
             // Don't acknowledge - message will be reprocessed
+        }
+    }
+    
+    /**
+     * Consume seed progress events from parcel-service
+     * Broadcasts via WebSocket to topic: /topic/seed-progress/{sessionKey}
+     */
+    @KafkaListener(
+        topics = KafkaConfig.TOPIC_SEED_PROGRESS,
+        groupId = "${spring.kafka.consumer.group-id:communication-service-group}",
+        containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void consumeSeedProgress(
+            @Payload Object payload,
+            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+            @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
+            @Header(KafkaHeaders.OFFSET) long offset,
+            Acknowledgment acknowledgment) {
+        
+        try {
+            log.debug("[communication-service] [MessageConsumer.consumeSeedProgress] Received seed progress event from Kafka. Topic: {}, Partition: {}, Offset: {}", 
+                topic, partition, offset);
+            
+            // Convert payload to SeedProgressEvent
+            SeedProgressEvent event;
+            if (payload instanceof SeedProgressEvent) {
+                event = (SeedProgressEvent) payload;
+            } else if (payload instanceof java.util.Map) {
+                try {
+                    event = objectMapper.convertValue(payload, SeedProgressEvent.class);
+                } catch (Exception e) {
+                    log.error("[communication-service] [MessageConsumer.consumeSeedProgress] Failed to convert payload to SeedProgressEvent", e);
+                    if (acknowledgment != null) acknowledgment.acknowledge();
+                    return;
+                }
+            } else {
+                log.error("[communication-service] [MessageConsumer.consumeSeedProgress] Received unexpected message type in seed-progress-events topic: {}. Expected SeedProgressEvent.", 
+                    payload != null ? payload.getClass().getName() : "null");
+                if (acknowledgment != null) acknowledgment.acknowledge();
+                return;
+            }
+            
+            // Validate sessionKey
+            if (event.getSessionKey() == null || event.getSessionKey().isBlank()) {
+                log.warn("[communication-service] [MessageConsumer.consumeSeedProgress] SeedProgressEvent missing sessionKey. Skipping.");
+                if (acknowledgment != null) acknowledgment.acknowledge();
+                return;
+            }
+            
+            // Broadcast via WebSocket to topic: /topic/seed-progress/{sessionKey}
+            // Clients subscribe to this topic using the sessionKey they received
+            String destination = "/topic/seed-progress/" + event.getSessionKey();
+            messagingTemplate.convertAndSend(destination, event);
+            
+            log.debug("[communication-service] [MessageConsumer.consumeSeedProgress] Seed progress event broadcast via WebSocket: sessionKey={}, eventType={}, progress={}%, destination={}", 
+                event.getSessionKey(), event.getEventType(), event.getProgress(), destination);
+            
+            // Acknowledge message processing
+            if (acknowledgment != null) {
+                acknowledgment.acknowledge();
+            }
+            
+        } catch (Exception e) {
+            log.error("[communication-service] [MessageConsumer.consumeSeedProgress] Error consuming seed progress event", e);
+            // Acknowledge to avoid infinite retry loop for malformed messages
+            if (acknowledgment != null) {
+                acknowledgment.acknowledge();
+            }
         }
     }
 }

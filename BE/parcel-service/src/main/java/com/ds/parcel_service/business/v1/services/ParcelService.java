@@ -1,10 +1,12 @@
 package com.ds.parcel_service.business.v1.services;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -25,12 +27,15 @@ import com.ds.parcel_service.application.services.AssignmentService.AssignmentIn
 import com.ds.parcel_service.app_context.repositories.ParcelDestinationRepository;
 import com.ds.parcel_service.app_context.repositories.ParcelRepository;
 import com.ds.parcel_service.application.client.UserServiceClient;
-import com.ds.parcel_service.application.client.UserServiceClient.UserInfo;
 import com.ds.parcel_service.application.client.DesDetail;
 import com.ds.parcel_service.application.client.DestinationResponse;
 import com.ds.parcel_service.application.client.ZoneClient;
+import com.ds.parcel_service.application.client.ZoneInfo;
+import com.ds.parcel_service.application.client.ZoneInfoFromAddress;
 import com.ds.parcel_service.application.client.SessionServiceClient;
 import com.ds.parcel_service.application.services.AssignmentService;
+import com.ds.parcel_service.infrastructure.kafka.dto.SeedProgressEvent;
+import com.ds.parcel_service.infrastructure.kafka.KafkaConfig;
 import com.ds.parcel_service.common.entities.dto.common.PagedData;
 import com.ds.parcel_service.common.entities.dto.request.ParcelCreateRequest;
 import com.ds.parcel_service.common.entities.dto.request.ParcelFilterRequest;
@@ -261,7 +266,8 @@ public class ParcelService implements IParcelService{
 
     @Override
     public ParcelResponse changeParcelStatus(UUID parcelId, ParcelEvent event) {
-        return toDto(processTransition(parcelId, event));
+        Parcel parcel = processTransition(parcelId, event);
+        return toDtoWithFullObjectsForSingle(parcel);
     }
 
     @Override
@@ -300,7 +306,7 @@ public class ParcelService implements IParcelService{
         // Publish update notification (user confirmed)
         publishParcelSucceededNotification(saved, userId, confirmedAtTime);
 
-        return toDto(saved);
+        return toDtoWithFullObjectsForSingle(saved);
     }
 
     @Override
@@ -370,7 +376,7 @@ public class ParcelService implements IParcelService{
         // Validate: Ensure only one destination is current
         validateSingleCurrentDestination(savedParcel);
         
-        return toDto(savedParcel);
+        return toDtoWithFullObjectsForSingle(savedParcel);
     }
 
     @Override
@@ -385,7 +391,8 @@ public class ParcelService implements IParcelService{
         
         parcel.setWeight(request.getWeight());
         parcel.setValue(request.getValue());
-        return toDto(parcelRepository.save(parcel));
+        Parcel savedParcel = parcelRepository.save(parcel);
+        return toDtoWithFullObjectsForSingle(savedParcel);
     }
 
     @Override
@@ -397,19 +404,13 @@ public class ParcelService implements IParcelService{
     @Override
     public ParcelResponse getParcelById(UUID parcelId) {
         Parcel parcel = getParcel(parcelId);
-        ParcelDestination des = parcelDestinationRepository.findByParcelAndIsCurrentTrue(parcel).orElseThrow(()-> new ResourceNotFound("Not found any current destination by parcel"));
-        
-        DestinationResponse<DesDetail> call = zoneClient.getDestination(des.getDestinationId());
-        return toDtoWithLocation(parcel, call);
+        return toDtoWithFullObjectsForSingle(parcel);
     }
 
     @Override
     public ParcelResponse getParcelByCode(String code) {
         Parcel parcel = parcelRepository.findByCode(code).orElseThrow(()-> new ResourceNotFound("Not found parcel with code " + code));
-        ParcelDestination des = parcelDestinationRepository.findByParcelAndIsCurrentTrue(parcel).orElseThrow(()-> new ResourceNotFound("Not found any current destination by parcel"));
-        
-        DestinationResponse<DesDetail> call = zoneClient.getDestination(des.getDestinationId());
-        return toDtoWithLocation(parcel, call);
+        return toDtoWithFullObjectsForSingle(parcel);
     }
 
     @Override
@@ -423,7 +424,7 @@ public class ParcelService implements IParcelService{
         Pageable pageable = PageUtil.build(page, size, sortBy, direction, Parcel.class);
         Specification<Parcel> spec = ParcelSpecification.buildeSpecification(filter);
         Page<Parcel> parcels = parcelRepository.findAll(spec, pageable);
-        return PageResponse.from(parcels.map(this::toDto));
+        return toPageResponseWithBulkUserFetch(parcels);
     }
 
     @Override
@@ -438,7 +439,7 @@ public class ParcelService implements IParcelService{
         );
         
         Page<Parcel> parcels = parcelRepository.findAll(pageable);
-        return PageResponse.from(parcels.map(this::toDto));
+        return toPageResponseWithBulkUserFetch(parcels);
     }
 
     @Override
@@ -462,7 +463,9 @@ public class ParcelService implements IParcelService{
         );
 
         Page<Parcel> parcels = parcelRepository.findAll(spec, pageable);
-        return PageResponse.from(parcels.map(this::toDto));
+        
+        // Use bulk fetch helper which fetches users, addresses, and destinations
+        return toPageResponseWithBulkUserFetch(parcels);
     }
     
     /**
@@ -498,7 +501,7 @@ public class ParcelService implements IParcelService{
         );
 
         Page<Parcel> parcels = parcelRepository.findAll(spec, pageable);
-        PageResponse<ParcelResponse> pageResponse = PageResponse.from(parcels.map(this::toDto));
+        PageResponse<ParcelResponse> pageResponse = toPageResponseWithBulkUserFetch(parcels);
         return convertToPagedData(pageResponse, request);
     }
     
@@ -547,43 +550,330 @@ public class ParcelService implements IParcelService{
         return Sort.by(orders);
     }
 
+    /**
+     * Convert list of Parcels to DTOs with bulk user info and address fetching (optimized)
+     */
+    private List<ParcelResponse> toDtoListWithBulkUserFetch(List<Parcel> parcels) {
+        if (parcels == null || parcels.isEmpty()) {
+            return List.of();
+        }
+        
+        // Step 1: Collect all unique user IDs
+        List<String> userIds = parcels.stream()
+            .flatMap(p -> java.util.stream.Stream.of(p.getSenderId(), p.getReceiverId()))
+            .filter(id -> id != null && !id.isBlank())
+            .distinct()
+            .collect(java.util.stream.Collectors.toList());
+        
+        // Step 2: Fetch all users in bulk
+        Map<String, UserServiceClient.UserInfo> usersMap = userIds.isEmpty() 
+            ? new java.util.HashMap<>() 
+            : userServiceClient.getUsersByIds(userIds);
+        
+        // Step 3: Collect all unique address IDs
+        List<String> addressIds = parcels.stream()
+            .flatMap(p -> java.util.stream.Stream.of(p.getSenderAddressId(), p.getReceiverAddressId()))
+            .filter(id -> id != null && !id.isBlank())
+            .distinct()
+            .collect(java.util.stream.Collectors.toList());
+        
+        // Step 4: Fetch all addresses in parallel (UserAddress from user-service)
+        Map<String, UserServiceClient.UserAddressInfo> addressesMap = fetchAddressesBulk(addressIds);
+        
+        // Step 5: Collect all destination IDs from addresses and fetch from zone-service
+        List<String> destinationIds = addressesMap.values().stream()
+            .map(UserServiceClient.UserAddressInfo::getDestinationId)
+            .filter(id -> id != null && !id.isBlank())
+            .distinct()
+            .collect(java.util.stream.Collectors.toList());
+        
+        Map<String, DesDetail> destinationsMap = fetchDestinationsBulk(destinationIds);
+        
+        // Step 6: No need to fetch zones separately - zone and center info is already in DesDetail from zone-service
+        // The nested zone object in DesDetail already contains all necessary info
+        
+        // Step 7: Convert to DTOs with full nested objects (including zone.center from DesDetail)
+        return parcels.stream()
+            .map(p -> toDtoWithFullObjects(p, usersMap, addressesMap, destinationsMap))
+            .collect(java.util.stream.Collectors.toList());
+    }
+    
+    /**
+     * Convert Page of Parcels to PageResponse with bulk user info fetching (optimized)
+     */
+    private PageResponse<ParcelResponse> toPageResponseWithBulkUserFetch(Page<Parcel> parcels) {
+        List<ParcelResponse> content = toDtoListWithBulkUserFetch(parcels.getContent());
+        return new PageResponse<>(
+            content,
+            parcels.getNumber(),
+            parcels.getSize(),
+            parcels.getTotalElements(),
+            parcels.getTotalPages(),
+            parcels.isFirst(),
+            parcels.isLast()
+        );
+    }
+    
+    /**
+     * Convert single Parcel to DTO with full nested objects (for single parcel operations)
+     */
+    private ParcelResponse toDtoWithFullObjectsForSingle(Parcel parcel) {
+        List<ParcelResponse> results = toDtoListWithBulkUserFetch(List.of(parcel));
+        return results.isEmpty() ? toDto(parcel) : results.get(0);
+    }
+
+    /**
+     * Convert Parcel to DTO with full nested objects (users, addresses with coordinates, zones with centers)
+     */
+    private ParcelResponse toDtoWithFullObjects(
+            Parcel parcel,
+            Map<String, UserServiceClient.UserInfo> usersMap,
+            Map<String, UserServiceClient.UserAddressInfo> addressesMap,
+            Map<String, DesDetail> destinationsMap) {
+        
+        // Build sender user object
+        ParcelResponse.UserInfoDto sender = null;
+        String senderName = null;
+        if (parcel.getSenderId() != null && usersMap.containsKey(parcel.getSenderId())) {
+            UserServiceClient.UserInfo senderInfo = usersMap.get(parcel.getSenderId());
+            if (senderInfo != null) {
+                senderName = senderInfo.getFullName();
+                sender = ParcelResponse.UserInfoDto.builder()
+                    .id(senderInfo.getId())
+                    .firstName(senderInfo.getFirstName())
+                    .lastName(senderInfo.getLastName())
+                    .username(senderInfo.getUsername())
+                    .email(senderInfo.getEmail())
+                    .phone(senderInfo.getPhone())
+                    .address(senderInfo.getAddress())
+                    .build();
+            }
+        }
+        
+        // Build receiver user object
+        ParcelResponse.UserInfoDto receiver = null;
+        String receiverName = null;
+        String receiverPhoneNumber = null;
+        if (parcel.getReceiverId() != null && usersMap.containsKey(parcel.getReceiverId())) {
+            UserServiceClient.UserInfo receiverInfo = usersMap.get(parcel.getReceiverId());
+            if (receiverInfo != null) {
+                receiverName = receiverInfo.getFullName();
+                receiverPhoneNumber = receiverInfo.getPhone();
+                receiver = ParcelResponse.UserInfoDto.builder()
+                    .id(receiverInfo.getId())
+                    .firstName(receiverInfo.getFirstName())
+                    .lastName(receiverInfo.getLastName())
+                    .username(receiverInfo.getUsername())
+                    .email(receiverInfo.getEmail())
+                    .phone(receiverInfo.getPhone())
+                    .address(receiverInfo.getAddress())
+                    .build();
+            }
+        }
+        
+        // Build sender address object with zone.center
+        ParcelResponse.AddressInfoDto senderAddress = null;
+        if (parcel.getSenderAddressId() != null && !parcel.getSenderAddressId().isBlank()) {
+            UserServiceClient.UserAddressInfo userAddr = addressesMap.get(parcel.getSenderAddressId());
+            if (userAddr != null) {
+                DesDetail desDetail = destinationsMap.get(userAddr.getDestinationId());
+                // Build ZoneInfoDto directly from nested zone object in DesDetail
+                ParcelResponse.ZoneInfoDto zoneDto = buildZoneInfoDtoFromAddress(desDetail);
+                
+                senderAddress = ParcelResponse.AddressInfoDto.builder()
+                    .id(userAddr.getId())
+                    .userId(userAddr.getUserId())
+                    .destinationId(userAddr.getDestinationId())
+                    .note(userAddr.getNote())
+                    .tag(userAddr.getTag())
+                    .isPrimary(userAddr.getIsPrimary())
+                    .lat(desDetail != null ? desDetail.getLat() : null)
+                    .lon(desDetail != null ? desDetail.getLon() : null)
+                    .zoneId(desDetail != null 
+                        ? (desDetail.getZone() != null ? desDetail.getZone().getId() : desDetail.getZoneId())
+                        : null)
+                    .zone(zoneDto)
+                    .build();
+            }
+        }
+        
+        // Build receiver address object with zone.center
+        ParcelResponse.AddressInfoDto receiverAddress = null;
+        if (parcel.getReceiverAddressId() != null && !parcel.getReceiverAddressId().isBlank()) {
+            UserServiceClient.UserAddressInfo userAddr = addressesMap.get(parcel.getReceiverAddressId());
+            if (userAddr != null) {
+                DesDetail desDetail = destinationsMap.get(userAddr.getDestinationId());
+                // Build ZoneInfoDto directly from nested zone object in DesDetail
+                ParcelResponse.ZoneInfoDto zoneDto = buildZoneInfoDtoFromAddress(desDetail);
+                
+                receiverAddress = ParcelResponse.AddressInfoDto.builder()
+                    .id(userAddr.getId())
+                    .userId(userAddr.getUserId())
+                    .destinationId(userAddr.getDestinationId())
+                    .note(userAddr.getNote())
+                    .tag(userAddr.getTag())
+                    .isPrimary(userAddr.getIsPrimary())
+                    .lat(desDetail != null ? desDetail.getLat() : null)
+                    .lon(desDetail != null ? desDetail.getLon() : null)
+                    .zoneId(desDetail != null 
+                        ? (desDetail.getZone() != null ? desDetail.getZone().getId() : desDetail.getZoneId())
+                        : null)
+                    .zone(zoneDto)
+                    .build();
+            }
+        }
+        
+        // Build response with full objects
+        return buildParcelResponse(parcel, senderName, receiverName, receiverPhoneNumber, sender, receiver, senderAddress, receiverAddress);
+    }
+    
+    /**
+     * Build ZoneInfoDto from nested zone object in DesDetail (from zone-service address response)
+     */
+    private ParcelResponse.ZoneInfoDto buildZoneInfoDtoFromAddress(DesDetail desDetail) {
+        if (desDetail == null) {
+            log.debug("[parcel-service] [ParcelService.buildZoneInfoDtoFromAddress] desDetail is null");
+            return null;
+        }
+        
+        if (desDetail.getZone() == null) {
+            log.debug("[parcel-service] [ParcelService.buildZoneInfoDtoFromAddress] desDetail.zone is null, zoneId: {}", desDetail.getZoneId());
+            return null;
+        }
+        
+        ZoneInfoFromAddress zoneFromAddress = desDetail.getZone();
+        log.debug("[parcel-service] [ParcelService.buildZoneInfoDtoFromAddress] Building zone DTO for zoneId: {}, zoneCode: {}, zoneName: {}", 
+            zoneFromAddress.getId(), zoneFromAddress.getCode(), zoneFromAddress.getName());
+        
+        ParcelResponse.CenterInfoDto centerDto = null;
+        if (zoneFromAddress.getCenter() != null) {
+            ZoneInfoFromAddress.CenterInfoFromAddress centerFromAddress = zoneFromAddress.getCenter();
+            centerDto = ParcelResponse.CenterInfoDto.builder()
+                .id(centerFromAddress.getId())
+                .code(centerFromAddress.getCode())
+                .name(centerFromAddress.getName())
+                .address(centerFromAddress.getAddress())
+                .lat(centerFromAddress.getLat())
+                .lon(centerFromAddress.getLon())
+                .build();
+        }
+        
+        return ParcelResponse.ZoneInfoDto.builder()
+            .id(zoneFromAddress.getId())
+            .code(zoneFromAddress.getCode())
+            .name(zoneFromAddress.getName())
+            .center(centerDto)
+            .build();
+    }
+    
+    /**
+     * Build ZoneInfoDto from ZoneInfo, including center information
+     * @deprecated Use buildZoneInfoDtoFromAddress instead
+     */
+    @Deprecated
+    private ParcelResponse.ZoneInfoDto buildZoneInfoDto(ZoneInfo zoneInfo) {
+        if (zoneInfo == null) {
+            return null;
+        }
+        
+        ParcelResponse.CenterInfoDto centerDto = null;
+        if (zoneInfo.getCenterId() != null) {
+            centerDto = ParcelResponse.CenterInfoDto.builder()
+                .id(zoneInfo.getCenterId())
+                .code(zoneInfo.getCenterCode())
+                .name(zoneInfo.getCenterName())
+                .address(zoneInfo.getCenterAddress())
+                .lat(zoneInfo.getCenterLat())
+                .lon(zoneInfo.getCenterLon())
+                .build();
+        }
+        
+        return ParcelResponse.ZoneInfoDto.builder()
+            .id(zoneInfo.getId())
+            .code(zoneInfo.getCode())
+            .name(zoneInfo.getName())
+            .center(centerDto)
+            .build();
+    }
+    
+    /**
+     * Convert Parcel to DTO with user info from pre-fetched map (optimized for bulk operations)
+     * @deprecated Use toDtoWithFullObjects for full nested objects
+     */
+    private ParcelResponse toDtoWithUserInfo(Parcel parcel, Map<String, UserServiceClient.UserInfo> usersMap) {
+        String senderName = null;
+        String receiverName = null;
+        String receiverPhoneNumber = null;
+        
+        if (parcel.getSenderId() != null && usersMap.containsKey(parcel.getSenderId())) {
+            UserServiceClient.UserInfo senderInfo = usersMap.get(parcel.getSenderId());
+            if (senderInfo != null) {
+                senderName = senderInfo.getFullName();
+            }
+        }
+        if (parcel.getReceiverId() != null && usersMap.containsKey(parcel.getReceiverId())) {
+            UserServiceClient.UserInfo receiverInfo = usersMap.get(parcel.getReceiverId());
+            if (receiverInfo != null) {
+                receiverName = receiverInfo.getFullName();
+                receiverPhoneNumber = receiverInfo.getPhone();
+            }
+        }
+        
+        return buildParcelResponse(parcel, senderName, receiverName, receiverPhoneNumber);
+    }
+
+    /**
+     * Convert Parcel to DTO (legacy method - calls User Service for each parcel)
+     * @deprecated Use toDtoWithUserInfo for bulk operations
+     */
     private ParcelResponse toDto(Parcel parcel) {
-        // Get sender and receiver info from User Service
-        final String[] senderName = {null};
-        final String[] receiverName = {null};
-        final String[] receiverPhoneNumber = {null};
+        // Get sender and receiver info from User Service (one-by-one - not optimized)
+        String senderName = null;
+        String receiverName = null;
+        String receiverPhoneNumber = null;
         
         try {
             if (parcel.getSenderId() != null) {
-                UserInfo senderInfo = userServiceClient.getUserById(parcel.getSenderId());
+                UserServiceClient.UserInfo senderInfo = userServiceClient.getUserById(parcel.getSenderId());
                 if (senderInfo != null) {
-                    senderName[0] = senderInfo.getFullName();
+                    senderName = senderInfo.getFullName();
                 }
             }
             if (parcel.getReceiverId() != null) {
-                UserInfo receiverInfo = userServiceClient.getUserById(parcel.getReceiverId());
+                UserServiceClient.UserInfo receiverInfo = userServiceClient.getUserById(parcel.getReceiverId());
                 if (receiverInfo != null) {
-                    receiverName[0] = receiverInfo.getFullName();
-                    receiverPhoneNumber[0] = receiverInfo.getPhone();
+                    receiverName = receiverInfo.getFullName();
+                    receiverPhoneNumber = receiverInfo.getPhone();
                 }
             }
         } catch (Exception e) {
             log.debug("[parcel-service] [ParcelService.toDto] Could not fetch user info for parcel {}: {}", parcel.getId(), e.getMessage());
         }
         
-        final String finalSenderName = senderName[0];
-        final String finalReceiverName = receiverName[0];
-        final String finalReceiverPhoneNumber = receiverPhoneNumber[0];
-        
+        return buildParcelResponse(parcel, senderName, receiverName, receiverPhoneNumber);
+    }
+
+    /**
+     * Build ParcelResponse from Parcel entity with full nested objects
+     */
+    private ParcelResponse buildParcelResponse(
+            Parcel parcel,
+            String senderName,
+            String receiverName,
+            String receiverPhoneNumber,
+            ParcelResponse.UserInfoDto sender,
+            ParcelResponse.UserInfoDto receiver,
+            ParcelResponse.AddressInfoDto senderAddress,
+            ParcelResponse.AddressInfoDto receiverAddress) {
         return ParcelResponse.builder()
                             .id(parcel.getId().toString())
                             .code(parcel.getCode())
                             .deliveryType(parcel.getDeliveryType())
                             .senderId(parcel.getSenderId())
-                            .senderName(finalSenderName)
+                            .senderName(senderName)
                             .receiverId(parcel.getReceiverId())
-                            .receiverName(finalReceiverName)
-                            .receiverPhoneNumber(finalReceiverPhoneNumber)
+                            .receiverName(receiverName)
+                            .receiverPhoneNumber(receiverPhoneNumber)
                             .senderAddressId(parcel.getSenderAddressId())
                             .receiverAddressId(parcel.getReceiverAddressId())
                             .weight(parcel.getWeight())
@@ -600,7 +890,173 @@ public class ParcelService implements IParcelService{
                             .priority(parcel.getPriority())
                             .isDelayed(parcel.getIsDelayed())
                             .delayedUntil(parcel.getDelayedUntil())
+                            .sender(sender)
+                            .receiver(receiver)
+                            .senderAddress(senderAddress)
+                            .receiverAddress(receiverAddress)
                             .build();
+    }
+    
+    /**
+     * Build ParcelResponse from Parcel entity and user info (legacy method without nested objects)
+     */
+    private ParcelResponse buildParcelResponse(Parcel parcel, String senderName, String receiverName, String receiverPhoneNumber) {
+        return buildParcelResponse(parcel, senderName, receiverName, receiverPhoneNumber, null, null, null, null);
+    }
+    
+    /**
+     * Bulk fetch addresses from User Service in parallel
+     */
+    private Map<String, UserServiceClient.UserAddressInfo> fetchAddressesBulk(List<String> addressIds) {
+        if (addressIds == null || addressIds.isEmpty()) {
+            return new HashMap<>();
+        }
+        
+        ExecutorService executor = Executors.newFixedThreadPool(Math.min(10, addressIds.size()));
+        Map<String, CompletableFuture<UserServiceClient.UserAddressInfo>> futures = new HashMap<>();
+        
+        for (String addressId : addressIds) {
+            CompletableFuture<UserServiceClient.UserAddressInfo> future = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return userServiceClient.getUserAddressById(addressId);
+                } catch (Exception e) {
+                    log.debug("[parcel-service] [ParcelService.fetchAddressesBulk] Failed to fetch address {}: {}", addressId, e.getMessage());
+                    return null;
+                }
+            }, executor);
+            futures.put(addressId, future);
+        }
+        
+        CompletableFuture.allOf(futures.values().toArray(new CompletableFuture[0])).join();
+        
+        Map<String, UserServiceClient.UserAddressInfo> result = new HashMap<>();
+        for (Map.Entry<String, CompletableFuture<UserServiceClient.UserAddressInfo>> entry : futures.entrySet()) {
+            try {
+                UserServiceClient.UserAddressInfo address = entry.getValue().get();
+                if (address != null) {
+                    result.put(entry.getKey(), address);
+                }
+            } catch (Exception e) {
+                log.debug("[parcel-service] [ParcelService.fetchAddressesBulk] Error getting address {}: {}", entry.getKey(), e.getMessage());
+            }
+        }
+        
+        executor.shutdown();
+        return result;
+    }
+    
+    /**
+     * Bulk fetch destinations from Zone Service in parallel
+     */
+    private Map<String, DesDetail> fetchDestinationsBulk(List<String> destinationIds) {
+        if (destinationIds == null || destinationIds.isEmpty()) {
+            return new HashMap<>();
+        }
+        
+        ExecutorService executor = Executors.newFixedThreadPool(Math.min(10, destinationIds.size()));
+        Map<String, CompletableFuture<DestinationResponse<DesDetail>>> futures = new HashMap<>();
+        
+        for (String destinationId : destinationIds) {
+            CompletableFuture<DestinationResponse<DesDetail>> future = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return zoneClient.getDestination(destinationId);
+                } catch (Exception e) {
+                    log.debug("[parcel-service] [ParcelService.fetchDestinationsBulk] Failed to fetch destination {}: {}", destinationId, e.getMessage());
+                    return null;
+                }
+            }, executor);
+            futures.put(destinationId, future);
+        }
+        
+        CompletableFuture.allOf(futures.values().toArray(new CompletableFuture[0])).join();
+        
+        Map<String, DesDetail> result = new HashMap<>();
+        for (Map.Entry<String, CompletableFuture<DestinationResponse<DesDetail>>> entry : futures.entrySet()) {
+            try {
+                DestinationResponse<DesDetail> response = entry.getValue().get();
+                if (response != null && response.getResult() != null) {
+                    result.put(entry.getKey(), response.getResult());
+                }
+            } catch (Exception e) {
+                log.debug("[parcel-service] [ParcelService.fetchDestinationsBulk] Error getting destination {}: {}", entry.getKey(), e.getMessage());
+            }
+        }
+        
+        executor.shutdown();
+        return result;
+    }
+    
+    /**
+     * Bulk fetch zones from Zone Service using V2 API with filter
+     */
+    private Map<String, ZoneInfo> fetchZonesBulk(List<String> zoneIds) {
+        if (zoneIds == null || zoneIds.isEmpty()) {
+            return new HashMap<>();
+        }
+        
+        try {
+            // Build V2 filter: id IN (zoneIds)
+            Map<String, Object> filter = new HashMap<>();
+            filter.put("type", "condition");
+            filter.put("field", "id");
+            filter.put("operator", "IN");
+            filter.put("value", zoneIds);
+            
+            Map<String, Object> filters = new HashMap<>();
+            filters.put("type", "group");
+            filters.put("operator", "AND");
+            filters.put("items", List.of(filter));
+            
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("filters", filters);
+            requestBody.put("page", 0);
+            requestBody.put("size", zoneIds.size()); // Request all at once
+            
+            log.debug("[parcel-service] [ParcelService.fetchZonesBulk] Calling Zone Service V2 bulk API for {} zones", zoneIds.size());
+            
+            com.ds.parcel_service.common.entities.dto.common.BaseResponse<com.ds.parcel_service.common.entities.dto.common.PagedData<Map<String, Object>>> response = 
+                zoneClient.getZonesV2(requestBody);
+            
+            if (response != null && response.getResult() != null && response.getResult().getData() != null) {
+                Map<String, ZoneInfo> result = new HashMap<>();
+                for (Map<String, Object> zoneMap : response.getResult().getData()) {
+                    ZoneInfo zoneInfo = new ZoneInfo();
+                    zoneInfo.setId((String) zoneMap.get("id"));
+                    zoneInfo.setCode((String) zoneMap.get("code"));
+                    zoneInfo.setName((String) zoneMap.get("name"));
+                    zoneInfo.setCenterId((String) zoneMap.get("centerId"));
+                    zoneInfo.setCenterCode((String) zoneMap.get("centerCode"));
+                    zoneInfo.setCenterName((String) zoneMap.get("centerName"));
+                    zoneInfo.setCenterAddress((String) zoneMap.get("centerAddress"));
+                    
+                    // Map centerLat and centerLon (might be Double or BigDecimal)
+                    Object centerLatObj = zoneMap.get("centerLat");
+                    if (centerLatObj != null) {
+                        if (centerLatObj instanceof Number) {
+                            zoneInfo.setCenterLat(BigDecimal.valueOf(((Number) centerLatObj).doubleValue()));
+                        }
+                    }
+                    Object centerLonObj = zoneMap.get("centerLon");
+                    if (centerLonObj != null) {
+                        if (centerLonObj instanceof Number) {
+                            zoneInfo.setCenterLon(BigDecimal.valueOf(((Number) centerLonObj).doubleValue()));
+                        }
+                    }
+                    
+                    if (zoneInfo.getId() != null) {
+                        result.put(zoneInfo.getId(), zoneInfo);
+                    }
+                }
+                log.debug("[parcel-service] [ParcelService.fetchZonesBulk] Retrieved {} zones from Zone Service", result.size());
+                return result;
+            }
+            
+            log.debug("[parcel-service] [ParcelService.fetchZonesBulk] No zones found in Zone Service");
+            return new HashMap<>();
+        } catch (Exception e) {
+            log.error("[parcel-service] [ParcelService.fetchZonesBulk] Error fetching zones: {}", e.getMessage(), e);
+            return new HashMap<>();
+        }
     }
 
     private ParcelResponse toDtoWithLocation(Parcel parcel, DestinationResponse<DesDetail> des) {
@@ -788,7 +1244,7 @@ public class ParcelService implements IParcelService{
         
         Page<Parcel> parcels = parcelRepository.findBySenderId(customerId, pageable);
         
-        return PageResponse.from(parcels.map(this::toDto));
+        return toPageResponseWithBulkUserFetch(parcels);
     }
 
     @Override
@@ -797,7 +1253,7 @@ public class ParcelService implements IParcelService{
         
         Page<Parcel> parcels = parcelRepository.findByReceiverId(customerId, pageable);
         
-        return PageResponse.from(parcels.map(this::toDto));
+        return toPageResponseWithBulkUserFetch(parcels);
     }
 
     @Override
@@ -810,7 +1266,7 @@ public class ParcelService implements IParcelService{
         parcel.setPriority(priority);
         
         Parcel updatedParcel = parcelRepository.save(parcel);
-        return toDto(updatedParcel);
+        return toDtoWithFullObjectsForSingle(updatedParcel);
     }
 
     @Override
@@ -824,7 +1280,7 @@ public class ParcelService implements IParcelService{
         parcel.setDelayedUntil(delayedUntil);
         
         Parcel updatedParcel = parcelRepository.save(parcel);
-        return toDto(updatedParcel);
+        return toDtoWithFullObjectsForSingle(updatedParcel);
     }
 
     @Override
@@ -838,7 +1294,7 @@ public class ParcelService implements IParcelService{
         parcel.setDelayedUntil(null);
         
         Parcel updatedParcel = parcelRepository.save(parcel);
-        return toDto(updatedParcel);
+        return toDtoWithFullObjectsForSingle(updatedParcel);
     }
 
     @Override
@@ -848,9 +1304,7 @@ public class ParcelService implements IParcelService{
         }
         log.debug("Getting parcels by IDs: count={}", parcelIds.size());
         List<Parcel> parcels = parcelRepository.findByIdIn(parcelIds);
-        return parcels.stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        return toDtoListWithBulkUserFetch(parcels);
     }
 
     @Override
@@ -860,9 +1314,7 @@ public class ParcelService implements IParcelService{
         }
         log.debug("Getting parcels by sender IDs: count={}", senderIds.size());
         List<Parcel> parcels = parcelRepository.findBySenderIdIn(senderIds);
-        return parcels.stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        return toDtoListWithBulkUserFetch(parcels);
     }
 
     @Override
@@ -872,15 +1324,23 @@ public class ParcelService implements IParcelService{
         }
         log.debug("Getting parcels by receiver IDs: count={}", receiverIds.size());
         List<Parcel> parcels = parcelRepository.findByReceiverIdIn(receiverIds);
-        return parcels.stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        return toDtoListWithBulkUserFetch(parcels);
     }
 
     @Override
     public PageResponse<ParcelResponse> getParcelsByIdsPaged(List<UUID> parcelIds, int page, int size, String sortBy, String direction) {
         if (parcelIds == null || parcelIds.isEmpty()) {
-            return PageResponse.empty(page, size);
+            // Create empty PageResponse manually
+            int totalPages = 0;
+            return new PageResponse<>(
+                List.of(),
+                page,
+                size,
+                0L,
+                totalPages,
+                true,
+                true
+            );
         }
         log.debug("Getting parcels by IDs with paging: count={}, page={}, size={}", parcelIds.size(), page, size);
         
@@ -905,18 +1365,40 @@ public class ParcelService implements IParcelService{
         int end = Math.min(start + size, allParcels.size());
         List<Parcel> pagedParcels = start < allParcels.size() ? allParcels.subList(start, end) : List.of();
         
-        // Convert to DTOs with join support (fetch user info, destination info)
-        List<ParcelResponse> content = pagedParcels.stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        // Convert to DTOs with join support (fetch user info in bulk)
+        List<ParcelResponse> content = toDtoListWithBulkUserFetch(pagedParcels);
         
-        return PageResponse.from(content, allParcels.size(), page, size);
+        // Calculate pagination metadata
+        long totalElements = allParcels.size();
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
+        boolean isFirst = page == 0;
+        boolean isLast = (page + 1) >= totalPages || content.isEmpty();
+        
+        return new PageResponse<>(
+            content,
+            page,
+            size,
+            totalElements,
+            totalPages,
+            isFirst,
+            isLast
+        );
     }
 
     @Override
     public PageResponse<ParcelResponse> getParcelsBySenderIdsPaged(List<String> senderIds, int page, int size, String sortBy, String direction) {
         if (senderIds == null || senderIds.isEmpty()) {
-            return PageResponse.empty(page, size);
+            // Create empty PageResponse manually
+            int totalPages = 0;
+            return new PageResponse<>(
+                List.of(),
+                page,
+                size,
+                0L,
+                totalPages,
+                true,
+                true
+            );
         }
         log.debug("Getting parcels by sender IDs with paging: count={}, page={}, size={}", senderIds.size(), page, size);
         
@@ -933,17 +1415,39 @@ public class ParcelService implements IParcelService{
         int end = Math.min(start + size, allParcels.size());
         List<Parcel> pagedParcels = start < allParcels.size() ? allParcels.subList(start, end) : List.of();
         
-        List<ParcelResponse> content = pagedParcels.stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        List<ParcelResponse> content = toDtoListWithBulkUserFetch(pagedParcels);
         
-        return PageResponse.from(content, allParcels.size(), page, size);
+        // Calculate pagination metadata
+        long totalElements = allParcels.size();
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
+        boolean isFirst = page == 0;
+        boolean isLast = (page + 1) >= totalPages || content.isEmpty();
+        
+        return new PageResponse<>(
+            content,
+            page,
+            size,
+            totalElements,
+            totalPages,
+            isFirst,
+            isLast
+        );
     }
 
     @Override
     public PageResponse<ParcelResponse> getParcelsByReceiverIdsPaged(List<String> receiverIds, int page, int size, String sortBy, String direction) {
         if (receiverIds == null || receiverIds.isEmpty()) {
-            return PageResponse.empty(page, size);
+            // Create empty PageResponse manually
+            int totalPages = 0;
+            return new PageResponse<>(
+                List.of(),
+                page,
+                size,
+                0L,
+                totalPages,
+                true,
+                true
+            );
         }
         log.debug("Getting parcels by receiver IDs with paging: count={}, page={}, size={}", receiverIds.size(), page, size);
         
@@ -960,13 +1464,309 @@ public class ParcelService implements IParcelService{
         int end = Math.min(start + size, allParcels.size());
         List<Parcel> pagedParcels = start < allParcels.size() ? allParcels.subList(start, end) : List.of();
         
-        List<ParcelResponse> content = pagedParcels.stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        List<ParcelResponse> content = toDtoListWithBulkUserFetch(pagedParcels);
         
-        return PageResponse.from(content, allParcels.size(), page, size);
+        // Calculate pagination metadata
+        long totalElements = allParcels.size();
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
+        boolean isFirst = page == 0;
+        boolean isLast = (page + 1) >= totalPages || content.isEmpty();
+        
+        return new PageResponse<>(
+            content,
+            page,
+            size,
+            totalElements,
+            totalPages,
+            isFirst,
+            isLast
+        );
     }
 
     //update address
     // parcel staticstic
+    
+    /**
+     * Auto seed parcels:
+     * 1. Fail parcels older than 48 hours with status DELAYED, IN_WAREHOUSE, ON_ROUTE
+     * 2. For each client, check addresses that don't have parcels in DELAYED, IN_WAREHOUSE, ON_ROUTE status
+     * 3. Seed one parcel per address (rule: max 1 parcel per user/address in those statuses)
+     * 
+     * @param sessionKey Optional session key for progress tracking. If provided, will emit progress events via Kafka
+     */
+    @Transactional
+    public AutoSeedResult autoSeedParcels(String sessionKey) {
+        log.info("[parcel-service] [ParcelService.autoSeedParcels] Starting auto seed parcels, sessionKey: {}", sessionKey);
+        int failedOldParcelsCount = 0;
+        int seededParcelsCount = 0;
+        int skippedAddressesCount = 0;
+        
+        try {
+            // Emit STARTED event if sessionKey provided
+            if (sessionKey != null && !sessionKey.isBlank()) {
+                publishSeedProgressEvent(sessionKey, SeedProgressEvent.EventType.STARTED, 1, 5, 
+                    "Starting auto seed process", 0, 0, 0, 0, null, null, null);
+            }
+            // Step 1: Fail parcels older than 48 hours
+            LocalDateTime fortyEightHoursAgo = LocalDateTime.now().minusHours(48);
+            List<ParcelStatus> statusesToFail = List.of(
+                ParcelStatus.DELAYED,
+                ParcelStatus.IN_WAREHOUSE,
+                ParcelStatus.ON_ROUTE
+            );
+            
+            List<Parcel> oldParcels = parcelRepository.findByStatusInAndCreatedAtBefore(
+                statusesToFail,
+                fortyEightHoursAgo
+            );
+            
+            log.info("[parcel-service] [ParcelService.autoSeedParcels] Found {} parcels older than 48h to fail", oldParcels.size());
+            
+            // Emit Step 1 progress event
+            if (sessionKey != null && !sessionKey.isBlank()) {
+                publishSeedProgressEvent(sessionKey, SeedProgressEvent.EventType.PROGRESS, 1, 5, 
+                    "Failing old parcels", 10, oldParcels.size(), 0, 0, null, null, null);
+            }
+            
+            for (Parcel parcel : oldParcels) {
+                try {
+                    changeParcelStatus(parcel.getId(), ParcelEvent.CAN_NOT_DELIVERY);
+                    failedOldParcelsCount++;
+                } catch (Exception e) {
+                    log.warn("[parcel-service] [ParcelService.autoSeedParcels] Failed to fail parcel {}: {}", parcel.getId(), e.getMessage());
+                }
+            }
+            
+            // Step 2: Get all clients from user-service
+            List<UserServiceClient.UserInfo> clients = userServiceClient.getUsersByUsernamePrefix("client", 0, 1000);
+            log.info("[parcel-service] [ParcelService.autoSeedParcels] Found {} clients", clients.size());
+            
+            // Emit Step 2 progress event
+            if (sessionKey != null && !sessionKey.isBlank()) {
+                publishSeedProgressEvent(sessionKey, SeedProgressEvent.EventType.PROGRESS, 2, 5, 
+                    "Fetching clients", 30, failedOldParcelsCount, 0, 0, null, null, null);
+            }
+            
+            // Step 3: Get all shops (for sender selection)
+            List<UserServiceClient.UserInfo> shops = userServiceClient.getUsersByUsernamePrefix("shop", 0, 1000);
+            log.info("[parcel-service] [ParcelService.autoSeedParcels] Found {} shops", shops.size());
+            
+            // Emit Step 3 progress event
+            if (sessionKey != null && !sessionKey.isBlank()) {
+                publishSeedProgressEvent(sessionKey, SeedProgressEvent.EventType.PROGRESS, 3, 5, 
+                    "Fetching shops", 40, failedOldParcelsCount, 0, 0, null, null, null);
+            }
+            
+            if (shops.isEmpty()) {
+                log.warn("[parcel-service] [ParcelService.autoSeedParcels] No shops found, cannot seed parcels");
+                return new AutoSeedResult(failedOldParcelsCount, 0, skippedAddressesCount, "No shops found");
+            }
+            
+            // Step 4: Get primary addresses for shops
+            Map<String, String> shopPrimaryAddressIds = new HashMap<>();
+            for (UserServiceClient.UserInfo shop : shops) {
+                List<UserServiceClient.UserAddressInfo> shopAddresses = userServiceClient.getUserAddressesByUserId(shop.getId());
+                log.debug("[parcel-service] [ParcelService.autoSeedParcels] Shop {} has {} addresses", shop.getId(), shopAddresses.size());
+                boolean foundPrimary = false;
+                for (UserServiceClient.UserAddressInfo address : shopAddresses) {
+                    log.debug("[parcel-service] [ParcelService.autoSeedParcels] Shop {} address {}: isPrimary={}", 
+                        shop.getId(), address.getId(), address.getIsPrimary());
+                    if (Boolean.TRUE.equals(address.getIsPrimary())) {
+                        shopPrimaryAddressIds.put(shop.getId(), address.getId());
+                        foundPrimary = true;
+                        log.debug("[parcel-service] [ParcelService.autoSeedParcels] Shop {} primary address found: {}", shop.getId(), address.getId());
+                        break;
+                    }
+                }
+                if (!foundPrimary) {
+                    log.warn("[parcel-service] [ParcelService.autoSeedParcels] Shop {} has no primary address", shop.getId());
+                }
+            }
+            
+            log.info("[parcel-service] [ParcelService.autoSeedParcels] Found {} shops with primary addresses out of {} shops", 
+                shopPrimaryAddressIds.size(), shops.size());
+            
+            // Emit Step 4 progress event
+            if (sessionKey != null && !sessionKey.isBlank()) {
+                publishSeedProgressEvent(sessionKey, SeedProgressEvent.EventType.PROGRESS, 4, 5, 
+                    "Fetching shop addresses", 50, failedOldParcelsCount, 0, 0, null, null, null);
+            }
+            
+            if (shopPrimaryAddressIds.isEmpty()) {
+                log.warn("[parcel-service] [ParcelService.autoSeedParcels] No shops with primary addresses found");
+                String errorMsg = "No shops with primary addresses found";
+                if (sessionKey != null && !sessionKey.isBlank()) {
+                    publishSeedProgressEvent(sessionKey, SeedProgressEvent.EventType.ERROR, 4, 5, 
+                        errorMsg, 50, failedOldParcelsCount, 0, 0, null, null, errorMsg);
+                }
+                return new AutoSeedResult(failedOldParcelsCount, 0, skippedAddressesCount, errorMsg);
+            }
+            
+            // Step 5: For each client, check addresses and seed parcels
+            java.util.Random random = new java.util.Random();
+            String[] deliveryTypes = { "NORMAL", "EXPRESS", "FAST", "URGENT", "ECONOMY" };
+            
+            // Get all existing parcels with statuses to check
+            List<Parcel> existingParcels = parcelRepository.findByStatusIn(statusesToFail);
+            Set<String> addressesWithParcels = existingParcels.stream()
+                .map(Parcel::getReceiverAddressId)
+                .filter(addrId -> addrId != null && !addrId.isBlank())
+                .collect(java.util.stream.Collectors.toSet());
+            
+            log.info("[parcel-service] [ParcelService.autoSeedParcels] Found {} addresses with existing parcels in target statuses", addressesWithParcels.size());
+            
+            int totalClients = clients.size();
+            int processedClients = 0;
+            
+            // Emit Step 5 start event
+            if (sessionKey != null && !sessionKey.isBlank()) {
+                publishSeedProgressEvent(sessionKey, SeedProgressEvent.EventType.PROGRESS, 5, 5, 
+                    "Processing clients", 60, failedOldParcelsCount, seededParcelsCount, skippedAddressesCount, 
+                    processedClients, totalClients, null);
+            }
+            
+            for (UserServiceClient.UserInfo client : clients) {
+                try {
+                    List<UserServiceClient.UserAddressInfo> clientAddresses = userServiceClient.getUserAddressesByUserId(client.getId());
+                    
+                    for (UserServiceClient.UserAddressInfo address : clientAddresses) {
+                        // Check if address already has a parcel in target statuses
+                        if (addressesWithParcels.contains(address.getId())) {
+                            skippedAddressesCount++;
+                            continue;
+                        }
+                        
+                        // Select random shop
+                        List<String> shopIds = new ArrayList<>(shopPrimaryAddressIds.keySet());
+                        String selectedShopId = shopIds.get(random.nextInt(shopIds.size()));
+                        String senderAddressId = shopPrimaryAddressIds.get(selectedShopId);
+                        
+                        if (senderAddressId == null) {
+                            log.warn("[parcel-service] [ParcelService.autoSeedParcels] Shop {} has no primary address, skipping", selectedShopId);
+                            skippedAddressesCount++;
+                            continue;
+                        }
+                        
+                        // Generate unique code
+                        String code = "AUTO-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 8);
+                        
+                        // Generate random delivery type and weight/value
+                        String deliveryType = deliveryTypes[random.nextInt(deliveryTypes.length)];
+                        double weight = 0.5 + random.nextDouble() * 9.5; // 0.5 - 10 kg
+                        BigDecimal value = BigDecimal.valueOf(10000 + random.nextInt(990000)); // 10k - 1M VND
+                        
+                        // Create parcel
+                        ParcelCreateRequest createRequest = ParcelCreateRequest.builder()
+                            .code(code)
+                            .senderId(selectedShopId)
+                            .receiverId(client.getId())
+                            .senderAddressId(senderAddressId)
+                            .receiverAddressId(address.getId())
+                            .deliveryType(deliveryType)
+                            .weight(weight)
+                            .value(value)
+                            .build();
+                        
+                        try {
+                            createParcel(createRequest);
+                            seededParcelsCount++;
+                            addressesWithParcels.add(address.getId()); // Mark as having parcel
+                            log.debug("[parcel-service] [ParcelService.autoSeedParcels] Created parcel {} for client {} address {}", 
+                                code, client.getId(), address.getId());
+                        } catch (Exception e) {
+                            log.warn("[parcel-service] [ParcelService.autoSeedParcels] Failed to create parcel for client {} address {}: {}", 
+                                client.getId(), address.getId(), e.getMessage());
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("[parcel-service] [ParcelService.autoSeedParcels] Failed to process client {}: {}", client.getId(), e.getMessage());
+                }
+                
+                // Emit progress event every 10 clients or at the end
+                processedClients++;
+                if (sessionKey != null && !sessionKey.isBlank() && (processedClients % 10 == 0 || processedClients == totalClients)) {
+                    int progress = 60 + (int) ((processedClients * 40.0) / totalClients);
+                    publishSeedProgressEvent(sessionKey, SeedProgressEvent.EventType.PROGRESS, 5, 5, 
+                        "Processing clients", progress, failedOldParcelsCount, seededParcelsCount, skippedAddressesCount, 
+                        processedClients, totalClients, null);
+                }
+            }
+            
+            log.info("[parcel-service] [ParcelService.autoSeedParcels] Auto seed completed: {} old parcels failed, {} new parcels seeded, {} addresses skipped", 
+                failedOldParcelsCount, seededParcelsCount, skippedAddressesCount);
+            
+            // Emit COMPLETED event
+            if (sessionKey != null && !sessionKey.isBlank()) {
+                publishSeedProgressEvent(sessionKey, SeedProgressEvent.EventType.COMPLETED, 5, 5, 
+                    "Completed", 100, failedOldParcelsCount, seededParcelsCount, skippedAddressesCount, 
+                    processedClients, totalClients, null);
+            }
+            
+            return new AutoSeedResult(failedOldParcelsCount, seededParcelsCount, skippedAddressesCount, null);
+            
+        } catch (Exception e) {
+            log.error("[parcel-service] [ParcelService.autoSeedParcels] Error during auto seed", e);
+            String errorMsg = "Error: " + e.getMessage();
+            
+            // Emit ERROR event
+            if (sessionKey != null && !sessionKey.isBlank()) {
+                publishSeedProgressEvent(sessionKey, SeedProgressEvent.EventType.ERROR, null, 5, 
+                    "Error occurred", null, failedOldParcelsCount, seededParcelsCount, skippedAddressesCount, 
+                    null, null, errorMsg);
+            }
+            
+            return new AutoSeedResult(failedOldParcelsCount, seededParcelsCount, skippedAddressesCount, errorMsg);
+        }
+    }
+    
+    /**
+     * Publish seed progress event to Kafka
+     */
+    private void publishSeedProgressEvent(String sessionKey, SeedProgressEvent.EventType eventType, 
+            Integer currentStep, Integer totalSteps, String stepDescription, Integer progress,
+            Integer failedOldParcelsCount, Integer seededParcelsCount, Integer skippedAddressesCount,
+            Integer currentClient, Integer totalClients, String errorMessage) {
+        try {
+            SeedProgressEvent event = SeedProgressEvent.builder()
+                .sessionKey(sessionKey)
+                .eventType(eventType)
+                .currentStep(currentStep)
+                .totalSteps(totalSteps)
+                .stepDescription(stepDescription)
+                .progress(progress)
+                .failedOldParcelsCount(failedOldParcelsCount)
+                .seededParcelsCount(seededParcelsCount)
+                .skippedAddressesCount(skippedAddressesCount)
+                .currentClient(currentClient)
+                .totalClients(totalClients)
+                .errorMessage(errorMessage)
+                .timestamp(LocalDateTime.now())
+                .build();
+            
+            kafkaTemplate.send(KafkaConfig.TOPIC_SEED_PROGRESS, sessionKey, event);
+            
+            log.debug("[parcel-service] [ParcelService.publishSeedProgressEvent] Published seed progress event: sessionKey={}, eventType={}, progress={}%", 
+                sessionKey, eventType, progress);
+        } catch (Exception e) {
+            log.error("[parcel-service] [ParcelService.publishSeedProgressEvent] Failed to publish seed progress event", e);
+            // Don't throw - progress event failure shouldn't break the seed process
+        }
+    }
+    
+    /**
+     * Result holder for auto seed operation
+     */
+    public static class AutoSeedResult {
+        public final int failedOldParcelsCount;
+        public final int seededParcelsCount;
+        public final int skippedAddressesCount;
+        public final String errorMessage;
+        
+        public AutoSeedResult(int failedOldParcelsCount, int seededParcelsCount, int skippedAddressesCount, String errorMessage) {
+            this.failedOldParcelsCount = failedOldParcelsCount;
+            this.seededParcelsCount = seededParcelsCount;
+            this.skippedAddressesCount = skippedAddressesCount;
+            this.errorMessage = errorMessage;
+        }
+    }
 }

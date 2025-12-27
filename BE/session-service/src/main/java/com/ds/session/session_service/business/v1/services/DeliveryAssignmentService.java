@@ -2,6 +2,7 @@ package com.ds.session.session_service.business.v1.services;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -19,6 +20,7 @@ import com.ds.session.session_service.app_context.models.DeliveryProof;
 import com.ds.session.session_service.app_context.models.DeliverySession;
 import com.ds.session.session_service.app_context.repositories.DeliveryAssignmentRepository;
 import com.ds.session.session_service.app_context.repositories.DeliverySessionRepository;
+import com.ds.session.session_service.application.client.communicationclient.CommunicationServiceClient;
 import com.ds.session.session_service.application.client.parcelclient.ParcelServiceClient;
 import com.ds.session.session_service.application.client.parcelclient.response.ParcelResponse;
 import com.ds.session.session_service.infrastructure.kafka.ParcelEventPublisher;
@@ -61,6 +63,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     private final DeliveryAssignmentRepository deliveryAssignmentRepository;
     private final DeliverySessionRepository deliverySessionRepository;
     private final ParcelServiceClient parcelServiceClient;
+    private final CommunicationServiceClient communicationServiceClient;
     private final ParcelEventPublisher parcelEventPublisher;
     private final EventProducer eventProducer;
     private final ParcelMapper parcelMapper;
@@ -458,6 +461,9 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         assignment.setStatus(newStatus);
         assignment.setFailReason(failReason);
 
+        // 6.5. Tạo ticket tự động nếu cần thiết
+        createTicketIfNeeded(assignment, session, parcelEvent, failReason);
+
         // 7. Lưu
         try {
             deliveryAssignmentRepository.save(assignment);
@@ -467,8 +473,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             throw new RuntimeException("Failed to save assignment: " + e.getMessage(), e);
         }
 
-        // 8. Fetch parcel information for response (includes receiver info from
-        // UserSnapshot)
+        // 8. Fetch parcel information for response (includes receiver info from User Service)
         ParcelInfo parcel = null;
         String receiverName = null;
         String receiverId = null;
@@ -479,8 +484,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(assignment.getParcelId().toString());
             if (parcelResponse != null) {
                 parcel = parcelMapper.toParcelInfo(parcelResponse);
-                // Extract receiver info from parcel response (already includes UserSnapshot
-                // data)
+                // Extract receiver info from parcel response (already includes User Service data)
                 receiverName = parcel != null ? parcel.getReceiverName() : null;
                 receiverId = parcel != null ? parcel.getReceiverId() : null;
                 receiverPhone = parcel != null ? parcel.getReceiverPhoneNumber() : null;
@@ -530,8 +534,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         //     checkAndAutoCompleteSession(session);
         // }
 
-        // 11. Trả về DTO (receiverName comes from parcel which already includes
-        // UserSnapshot data)
+        // 11. Trả về DTO (receiverName comes from parcel which already includes User Service data)
         // Note: deliveryManPhone is not needed - the shipper already knows their own
         // phone number
         return DeliveryAssignmentResponse.from(assignment, parcel, assignment.getSession(), null, receiverName);
@@ -762,8 +765,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                         entry -> parcelMapper.toParcelInfo(entry.getValue())));
 
         // 3. Map dữ liệu - only include tasks where we successfully fetched parcel info
-        // Note: Receiver info (name, phone) comes from parcel response which already
-        // includes UserSnapshot data
+        // Note: Receiver info (name, phone) comes from parcel response which already includes User Service data
         // Note: deliveryManPhone is not needed - the shipper already knows their own
         // phone number
         List<DeliveryAssignmentResponse> dtoList = tasks.stream().map(t -> {
@@ -772,8 +774,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 log.debug("[session-service] [DeliveryAssignmentService.getEnrichedTasks] Parcel info not available for parcelId: {}. Skipping task.", t.getParcelId());
                 return null;
             }
-            // Extract receiver name from parcel info (already includes UserSnapshot data
-            // from parcel-service)
+            // Extract receiver name from parcel info (already includes User Service data from parcel-service)
             String receiverName = parcelInfo.getReceiverName();
             return DeliveryAssignmentResponse.from(t, parcelInfo, t.getSession(), null, receiverName);
 
@@ -1002,7 +1003,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         //     checkAndAutoCompleteSessionIfOnlyPostponedRemain(session);
         // }
 
-        // 10. Fetch parcel information (includes receiver info from UserSnapshot)
+        // 10. Fetch parcel information (includes receiver info from User Service)
         ParcelInfo parcel = null;
         String receiverName = null;
         try {
@@ -1251,12 +1252,84 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         // 6. Save
         deliveryAssignmentRepository.save(assignment);
 
-        // 7. Extract receiver info from parcel (already includes UserSnapshot data from
-        // parcel-service)
+        // 7. Extract receiver info from parcel (already includes User Service data from parcel-service)
         String receiverName = parcel != null ? parcel.getReceiverName() : null;
 
         // 8. Return DTO (deliveryManPhone not needed - shipper knows their own phone)
         return DeliveryAssignmentResponse.from(assignment, parcel, assignment.getSession(), null, receiverName);
+    }
+
+    /**
+     * Create ticket automatically when certain parcel events occur:
+     * - CAN_NOT_DELIVERY → DELIVERY_FAILED ticket (reporter: shipper)
+     * - CUSTOMER_REJECT → DELIVERY_FAILED ticket (reporter: shipper)
+     * - CUSTOMER_CONFIRM_NOT_RECEIVED → NOT_RECEIVED ticket (reporter: client)
+     * 
+     * Note: CUSTOMER_CONFIRM_NOT_RECEIVED is typically handled by client-side, but we include it here for completeness
+     */
+    private void createTicketIfNeeded(DeliveryAssignment assignment, DeliverySession session, 
+                                     ParcelEvent parcelEvent, String failReason) {
+        try {
+            String ticketType = null;
+            String reporterId = null;
+            String description = null;
+            
+            // Determine ticket type and reporter based on event
+            switch (parcelEvent) {
+                case CAN_NOT_DELIVERY:
+                    ticketType = "DELIVERY_FAILED";
+                    reporterId = session.getDeliveryManId(); // Shipper reports failure
+                    description = "Shipper báo giao thất bại: " + (failReason != null ? failReason : "Không thể giao hàng");
+                    break;
+                    
+                case CUSTOMER_REJECT:
+                    ticketType = "DELIVERY_FAILED";
+                    reporterId = session.getDeliveryManId(); // Shipper reports customer rejection
+                    description = "Khách hàng từ chối nhận hàng: " + (failReason != null ? failReason : "Customer rejected");
+                    break;
+                    
+                case CUSTOMER_CONFIRM_NOT_RECEIVED:
+                    // This event is typically created by client, but if it comes through here, we'll handle it
+                    // We need to get receiver ID from parcel
+                    ticketType = "NOT_RECEIVED";
+                    try {
+                        ParcelResponse parcel = parcelServiceClient.fetchParcelResponse(assignment.getParcelId());
+                        if (parcel != null && parcel.getReceiverId() != null) {
+                            reporterId = parcel.getReceiverId(); // Client reports not received
+                            description = "Khách hàng xác nhận chưa nhận được hàng";
+                        } else {
+                            log.warn("[DeliveryAssignmentService] Cannot create NOT_RECEIVED ticket: parcel receiverId not found for parcel {}", assignment.getParcelId());
+                            return;
+                        }
+                    } catch (Exception e) {
+                        log.warn("[DeliveryAssignmentService] Cannot create NOT_RECEIVED ticket: failed to fetch parcel {}", assignment.getParcelId(), e);
+                        return;
+                    }
+                    break;
+                    
+                default:
+                    // No ticket needed for other events
+                    return;
+            }
+            
+            // Create ticket via communication service
+            CommunicationServiceClient.CreateTicketRequest ticketRequest = 
+                new CommunicationServiceClient.CreateTicketRequest(
+                    ticketType,
+                    assignment.getParcelId(),
+                    assignment.getId().toString(),
+                    description
+                );
+            
+            communicationServiceClient.createTicket(ticketRequest, reporterId);
+            log.info("[DeliveryAssignmentService] Created ticket automatically: type={}, parcelId={}, assignmentId={}, reporterId={}", 
+                ticketType, assignment.getParcelId(), assignment.getId(), reporterId);
+                
+        } catch (Exception e) {
+            // Don't throw - ticket creation failure should not block assignment status update
+            log.error("[DeliveryAssignmentService] Failed to create ticket automatically for parcel {}: {}", 
+                assignment.getParcelId(), e.getMessage(), e);
+        }
     }
 
     private ParcelInfo updateParcelStatusAndMap(UUID parcelId, ParcelEvent event) {
@@ -1380,20 +1453,22 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         }
 
         // Fetch parcel info in bulk
-        List<String> parcelIds = assignments.stream()
-                .map(DeliveryAssignment::getParcelId)
+        List<UUID> parcelIds = assignments.stream()
+                .map(a -> UUID.fromString(a.getParcelId()))
                 .distinct()
                 .collect(Collectors.toList());
 
         Map<String, ParcelInfo> parcelInfoMap = new HashMap<>();
-        for (String parcelId : parcelIds) {
+        if (!parcelIds.isEmpty()) {
             try {
-                ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(parcelId);
-                if (parcelResponse != null) {
-                    parcelInfoMap.put(parcelId, parcelMapper.toParcelInfo(parcelResponse));
+                Map<String, ParcelResponse> parcelResponseMap = parcelServiceClient.fetchParcelsBulk(parcelIds);
+                for (Map.Entry<String, ParcelResponse> entry : parcelResponseMap.entrySet()) {
+                    if (entry.getValue() != null) {
+                        parcelInfoMap.put(entry.getKey(), parcelMapper.toParcelInfo(entry.getValue()));
+                    }
                 }
             } catch (Exception e) {
-                log.debug("Failed to fetch parcel info for parcelId {}: {}", parcelId, e.getMessage());
+                log.warn("[session-service] [DeliveryAssignmentService.convertAssignmentsToResponse] Failed to fetch parcels in bulk: {}", e.getMessage());
             }
         }
 
@@ -1410,7 +1485,14 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     @Override
     public PageResponse<DeliveryAssignmentResponse> getAssignmentsByIdsPaged(List<UUID> assignmentIds, int page, int size) {
         if (assignmentIds == null || assignmentIds.isEmpty()) {
-            return PageResponse.empty(page, size);
+            return PageResponse.<DeliveryAssignmentResponse>builder()
+                    .content(Collections.emptyList())
+                    .pageNo(page)
+                    .pageSize(size)
+                    .totalElements(0)
+                    .totalPages(0)
+                    .last(true)
+                    .build();
         }
         log.debug("Getting assignments by IDs with paging: count={}, page={}, size={}", assignmentIds.size(), page, size);
         
@@ -1424,13 +1506,31 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         // Convert with join support (fetch parcel info in bulk)
         List<DeliveryAssignmentResponse> content = convertAssignmentsToResponse(pagedAssignments);
         
-        return PageResponse.from(content, allAssignments.size(), page, size);
+        long totalElements = allAssignments.size();
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
+        boolean last = page >= totalPages - 1;
+        
+        return PageResponse.<DeliveryAssignmentResponse>builder()
+                .content(content)
+                .pageNo(page)
+                .pageSize(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last(last)
+                .build();
     }
 
     @Override
     public PageResponse<DeliveryAssignmentResponse> getAssignmentsByParcelIdsPaged(List<String> parcelIds, int page, int size) {
         if (parcelIds == null || parcelIds.isEmpty()) {
-            return PageResponse.empty(page, size);
+            return PageResponse.<DeliveryAssignmentResponse>builder()
+                    .content(Collections.emptyList())
+                    .pageNo(page)
+                    .pageSize(size)
+                    .totalElements(0)
+                    .totalPages(0)
+                    .last(true)
+                    .build();
         }
         log.debug("Getting assignments by parcel IDs with paging: count={}, page={}, size={}", parcelIds.size(), page, size);
         
@@ -1442,13 +1542,31 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         
         List<DeliveryAssignmentResponse> content = convertAssignmentsToResponse(pagedAssignments);
         
-        return PageResponse.from(content, allAssignments.size(), page, size);
+        long totalElements = allAssignments.size();
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
+        boolean last = page >= totalPages - 1;
+        
+        return PageResponse.<DeliveryAssignmentResponse>builder()
+                .content(content)
+                .pageNo(page)
+                .pageSize(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last(last)
+                .build();
     }
 
     @Override
     public PageResponse<DeliveryAssignmentResponse> getAssignmentsBySessionIdsPaged(List<UUID> sessionIds, int page, int size) {
         if (sessionIds == null || sessionIds.isEmpty()) {
-            return PageResponse.empty(page, size);
+            return PageResponse.<DeliveryAssignmentResponse>builder()
+                    .content(Collections.emptyList())
+                    .pageNo(page)
+                    .pageSize(size)
+                    .totalElements(0)
+                    .totalPages(0)
+                    .last(true)
+                    .build();
         }
         log.debug("Getting assignments by session IDs with paging: count={}, page={}, size={}", sessionIds.size(), page, size);
         
@@ -1460,13 +1578,31 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         
         List<DeliveryAssignmentResponse> content = convertAssignmentsToResponse(pagedAssignments);
         
-        return PageResponse.from(content, allAssignments.size(), page, size);
+        long totalElements = allAssignments.size();
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
+        boolean last = page >= totalPages - 1;
+        
+        return PageResponse.<DeliveryAssignmentResponse>builder()
+                .content(content)
+                .pageNo(page)
+                .pageSize(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last(last)
+                .build();
     }
 
     @Override
     public PageResponse<DeliveryAssignmentResponse> getAssignmentsByShipperIdsPaged(List<UUID> shipperIds, int page, int size) {
         if (shipperIds == null || shipperIds.isEmpty()) {
-            return PageResponse.empty(page, size);
+            return PageResponse.<DeliveryAssignmentResponse>builder()
+                    .content(Collections.emptyList())
+                    .pageNo(page)
+                    .pageSize(size)
+                    .totalElements(0)
+                    .totalPages(0)
+                    .last(true)
+                    .build();
         }
         log.debug("Getting assignments by shipper IDs with paging: count={}, page={}, size={}", shipperIds.size(), page, size);
         
@@ -1478,6 +1614,17 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         
         List<DeliveryAssignmentResponse> content = convertAssignmentsToResponse(pagedAssignments);
         
-        return PageResponse.from(content, allAssignments.size(), page, size);
+        long totalElements = allAssignments.size();
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
+        boolean last = page >= totalPages - 1;
+        
+        return PageResponse.<DeliveryAssignmentResponse>builder()
+                .content(content)
+                .pageNo(page)
+                .pageSize(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last(last)
+                .build();
     }
 }

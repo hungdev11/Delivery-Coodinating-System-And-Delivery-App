@@ -32,6 +32,17 @@ public class AdminSessionController {
     private String sessionServiceUrl;
 
     /**
+     * Create session prepared (CREATED status) for a delivery man
+     * POST /api/v1/admin/sessions/prepared/{deliveryManId}
+     */
+    @PostMapping("/prepared/{deliveryManId}")
+    @AuthRequired
+    public ResponseEntity<?> createSessionPrepared(@PathVariable String deliveryManId) {
+        log.debug("[api-gateway] [AdminSessionController.createSessionPrepared] POST /api/v1/admin/sessions/prepared/{} - Proxying to Session Service", deliveryManId);
+        return proxySession(HttpMethod.POST, "/api/v1/delivery-sessions/prepared/" + deliveryManId, null);
+    }
+
+    /**
      * Create session with assignments (admin workflow)
      * POST /api/v1/admin/sessions
      */

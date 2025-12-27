@@ -104,4 +104,20 @@ public interface ISessionService {
         com.ds.session.session_service.common.entities.dto.request.AcceptTransferredParcelRequest request);
 
     List<AssignmentResponse> listAssignmentsMustReturnWarehouse(String sessionId);
+    
+    /**
+     * Get session information for a delivery man (active session status and last session start time)
+     * Used to enrich delivery man list with session data
+     * @param deliveryManId ID of the delivery man
+     * @return Session information (hasActiveSession, lastSessionStartTime)
+     */
+    com.ds.session.session_service.common.entities.dto.response.DeliveryManSessionInfo getDeliveryManSessionInfo(String deliveryManId);
+    
+    /**
+     * Bulk get session information for multiple delivery men (active session status and last session start time)
+     * Used to enrich delivery man list with session data efficiently
+     * @param deliveryManIds List of delivery man user IDs
+     * @return Map of deliveryManId -> Session information (hasActiveSession, lastSessionStartTime)
+     */
+    java.util.Map<String, com.ds.session.session_service.common.entities.dto.response.DeliveryManSessionInfo> getDeliveryManSessionInfoBulk(java.util.List<String> deliveryManIds);
 }

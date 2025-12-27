@@ -235,6 +235,21 @@ public class ParcelServiceClient implements IParcelServiceClient {
         }
     }
 
+    @Override
+    public ResponseEntity<?> autoSeedParcels() {
+        try {
+            Object response = parcelServiceWebClient.post()
+                    .uri("/api/v1/parcels/auto-seed")
+                    .retrieve()
+                    .bodyToMono(Object.class)
+                    .block();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("[api-gateway] [ParcelServiceClient.autoSeedParcels] Error during request", e);
+            throw new RuntimeException("Error auto seeding parcels", e);
+        }
+    }
+
     private Object executeGet(String url) {
         try {
             return parcelServiceWebClient.get()

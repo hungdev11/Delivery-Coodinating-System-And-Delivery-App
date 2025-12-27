@@ -27,4 +27,11 @@ public interface ZoneClient {
     ListAddressResponse getNearestDestination(
         @RequestParam BigDecimal lat, 
         @RequestParam BigDecimal lon);
+    
+    @GetMapping("/api/v1/zones/{id}")
+    com.ds.parcel_service.common.entities.dto.common.BaseResponse<ZoneInfo> getZone(@PathVariable String id);
+    
+    @PostMapping("/api/v2/zones")
+    com.ds.parcel_service.common.entities.dto.common.BaseResponse<com.ds.parcel_service.common.entities.dto.common.PagedData<java.util.Map<String, Object>>> getZonesV2(
+        @RequestBody java.util.Map<String, Object> requestBody);
 }

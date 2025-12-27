@@ -11,7 +11,7 @@ spring:
     application:
         name: session-service
     datasource:
-        url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${SESSION_DB_NAME:ds_session_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+        url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${SESSION_DB_NAME:ds_session_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&zeroDateTimeBehavior=CONVERT_TO_NULL
         username: ${DB_USERNAME:root}
         password: ${DB_PASSWORD:root}
         driver-class-name: com.mysql.cj.jdbc.Driver
@@ -54,16 +54,6 @@ spring:
             missing-topics-fatal: false
         properties:
             'isolation.level': read_committed
-
-# Snapshot Initialization Configuration
-snapshot:
-    initialization:
-        enabled: ${SNAPSHOT_INIT_ENABLED:true}
-
-# User Service Configuration (for snapshot initialization)
-user:
-    service:
-        url: ${USER_SERVICE_URL:http://localhost:21501}
 
 logging:
     pattern:

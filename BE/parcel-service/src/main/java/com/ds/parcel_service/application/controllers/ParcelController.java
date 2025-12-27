@@ -228,4 +228,49 @@ public class ParcelController {
         ParcelResponse response = parcelService.undelayParcel(parcelId);
         return ResponseEntity.ok(BaseResponse.success(response));
     }
+
+    /**
+     * Auto seed parcels:
+     * - Fail parcels older than 48 hours with status DELAYED, IN_WAREHOUSE, ON_ROUTE
+     * - Seed one parcel per client address that doesn't have parcels in those statuses
+     * 
+     * @param sessionKey Session key for progress tracking (optional, if provided will emit progress events via Kafka)
+     */
+    @PostMapping("/auto-seed")
+    public ResponseEntity<BaseResponse<Map<String, Object>>> autoSeedParcels(
+            @RequestParam(required = false) String sessionKey) {
+        log.info("[parcel-service] [ParcelController.autoSeedParcels] Auto seed parcels requested, sessionKey: {}", sessionKey);
+        
+        // Run seed process asynchronously if sessionKey is provided, otherwise run synchronously
+        if (sessionKey != null && !sessionKey.isBlank()) {
+            // Run async to return immediately with sessionKey
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    ((com.ds.parcel_service.business.v1.services.ParcelService) parcelService).autoSeedParcels(sessionKey);
+                } catch (Exception e) {
+                    log.error("[parcel-service] [ParcelController.autoSeedParcels] Error in async seed process", e);
+                }
+            });
+            
+            Map<String, Object> responseData = new java.util.HashMap<>();
+            responseData.put("sessionKey", sessionKey);
+            responseData.put("status", "started");
+            responseData.put("message", "Seed process started. Subscribe to WebSocket topic /topic/seed-progress/" + sessionKey + " for progress updates");
+            return ResponseEntity.ok(BaseResponse.success(responseData));
+        } else {
+            // Run synchronously for backward compatibility (no progress tracking)
+            com.ds.parcel_service.business.v1.services.ParcelService.AutoSeedResult result = 
+                ((com.ds.parcel_service.business.v1.services.ParcelService) parcelService).autoSeedParcels(null);
+            
+            Map<String, Object> responseData = new java.util.HashMap<>();
+            responseData.put("failedOldParcelsCount", result.failedOldParcelsCount);
+            responseData.put("seededParcelsCount", result.seededParcelsCount);
+            responseData.put("skippedAddressesCount", result.skippedAddressesCount);
+            if (result.errorMessage != null) {
+                responseData.put("errorMessage", result.errorMessage);
+            }
+            
+            return ResponseEntity.ok(BaseResponse.success(responseData));
+        }
+    }
 }

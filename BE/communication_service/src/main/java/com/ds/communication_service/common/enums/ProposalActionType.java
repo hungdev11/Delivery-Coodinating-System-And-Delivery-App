@@ -7,6 +7,11 @@ public enum ProposalActionType {
     ACCEPT_DECLINE,
     
     /**
+     * Cho tickets: Hiển thị 2 nút [Accept Ticket] / [Reject] (admin có thể accept để assign hoặc reject để cancel).
+     */
+    ACCEPT_REJECT,
+    
+    /**
      * Hiển thị một ô [Nhập văn bản] và nút [Gửi].
      */
     TEXT_INPUT,

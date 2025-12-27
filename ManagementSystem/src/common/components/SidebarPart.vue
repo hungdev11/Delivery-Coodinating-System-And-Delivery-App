@@ -17,8 +17,8 @@
             </div>
           </div>
           <div v-if="!isCollapsed" class="ml-4 flex-1 cursor-pointer" @click="router.push('/')">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">ERP</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400">Quản lý đơn hàng</p>
+            <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">DSS</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Phân phối hàng hoá đầu cuối</p>
           </div>
         </div>
       </div>
@@ -67,11 +67,11 @@
               {{
                 currentUser?.firstName && currentUser?.lastName
                   ? currentUser.firstName + ' ' + currentUser.lastName
-                  : currentUser?.username || 'Guest User'
+                  : currentUser?.username || 'Người dùng'
               }}
             </p>
             <p class="text-xs text-gray-500 dark:text-gray-400">
-              {{ currentUser?.email || 'No email' }}
+              {{ currentUser?.email || 'Không có email' }}
             </p>
           </div>
         </div>
@@ -98,10 +98,10 @@
               <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center mr-2">
                 <UIcon name="i-heroicons-folder-open" class="w-5 h-5 text-white" />
               </div>
-              <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100">ERP</h1>
+              <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100">DSS</h1>
             </div>
             <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100 hidden md:block">
-              {{ 'Dashboard' }}
+              {{ 'Bảng điều khiển' }}
             </h1>
           </div>
           <div class="flex items-center space-x-2 md:space-x-4">
@@ -144,7 +144,7 @@
                       icon="i-heroicons-user"
                       @click="handleProfile"
                     >
-                      My Profile
+                      Hồ sơ của tôi
                     </UButton>
                     <UButton
                       v-if="showAdminMenu"
@@ -154,7 +154,7 @@
                       icon="i-heroicons-cog-6-tooth"
                       @click="handleSettings"
                     >
-                      Settings
+                      Cài đặt
                     </UButton>
                     <UButton
                       variant="ghost"
@@ -163,7 +163,7 @@
                       icon="i-heroicons-arrow-right-on-rectangle"
                       @click="handleLogout"
                     >
-                      Logout
+                      Đăng xuất
                     </UButton>
                   </div>
                 </div>
@@ -286,7 +286,7 @@
           ]"
         >
           <UIcon name="i-heroicons-home" class="w-6 h-6" />
-          <span class="text-xs mt-1">Dashboard</span>
+          <span class="text-xs mt-1">Bảng điều khiển</span>
         </router-link>
 
         <!-- Communication -->
@@ -479,7 +479,7 @@ onUnmounted(() => {
 const navigationItems = computed<NavigationMenuItem[][]>(() => {
   const communicationChildren: NavigationMenuItem[] = [
     {
-      label: 'Conversations',
+      label: 'Cuộc trò chuyện',
       to: '/communication',
       icon: 'i-heroicons-chat-bubble-left-right',
     },
@@ -488,7 +488,7 @@ const navigationItems = computed<NavigationMenuItem[][]>(() => {
   // Add Proposal Configs only for Admin
   if (isAdmin.value) {
     communicationChildren.push({
-      label: 'Proposal Configs',
+      label: 'Cấu hình đề xuất',
       to: '/communication/proposals/configs',
       icon: 'i-heroicons-cog-6-tooth',
     })
@@ -497,12 +497,12 @@ const navigationItems = computed<NavigationMenuItem[][]>(() => {
   // Base menu items (visible to all authenticated users)
   const baseMenuItems: NavigationMenuItem[] = [
     {
-      label: 'Dashboard',
+      label: 'Bảng điều khiển',
       to: '/',
       icon: 'i-heroicons-home',
     },
     {
-      label: 'Communication',
+      label: 'Giao tiếp',
       icon: 'i-heroicons-chat-bubble-left-right',
       children: communicationChildren,
     },
@@ -512,77 +512,92 @@ const navigationItems = computed<NavigationMenuItem[][]>(() => {
   const adminMenuItems: NavigationMenuItem[] = showAdminMenu.value
     ? [
         {
-          label: 'Users',
+          label: 'Người dùng',
           icon: 'i-heroicons-user-group',
           children: [
             {
-              label: 'List',
+              label: 'Danh sách',
               to: '/users',
               icon: 'i-heroicons-user-group',
             },
           ],
         },
         {
-          label: 'Delivery',
+          label: 'Giao hàng',
           icon: 'i-heroicons-truck',
           children: [
             {
-              label: 'Shippers',
+              label: 'Shipper',
               to: '/delivery/shippers',
               icon: 'i-heroicons-truck',
+            },
+            {
+              label: 'Quản lý nhiệm vụ',
+              to: '/delivery/tasks',
+              icon: 'i-heroicons-clipboard-document-list',
+            },
+            {
+              label: 'Tất cả phiên',
+              to: '/delivery/sessions',
+              icon: 'i-heroicons-list-bullet',
+            },
+            {
+              label: 'Lịch ca làm việc',
+              to: '/delivery/shifts/calendar',
+              icon: 'i-heroicons-calendar-days',
             },
           ],
         },
         {
-          label: 'Zones',
+          label: 'Khu vực',
           icon: 'i-heroicons-map',
           children: [
             {
-              label: 'List',
+              label: 'Danh sách',
               to: '/zones',
               icon: 'i-heroicons-rectangle-stack',
             },
             {
-              label: 'Map',
+              label: 'Bản đồ',
               to: '/zones/map',
               icon: 'i-heroicons-map',
             },
             {
-              label: 'Demo Routing',
+              label: 'Demo tuyến đường',
               to: '/zones/map/demo-routing',
               icon: 'i-heroicons-arrow-path-rounded-square',
             },
           ],
         },
         {
-          label: 'Addresses',
+          label: 'Địa chỉ',
           icon: 'i-heroicons-map-pin',
           children: [
             {
-              label: 'Picker',
+              label: 'Chọn địa chỉ',
               to: '/addresses/picker',
               icon: 'i-heroicons-map-pin',
             },
           ],
         },
         {
-          label: 'Parcels',
+          label: 'Đơn hàng',
           icon: 'i-heroicons-cube',
           children: [
             {
-              label: 'List',
+              label: 'Danh sách',
               to: '/parcels',
               icon: 'i-heroicons-cube',
             },
           ],
         },
         {
-          label: 'Settings',
+          label: 'Cài đặt',
           to: '/settings',
           icon: 'i-heroicons-cog-6-tooth',
         },
         {
-          label: 'System Management',
+          label: 'Quản lý hệ thống',
           to: '/system',
           icon: 'i-heroicons-server',
         },
@@ -593,17 +608,17 @@ const navigationItems = computed<NavigationMenuItem[][]>(() => {
   const clientMenuItems: NavigationMenuItem[] = isClient.value
     ? [
         {
-          label: 'My Parcels',
+          label: 'Đơn hàng của tôi',
           to: '/client/parcels',
           icon: 'i-heroicons-cube',
         },
         {
-          label: 'My Addresses',
+          label: 'Địa chỉ của tôi',
           to: '/client/addresses',
           icon: 'i-heroicons-map-pin',
         },
         {
-          label: 'My Profile',
+          label: 'Hồ sơ của tôi',
           to: '/client/profile',
           icon: 'i-heroicons-user',
         },

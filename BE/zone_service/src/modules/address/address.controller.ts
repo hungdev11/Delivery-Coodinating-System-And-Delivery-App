@@ -331,4 +331,19 @@ export class AddressController {
       return res.status(500).json(BaseResponse.error(error.message || 'Failed to get addresses by zone'))
     }
   }
+
+  /**
+   * [TROUBLESHOOTING ONLY] POST /addresses/troubleshoot/fix-zones
+   * Fix addresses without zone_id by finding zones from coordinates
+   * This endpoint should only be used for one-time data migration/repair
+   */
+  fixAddressesWithoutZone = async (_req: Request, res: Response) => {
+    try {
+      const result = await this.service.fixAddressesWithoutZone()
+      return res.json(BaseResponse.success(result, `Fixed ${result.fixed} out of ${result.total} addresses`))
+    } catch (error: any) {
+      console.error('Error fixing addresses without zone:', error)
+      return res.status(500).json(BaseResponse.error(error.message || 'Failed to fix addresses without zone'))
+    }
+  }
 }

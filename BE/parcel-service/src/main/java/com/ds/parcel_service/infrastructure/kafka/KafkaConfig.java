@@ -37,6 +37,11 @@ public class KafkaConfig {
 
     public static final String TOPIC_PARCEL_STATUS_REQUEST = "parcel-status-request";
     // TOPIC_PARCEL_STATUS_CHANGED removed (not used currently)
+    /**
+     * Topic for parcel seed progress events
+     * Published by parcel-service, consumed by communication-service and broadcast via WebSocket
+     */
+    public static final String TOPIC_SEED_PROGRESS = "seed-progress-events";
 
     @Bean
     public ProducerFactory<String, Object> producerFactory() {

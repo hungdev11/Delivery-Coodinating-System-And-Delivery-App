@@ -25,4 +25,11 @@ public interface DeliveryManRepository extends JpaRepository<DeliveryMan, UUID>,
     @EntityGraph(attributePaths = {"user"})
     @Override
     Page<DeliveryMan> findAll(Specification<DeliveryMan> spec, Pageable pageable);
+    
+    /**
+     * Find delivery man by user username
+     */
+    @EntityGraph(attributePaths = {"user"})
+    @Query("SELECT dm FROM DeliveryMan dm WHERE dm.user.username = :username")
+    Optional<DeliveryMan> findByUserUsername(@Param("username") String username);
 }

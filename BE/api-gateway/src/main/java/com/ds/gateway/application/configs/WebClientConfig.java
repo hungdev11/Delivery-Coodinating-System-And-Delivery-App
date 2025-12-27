@@ -23,9 +23,10 @@ public class WebClientConfig {
     @Bean
     public RestTemplate restTemplate(RestTemplateBuilder builder) {
         // Configure timeouts to prevent hanging requests
+        // Match nginx timeout configuration (180s) for long-running queries
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(10000); // 10 seconds connect timeout
-        factory.setReadTimeout(30000); // 30 seconds read timeout
+        factory.setReadTimeout(180000); // 180 seconds (3 minutes) read timeout - matches nginx config
         
         return builder
             .requestFactory(() -> factory)

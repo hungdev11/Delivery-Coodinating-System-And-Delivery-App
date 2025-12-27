@@ -12,11 +12,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ds.session.session_service.app_context.models.DeliveryAssignment;
 import com.ds.session.session_service.app_context.models.DeliveryAssignmentParcel;
+import com.ds.session.session_service.app_context.models.DeliverySession;
 import com.ds.session.session_service.app_context.repositories.DeliveryAssignmentParcelRepository;
 import com.ds.session.session_service.app_context.repositories.DeliveryAssignmentRepository;
+import com.ds.session.session_service.app_context.repositories.DeliverySessionRepository;
 import com.ds.session.session_service.application.client.parcelclient.ParcelServiceClient;
 import com.ds.session.session_service.application.client.parcelclient.response.ParcelResponse;
 import com.ds.session.session_service.application.client.zoneclient.ZoneServiceClient;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
+import org.springframework.web.reactive.function.client.WebClient;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.ds.session.session_service.application.client.zoneclient.request.VRPAssignmentRequest;
 import com.ds.session.session_service.application.client.zoneclient.response.BaseResponse;
 import com.ds.session.session_service.application.client.zoneclient.response.VRPAssignmentResponse;
@@ -25,44 +32,78 @@ import com.ds.session.session_service.common.entities.dto.request.ManualAssignme
 import com.ds.session.session_service.common.entities.dto.response.AutoAssignmentResponse;
 import com.ds.session.session_service.common.entities.dto.response.ManualAssignmentResponse;
 import com.ds.session.session_service.common.enums.AssignmentStatus;
+import com.ds.session.session_service.common.enums.SessionStatus;
+import com.ds.session.session_service.common.exceptions.ResourceNotFound;
 
-import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.Map;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for admin to manually create delivery assignments
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 @Transactional
 public class AdminAssignmentService {
     
     private final DeliveryAssignmentRepository assignmentRepository;
     private final DeliveryAssignmentParcelRepository assignmentParcelRepository;
+    private final DeliverySessionRepository sessionRepository;
     private final ParcelServiceClient parcelServiceClient;
     private final ZoneServiceClient zoneServiceClient;
+    private final WebClient parcelServiceWebClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    public AdminAssignmentService(
+            DeliveryAssignmentRepository assignmentRepository,
+            DeliveryAssignmentParcelRepository assignmentParcelRepository,
+            DeliverySessionRepository sessionRepository,
+            ParcelServiceClient parcelServiceClient,
+            ZoneServiceClient zoneServiceClient,
+            @Qualifier("parcelServiceWebClient") WebClient parcelServiceWebClient) {
+        this.assignmentRepository = assignmentRepository;
+        this.assignmentParcelRepository = assignmentParcelRepository;
+        this.sessionRepository = sessionRepository;
+        this.parcelServiceClient = parcelServiceClient;
+        this.zoneServiceClient = zoneServiceClient;
+        this.parcelServiceWebClient = parcelServiceWebClient;
+    }
     
     /**
      * Create a manual assignment for a shipper with specified parcels
      * 
+     * IMPORTANT: Session must be created first (status CREATED) before calling this method.
+     * 
      * Validations:
+     * - Session must exist and be in CREATED status
+     * - Session's deliveryManId must match request.shipperId
      * - All parcels must have the same delivery address
      * - Parcels must be in shipper's working zones (if zoneId provided)
      * - Parcels must not already be assigned
      * 
-     * @param request Manual assignment request
+     * @param request Manual assignment request (must include sessionId)
      * @return Created assignment response
      */
     public ManualAssignmentResponse createManualAssignment(ManualAssignmentRequest request) {
-        log.info("[AdminAssignmentService] Creating manual assignment for shipper {} with {} parcels", 
-            request.getShipperId(), request.getParcelIds().size());
+        log.info("[AdminAssignmentService] Creating manual assignment for session {} with {} parcels", 
+            request.getSessionId(), request.getParcelIds().size());
         
-        // 1. Fetch all parcels
+        // 1. Fetch and validate session
+        DeliverySession session = sessionRepository.findById(UUID.fromString(request.getSessionId()))
+            .orElseThrow(() -> new ResourceNotFound("Session not found: " + request.getSessionId()));
+        
+        if (session.getStatus() != SessionStatus.CREATED) {
+            throw new IllegalArgumentException("Session must be in CREATED status. Current status: " + session.getStatus());
+        }
+        
+        if (!session.getDeliveryManId().equals(request.getShipperId())) {
+            throw new IllegalArgumentException(
+                "Session deliveryManId (" + session.getDeliveryManId() + ") does not match request shipperId (" + request.getShipperId() + ")");
+        }
+        
+        // 2. Fetch all parcels
         List<ParcelResponse> parcels = new ArrayList<>();
         for (String parcelId : request.getParcelIds()) {
             ParcelResponse parcel = parcelServiceClient.fetchParcelResponse(parcelId);
@@ -122,8 +163,9 @@ public class AdminAssignmentService {
             }
         }
         
-        // 5. Create assignment with status PENDING
+        // 6. Create assignment with status PENDING and link to session
         DeliveryAssignment assignment = DeliveryAssignment.builder()
+            .session(session) // Link to session immediately
             .shipperId(request.getShipperId())
             .deliveryAddressId(firstDeliveryAddressId)
             .status(AssignmentStatus.PENDING)
@@ -131,10 +173,13 @@ public class AdminAssignmentService {
             .parcels(new ArrayList<>())
             .build();
         
-        assignment = assignmentRepository.save(assignment);
-        log.info("[AdminAssignmentService] Created assignment {} with status PENDING", assignment.getId());
+        // Link assignment to session (bidirectional relationship)
+        session.addAssignment(assignment);
         
-        // 6. Create DeliveryAssignmentParcel records
+        assignment = assignmentRepository.save(assignment);
+        log.info("[AdminAssignmentService] Created assignment {} with status PENDING linked to session {}", assignment.getId(), session.getId());
+        
+        // 7. Create DeliveryAssignmentParcel records
         for (ParcelResponse parcel : filteredParcels) {
             DeliveryAssignmentParcel assignmentParcel = DeliveryAssignmentParcel.builder()
                 .assignment(assignment)
@@ -147,9 +192,10 @@ public class AdminAssignmentService {
         log.info("[AdminAssignmentService] Added {} parcels to assignment {}", 
             filteredParcels.size(), assignment.getId());
         
-        // 7. Build response
+        // 9. Build response
         return ManualAssignmentResponse.builder()
             .assignmentId(assignment.getId())
+            .sessionId(session.getId().toString())
             .shipperId(assignment.getShipperId())
             .deliveryAddressId(assignment.getDeliveryAddressId())
             .parcelIds(parcelIds.stream().collect(Collectors.toList()))
@@ -195,14 +241,18 @@ public class AdminAssignmentService {
     /**
      * Create auto assignments using VRP solver from zone-service
      * 
+     * IMPORTANT: For each shipper, a session must be created first (status CREATED) before calling this method.
+     * The sessionId for each shipper should be provided in request.shipperSessionMap.
+     * 
      * Algorithm:
      * 1. Fetch shippers and parcels
      * 2. Convert to VRP DTOs
      * 3. Call zone-service VRP API
      * 4. Create assignments and DeliveryAssignmentParcel records from results
      * 5. Group parcels by delivery address (all parcels with same deliveryAddressId in same assignment)
+     * 6. Link assignments to their respective sessions
      * 
-     * @param request Auto assignment request
+     * @param request Auto assignment request (must include shipperSessionMap with sessionId for each shipper)
      * @return Auto assignment response with created assignments
      */
     public AutoAssignmentResponse createAutoAssignment(AutoAssignmentRequest request) {
@@ -293,12 +343,42 @@ public class AdminAssignmentService {
             shipperAddressParcels.put(shipperId, addressParcels);
         }
         
-        // 6. Create DeliveryAssignment records grouped by delivery address
+        // 6. Validate and fetch sessions for each shipper
+        Map<String, DeliverySession> shipperSessionMap = new HashMap<>();
+        if (request.getShipperSessionMap() == null || request.getShipperSessionMap().isEmpty()) {
+            throw new IllegalArgumentException("shipperSessionMap is required. Sessions must be created first (status CREATED) for each shipper.");
+        }
+        
+        for (Map.Entry<String, String> entry : request.getShipperSessionMap().entrySet()) {
+            String shipperId = entry.getKey();
+            String sessionId = entry.getValue();
+            
+            DeliverySession session = sessionRepository.findById(UUID.fromString(sessionId))
+                .orElseThrow(() -> new ResourceNotFound("Session not found: " + sessionId + " for shipper: " + shipperId));
+            
+            if (session.getStatus() != SessionStatus.CREATED) {
+                throw new IllegalArgumentException("Session " + sessionId + " must be in CREATED status. Current status: " + session.getStatus());
+            }
+            
+            if (!session.getDeliveryManId().equals(shipperId)) {
+                throw new IllegalArgumentException("Session " + sessionId + " deliveryManId (" + session.getDeliveryManId() + ") does not match shipperId (" + shipperId + ")");
+            }
+            
+            shipperSessionMap.put(shipperId, session);
+        }
+        
+        // 7. Create DeliveryAssignment records grouped by delivery address
         List<AutoAssignmentResponse.AssignmentInfo> allAssignments = new ArrayList<>();
         
         for (Map.Entry<String, Map<String, List<String>>> shipperEntry : shipperAddressParcels.entrySet()) {
             String shipperId = shipperEntry.getKey();
             Map<String, List<String>> addressParcels = shipperEntry.getValue();
+            
+            // Get session for this shipper
+            DeliverySession session = shipperSessionMap.get(shipperId);
+            if (session == null) {
+                throw new IllegalArgumentException("Session not found for shipper: " + shipperId + ". Please create session first and include it in shipperSessionMap.");
+            }
             
             List<AutoAssignmentResponse.AssignmentInfo> shipperAssignments = new ArrayList<>();
             
@@ -306,14 +386,18 @@ public class AdminAssignmentService {
                 String deliveryAddressId = addressEntry.getKey();
                 List<String> parcelIds = addressEntry.getValue();
                 
-                // Create assignment
+                // Create assignment with session linked
                 DeliveryAssignment assignment = DeliveryAssignment.builder()
+                    .session(session) // Link to session immediately
                     .shipperId(shipperId)
                     .deliveryAddressId(deliveryAddressId)
                     .status(AssignmentStatus.PENDING)
                     .assignedAt(LocalDateTime.now())
                     .parcels(new ArrayList<>())
                     .build();
+                
+                // Link assignment to session (bidirectional relationship)
+                session.addAssignment(assignment);
                 
                 assignment = assignmentRepository.save(assignment);
                 log.debug("[AdminAssignmentService] Created assignment {} for shipper {} with {} parcels", 
@@ -375,26 +459,101 @@ public class AdminAssignmentService {
     }
     
     /**
-     * Fetch parcels from parcel-service
+     * Fetch parcels from parcel-service (optimized with bulk API)
+     * If parcelIds is null/empty, fetches all unassigned parcels with status IN_WAREHOUSE, DELAYED, or ON_ROUTE
      */
     private List<ParcelResponse> fetchParcels(List<String> parcelIds) {
         if (parcelIds == null || parcelIds.isEmpty()) {
-            // TODO: Fetch all unassigned parcels from parcel-service
-            // For now, return empty list
-            log.warn("[AdminAssignmentService] Fetching all parcels not yet implemented");
-            return new ArrayList<>();
+            // Fetch all unassigned parcels from parcel-service with status IN_WAREHOUSE, DELAYED, ON_ROUTE
+            log.info("[AdminAssignmentService] Fetching all unassigned parcels with eligible statuses");
+            return fetchUnassignedParcels();
         }
         
-        List<ParcelResponse> parcels = new ArrayList<>();
-        for (String parcelId : parcelIds) {
-            ParcelResponse parcel = parcelServiceClient.fetchParcelResponse(parcelId);
-            if (parcel != null) {
-                parcels.add(parcel);
-            } else {
-                log.warn("[AdminAssignmentService] Parcel not found: {}", parcelId);
-            }
+        try {
+            List<UUID> parcelUuids = parcelIds.stream()
+                .map(UUID::fromString)
+                .collect(Collectors.toList());
+            Map<String, ParcelResponse> parcelMap = parcelServiceClient.fetchParcelsBulk(parcelUuids);
+            return new ArrayList<>(parcelMap.values());
+        } catch (Exception e) {
+            log.error("[AdminAssignmentService] Failed to fetch parcels in bulk: {}", e.getMessage(), e);
+            return new ArrayList<>();
         }
-        return parcels;
+    }
+    
+    /**
+     * Fetch all unassigned parcels with status IN_WAREHOUSE, DELAYED, or ON_ROUTE from parcel-service V2 API
+     */
+    private List<ParcelResponse> fetchUnassignedParcels() {
+        try {
+            // Build V2 API request with filter for status IN (IN_WAREHOUSE, DELAYED, ON_ROUTE)
+            Map<String, Object> requestBody = new HashMap<>();
+            
+            // Build filter: status IN (IN_WAREHOUSE, DELAYED, ON_ROUTE)
+            Map<String, Object> statusFilter = new HashMap<>();
+            statusFilter.put("type", "condition");
+            statusFilter.put("field", "status");
+            statusFilter.put("operator", "IN");
+            statusFilter.put("value", List.of("IN_WAREHOUSE", "DELAYED", "ON_ROUTE"));
+            
+            Map<String, Object> filters = new HashMap<>();
+            filters.put("type", "group");
+            filters.put("operator", "AND");
+            filters.put("items", List.of(statusFilter));
+            
+            requestBody.put("filters", filters);
+            requestBody.put("page", 0);
+            requestBody.put("size", 1000); // Request up to 1000 parcels at once
+            
+            log.debug("[AdminAssignmentService] Calling parcel-service V2 API to fetch unassigned parcels");
+            
+            String responseBody = parcelServiceWebClient.post()
+                .uri("/api/v2/parcels")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestBody)
+                .retrieve()
+                .bodyToMono(String.class)
+                .block();
+            
+            if (responseBody == null || responseBody.isBlank()) {
+                log.warn("[AdminAssignmentService] Empty response from parcel-service V2 API");
+                return new ArrayList<>();
+            }
+            
+            // Parse response
+            JsonNode responseJson = objectMapper.readTree(responseBody);
+            JsonNode resultNode = responseJson.get("result");
+            if (resultNode == null) {
+                log.warn("[AdminAssignmentService] Invalid response format from parcel-service V2 API: missing 'result'");
+                return new ArrayList<>();
+            }
+            
+            JsonNode dataNode = resultNode.get("data");
+            if (dataNode == null || !dataNode.isArray()) {
+                log.warn("[AdminAssignmentService] Invalid response format from parcel-service V2 API: missing or invalid 'data' array");
+                return new ArrayList<>();
+            }
+            
+            // Convert JSON array to List<ParcelResponse>
+            List<ParcelResponse> parcels = new ArrayList<>();
+            for (JsonNode parcelNode : dataNode) {
+                try {
+                    ParcelResponse parcel = objectMapper.treeToValue(parcelNode, ParcelResponse.class);
+                    if (parcel != null) {
+                        parcels.add(parcel);
+                    }
+                } catch (Exception e) {
+                    log.warn("[AdminAssignmentService] Failed to parse parcel from response: {}", e.getMessage());
+                }
+            }
+            
+            log.info("[AdminAssignmentService] Fetched {} unassigned parcels from parcel-service", parcels.size());
+            return parcels;
+            
+        } catch (Exception e) {
+            log.error("[AdminAssignmentService] Failed to fetch unassigned parcels from parcel-service V2 API: {}", e.getMessage(), e);
+            return new ArrayList<>();
+        }
     }
     
     /**

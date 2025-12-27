@@ -1,19 +1,19 @@
 <script setup lang="ts">
 /**
- * Shipper Sessions Modal
+ * Shipper Sessions Statistics Modal
  *
- * Displays all sessions of a given shipper in a modal using UModal
+ * Displays session statistics for a shipper and provides redirect to All Sessions page
  */
 
-import { onMounted, computed, ref, h, resolveComponent } from 'vue'
+import { onMounted, computed, ref, resolveComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { getDeliverySessions, getActiveSessionForDeliveryMan } from '../api'
 import type { DeliveryManDto, DeliverySessionDto } from '../model.type'
 import type { FilterGroup } from '@/common/types/filter'
-import type { TableColumn } from '@nuxt/ui'
 
 const UButton = resolveComponent('UButton')
 const UBadge = resolveComponent('UBadge')
+const UCard = resolveComponent('UCard')
 
 interface Props {
   shipper: DeliveryManDto
@@ -25,23 +25,19 @@ const emit = defineEmits<{ close: [result: unknown] }>()
 const router = useRouter()
 const sessions = ref<DeliverySessionDto[]>([])
 const sessionsLoading = ref(false)
-const showInactive = ref(false)
 const activeSessionId = ref<string | null>(null)
 
 onMounted(async () => {
-  await loadActiveSession()
-  await loadAllSessions()
+  await Promise.all([loadActiveSession(), loadAllSessions()])
 })
 
 const loadActiveSession = async () => {
   try {
-    // Get active session for this shipper
     const response = await getActiveSessionForDeliveryMan(props.shipper.userId)
     if (response.result?.id) {
       activeSessionId.value = response.result.id
     }
-  } catch (error) {
-    // If no active session, that's fine - just log it
+  } catch {
     console.debug('No active session found for shipper:', props.shipper.userId)
     activeSessionId.value = null
   }
@@ -50,8 +46,6 @@ const loadActiveSession = async () => {
 const loadAllSessions = async () => {
   sessionsLoading.value = true
   try {
-    // Query all sessions for this shipper
-    // Note: deliveryManId in database is actually userId (Keycloak ID), not deliveryMan.id
     const filterGroup: FilterGroup = {
       logic: 'AND',
       conditions: [
@@ -59,7 +53,6 @@ const loadAllSessions = async () => {
           field: 'deliveryManId',
           operator: 'eq',
           value: props.shipper.userId,
-          logic: undefined,
         },
       ],
     }
@@ -67,7 +60,7 @@ const loadAllSessions = async () => {
     const response = await getDeliverySessions({
       filters: filterGroup,
       page: 0,
-      size: 100, // Load up to 100 sessions
+      size: 100, // Load up to 100 sessions for statistics
       sorts: [
         {
           field: 'startTime',
@@ -86,26 +79,53 @@ const loadAllSessions = async () => {
   }
 }
 
+// Statistics
 const totalSessions = computed(() => sessions.value.length)
 const activeSessions = computed(() => sessions.value.filter((session) => session.isActive).length)
-const inactiveSessions = computed(
-  () => sessions.value.filter((session) => !session.isActive).length,
+const completedSessions = computed(() =>
+  sessions.value.filter((session) => session.status === 'COMPLETED').length,
+)
+const failedSessions = computed(() =>
+  sessions.value.filter((session) => session.status === 'FAILED').length,
+)
+const inProgressSessions = computed(() =>
+  sessions.value.filter((session) => session.status === 'IN_PROGRESS').length,
 )
 
-const displayedSessions = computed(() => {
-  if (showInactive.value) {
-    return sessions.value
-  }
-  return sessions.value.filter((session) => session.isActive)
+const totalTasks = computed(() =>
+  sessions.value.reduce((sum, session) => sum + (session.totalTasks || 0), 0),
+)
+const completedTasks = computed(() =>
+  sessions.value.reduce((sum, session) => sum + (session.completedTasks || 0), 0),
+)
+const failedTasks = computed(() =>
+  sessions.value.reduce((sum, session) => sum + (session.failedTasks || 0), 0),
+)
+
+const lastSessionStartTime = computed(() => {
+  if (sessions.value.length === 0) return null
+  const sorted = [...sessions.value].sort((a, b) => {
+    if (!a.startTime) return 1
+    if (!b.startTime) return -1
+    return new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+  })
+  return sorted[0].startTime
 })
 
 const handleClose = () => {
   emit('close', null)
 }
 
-const navigateToSession = (session: DeliverySessionDto) => {
+const navigateToAllSessions = () => {
   emit('close', null)
-  router.push({ name: 'delivery-session-detail', params: { sessionId: session.id } })
+  // Navigate to All Sessions page with shipper filter
+  router.push({
+    name: 'delivery-sessions',
+    query: {
+      shipperId: props.shipper.id,
+      userId: props.shipper.userId,
+    },
+  })
 }
 
 const formatDate = (value?: string | null) => {
@@ -115,156 +135,124 @@ const formatDate = (value?: string | null) => {
     timeStyle: 'short',
   }).format(new Date(value))
 }
-
-// Table columns configuration (defined after functions to avoid hoisting issues)
-const columns: TableColumn<DeliverySessionDto>[] = [
-  {
-    accessorKey: 'actions',
-    header: 'Actions',
-    cell: ({ row }) => {
-      const session = row.original
-      return h(
-        UButton,
-        {
-          size: 'xs',
-          variant: 'ghost',
-          icon: 'i-heroicons-arrow-top-right-on-square',
-          onClick: () => navigateToSession(session),
-        },
-        () => 'View detail',
-      )
-    },
-  },
-  {
-    accessorKey: 'id',
-    header: 'Session ID',
-  },
-  {
-    accessorKey: 'status',
-    header: 'Status',
-    cell: ({ row }) => {
-      const session = row.original
-      const status = session.status
-      const isActive = activeSessionId.value === session.id
-      const color = status === 'COMPLETED' ? 'success' : status === 'FAILED' ? 'error' : 'warning'
-      return h('div', { class: 'flex items-center gap-2' }, [
-        h(
-          UBadge,
-          {
-            variant: 'soft',
-            color,
-            class: 'capitalize',
-          },
-          () => status.toLowerCase(),
-        ),
-        isActive &&
-          h(
-            UBadge,
-            {
-              variant: 'solid',
-              color: 'primary',
-              class: 'text-xs',
-            },
-            () => 'ACTIVE',
-          ),
-      ])
-    },
-  },
-  {
-    accessorKey: 'totalTasks',
-    header: 'Tasks',
-  },
-  {
-    accessorKey: 'completedTasks',
-    header: 'Completed',
-  },
-  {
-    accessorKey: 'failedTasks',
-    header: 'Failed',
-  },
-  {
-    accessorKey: 'startTime',
-    header: 'Start Time',
-    cell: ({ row }) => {
-      return h('span', formatDate(row.original.startTime))
-    },
-  },
-  {
-    accessorKey: 'endTime',
-    header: 'End Time',
-    cell: ({ row }) => {
-      return h('span', row.original.endTime ? formatDate(row.original.endTime) : '—')
-    },
-  },
-]
 </script>
 
 <template>
   <UModal
-    :title="`Sessions for ${shipper.displayName}`"
-    :description="`Total sessions: ${totalSessions}`"
+    :title="`Session Statistics - ${shipper.displayName}`"
+    :description="`Overview of delivery sessions for this shipper`"
     :close="{ onClick: handleClose }"
     :ui="{
-      content: 'min-w-[100vh] w-full md:min-w-none sm:min-w-none sm:max-w-md md:max-w-lg',
+      content: 'min-w-[600px] w-full md:min-w-none sm:min-w-none sm:max-w-md md:max-w-2xl',
       footer: 'justify-end w-full',
     }"
   >
     <template #body>
-      <div class="space-y-4">
-        <div class="flex items-center justify-between text-sm text-gray-500">
-          <span
-            >Email: <strong>{{ shipper.email || 'N/A' }}</strong></span
+      <div v-if="sessionsLoading" class="flex justify-center py-12">
+        <div class="text-gray-500">Loading statistics...</div>
+      </div>
+
+      <div v-else class="space-y-6">
+        <!-- Shipper Info -->
+        <div class="flex items-center justify-between text-sm text-gray-600 border-b pb-3">
+          <div class="flex items-center gap-4">
+            <span>Email: <strong>{{ shipper.email || 'N/A' }}</strong></span>
+            <span>Phone: <strong>{{ shipper.phone || 'N/A' }}</strong></span>
+          </div>
+          <UBadge
+            v-if="shipper.hasActiveSession"
+            variant="solid"
+            color="success"
+            class="text-xs"
           >
-          <span
-            >Phone: <strong>{{ shipper.phone || 'N/A' }}</strong></span
-          >
-          <span
-            >Active: <strong>{{ activeSessions }}</strong> / Total:
-            <strong>{{ totalSessions }}</strong></span
-          >
+            ACTIVE SESSION
+          </UBadge>
         </div>
 
-        <div v-if="inactiveSessions > 0" class="flex justify-end">
-          <UButton
-            :variant="showInactive ? 'solid' : 'outline'"
-            size="sm"
-            @click="showInactive = !showInactive"
-          >
-            {{ showInactive ? 'Hide' : 'Show' }} Inactive ({{ inactiveSessions }})
-          </UButton>
+        <!-- Session Statistics -->
+        <div class="grid grid-cols-2 gap-4">
+          <UCard>
+            <div class="p-4">
+              <div class="text-sm text-gray-500 mb-1">Total Sessions</div>
+              <div class="text-2xl font-bold">{{ totalSessions }}</div>
+            </div>
+          </UCard>
+
+          <UCard>
+            <div class="p-4">
+              <div class="text-sm text-gray-500 mb-1">Active Sessions</div>
+              <div class="text-2xl font-bold text-green-600">{{ activeSessions }}</div>
+            </div>
+          </UCard>
+
+          <UCard>
+            <div class="p-4">
+              <div class="text-sm text-gray-500 mb-1">Completed</div>
+              <div class="text-2xl font-bold text-blue-600">{{ completedSessions }}</div>
+            </div>
+          </UCard>
+
+          <UCard>
+            <div class="p-4">
+              <div class="text-sm text-gray-500 mb-1">Failed</div>
+              <div class="text-2xl font-bold text-red-600">{{ failedSessions }}</div>
+            </div>
+          </UCard>
         </div>
 
-        <USkeleton v-if="sessionsLoading" class="h-48 w-full" />
+        <!-- Task Statistics -->
+        <div class="grid grid-cols-3 gap-4">
+          <UCard>
+            <div class="p-4">
+              <div class="text-sm text-gray-500 mb-1">Total Tasks</div>
+              <div class="text-2xl font-bold">{{ totalTasks }}</div>
+            </div>
+          </UCard>
 
-        <div v-else>
-          <UAlert
-            v-if="displayedSessions.length === 0"
-            color="neutral"
-            variant="soft"
-            title="No sessions found"
-            :description="
-              showInactive
-                ? 'This shipper has no delivery sessions yet.'
-                : 'No active sessions. Click Show Inactive to view completed sessions.'
-            "
-          />
+          <UCard>
+            <div class="p-4">
+              <div class="text-sm text-gray-500 mb-1">Completed Tasks</div>
+              <div class="text-2xl font-bold text-green-600">{{ completedTasks }}</div>
+            </div>
+          </UCard>
 
-          <UTable
-            v-else
-            :data="displayedSessions"
-            :columns="columns"
-            :ui="{
-              empty: 'text-center py-12',
-              root: 'h-[50vh]',
-              thead: 'sticky top-0 bg-white dark:bg-gray-800',
-            }"
-          />
+          <UCard>
+            <div class="p-4">
+              <div class="text-sm text-gray-500 mb-1">Failed Tasks</div>
+              <div class="text-2xl font-bold text-red-600">{{ failedTasks }}</div>
+            </div>
+          </UCard>
+        </div>
+
+        <!-- Last Session Info -->
+        <UCard v-if="lastSessionStartTime">
+          <div class="p-4">
+            <div class="text-sm text-gray-500 mb-1">Last Session Started</div>
+            <div class="text-lg font-medium">{{ formatDate(lastSessionStartTime) }}</div>
+          </div>
+        </UCard>
+
+        <!-- Empty State -->
+        <div v-if="totalSessions === 0" class="text-center py-8">
+          <div class="text-gray-400 mb-2">No sessions found for this shipper</div>
+          <div class="text-sm text-gray-500">This shipper has not started any delivery sessions yet.</div>
         </div>
       </div>
     </template>
 
     <template #footer>
-      <UButton variant="outline" color="neutral" @click="handleClose"> Close </UButton>
+      <div class="flex justify-between w-full">
+        <UButton variant="ghost" color="neutral" @click="handleClose"> Close </UButton>
+        <UButton
+          variant="solid"
+          color="primary"
+          icon="i-heroicons-arrow-top-right-on-square"
+          :disabled="totalSessions === 0"
+          @click="navigateToAllSessions"
+        >
+          View All Sessions
+        </UButton>
+      </div>
     </template>
   </UModal>
 </template>

@@ -66,8 +66,8 @@ export function useUsers() {
     } catch (error) {
       console.error('Failed to load users:', error)
       toast.add({
-        title: 'Error',
-        description: 'Failed to load users',
+        title: 'Lỗi',
+        description: 'Không thể tải danh sách người dùng',
         color: 'error',
       })
     } finally {
@@ -84,8 +84,8 @@ export function useUsers() {
       await createUser(request)
 
       toast.add({
-        title: 'Success',
-        description: 'User created successfully',
+        title: 'Thành công',
+        description: 'Đã tạo người dùng thành công',
         color: 'success',
       })
 
@@ -106,8 +106,8 @@ export function useUsers() {
       await updateUser(id, request)
 
       toast.add({
-        title: 'Success',
-        description: 'User updated successfully',
+        title: 'Thành công',
+        description: 'Đã cập nhật người dùng thành công',
         color: 'success',
       })
 
@@ -127,8 +127,8 @@ export function useUsers() {
       await deleteUser(id)
 
       toast.add({
-        title: 'Success',
-        description: 'User deleted successfully',
+        title: 'Thành công',
+        description: 'Đã xóa người dùng thành công',
         color: 'success',
       })
 
@@ -149,7 +149,7 @@ export function useUsers() {
 
       toast.add({
         title: 'Success',
-        description: `${ids.length} user(s) deleted successfully`,
+        description: `Đã xóa ${ids.length} người dùng thành công`,
         color: 'success',
       })
 
@@ -236,13 +236,13 @@ export function useUsers() {
     return [
       {
         field: 'username',
-        label: 'Username',
+        label: 'Tên đăng nhập',
         type: 'string',
         caseSensitive: false,
         filterable: true,
         filterType: 'text',
         filterConfig: {
-          placeholder: 'Enter username...',
+          placeholder: 'Nhập tên đăng nhập...',
         },
       },
       {
@@ -253,98 +253,98 @@ export function useUsers() {
         filterable: true,
         filterType: 'text',
         filterConfig: {
-          placeholder: 'Enter email address...',
+          placeholder: 'Nhập địa chỉ email...',
         },
       },
       {
         field: 'firstName',
-        label: 'First Name',
+        label: 'Tên',
         type: 'string',
         caseSensitive: false,
         filterable: true,
         filterType: 'text',
         filterConfig: {
-          placeholder: 'Enter first name...',
+          placeholder: 'Nhập tên...',
         },
       },
       {
         field: 'lastName',
-        label: 'Last Name',
+        label: 'Họ',
         type: 'string',
         caseSensitive: false,
         filterable: true,
         filterType: 'text',
         filterConfig: {
-          placeholder: 'Enter last name...',
+          placeholder: 'Nhập họ...',
         },
       },
       {
         field: 'fullName',
-        label: 'Full Name',
+        label: 'Họ và tên',
         type: 'string',
         caseSensitive: false,
         filterable: true,
         filterType: 'text',
         filterConfig: {
-          placeholder: 'Enter full name...',
+          placeholder: 'Nhập họ và tên...',
         },
       },
       {
         field: 'phone',
-        label: 'Phone',
+        label: 'Số điện thoại',
         type: 'string',
         caseSensitive: false,
         filterable: true,
         filterType: 'text',
         filterConfig: {
-          placeholder: 'Enter phone number...',
+          placeholder: 'Nhập số điện thoại...',
         },
       },
       {
         field: 'status',
-        label: 'Status',
+        label: 'Trạng thái',
         type: 'enum',
         enumOptions: [
-          { label: 'Active', value: 'ACTIVE' },
-          { label: 'Inactive', value: 'INACTIVE' },
-          { label: 'Suspended', value: 'SUSPENDED' },
-          { label: 'Pending', value: 'PENDING' },
+          { label: 'Hoạt động', value: 'ACTIVE' },
+          { label: 'Không hoạt động', value: 'INACTIVE' },
+          { label: 'Tạm khóa', value: 'SUSPENDED' },
+          { label: 'Đang chờ', value: 'PENDING' },
         ],
         filterable: true,
         filterType: 'select',
         filterConfig: {
-          placeholder: 'Select status...',
+          placeholder: 'Chọn trạng thái...',
           multiple: false,
         },
       },
       {
         field: 'createdAt',
-        label: 'Created At',
+        label: 'Ngày tạo',
         type: 'date',
         filterable: true,
         filterType: 'date',
         filterConfig: {
-          placeholder: 'Select date...',
+          placeholder: 'Chọn ngày...',
         },
       },
       {
         field: 'updatedAt',
-        label: 'Updated At',
+        label: 'Ngày cập nhật',
         type: 'date',
         filterable: true,
         filterType: 'date',
         filterConfig: {
-          placeholder: 'Select date...',
+          placeholder: 'Chọn ngày...',
         },
       },
       {
         field: 'age',
-        label: 'Age',
+        label: 'Tuổi',
         type: 'number',
         filterable: true,
         filterType: 'number',
         filterConfig: {
-          placeholder: 'Enter age...',
+          placeholder: 'Nhập tuổi...',
           min: 0,
           max: 120,
           step: 1,

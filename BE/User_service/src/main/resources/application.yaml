@@ -5,7 +5,7 @@ spring:
     application:
         name: user-service
     datasource:
-        url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${USER_DB_NAME:ds_user_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+        url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${USER_DB_NAME:ds_user_service}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&zeroDateTimeBehavior=CONVERT_TO_NULL
         username: ${DB_USERNAME:root}
         password: ${DB_PASSWORD:root}
         driver-class-name: com.mysql.cj.jdbc.Driver
@@ -55,8 +55,8 @@ keycloak:
     realm: ${KEYCLOAK_REALM:delivery-system}
     resource: ${KEYCLOAK_CLIENT_ID:frontend-client}
     credentials:
-        username: ${KEYCLOAK_ADMIN_USERNAME}
-        password: ${KEYCLOAK_ADMIN_PASSWORD}
+        username: ${KEYCLOAK_ADMIN_USERNAME:admin}
+        password: ${KEYCLOAK_ADMIN_PASSWORD:admin}
         secret: ${KEYCLOAK_CLIENT_SECRET:46sGOyba6nyt8UhLkKAQgzmbedF9L042}
 
     admin-client:
@@ -187,6 +187,19 @@ keycloak:
                         enabled: true
                         vehicleType: BIKE
                         capacityKg: 120
+                        shifts:
+                            - dayOfWeek: 1
+                              startTime: "08:00"
+                              endTime: "18:00"
+                            - dayOfWeek: 3
+                              startTime: "08:00"
+                              endTime: "18:00"
+                            - dayOfWeek: 5
+                              startTime: "08:00"
+                              endTime: "18:00"
+                            - dayOfWeek: 7
+                              startTime: "08:00"
+                              endTime: "18:00"
 
                   - username: shipper02
                     email: shipper02@delivery-system.com
@@ -202,6 +215,16 @@ keycloak:
                         enabled: true
                         vehicleType: BIKE
                         capacityKg: 150
+                        shifts:
+                            - dayOfWeek: 1
+                              startTime: "08:00"
+                              endTime: "18:00"
+                            - dayOfWeek: 4
+                              startTime: "08:00"
+                              endTime: "18:00"
+                            - dayOfWeek: 6
+                              startTime: "08:00"
+                              endTime: "18:00"
 
                   - username: shipper03
                     email: shipper03@delivery-system.com
@@ -217,6 +240,16 @@ keycloak:
                         enabled: true
                         vehicleType: BIKE
                         capacityKg: 80
+                        shifts:
+                            - dayOfWeek: 1
+                              startTime: "08:00"
+                              endTime: "18:00"
+                            - dayOfWeek: 2
+                              startTime: "08:00"
+                              endTime: "18:00"
+                            - dayOfWeek: 3
+                              startTime: "08:00"
+                              endTime: "18:00"
 
                   - username: shipper04
                     email: shipper04@delivery-system.com
@@ -232,6 +265,16 @@ keycloak:
                         enabled: true
                         vehicleType: CAR
                         capacityKg: 120
+                        shifts:
+                            - dayOfWeek: 1
+                              startTime: "08:00"
+                              endTime: "18:00"
+                            - dayOfWeek: 5
+                              startTime: "08:00"
+                              endTime: "18:00"
+                            - dayOfWeek: 6
+                              startTime: "08:00"
+                              endTime: "18:00"
 
                   - username: shipper05
                     email: shipper05@delivery-system.com
@@ -247,6 +290,19 @@ keycloak:
                         enabled: true
                         vehicleType: CAR
                         capacityKg: 200
+                        shifts:
+                            - dayOfWeek: 1
+                              startTime: "08:00"
+                              endTime: "18:00"
+                            - dayOfWeek: 2
+                              startTime: "08:00"
+                              endTime: "18:00"
+                            - dayOfWeek: 4
+                              startTime: "08:00"
+                              endTime: "18:00"
+                            - dayOfWeek: 6
+                              startTime: "08:00"
+                              endTime: "18:00"
 
                   - username: shop01
                     email: shop01@delivery-system.com
@@ -840,17 +896,13 @@ keycloak:
 # External Services
 services:
     settings:
-        base-url: ${SETTINGS_SERVICE_URL:http://localhost:21502}
+        base-url: ${SETTINGS_SERVICE_URL:http://settings-service:21502}
     zone:
-        base-url: ${ZONE_SERVICE_URL:http://localhost:21503}
+        base-url: ${ZONE_SERVICE_URL:http://zone-service:21503}
     parcel:
-        base-url: ${PARCEL_SERVICE_URL:http://localhost:21506}
-
-# Parcel Seed Configuration
-parcel:
-    seed:
-        enabled: ${PARCEL_SEED_ENABLED:true}
-        count: ${PARCEL_SEED_COUNT:20}
+        base-url: ${PARCEL_SERVICE_URL:http://parcel-service:21506}
+    session:
+        base-url: ${SESSION_SERVICE_URL:http://session-service:21505}
 
 # Actuator Configuration
 management:
@@ -871,34 +923,40 @@ user:
             retry-delay-seconds: 10
 
 # Logging Configuration
+# Only log errors from frameworks/libraries, keep developer logs at INFO
+# Suppress verbose output from Java/Spring libraries to reduce log noise
 logging:
-    pattern:
-        console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n'
     level:
-        root: ERROR
-        com.ds.user: DEBUG
-        com.ds: DEBUG
-        org.springframework: ERROR
-        org.springframework.web: ERROR
-        org.springframework.boot: ERROR
-        org.springframework.context: ERROR
-        org.springframework.beans: ERROR
-        org.springframework.core: ERROR
-        org.springframework.security: ERROR
-        org.hibernate: ERROR
-        org.hibernate.SQL: OFF
-        org.hibernate.type.descriptor.sql: OFF
-        org.flywaydb: ERROR
-        com.zaxxer.hikari: ERROR
-        org.keycloak: ERROR
-        org.jboss.resteasy: ERROR
-        org.apache.http: ERROR
-        org.apache.catalina: ERROR
-        org.apache.tomcat: ERROR
-        org.jboss.resteasy.client: ERROR
-        com.fasterxml.jackson: ERROR
-        org.reflections: ERROR
-        io.netty: ERROR
-        reactor.netty: ERROR
-        ch.qos.logback: ERROR
-        org.apache.kafka: ERROR
+        root: ERROR                          # All libraries default to ERROR
+        com.ds: INFO                         # Developer logs at INFO level
+        # Spring Framework - suppress verbose startup/component scanning
+        org.springframework: ERROR           # Spring framework errors only
+        org.springframework.web: ERROR       # Spring web errors only
+        org.springframework.boot: ERROR      # Spring Boot errors only
+        org.springframework.context: ERROR   # Component scanning noise
+        org.springframework.beans: ERROR      # Bean creation noise
+        org.springframework.core: ERROR       # Core framework noise
+        # Database/JPA - suppress SQL and connection pool noise
+        org.hibernate: ERROR                  # Hibernate errors only (no SQL logging)
+        org.hibernate.SQL: OFF                # Explicitly disable SQL logging
+        org.hibernate.type.descriptor.sql: OFF # Disable SQL parameter logging
+        org.flywaydb: ERROR                  # Flyway errors only
+        com.zaxxer.hikari: ERROR             # HikariCP errors only
+        # Keycloak - suppress verbose admin client logs
+        org.keycloak: ERROR                  # Keycloak admin client errors only
+        org.jboss.resteasy: ERROR            # RESTEasy (Keycloak client) errors only
+        # HTTP/Network - suppress connection pool and HTTP client noise
+        org.apache.http: ERROR               # Apache HTTP client errors only
+        org.apache.catalina: ERROR           # Tomcat errors only
+        org.apache.tomcat: ERROR             # Tomcat errors only
+        # JAX-RS/Jersey - suppress REST client verbose logs
+        org.jboss.resteasy.client: ERROR     # RESTEasy client errors only
+        # Jackson/JSON - suppress serialization noise
+        com.fasterxml.jackson: ERROR         # Jackson errors only
+        # Other common noisy libraries
+        org.reflections: ERROR                # Reflections library errors only
+        io.netty: ERROR                      # Netty (used by HTTP clients) errors only
+        reactor.netty: ERROR                 # Reactor Netty errors only
+        # Logback configuration
+        ch.qos.logback: ERROR                # Logback errors only
+        org.apache.kafka: ERROR              # Kafka errors only

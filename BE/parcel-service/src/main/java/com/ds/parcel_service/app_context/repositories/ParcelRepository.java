@@ -41,4 +41,19 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID>, JpaSpecif
      * Bulk query: Find parcels by list of receiver IDs
      */
     List<Parcel> findByReceiverIdIn(List<String> receiverIds);
+    
+    /**
+     * Find parcels older than specified date with specific statuses
+     */
+    List<Parcel> findByStatusInAndCreatedAtBefore(List<ParcelStatus> statuses, LocalDateTime before);
+    
+    /**
+     * Find parcels by receiver address IDs and statuses
+     */
+    List<Parcel> findByReceiverAddressIdInAndStatusIn(List<String> receiverAddressIds, List<ParcelStatus> statuses);
+    
+    /**
+     * Find parcels by statuses
+     */
+    List<Parcel> findByStatusIn(List<ParcelStatus> statuses);
 }

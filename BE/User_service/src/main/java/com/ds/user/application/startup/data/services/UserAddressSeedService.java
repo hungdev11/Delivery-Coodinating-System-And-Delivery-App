@@ -7,14 +7,18 @@ import com.ds.user.common.entities.base.User;
 import com.ds.user.common.entities.base.UserAddress;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -28,6 +32,9 @@ public class UserAddressSeedService {
     private final UserRepository userRepository;
     private final UserAddressRepository userAddressRepository;
     private final WebClient zoneServiceWebClient;
+    
+    @PersistenceContext
+    private EntityManager entityManager;
     
     private final ObjectMapper objectMapper = new ObjectMapper();
     
@@ -44,6 +51,7 @@ public class UserAddressSeedService {
      * Seed a single address for a user
      * Creates address in zone-service, then creates UserAddress with specified tag and isPrimary
      */
+    @Transactional
     public void seedAddress(String userId, KeycloakInitConfig.AddressConfig addressConfig, boolean isPrimary) {
         if (addressConfig == null || addressConfig.getLat() == null || addressConfig.getLon() == null) {
             log.warn("⚠️ Address config is missing or incomplete for user: {}. Skipping address seeding.", userId);
@@ -115,8 +123,8 @@ public class UserAddressSeedService {
             // Determine tag
             String tag = addressConfig.getTag();
             if (tag == null || tag.isBlank()) {
-                // Auto-detect tag from name
-                String nameLower = addressName.toLowerCase();
+                // Auto-detect tag from addressText
+                String nameLower = addressText.toLowerCase();
                 if (nameLower.contains("primary") || nameLower.contains("home")) {
                     tag = "Home";
                 } else if (nameLower.contains("office") || nameLower.contains("work") || nameLower.contains("company")) {
@@ -129,8 +137,14 @@ public class UserAddressSeedService {
             }
 
             // If setting as primary, unset other primary addresses
+            // Only do this if user already has addresses (to avoid unnecessary query)
             if (isPrimary) {
-                userAddressRepository.setAllNonPrimaryByUserId(userId);
+                boolean hasExistingAddresses = userAddressRepository.existsByUserId(userId);
+                if (hasExistingAddresses) {
+                    // Flush any pending changes to ensure consistency
+                    entityManager.flush();
+                    userAddressRepository.setAllNonPrimaryByUserId(userId);
+                }
             }
 
             // Create UserAddress
@@ -165,9 +179,17 @@ public class UserAddressSeedService {
     /**
      * Seed addresses for shop and client users
      * Supports both single address (backward compatibility) and multiple addresses
+     * Only seeds if database is empty (no addresses exist)
      */
     public void seedPrimaryAddressesForUsers(KeycloakInitConfig.RealmConfig realmConfig) {
         if (realmConfig == null || realmConfig.getUsers() == null) {
+            return;
+        }
+
+        // Check if database already has addresses - if yes, skip seeding
+        long existingAddressCount = userAddressRepository.count();
+        if (existingAddressCount > 0) {
+            log.info("✓ Address seeding skipped: Database already has {} address(es). Skipping seed.", existingAddressCount);
             return;
         }
 

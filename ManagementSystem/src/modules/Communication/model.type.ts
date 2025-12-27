@@ -25,7 +25,7 @@ export type ProposalStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED'
 
 /**
  * Proposal Type
- * Must match backend enum: CONFIRM_REFUSAL, POSTPONE_REQUEST, DELAY_ORDER_RECEIVE, DISPUTE_APPEAL, STATUS_CHANGE_NOTIFICATION
+ * Must match backend enum: CONFIRM_REFUSAL, POSTPONE_REQUEST, DELAY_ORDER_RECEIVE, DISPUTE_APPEAL, STATUS_CHANGE_NOTIFICATION, TICKET
  */
 export type ProposalType =
   | 'CONFIRM_REFUSAL'
@@ -33,11 +33,12 @@ export type ProposalType =
   | 'DELAY_ORDER_RECEIVE'
   | 'DISPUTE_APPEAL'
   | 'STATUS_CHANGE_NOTIFICATION'
+  | 'TICKET'
 
 /**
  * Proposal Action Type
  */
-export type ProposalActionType = 'ACCEPT_DECLINE' | 'DATE_PICKER' | 'TEXT_INPUT' | 'CHOICE'
+export type ProposalActionType = 'ACCEPT_DECLINE' | 'ACCEPT_REJECT' | 'DATE_PICKER' | 'TEXT_INPUT' | 'CHOICE'
 
 /**
  * Conversation Response

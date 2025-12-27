@@ -54,4 +54,9 @@ public class ManualAssignmentResponse {
      * Zone ID used for filtering (if provided)
      */
     private String zoneId;
+    
+    /**
+     * Session ID that this assignment belongs to
+     */
+    private String sessionId;
 }

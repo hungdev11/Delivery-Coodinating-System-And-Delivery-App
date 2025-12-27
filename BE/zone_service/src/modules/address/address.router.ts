@@ -102,4 +102,11 @@ router.put('/:id', addressController.updateAddress)
  */
 router.delete('/:id', addressController.deleteAddress)
 
+/**
+ * @route POST /api/v1/addresses/troubleshoot/fix-zones
+ * @desc [TROUBLESHOOTING ONLY] Fix addresses without zone_id by finding zones from coordinates
+ * @access Public (should be restricted to admin in production)
+ */
+router.post('/troubleshoot/fix-zones', addressController.fixAddressesWithoutZone)
+
 export default router

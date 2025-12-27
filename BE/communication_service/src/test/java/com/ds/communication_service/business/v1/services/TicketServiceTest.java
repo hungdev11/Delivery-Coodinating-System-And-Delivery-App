@@ -3,11 +3,13 @@ package com.ds.communication_service.business.v1.services;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,13 +24,19 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import com.ds.communication_service.app_context.models.Conversation;
 import com.ds.communication_service.app_context.models.Ticket;
+import com.ds.communication_service.app_context.repositories.InteractiveProposalRepository;
+import com.ds.communication_service.app_context.repositories.MessageRepository;
 import com.ds.communication_service.app_context.repositories.TicketRepository;
 import com.ds.communication_service.common.dto.CreateTicketRequest;
 import com.ds.communication_service.common.dto.TicketResponse;
 import com.ds.communication_service.common.dto.UpdateTicketRequest;
 import com.ds.communication_service.common.enums.TicketStatus;
 import com.ds.communication_service.common.enums.TicketType;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.messaging.simp.SimpMessageSendingOperations;
 
 /**
  * Unit tests for TicketService
@@ -39,6 +47,24 @@ class TicketServiceTest {
 
     @Mock
     private TicketRepository ticketRepository;
+
+    @Mock
+    private KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Mock
+    private ConversationService conversationService;
+
+    @Mock
+    private InteractiveProposalRepository proposalRepository;
+
+    @Mock
+    private MessageRepository messageRepository;
+
+    @Mock
+    private ObjectMapper objectMapper;
+
+    @Mock
+    private SimpMessageSendingOperations messagingTemplate;
 
     @InjectMocks
     private TicketService ticketService;
@@ -89,6 +115,14 @@ class TicketServiceTest {
                 saved.setUpdatedAt(LocalDateTime.now());
                 return saved;
             });
+
+            // Mock KafkaTemplate (to avoid NPE when publishing notifications)
+            // KafkaTemplate.send() returns CompletableFuture, not void
+            lenient().when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(CompletableFuture.completedFuture(null));
+            // Mock ObjectMapper - return real ObjectNode (not null) - lenient because not called in createTicket
+            lenient().when(objectMapper.createObjectNode()).thenAnswer(invocation -> 
+                new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
+            );
 
             // Act
             TicketResponse response = ticketService.createTicket(request, reporterId);
@@ -153,6 +187,24 @@ class TicketServiceTest {
 
             when(ticketRepository.findById(ticketId)).thenReturn(Optional.of(ticket));
             when(ticketRepository.save(any(Ticket.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            
+            // Mock KafkaTemplate (returns CompletableFuture)
+            lenient().when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(CompletableFuture.completedFuture(null));
+            // Mock ObjectMapper for proposal creation (when admin assigns ticket) - lenient because may not be called
+            lenient().when(objectMapper.createObjectNode()).thenAnswer(invocation -> 
+                new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
+            );
+            // Mock ConversationService to avoid NPE - lenient because only called when admin assigns
+            Conversation mockConversation = new Conversation();
+            mockConversation.setId(UUID.randomUUID());
+            mockConversation.setUser1Id("user1");
+            mockConversation.setUser2Id("user2");
+            lenient().when(conversationService.findOrCreateConversation(anyString(), anyString()))
+                .thenReturn(mockConversation);
+            // Mock repositories to avoid NPE - lenient because only called when admin assigns
+            lenient().when(proposalRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            lenient().when(messageRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            lenient().doNothing().when(messagingTemplate).convertAndSendToUser(anyString(), anyString(), any());
 
             // Act
             TicketResponse response = ticketService.updateTicket(ticketId, request, adminId);
@@ -179,6 +231,24 @@ class TicketServiceTest {
 
             when(ticketRepository.findById(ticketId)).thenReturn(Optional.of(ticket));
             when(ticketRepository.save(any(Ticket.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            
+            // Mock KafkaTemplate (returns CompletableFuture)
+            lenient().when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(CompletableFuture.completedFuture(null));
+            // Mock ObjectMapper for proposal creation (when admin assigns ticket) - lenient because may not be called
+            lenient().when(objectMapper.createObjectNode()).thenAnswer(invocation -> 
+                new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
+            );
+            // Mock ConversationService to avoid NPE - lenient because only called when admin assigns
+            Conversation mockConversation = new Conversation();
+            mockConversation.setId(UUID.randomUUID());
+            mockConversation.setUser1Id("user1");
+            mockConversation.setUser2Id("user2");
+            lenient().when(conversationService.findOrCreateConversation(anyString(), anyString()))
+                .thenReturn(mockConversation);
+            // Mock repositories to avoid NPE - lenient because only called when admin assigns
+            lenient().when(proposalRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            lenient().when(messageRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            lenient().doNothing().when(messagingTemplate).convertAndSendToUser(anyString(), anyString(), any());
 
             // Act
             TicketResponse response = ticketService.updateTicket(ticketId, request, adminId);

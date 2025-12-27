@@ -132,7 +132,7 @@ const getBorderColor = computed(() => {
 
     <!-- Proposal Data Display -->
     <div v-if="proposal.data" class="text-xs text-gray-500 mb-2">
-      <div v-if="proposal.type === 'DISPUTE_APPEAL' || proposal.type === 'STATUS_CHANGE_NOTIFICATION'">
+      <div v-if="proposal.type === 'DISPUTE_APPEAL' || proposal.type === 'STATUS_CHANGE_NOTIFICATION' || proposal.type === 'TICKET'">
         <div v-for="(value, key) in parseProposalData(proposal.data)" :key="key" class="mb-1">
           <span class="font-medium">{{ key }}:</span>
           <span class="ml-1">{{ value }}</span>
@@ -145,9 +145,9 @@ const getBorderColor = computed(() => {
 
     <!-- Proposal Response Buttons -->
     <div v-if="canRespond || (proposal.type === 'DISPUTE_APPEAL' && proposal.proposerId === currentUserId)" class="flex space-x-2 mt-3">
-      <!-- ACCEPT_DECLINE action type -->
+      <!-- ACCEPT_DECLINE or ACCEPT_REJECT action type -->
       <UButton
-        v-if="proposal.actionType === 'ACCEPT_DECLINE'"
+        v-if="proposal.actionType === 'ACCEPT_DECLINE' || proposal.actionType === 'ACCEPT_REJECT'"
         size="xs"
         color="success"
         @click="handleResponse('ACCEPTED')"
@@ -155,13 +155,13 @@ const getBorderColor = computed(() => {
         Accept
       </UButton>
       <UButton
-        v-if="proposal.actionType === 'ACCEPT_DECLINE'"
+        v-if="proposal.actionType === 'ACCEPT_DECLINE' || proposal.actionType === 'ACCEPT_REJECT'"
         size="xs"
         color="error"
         variant="outline"
         @click="handleResponse('REJECTED')"
       >
-        Decline
+        {{ proposal.actionType === 'ACCEPT_REJECT' ? 'Reject' : 'Decline' }}
       </UButton>
 
       <!-- TEXT_INPUT action type (e.g., "Xác nhận đã nhận đơn") -->
@@ -196,6 +196,32 @@ const getBorderColor = computed(() => {
       <div v-if="proposal.type === 'STATUS_CHANGE_NOTIFICATION'" class="text-xs text-gray-500 italic">
         Đây là thông báo, không cần phản hồi
       </div>
+
+      <!-- TICKET type - Admin can accept (assign to self) or reject (cancel) -->
+      <template v-if="proposal.type === 'TICKET'">
+        <!-- Admin view: can accept/reject -->
+        <template v-if="proposal.recipientId === currentUserId">
+          <UButton
+            size="xs"
+            color="success"
+            @click="handleResponse('ACCEPTED')"
+          >
+            Accept Ticket
+          </UButton>
+          <UButton
+            size="xs"
+            color="error"
+            variant="outline"
+            @click="handleResponse('REJECTED')"
+          >
+            Reject
+          </UButton>
+        </template>
+        <!-- Reporter view: read-only info -->
+        <div v-else class="text-xs text-gray-500 italic">
+          Ticket đã được tạo. Admin sẽ xử lý.
+        </div>
+      </template>
     </div>
 
     <!-- Affected Parcels Display (if proposal has sessionId) -->

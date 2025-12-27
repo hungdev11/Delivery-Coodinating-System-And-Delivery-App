@@ -28,9 +28,25 @@ export interface AddressDto {
   projectedLat?: number | null
   projectedLon?: number | null
 
-  // Zone information
+  // Zone information (nested object)
+  zone?: {
+    id: string
+    code: string
+    name: string
+      center?: {
+        id: string
+        code?: string | null
+        name?: string | null
+        address?: string | null
+        lat?: number | null
+        lon?: number | null
+        polygon?: any | null
+      } | null
+  } | null
+  
+  // Legacy fields for backward compatibility (zoneId, zoneName from zone relation)
   zoneId?: string | null
-  zoneName?: string | null // Denormalized from zone
+  zoneName?: string | null
   wardName?: string | null
   districtName?: string | null
 

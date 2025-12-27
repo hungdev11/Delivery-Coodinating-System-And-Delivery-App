@@ -11,22 +11,42 @@ import com.ds.user.common.entities.dto.request.CreateUserAddressRequest;
 import com.ds.user.common.entities.dto.request.UpdateUserAddressRequest;
 import com.ds.user.common.exceptions.ResourceNotFoundException;
 import com.ds.user.common.interfaces.IUserAddressService;
-import lombok.RequiredArgsConstructor;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class UserAddressService implements IUserAddressService {
 
     private final UserAddressRepository userAddressRepository;
     private final UserRepository userRepository;
     private final ZoneClient zoneClient;
+    private final WebClient zoneServiceWebClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public UserAddressService(
+            UserAddressRepository userAddressRepository,
+            UserRepository userRepository,
+            ZoneClient zoneClient,
+            @Qualifier("zoneServiceWebClient") WebClient zoneServiceWebClient) {
+        this.userAddressRepository = userAddressRepository;
+        this.userRepository = userRepository;
+        this.zoneClient = zoneClient;
+        this.zoneServiceWebClient = zoneServiceWebClient;
+    }
 
     @Override
     @Transactional
@@ -36,6 +56,24 @@ public class UserAddressService implements IUserAddressService {
             throw new ResourceNotFoundException("User not found: " + userId);
         }
 
+        // Determine destinationId: either use provided one, or create/get from zone-service
+        String destinationId = request.getDestinationId();
+        
+        if (destinationId == null || destinationId.isBlank()) {
+            // If destinationId is not provided, lat and lon must be provided
+            if (request.getLat() == null || request.getLon() == null) {
+                throw new IllegalArgumentException(
+                    "Either destinationId must be provided, or both lat and lon must be provided");
+            }
+            
+            // Call zone-service to get-or-create address
+            destinationId = getOrCreateAddressInZoneService(
+                request.getLat(), 
+                request.getLon(),
+                request.getName(),
+                request.getAddressText());
+        }
+
         // If setting as primary, unset other primary addresses
         if (Boolean.TRUE.equals(request.getIsPrimary())) {
             userAddressRepository.setAllNonPrimaryByUserId(userId);
@@ -43,16 +81,72 @@ public class UserAddressService implements IUserAddressService {
 
         UserAddress userAddress = UserAddress.builder()
                 .userId(userId)
-                .destinationId(request.getDestinationId())
+                .destinationId(destinationId)
                 .note(request.getNote())
                 .tag(request.getTag())
                 .isPrimary(request.getIsPrimary() != null ? request.getIsPrimary() : false)
                 .build();
 
         UserAddress saved = userAddressRepository.save(userAddress);
-        log.debug("Created user address {} for user {}", saved.getId(), userId);
+        log.debug("Created user address {} for user {} with destinationId {}", saved.getId(), userId, destinationId);
 
         return toDto(saved);
+    }
+
+    /**
+     * Call zone-service to get or create an address.
+     * Returns the address ID from zone-service.
+     */
+    private String getOrCreateAddressInZoneService(BigDecimal lat, BigDecimal lon, String name, String addressText) {
+        try {
+            Map<String, Object> createAddressRequest = new HashMap<>();
+            if (name != null && !name.isBlank()) {
+                createAddressRequest.put("name", name);
+            }
+            if (addressText != null && !addressText.isBlank()) {
+                createAddressRequest.put("addressText", addressText);
+                // Use addressText as name if name is not provided
+                if (name == null || name.isBlank()) {
+                    createAddressRequest.put("name", addressText);
+                }
+            }
+            createAddressRequest.put("lat", lat);
+            createAddressRequest.put("lon", lon);
+
+            log.debug("Calling zone-service to get-or-create address at ({}, {})", lat, lon);
+
+            String responseBody = zoneServiceWebClient.post()
+                    .uri("/api/v1/addresses/get-or-create")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(createAddressRequest)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            if (responseBody == null || responseBody.isBlank()) {
+                throw new RuntimeException("Empty response from zone-service when creating address");
+            }
+
+            // Parse response to get address ID
+            JsonNode responseJson = objectMapper.readTree(responseBody);
+            JsonNode resultNode = responseJson.get("result");
+            if (resultNode == null || !resultNode.has("id")) {
+                log.error("Invalid response format from zone-service: {}", responseBody);
+                throw new RuntimeException("Invalid response format from zone-service when creating address");
+            }
+
+            String addressId = resultNode.get("id").asText();
+            log.debug("Address created/retrieved from zone-service: {}", addressId);
+            return addressId;
+
+        } catch (WebClientResponseException e) {
+            log.error("Failed to create address in zone-service: HTTP {} - {}", 
+                    e.getStatusCode(), e.getResponseBodyAsString(), e);
+            throw new RuntimeException("Failed to create address in zone-service: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Error calling zone-service to create address: {}", e.getMessage(), e);
+            throw new RuntimeException("Error calling zone-service to create address: " + e.getMessage(), e);
+        }
     }
 
     @Override

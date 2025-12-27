@@ -4,6 +4,7 @@
 
 import { IsString, IsNotEmpty, IsOptional, IsObject } from 'class-validator';
 import { PagingRequest } from '../../common/types/restful';
+import { CenterDto } from '../center/center.model';
 
 /**
  * Zone DTO
@@ -13,9 +14,7 @@ export class ZoneDto {
   code!: string;
   name!: string;
   polygon?: any | null;
-  centerId!: string;
-  centerCode?: string;
-  centerName?: string;
+  center?: CenterDto | null; // Nested center object
 }
 
 /**
@@ -76,4 +75,3 @@ export class ZonePagingRequest extends PagingRequest {
   @IsOptional()
   centerId?: string;
 }
-

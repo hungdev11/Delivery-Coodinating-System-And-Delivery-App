@@ -1,12 +1,15 @@
 package com.ds.communication_service.business.v1.services;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,10 +17,26 @@ import com.ds.communication_service.app_context.models.Ticket;
 import com.ds.communication_service.app_context.repositories.TicketRepository;
 import com.ds.communication_service.common.dto.CreateTicketRequest;
 import com.ds.communication_service.common.dto.TicketResponse;
+import com.ds.communication_service.common.dto.UpdateNotificationDTO;
 import com.ds.communication_service.common.dto.UpdateTicketRequest;
 import com.ds.communication_service.common.enums.TicketStatus;
 import com.ds.communication_service.common.enums.TicketType;
 import com.ds.communication_service.common.interfaces.ITicketService;
+import com.ds.communication_service.infrastructure.kafka.KafkaConfig;
+import com.ds.communication_service.app_context.models.Conversation;
+import com.ds.communication_service.app_context.models.InteractiveProposal;
+import com.ds.communication_service.app_context.models.Message;
+import com.ds.communication_service.app_context.repositories.InteractiveProposalRepository;
+import com.ds.communication_service.app_context.repositories.MessageRepository;
+import com.ds.communication_service.common.dto.InteractiveProposalResponseDTO;
+import com.ds.communication_service.common.dto.MessageResponse;
+import com.ds.communication_service.common.enums.ContentType;
+import com.ds.communication_service.common.enums.MessageStatus;
+import com.ds.communication_service.common.enums.ProposalActionType;
+import com.ds.communication_service.common.enums.ProposalStatus;
+import com.ds.communication_service.common.enums.ProposalType;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +51,12 @@ import lombok.extern.slf4j.Slf4j;
 public class TicketService implements ITicketService {
 
     private final TicketRepository ticketRepository;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ConversationService conversationService;
+    private final InteractiveProposalRepository proposalRepository;
+    private final MessageRepository messageRepository;
+    private final ObjectMapper objectMapper;
+    private final org.springframework.messaging.simp.SimpMessageSendingOperations messagingTemplate;
 
     @Override
     @Transactional
@@ -49,6 +74,9 @@ public class TicketService implements ITicketService {
 
         Ticket saved = ticketRepository.save(ticket);
         log.info("Ticket created: id={}", saved.getId());
+
+        // Publish update notification for ticket creation
+        publishTicketUpdateNotification(saved, UpdateNotificationDTO.ActionType.CREATED);
 
         return toDto(saved);
     }
@@ -79,6 +107,9 @@ public class TicketService implements ITicketService {
         // Update status
         ticket.setStatus(request.getStatus());
         
+        // Track if admin was just assigned (for creating proposal)
+        boolean adminJustAssigned = ticket.getAssignedAdminId() == null;
+        
         // Assign admin if not already assigned
         if (ticket.getAssignedAdminId() == null) {
             ticket.setAssignedAdminId(adminId);
@@ -107,6 +138,14 @@ public class TicketService implements ITicketService {
 
         Ticket saved = ticketRepository.save(ticket);
         log.info("Ticket updated: id={}, status={}", saved.getId(), saved.getStatus());
+
+        // Create proposal if admin was just assigned and ticket is OPEN/IN_PROGRESS
+        if (adminJustAssigned && (saved.getStatus() == TicketStatus.OPEN || saved.getStatus() == TicketStatus.IN_PROGRESS)) {
+            createTicketProposal(saved);
+        }
+
+        // Publish update notification for ticket update
+        publishTicketUpdateNotification(saved, UpdateNotificationDTO.ActionType.STATUS_CHANGED);
 
         return toDto(saved);
     }
@@ -302,5 +341,152 @@ public class TicketService implements ITicketService {
                 .updatedAt(ticket.getUpdatedAt())
                 .resolvedAt(ticket.getResolvedAt())
                 .build();
+    }
+
+    /**
+     * Publish ticket update notification to Kafka
+     * Notifies reporter, assigned admin (if any), and all admins for OPEN tickets
+     */
+    private void publishTicketUpdateNotification(Ticket ticket, UpdateNotificationDTO.ActionType action) {
+        try {
+            Map<String, Object> data = new HashMap<>();
+            data.put("ticketId", ticket.getId().toString());
+            data.put("ticketType", ticket.getType().toString());
+            data.put("ticketStatus", ticket.getStatus().toString());
+            data.put("parcelId", ticket.getParcelId());
+            data.put("assignmentId", ticket.getAssignmentId());
+            data.put("reporterId", ticket.getReporterId());
+            data.put("assignedAdminId", ticket.getAssignedAdminId());
+            data.put("description", ticket.getDescription());
+
+            // Create UpdateNotificationDTO as Map (to match parcel-service pattern)
+            Map<String, Object> updateNotification = new HashMap<>();
+            updateNotification.put("id", UUID.randomUUID().toString());
+            
+            // Determine userIds to notify:
+            // - Always notify reporter
+            // - Notify assigned admin if exists
+            // - For OPEN tickets, also notify all admins (they can see in ticket list)
+            String userIds = ticket.getReporterId();
+            if (ticket.getAssignedAdminId() != null && !ticket.getAssignedAdminId().isBlank()) {
+                userIds += "," + ticket.getAssignedAdminId();
+            }
+            // Note: For OPEN tickets without assigned admin, admins should check ticket list
+            // We don't broadcast to all admins here to avoid spam
+            
+            updateNotification.put("userId", userIds);
+            updateNotification.put("updateType", UpdateNotificationDTO.UpdateType.DELIVERY_UPDATE.toString());
+            updateNotification.put("entityType", UpdateNotificationDTO.EntityType.ASSIGNMENT.toString()); // Ticket is related to assignment
+            updateNotification.put("entityId", ticket.getAssignmentId() != null ? ticket.getAssignmentId() : ticket.getParcelId());
+            updateNotification.put("action", action.toString());
+            updateNotification.put("data", data);
+            updateNotification.put("timestamp", LocalDateTime.now().toString());
+            updateNotification.put("message", String.format("Ticket %s: %s - %s", 
+                    ticket.getType().toString(), 
+                    ticket.getStatus().toString(),
+                    ticket.getDescription() != null && ticket.getDescription().length() > 50 
+                            ? ticket.getDescription().substring(0, 50) + "..." 
+                            : ticket.getDescription()));
+            updateNotification.put("clientType", UpdateNotificationDTO.ClientType.ALL.toString());
+
+            // Publish to update-notifications topic
+            kafkaTemplate.send(KafkaConfig.TOPIC_UPDATE_NOTIFICATIONS, ticket.getId().toString(), updateNotification);
+
+            log.debug("[communication-service] [TicketService.publishTicketUpdateNotification] Published ticket {} update notification: action={}, userIds={}", 
+                    ticket.getId(), action, userIds);
+        } catch (Exception e) {
+            log.error("[communication-service] [TicketService.publishTicketUpdateNotification] Failed to publish update notification for ticket {}", 
+                    ticket.getId(), e);
+            // Don't throw - notification failure shouldn't break the transaction
+        }
+    }
+
+    /**
+     * Create InteractiveProposal for ticket in conversation between reporter and assigned admin
+     * Allows admin to interact with ticket (ACCEPT, RESOLVE, REJECT) via chat
+     */
+    private void createTicketProposal(Ticket ticket) {
+        try {
+            if (ticket.getAssignedAdminId() == null || ticket.getAssignedAdminId().isBlank()) {
+                log.debug("[communication-service] [TicketService.createTicketProposal] Ticket {} has no assigned admin, skipping proposal creation", ticket.getId());
+                return;
+            }
+
+            if (ticket.getReporterId() == null || ticket.getReporterId().isBlank()) {
+                log.debug("[communication-service] [TicketService.createTicketProposal] Ticket {} has no reporter, skipping proposal creation", ticket.getId());
+                return;
+            }
+
+            // Find or create conversation between reporter and admin
+            Conversation conversation = conversationService.findOrCreateConversation(
+                    ticket.getReporterId(), 
+                    ticket.getAssignedAdminId()
+            );
+
+            // Create proposal data
+            ObjectNode proposalData = objectMapper.createObjectNode();
+            proposalData.put("ticketId", ticket.getId().toString());
+            proposalData.put("ticketType", ticket.getType().toString());
+            proposalData.put("parcelId", ticket.getParcelId());
+            proposalData.put("assignmentId", ticket.getAssignmentId());
+            proposalData.put("description", ticket.getDescription() != null ? ticket.getDescription() : "");
+
+            // Create proposal
+            InteractiveProposal proposal = new InteractiveProposal();
+            proposal.setConversation(conversation);
+            proposal.setProposerId(ticket.getReporterId()); // Reporter created the ticket
+            proposal.setRecipientId(ticket.getAssignedAdminId()); // Admin receives the ticket
+            proposal.setType(ProposalType.TICKET);
+            proposal.setData(proposalData.toString());
+            proposal.setStatus(ProposalStatus.PENDING);
+            proposal.setActionType(ProposalActionType.ACCEPT_REJECT); // Admin can ACCEPT (assign to self) or REJECT (cancel)
+            // No expiration for tickets - they remain until resolved
+
+            InteractiveProposal savedProposal = proposalRepository.save(proposal);
+
+            // Create message for proposal
+            Message message = new Message();
+            message.setConversation(conversation);
+            message.setSenderId(ticket.getReporterId());
+            message.setType(ContentType.INTERACTIVE_PROPOSAL);
+            message.setContent(String.format("Ticket %s: %s - %s", 
+                    ticket.getType().toString(),
+                    ticket.getDescription() != null && ticket.getDescription().length() > 100 
+                            ? ticket.getDescription().substring(0, 100) + "..." 
+                            : ticket.getDescription()));
+            message.setStatus(MessageStatus.SENT);
+            message.setSentAt(LocalDateTime.now());
+            message.setProposal(savedProposal);
+
+            Message savedMessage = messageRepository.save(message);
+
+            // Convert proposal to DTO using static from() method
+            InteractiveProposalResponseDTO proposalDto = InteractiveProposalResponseDTO.from(savedProposal);
+
+            // Convert to DTO and send via WebSocket
+            MessageResponse messageResponse = MessageResponse.builder()
+                    .id(savedMessage.getId().toString())
+                    .conversationId(conversation.getId().toString())
+                    .senderId(savedMessage.getSenderId())
+                    .content(savedMessage.getContent())
+                    .type(savedMessage.getType())
+                    .sentAt(savedMessage.getSentAt())
+                    .status(savedMessage.getStatus())
+                    .proposal(proposalDto)
+                    .build();
+
+            // Send to admin (recipient)
+            messagingTemplate.convertAndSendToUser(ticket.getAssignedAdminId(), "/queue/messages", messageResponse);
+            
+            // Send to reporter (proposer) - they should see the message in chat
+            messagingTemplate.convertAndSendToUser(ticket.getReporterId(), "/queue/messages", messageResponse);
+
+            log.debug("[communication-service] [TicketService.createTicketProposal] Created ticket proposal {} for ticket {}", 
+                    savedProposal.getId(), ticket.getId());
+        } catch (Exception e) {
+            log.error("[communication-service] [TicketService.createTicketProposal] Failed to create ticket proposal for ticket {}", 
+                    ticket.getId(), e);
+            // Don't throw - proposal creation failure shouldn't break ticket update
+        }
     }
 }

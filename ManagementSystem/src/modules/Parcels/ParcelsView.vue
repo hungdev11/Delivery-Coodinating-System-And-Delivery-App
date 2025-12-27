@@ -1432,7 +1432,7 @@ const tabItems = computed<TabsItem[]>(() => [
 
 <template>
   <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
-    <PageHeader title="Parcels" description="Manage system parcels">
+    <PageHeader title="Đơn hàng" description="Quản lý đơn hàng hệ thống">
       <template #actions>
         <div class="flex gap-2">
           <UButton
@@ -1443,12 +1443,12 @@ const tabItems = computed<TabsItem[]>(() => [
             class="md:size-md"
             @click="showSeedModal = true"
           >
-            <span class="hidden sm:inline">Seed Parcels</span>
-            <span class="sm:hidden">Seed</span>
+            <span class="hidden sm:inline">Tạo dữ liệu mẫu</span>
+            <span class="sm:hidden">Tạo mẫu</span>
           </UButton>
           <UButton icon="i-heroicons-plus" size="sm" class="md:size-md" @click="openCreateModal">
-            <span class="hidden sm:inline">Add Parcel</span>
-            <span class="sm:hidden">Add</span>
+            <span class="hidden sm:inline">Thêm đơn hàng</span>
+            <span class="sm:hidden">Thêm</span>
           </UButton>
         </div>
       </template>
@@ -1457,7 +1457,7 @@ const tabItems = computed<TabsItem[]>(() => [
     <!-- Table Filters (includes Search + Bulk Actions + Filters + Sort) -->
     <TableFilters
       :search-value="searchValue"
-      search-placeholder="Search parcels..."
+      search-placeholder="Tìm kiếm đơn hàng..."
       :active-filters="getAllActiveFilters()"
       :filter-structure="getFilterStructure()"
       :sorting="sorting"

@@ -123,9 +123,9 @@ const getValuePlaceholder = () => {
 
 <template>
   <UModal
-    :title="mode === 'create' ? 'Create Setting' : 'Edit Setting'"
+    :title="mode === 'create' ? 'Tạo cài đặt' : 'Chỉnh sửa cài đặt'"
     :description="
-      mode === 'create' ? 'Configure a new system setting' : 'Update the selected system setting'
+      mode === 'create' ? 'Cấu hình một cài đặt hệ thống mới' : 'Cập nhật cài đặt hệ thống đã chọn'
     "
     :close="{ onClick: handleCancel }"
     :ui="{ width: 'sm:max-w-md md:max-w-lg', footer: 'justify-end space-x-2' }"
@@ -169,7 +169,7 @@ const getValuePlaceholder = () => {
               class="text-sm text-amber-600 dark:text-amber-400"
             >
               <UIcon name="i-heroicons-exclamation-triangle" class="inline mr-1" />
-              Sensitive value - enter new value to update
+              Giá trị nhạy cảm - nhập giá trị mới để cập nhật
             </div>
           </div>
         </UFormField>
@@ -220,9 +220,9 @@ const getValuePlaceholder = () => {
     </template>
 
     <template #footer>
-      <UButton variant="outline" color="neutral" @click="handleCancel"> Cancel </UButton>
+      <UButton variant="outline" color="neutral" @click="handleCancel"> Hủy </UButton>
       <UButton :disabled="!isValid" @click="handleSubmit">
-        {{ mode === 'create' ? 'Create' : 'Update' }}
+        {{ mode === 'create' ? 'Tạo' : 'Cập nhật' }}
       </UButton>
     </template>
   </UModal>
