@@ -316,23 +316,29 @@ public class ProposalService implements IProposalService{
                         response.getStatusCode(), parcelId);
                 }
             } else {
-                // Fallback to old refuse endpoint if assignmentId not found
-                String url = String.format("%s/api/v1/assignments/drivers/%s/parcels/%s/refuse",
+                // Fallback to old postpone endpoint if assignmentId not found
+                // Use postpone endpoint instead of refuse to set parcel to DELAY (not FAILED)
+                String url = String.format("%s/api/v1/assignments/drivers/%s/parcels/%s/postpone",
                                        sessionServiceUrl, deliveryManId, parcelId);
             
-                log.debug("[communication-service] [ProposalService.callRefuseParcelApi] Fallback: Đang gọi API refuse (old endpoint): POST {}", url);
+                log.info("[communication-service] [ProposalService.callRefuseParcelApi] Fallback: Đang gọi API postpone (old endpoint) để set parcel sang DELAY: POST {}", url);
+                
+                // Create postpone request payload
+                ObjectNode postponePayload = mapper.createObjectNode();
+                postponePayload.put("reason", "Khách từ chối nhận hàng");
+                String postponeData = mapper.writeValueAsString(postponePayload);
                 
                 HttpHeaders headers = new HttpHeaders();
                 headers.setContentType(MediaType.APPLICATION_JSON);
-                HttpEntity<Void> entity = new HttpEntity<>(headers);
+                HttpEntity<String> entity = new HttpEntity<>(postponeData, headers);
                 
                 ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
                 
                 if (response.getStatusCode().is2xxSuccessful()) {
-                    log.debug("[communication-service] [ProposalService.callRefuseParcelApi] Gọi API Refuse Parcel thành công cho Parcel ID: {}", parcelId);
+                    log.info("[communication-service] [ProposalService.callRefuseParcelApi] Gọi API Postpone Parcel thành công (fallback) cho Parcel ID: {} (assignment set to FAILED, parcel set to DELAY)", parcelId);
                 } else {
-                    log.debug("[communication-service] [ProposalService.callRefuseParcelApi] API Refuse Parcel trả về status code: {} cho Parcel ID: {}", 
-                        response.getStatusCode(), parcelId);
+                    log.error("[communication-service] [ProposalService.callRefuseParcelApi] API Postpone Parcel (fallback) trả về status code: {} cho Parcel ID: {}. Response body: {}", 
+                        response.getStatusCode(), parcelId, response.getBody());
                 }
             }
         } catch (JsonProcessingException e) {

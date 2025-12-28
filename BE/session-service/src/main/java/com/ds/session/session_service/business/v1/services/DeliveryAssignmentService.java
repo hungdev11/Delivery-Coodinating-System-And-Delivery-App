@@ -275,7 +275,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     @Override
     public DeliveryAssignmentResponse postponeByCustomer(UUID parcelId, UUID deliveryManId, String reason,
             RouteInfo routeInfo) {
-        log.debug("Postponing parcel {} for delivery man {} with reason: {}", parcelId, deliveryManId, reason);
+        log.info("[session-service] [DeliveryAssignmentService.postponeByCustomer] Postponing parcel {} for delivery man {} with reason: {}", parcelId, deliveryManId, reason);
         try {
             // First, try to find IN_PROGRESS assignment
             Optional<DeliveryAssignment> assignmentOpt = deliveryAssignmentRepository
@@ -284,6 +284,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             if (assignmentOpt.isPresent()) {
                 // Found IN_PROGRESS assignment, proceed with postpone
                 // Set assignment to FAILED when client accepts postpone request
+                log.info("[session-service] [DeliveryAssignmentService.postponeByCustomer] Found IN_PROGRESS assignment, calling updateTaskState");
                 return updateTaskState(
                         parcelId,
                         deliveryManId,
@@ -293,6 +294,30 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                         reason // failReason
                 );
             } else {
+                log.warn("[session-service] [DeliveryAssignmentService.postponeByCustomer] No IN_PROGRESS assignment found. Checking for other statuses...");
+                
+                // Try to find any assignment (any status) for this parcel and deliveryMan
+                Optional<DeliveryAssignment> anyAssignmentOpt = deliveryAssignmentRepository
+                        .findFirstByParcelIdOrderByUpdatedAtDesc(parcelId.toString())
+                        .filter(da -> da.getSession() != null && da.getSession().getDeliveryManId().equals(deliveryManId.toString()));
+                
+                if (anyAssignmentOpt.isPresent()) {
+                    DeliveryAssignment assignment = anyAssignmentOpt.get();
+                    log.info("[session-service] [DeliveryAssignmentService.postponeByCustomer] Found assignment {} with status: {}", assignment.getId(), assignment.getStatus());
+                    
+                    // If assignment is IN_PROGRESS but query didn't find it (possible query issue), update it directly
+                    if (assignment.getStatus() == AssignmentStatus.IN_PROGRESS) {
+                        log.info("[session-service] [DeliveryAssignmentService.postponeByCustomer] Assignment is IN_PROGRESS, updating to FAILED via updateTaskState");
+                        return updateTaskState(
+                                parcelId,
+                                deliveryManId,
+                                routeInfo,
+                                AssignmentStatus.FAILED,
+                                ParcelEvent.POSTPONE,
+                                reason
+                        );
+                    }
+                }
                 // No IN_PROGRESS assignment found, check if already DELAYED (idempotent)
                 Optional<DeliveryAssignment> delayedAssignmentOpt = deliveryAssignmentRepository
                         .findFirstByParcelIdOrderByUpdatedAtDesc(parcelId.toString())
