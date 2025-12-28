@@ -490,31 +490,55 @@ export class GenerateService {
     const modifiersCode = `
   
   -- Apply dynamic modifiers AFTER WayHandlers.run()
+  -- For duration-based weight_name, weight is already calculated from speed, so we modify weight directly
+  
   if profile.use_blocking then
     local traffic_value = tonumber(way:get_value_by_key("traffic_value"))
     if traffic_value then
+      -- traffic_value: 5.0 (free) -> 0.0 (blocked)
+      -- We want: free traffic = lower weight (faster), blocked = higher weight (slower)
       local traffic_multiplier = traffic_value / 5.0
-      if result.forward_speed and result.forward_speed > 0 then
-        result.forward_speed = result.forward_speed * traffic_multiplier
+      -- Modify weight: lower traffic_value = higher weight (avoid blocked roads)
+      if result.weight and result.weight > 0 then
+        result.weight = result.weight / math.max(0.1, traffic_multiplier)
       end
-      if result.backward_speed and result.backward_speed > 0 then
-        result.backward_speed = result.backward_speed * traffic_multiplier
+      -- Also modify rate if it exists (for cyclability weight_name)
+      if result.forward_rate and result.forward_rate > 0 then
+        result.forward_rate = result.forward_rate * math.max(0.1, traffic_multiplier)
+      end
+      if result.backward_rate and result.backward_rate > 0 then
+        result.backward_rate = result.backward_rate * math.max(0.1, traffic_multiplier)
       end
     end
   end
 
   if profile.use_rating then
     local user_rating = tonumber(way:get_value_by_key("user_rating"))
-    if user_rating and result.weight and result.weight > 0 then
+    if user_rating then
+      -- user_rating: 0.0 (bad) -> 1.0 (good)
+      -- We want: bad roads = higher weight (avoid), good roads = lower weight
       local rating_multiplier = 2.0 - user_rating
-      result.weight = result.weight * rating_multiplier
+      -- Modify weight to penalize bad roads (higher weight = avoid)
+      if result.weight and result.weight > 0 then
+        result.weight = result.weight * rating_multiplier
+      end
+      -- Also modify rate if it exists
+      if result.forward_rate and result.forward_rate > 0 then
+        result.forward_rate = result.forward_rate / rating_multiplier
+      end
+      if result.backward_rate and result.backward_rate > 0 then
+        result.backward_rate = result.backward_rate / rating_multiplier
+      end
     end
   end
 `;
-    bicycleLua = bicycleLua.replace(
-      /(WayHandlers\.run\(profile, way, result, data, handlers\)\s*\n)(end)/,
-      `$1${modifiersCode}$2`
-    );
+    // Match WayHandlers.run() followed by end (may have whitespace/newlines)
+    const runPattern = /(WayHandlers\.run\(profile,\s*way,\s*result,\s*data,\s*handlers\)\s*\n)\s*(end\b)/;
+    if (runPattern.test(bicycleLua)) {
+      bicycleLua = bicycleLua.replace(runPattern, `$1${modifiersCode}$2`);
+    } else {
+      logger.warn('Failed to inject modifiers after WayHandlers.run() in bicycle.lua - pattern not matched');
+    }
     
     // Add header
     const header = `-- OSRM Bicycle Profile with Dynamic Modifiers
@@ -690,31 +714,47 @@ return {
     const modifiersCode = `
   
   -- Apply dynamic modifiers AFTER WayHandlers.run()
+  -- For routability weight_name, weight is already calculated, so we modify weight directly
+  
   if profile.use_blocking then
     local traffic_value = tonumber(way:get_value_by_key("traffic_value"))
     if traffic_value then
+      -- traffic_value: 5.0 (free) -> 0.0 (blocked)
+      -- We want: free traffic = lower weight (faster), blocked = higher weight (slower)
       local traffic_multiplier = traffic_value / 5.0
-      if result.forward_speed and result.forward_speed > 0 then
-        result.forward_speed = result.forward_speed * traffic_multiplier
-      end
-      if result.backward_speed and result.backward_speed > 0 then
-        result.backward_speed = result.backward_speed * traffic_multiplier
+      -- Modify weight: lower traffic_value = higher weight (avoid blocked roads)
+      if result.weight and result.weight > 0 then
+        result.weight = result.weight / math.max(0.1, traffic_multiplier)
       end
     end
   end
 
   if profile.use_rating then
     local user_rating = tonumber(way:get_value_by_key("user_rating"))
-    if user_rating and result.weight and result.weight > 0 then
+    if user_rating then
+      -- user_rating: 0.0 (bad) -> 1.0 (good)
+      -- We want: bad roads = higher weight (avoid), good roads = lower weight
       local rating_multiplier = 2.0 - user_rating
-      result.weight = result.weight * rating_multiplier
+      -- Modify weight to penalize bad roads (higher weight = avoid)
+      if result.weight and result.weight > 0 then
+        result.weight = result.weight * rating_multiplier
+      end
     end
   end
 `;
-    carLua = carLua.replace(
-      /(if profile\.cardinal_directions then\s*\n\s*Relations\.process_way_refs\(way, relations, result\)\s*\n\s*end\s*\n)(end)/,
-      `$1${modifiersCode}$2`
-    );
+    // Match Relations.process_way_refs block followed by end
+    const relationsPattern = /(if\s+profile\.cardinal_directions\s+then\s*\n\s*Relations\.process_way_refs\(way,\s*relations,\s*result\)\s*\n\s*end\s*\n)\s*(end\b)/;
+    if (relationsPattern.test(carLua)) {
+      carLua = carLua.replace(relationsPattern, `$1${modifiersCode}$2`);
+    } else {
+      // Fallback: inject after WayHandlers.run() if cardinal_directions pattern not found
+      const runPattern = /(WayHandlers\.run\(profile,\s*way,\s*result,\s*data,\s*handlers,\s*relations\)\s*\n)\s*(end\b)/;
+      if (runPattern.test(carLua)) {
+        carLua = carLua.replace(runPattern, `$1${modifiersCode}$2`);
+      } else {
+        logger.warn('Failed to inject modifiers in car.lua - pattern not matched');
+      }
+    }
     
     // 5. Fix process_turn - remove obstacle_map loop
     // Remove the entire for loop with obstacle_map:get (from "for _, obs" to matching "end")
