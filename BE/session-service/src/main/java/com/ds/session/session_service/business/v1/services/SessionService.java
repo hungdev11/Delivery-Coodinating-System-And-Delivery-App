@@ -131,10 +131,12 @@ public class SessionService implements ISessionService {
         }
 
         // 5. Tạo Assignment (Task) mới
+        LocalDateTime now = LocalDateTime.now();
         DeliveryAssignment newAssignment = DeliveryAssignment.builder()
             .parcelId(parcelId)
             .status(AssignmentStatus.IN_PROGRESS)
-            .scanedAt(LocalDateTime.now())
+            .scanedAt(now)
+            .assignedAt(now)
             .build();
         
         // 6. Kiểm tra hết hạn session trước khi thêm đơn
@@ -201,11 +203,13 @@ public class SessionService implements ISessionService {
             .build();
 
         // 3. Tạo các Assignment (Task) con
+        LocalDateTime now = LocalDateTime.now();
         for (String parcelId : request.getParcelIds()) {
             DeliveryAssignment assignment = DeliveryAssignment.builder()
                 .parcelId(parcelId)
                 .status(AssignmentStatus.IN_PROGRESS)
-                .scanedAt(LocalDateTime.now())
+                .scanedAt(now)
+                .assignedAt(now)
                 .build();
             
             // Dùng hàm helper để liên kết 2 chiều
@@ -1083,10 +1087,12 @@ public class SessionService implements ISessionService {
         log.info("Marked source assignment {} as FAILED (TRANSFERRED)", sourceAssignment.getId());
         
         // 7. Create new assignment for target session
+        LocalDateTime now = LocalDateTime.now();
         DeliveryAssignment newAssignment = DeliveryAssignment.builder()
             .parcelId(request.getParcelId())
             .status(AssignmentStatus.IN_PROGRESS)
-            .scanedAt(LocalDateTime.now())
+            .scanedAt(now)
+            .assignedAt(now)
             .build();
         
         targetSession.addAssignment(newAssignment);
@@ -1166,10 +1172,12 @@ public class SessionService implements ISessionService {
         }
         
         // 7. Create new assignment for target session
+        LocalDateTime now = LocalDateTime.now();
         DeliveryAssignment newAssignment = DeliveryAssignment.builder()
             .parcelId(request.getParcelId())
             .status(AssignmentStatus.IN_PROGRESS)
-            .scanedAt(LocalDateTime.now())
+            .scanedAt(now)
+            .assignedAt(now)
             .build();
         
         targetSession.addAssignment(newAssignment);

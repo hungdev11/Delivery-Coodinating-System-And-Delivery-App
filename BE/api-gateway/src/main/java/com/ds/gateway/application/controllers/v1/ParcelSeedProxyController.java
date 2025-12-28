@@ -30,10 +30,12 @@ public class ParcelSeedProxyController {
     private String userServiceBaseUrl;
 
     private String parcelSeedUrl;
+    private String parcelSeedSafeUrl;
 
     @PostConstruct
     private void init() {
         this.parcelSeedUrl = userServiceBaseUrl + "/api/v1/parcels/seed";
+        this.parcelSeedSafeUrl = userServiceBaseUrl + "/api/v1/parcels/seed/safe";
     }
 
     /**
@@ -44,5 +46,15 @@ public class ParcelSeedProxyController {
     public ResponseEntity<?> seedParcels(@RequestBody Object requestBody) {
         log.debug("[api-gateway] [ParcelSeedProxyController.seedParcels] POST /api/v1/parcels/seed - proxy to User Service");
         return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.POST, parcelSeedUrl, requestBody);
+    }
+
+    /**
+     * POST /api/v1/parcels/seed/safe
+     * Safe seed parcels: Only seed for addresses that don't have parcels in DELAYED or IN_WAREHOUSE status
+     */
+    @PostMapping("/safe")
+    public ResponseEntity<?> seedParcelsSafe(@RequestBody Object requestBody) {
+        log.debug("[api-gateway] [ParcelSeedProxyController.seedParcelsSafe] POST /api/v1/parcels/seed/safe - proxy to User Service");
+        return proxyControllerSupport.forward(USER_SERVICE, HttpMethod.POST, parcelSeedSafeUrl, requestBody);
     }
 }

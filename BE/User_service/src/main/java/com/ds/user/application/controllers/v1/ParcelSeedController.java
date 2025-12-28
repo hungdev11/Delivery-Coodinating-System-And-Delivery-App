@@ -108,4 +108,50 @@ public class ParcelSeedController {
                             .build());
         }
     }
+
+    /**
+     * POST /api/v1/parcels/seed/safe
+     * Safe seed: Only seed parcels for addresses that don't have parcels in DELAYED or IN_WAREHOUSE status
+     */
+    @PostMapping("/safe")
+    @Operation(summary = "Safe seed parcels", description = "Create parcels only for addresses that don't have parcels in DELAYED or IN_WAREHOUSE status. Prevents duplicate seeding.")
+    public ResponseEntity<BaseResponse<SeedParcelsResponse>> seedParcelsSafe(
+            @Valid @RequestBody(required = false) SeedParcelsRequest request,
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
+        log.info("POST /api/v1/parcels/seed/safe - Safe seed parcels");
+        log.debug("Request: count={}, shopId={}, clientId={}", 
+                request != null ? request.getCount() : null,
+                request != null ? request.getShopId() : null,
+                request != null ? request.getClientId() : null);
+
+        try {
+            int count = request != null && request.getCount() != null ? request.getCount() : 0; // 0 = unlimited
+            SeedParcelsResult result = parcelSeedService.seedParcelsSafe(
+                    count,
+                    request != null ? request.getShopId() : null,
+                    request != null ? request.getClientId() : null,
+                    authorization);
+
+            SeedParcelsResponse response = new SeedParcelsResponse();
+            response.setSuccessCount(result.successCount);
+            response.setFailCount(result.failCount);
+            response.setTotal(result.total);
+            response.setMessage(String.format("Safe seed completed: %d parcel(s) created, %d failed (from %d eligible addresses)", 
+                    result.successCount, result.failCount, result.total));
+
+            return ResponseEntity.ok(BaseResponse.success(response));
+        } catch (Exception e) {
+            log.error("Error in safe seed parcels: {}", e.getMessage(), e);
+            SeedParcelsResponse errorResponse = new SeedParcelsResponse();
+            errorResponse.setSuccessCount(0);
+            errorResponse.setFailCount(0);
+            errorResponse.setTotal(0);
+            errorResponse.setMessage("Error in safe seed parcels: " + e.getMessage());
+            return ResponseEntity.internalServerError()
+                    .body(BaseResponse.<SeedParcelsResponse>builder()
+                            .result(errorResponse)
+                            .message("Error in safe seed parcels: " + e.getMessage())
+                            .build());
+        }
+    }
 }

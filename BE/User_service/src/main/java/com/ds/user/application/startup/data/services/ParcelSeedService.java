@@ -78,6 +78,328 @@ public class ParcelSeedService {
     }
 
     /**
+     * Safe seed: Only seed parcels for addresses that don't have parcels in DELAYED or IN_WAREHOUSE status
+     * 
+     * @param count         maximum number of parcels to create (0 = unlimited, seed all eligible addresses)
+     * @param shopId        optional shop ID (if null, randomly selects)
+     * @param clientId      optional client ID (if null, checks all clients)
+     * @param authorization optional Authorization header token (for API calls)
+     * @return result with success/fail counts
+     */
+    public ParcelSeedService.SeedParcelsResult seedParcelsSafe(int count, String shopId, String clientId,
+            String authorization) {
+        log.info("Starting SAFE parcel seeding (only addresses without DELAYED/IN_WAREHOUSE parcels)...");
+        log.debug("   Target count: {} parcels (0 = unlimited)", count);
+        if (shopId != null) {
+            log.debug("   Using shop: {}", shopId);
+        }
+        if (clientId != null) {
+            log.debug("   Using client: {}", clientId);
+        }
+
+        try {
+            // Get all shops and clients
+            List<User> shops = userRepository.findAll().stream()
+                    .filter(user -> user.getUsername() != null && user.getUsername().startsWith("shop"))
+                    .collect(Collectors.toList());
+
+            List<User> clients = userRepository.findAll().stream()
+                    .filter(user -> user.getUsername() != null && user.getUsername().startsWith("client"))
+                    .collect(Collectors.toList());
+
+            if (shops.isEmpty() || clients.isEmpty()) {
+                log.debug("[user-service] [ParcelSeedService.seedParcelsSafe] Cannot seed parcels: No shops or clients found");
+                return new SeedParcelsResult(0, count > 0 ? count : 0, count > 0 ? count : 0);
+            }
+
+            log.debug("   Found {} shops and {} clients", shops.size(), clients.size());
+
+            // Get primary addresses for shops
+            Map<String, String> shopAddresses = new HashMap<>();
+            for (User shop : shops) {
+                Optional<UserAddress> primaryAddress = userAddressRepository.findByUserIdAndIsPrimaryTrue(shop.getId());
+                if (primaryAddress.isPresent()) {
+                    shopAddresses.put(shop.getId(), primaryAddress.get().getDestinationId());
+                }
+            }
+
+            // Get ALL addresses for clients
+            List<ClientAddressInfo> allClientAddresses = new ArrayList<>();
+            for (User client : clients) {
+                List<UserAddress> clientAddresses = userAddressRepository.findByUserId(client.getId());
+                for (UserAddress clientAddress : clientAddresses) {
+                    allClientAddresses.add(new ClientAddressInfo(client.getId(), clientAddress.getDestinationId()));
+                }
+            }
+
+            if (shopAddresses.isEmpty() || allClientAddresses.isEmpty()) {
+                log.debug("[user-service] [ParcelSeedService.seedParcelsSafe] Cannot seed parcels: Shops or clients missing addresses");
+                return new SeedParcelsResult(0, count > 0 ? count : 0, count > 0 ? count : 0);
+            }
+
+            // Filter by clientId if provided
+            if (clientId != null) {
+                allClientAddresses = allClientAddresses.stream()
+                        .filter(ca -> ca.clientId.equals(clientId))
+                        .collect(Collectors.toList());
+                if (allClientAddresses.isEmpty()) {
+                    log.error("[user-service] [ParcelSeedService.seedParcelsSafe] Client ID {} not found or missing addresses", clientId);
+                    return new SeedParcelsResult(0, 0, count > 0 ? count : 0);
+                }
+            }
+
+            // Filter by shopId if provided
+            if (shopId != null && !shopAddresses.containsKey(shopId)) {
+                log.error("[user-service] [ParcelSeedService.seedParcelsSafe] Shop ID {} not found or missing primary address", shopId);
+                return new SeedParcelsResult(0, 0, count > 0 ? count : 0);
+            }
+
+            log.debug("   Checking {} client addresses for existing DELAYED/IN_WAREHOUSE parcels...", allClientAddresses.size());
+
+            // Filter addresses: only those without parcels in DELAYED or IN_WAREHOUSE status
+            List<ClientAddressInfo> eligibleAddresses = new ArrayList<>();
+            int checkedCount = 0;
+            for (ClientAddressInfo clientAddr : allClientAddresses) {
+                checkedCount++;
+                if (checkedCount % 10 == 0) {
+                    log.debug("   Checked {}/{} addresses...", checkedCount, allClientAddresses.size());
+                }
+
+                // Check if this address has parcels in DELAYED or IN_WAREHOUSE status
+                boolean hasExistingParcels = checkAddressHasParcelsInStatus(clientAddr.destinationId, 
+                        List.of("DELAYED", "IN_WAREHOUSE"), authorization);
+
+                if (!hasExistingParcels) {
+                    eligibleAddresses.add(clientAddr);
+                    log.debug("   ✓ Address {} is eligible (no DELAYED/IN_WAREHOUSE parcels)", clientAddr.destinationId);
+                } else {
+                    log.debug("   ✗ Address {} skipped (has DELAYED/IN_WAREHOUSE parcels)", clientAddr.destinationId);
+                }
+            }
+
+            log.info("   Found {} eligible addresses (out of {} total)", eligibleAddresses.size(), allClientAddresses.size());
+
+            if (eligibleAddresses.isEmpty()) {
+                log.info("   No eligible addresses found. All addresses already have parcels in DELAYED or IN_WAREHOUSE status.");
+                return new SeedParcelsResult(0, 0, count > 0 ? count : 0);
+            }
+
+            // Limit to count if specified
+            List<ClientAddressInfo> selectedAddresses = eligibleAddresses;
+            if (count > 0 && count < eligibleAddresses.size()) {
+                Collections.shuffle(eligibleAddresses);
+                selectedAddresses = eligibleAddresses.subList(0, count);
+                log.debug("   Randomly selected {} addresses from {} eligible", selectedAddresses.size(), eligibleAddresses.size());
+            }
+
+            // Get address details
+            Map<String, AddressInfo> addressInfoMap = new HashMap<>();
+            Set<String> allDestinationIds = new HashSet<>();
+            allDestinationIds.addAll(shopAddresses.values());
+            for (ClientAddressInfo clientAddr : selectedAddresses) {
+                allDestinationIds.add(clientAddr.destinationId);
+            }
+
+            for (String destinationId : allDestinationIds) {
+                try {
+                    AddressInfo info = getAddressInfo(destinationId);
+                    if (info != null) {
+                        addressInfoMap.put(destinationId, info);
+                    }
+                } catch (Exception e) {
+                    log.debug("[user-service] [ParcelSeedService.seedParcelsSafe] Failed to get address info for {}: {}", destinationId, e.getMessage());
+                }
+            }
+
+            // Create parcels
+            Random random = new Random();
+            List<String> shopIds = new ArrayList<>(shopAddresses.keySet());
+            String[] deliveryTypes = { "NORMAL", "EXPRESS", "FAST", "URGENT", "ECONOMY" };
+            int successCount = 0;
+            int failCount = 0;
+
+            log.info("   Creating {} parcels for eligible addresses...", selectedAddresses.size());
+
+            for (int i = 0; i < selectedAddresses.size(); i++) {
+                Map<String, Object> parcelRequest = null;
+                String code = null;
+                try {
+                    ClientAddressInfo clientAddr = selectedAddresses.get(i);
+                    String selectedShopId = shopId != null ? shopId : shopIds.get(random.nextInt(shopIds.size()));
+                    String senderDestinationId = shopAddresses.get(selectedShopId);
+                    String receiverDestinationId = clientAddr.destinationId;
+
+                    if (senderDestinationId == null || receiverDestinationId == null) {
+                        log.debug("[user-service] [ParcelSeedService.seedParcelsSafe] Skipping parcel {}: Missing address", i + 1);
+                        failCount++;
+                        continue;
+                    }
+
+                    AddressInfo senderAddress = addressInfoMap.get(senderDestinationId);
+                    AddressInfo receiverAddress = addressInfoMap.get(receiverDestinationId);
+
+                    if (senderAddress == null || receiverAddress == null) {
+                        log.debug("[user-service] [ParcelSeedService.seedParcelsSafe] Skipping parcel {}: Missing address info", i + 1);
+                        failCount++;
+                        continue;
+                    }
+
+                    code = "PARCEL-" + System.currentTimeMillis() + "-" + String.format("%04d", i + 1);
+                    String deliveryType = deliveryTypes[random.nextInt(deliveryTypes.length)];
+                    double weight = 0.5 + random.nextDouble() * 9.5;
+                    BigDecimal value = BigDecimal.valueOf(10000 + random.nextInt(990000));
+
+                    parcelRequest = new HashMap<>();
+                    parcelRequest.put("code", code);
+                    parcelRequest.put("senderId", selectedShopId);
+                    parcelRequest.put("receiverId", clientAddr.clientId);
+                    parcelRequest.put("deliveryType", deliveryType);
+                    parcelRequest.put("receiveFrom", senderAddress.name);
+                    parcelRequest.put("sendTo", receiverAddress.name);
+                    parcelRequest.put("weight", weight);
+                    parcelRequest.put("value", value);
+                    parcelRequest.put("senderDestinationId", senderDestinationId);
+                    parcelRequest.put("receiverDestinationId", receiverDestinationId);
+
+                    var requestSpec = parcelServiceWebClient.post()
+                            .uri("/api/v1/parcels")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .bodyValue(parcelRequest);
+
+                    if (authorization != null && !authorization.isBlank()) {
+                        requestSpec = requestSpec.header("Authorization", authorization);
+                    }
+
+                    String responseBody = requestSpec
+                            .retrieve()
+                            .bodyToMono(String.class)
+                            .block();
+
+                    if (responseBody != null && !responseBody.isBlank()) {
+                        JsonNode responseJson = objectMapper.readTree(responseBody);
+                        boolean isSuccess = (responseJson.has("success") && responseJson.get("success").asBoolean())
+                                || responseJson.has("id");
+
+                        if (isSuccess) {
+                            successCount++;
+                            if ((i + 1) % 5 == 0) {
+                                log.debug("   Created {}/{} parcels...", i + 1, selectedAddresses.size());
+                            }
+                        } else {
+                            failCount++;
+                            log.debug("[user-service] [ParcelSeedService.seedParcelsSafe] Failed to create parcel {}: {}", code, responseBody);
+                        }
+                    } else {
+                        failCount++;
+                        log.debug("[user-service] [ParcelSeedService.seedParcelsSafe] Failed to create parcel {}: Empty response", code);
+                    }
+
+                } catch (WebClientResponseException e) {
+                    failCount++;
+                    log.error("[user-service] [ParcelSeedService.seedParcelsSafe] Failed to create parcel {}: HTTP {} - {}",
+                            code != null ? code : (i + 1), e.getStatusCode(), e.getResponseBodyAsString());
+                } catch (Exception e) {
+                    failCount++;
+                    log.error("[user-service] [ParcelSeedService.seedParcelsSafe] Failed to create parcel {}", code != null ? code : (i + 1), e);
+                }
+            }
+
+            log.info("[user-service] [ParcelSeedService.seedParcelsSafe] Safe parcel seeding completed: {} successful, {} failed (target: {})",
+                    successCount, failCount, selectedAddresses.size());
+            return new SeedParcelsResult(successCount, failCount, selectedAddresses.size());
+
+        } catch (Exception e) {
+            log.error("[user-service] [ParcelSeedService.seedParcelsSafe] Error during safe parcel seeding", e);
+            return new SeedParcelsResult(0, count > 0 ? count : 0, count > 0 ? count : 0);
+        }
+    }
+
+    /**
+     * Check if an address has parcels in specific statuses
+     * 
+     * @param destinationId  the receiver destination ID to check
+     * @param statuses       list of statuses to check (e.g., ["DELAYED", "IN_WAREHOUSE"])
+     * @param authorization  optional Authorization header token
+     * @return true if address has parcels in any of the specified statuses, false otherwise
+     */
+    private boolean checkAddressHasParcelsInStatus(String destinationId, List<String> statuses, String authorization) {
+        try {
+            // Build V2 filter query
+            Map<String, Object> filterRequest = new HashMap<>();
+            Map<String, Object> filterGroup = new HashMap<>();
+            filterGroup.put("operator", "AND");
+            
+            List<Map<String, Object>> conditions = new ArrayList<>();
+            
+            // Condition: receiverDestinationId = destinationId
+            Map<String, Object> destCondition = new HashMap<>();
+            destCondition.put("field", "receiverDestinationId");
+            destCondition.put("operator", "eq");
+            destCondition.put("value", destinationId);
+            conditions.add(destCondition);
+            
+            // Condition: status IN (statuses)
+            Map<String, Object> statusCondition = new HashMap<>();
+            statusCondition.put("field", "status");
+            statusCondition.put("operator", "in");
+            statusCondition.put("value", statuses);
+            conditions.add(statusCondition);
+            
+            filterGroup.put("conditions", conditions);
+            filterRequest.put("filters", filterGroup);
+            filterRequest.put("page", 0);
+            filterRequest.put("size", 1); // Only need to check if any exists
+            filterRequest.put("sorts", new ArrayList<>());
+
+            var requestSpec = parcelServiceWebClient.post()
+                    .uri("/api/v2/parcels")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(filterRequest);
+
+            if (authorization != null && !authorization.isBlank()) {
+                requestSpec = requestSpec.header("Authorization", authorization);
+            }
+
+            String responseBody = requestSpec
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            if (responseBody == null || responseBody.isBlank()) {
+                return false;
+            }
+
+            JsonNode responseJson = objectMapper.readTree(responseBody);
+            JsonNode resultNode = responseJson.get("result");
+            if (resultNode == null) {
+                return false;
+            }
+
+            JsonNode dataNode = resultNode.get("data");
+            if (dataNode == null || !dataNode.isArray()) {
+                return false;
+            }
+
+            // If we got any results, the address has parcels in the specified statuses
+            return dataNode.size() > 0;
+
+        } catch (WebClientResponseException e) {
+            // If 404 or empty result, no parcels found
+            if (e.getStatusCode().value() == 404) {
+                return false;
+            }
+            // For other errors, log and assume no parcels (safe default)
+            log.debug("[user-service] [ParcelSeedService.checkAddressHasParcelsInStatus] Error checking parcels for destination {}: HTTP {} - {}",
+                    destinationId, e.getStatusCode(), e.getResponseBodyAsString());
+            return false;
+        } catch (Exception e) {
+            log.debug("[user-service] [ParcelSeedService.checkAddressHasParcelsInStatus] Error checking parcels for destination {}: {}",
+                    destinationId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Seed parcels with optional shop/client selection
      * 
      * @param count         number of parcels to create

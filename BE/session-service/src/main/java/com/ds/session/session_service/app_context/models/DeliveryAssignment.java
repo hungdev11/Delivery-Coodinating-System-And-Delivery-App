@@ -69,6 +69,9 @@ public class DeliveryAssignment {
     @Column(name = "scaned_at", nullable = false)
     private LocalDateTime scanedAt;
 
+    @Column(name = "assigned_at", nullable = false)
+    private LocalDateTime assignedAt;
+
     private double distanceM;
     private long durationS;
 

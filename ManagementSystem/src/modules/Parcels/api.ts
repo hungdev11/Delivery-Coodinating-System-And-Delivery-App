@@ -185,3 +185,10 @@ export interface SeedParcelsResponse {
 export const seedParcels = async (data?: SeedParcelsRequest): Promise<SeedParcelsResponse> => {
   return apiClient.post<SeedParcelsResponse, SeedParcelsRequest>('/v1/parcels/seed', data || {})
 }
+
+/**
+ * Safe seed parcels: Only seed for addresses that don't have parcels in DELAYED or IN_WAREHOUSE status
+ */
+export const seedParcelsSafe = async (data?: SeedParcelsRequest): Promise<SeedParcelsResponse> => {
+  return apiClient.post<SeedParcelsResponse, SeedParcelsRequest>('/v1/parcels/seed/safe', data || {})
+}
