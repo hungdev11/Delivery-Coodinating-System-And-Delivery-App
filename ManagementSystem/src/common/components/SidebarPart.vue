@@ -17,8 +17,8 @@
             </div>
           </div>
           <div v-if="!isCollapsed" class="ml-4 flex-1 cursor-pointer" @click="router.push('/')">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">ERP</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400">Quản lý đơn hàng</p>
+            <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">DSS</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Điều phối giao hàng đầu cuối</p>
           </div>
         </div>
       </div>
@@ -98,7 +98,7 @@
               <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center mr-2">
                 <UIcon name="i-heroicons-folder-open" class="w-5 h-5 text-white" />
               </div>
-              <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100">ERP</h1>
+              <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100">DSS</h1>
             </div>
             <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100 hidden md:block">
               {{ 'Dashboard' }}
@@ -301,6 +301,19 @@
         >
           <UIcon name="i-heroicons-chat-bubble-left-right" class="w-6 h-6" />
           <span class="text-xs mt-1">Chat</span>
+        </router-link>
+
+        <!-- Tickets -->
+        <router-link
+          v-if="isAdmin"
+          to="/tickets"
+          class="flex flex-col items-center justify-center flex-1 h-full"
+          :class="[
+            isActiveRoute('/tickets') ? 'text-orange-500' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300',
+          ]"
+        >
+          <UIcon name="i-heroicons-ticket" class="w-6 h-6" />
+          <span class="text-xs mt-1">Tickets</span>
         </router-link>
 
         <!-- Parcels (Center - Primary) -->
@@ -513,25 +526,13 @@ const navigationItems = computed<NavigationMenuItem[][]>(() => {
     ? [
         {
           label: 'Users',
+          to: '/users',
           icon: 'i-heroicons-user-group',
-          children: [
-            {
-              label: 'List',
-              to: '/users',
-              icon: 'i-heroicons-user-group',
-            },
-          ],
         },
         {
           label: 'Delivery',
+          to: '/delivery/shippers',
           icon: 'i-heroicons-truck',
-          children: [
-            {
-              label: 'Shippers',
-              to: '/delivery/shippers',
-              icon: 'i-heroicons-truck',
-            },
-          ],
         },
         {
           label: 'Zones',
@@ -556,25 +557,18 @@ const navigationItems = computed<NavigationMenuItem[][]>(() => {
         },
         {
           label: 'Addresses',
+          to: '/addresses/picker',
           icon: 'i-heroicons-map-pin',
-          children: [
-            {
-              label: 'Picker',
-              to: '/addresses/picker',
-              icon: 'i-heroicons-map-pin',
-            },
-          ],
         },
         {
           label: 'Parcels',
+          to: '/parcels',
           icon: 'i-heroicons-cube',
-          children: [
-            {
-              label: 'List',
-              to: '/parcels',
-              icon: 'i-heroicons-cube',
-            },
-          ],
+        },
+        {
+          label: 'Tickets',
+          to: '/tickets',
+          icon: 'i-heroicons-ticket',
         },
         {
           label: 'Settings',

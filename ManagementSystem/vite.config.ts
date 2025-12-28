@@ -31,8 +31,8 @@ export default defineConfig({
         type: 'module',
       },
       manifest: {
-        name: 'ERP - Quản lý đơn hàng',
-        short_name: 'ERP',
+        name: 'DSS - Điều phối giao hàng đầu cuối',
+        short_name: 'DSS',
         description: 'Hệ thống quản lý đơn hàng và giao vận',
         theme_color: '#f97316',
         background_color: '#ffffff',

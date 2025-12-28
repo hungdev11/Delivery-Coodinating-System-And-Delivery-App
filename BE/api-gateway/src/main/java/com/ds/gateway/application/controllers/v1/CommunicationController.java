@@ -311,6 +311,183 @@ public class CommunicationController {
         return proxyCommunication(HttpMethod.PUT, "/api/v1/messages/" + messageId + "/status", requestBody);
     }
 
+    // ============================================
+    // Ticket Endpoints
+    // ============================================
+
+    /**
+     * Create a new ticket
+     */
+    @PostMapping("/tickets")
+    @AuthRequired
+    public ResponseEntity<?> createTicket(@RequestBody Object request) {
+        log.debug("[api-gateway] [CommunicationController.createTicket] POST /api/v1/tickets - Proxying to Communication Service");
+        return proxyCommunication(HttpMethod.POST, "/api/v1/tickets", request);
+    }
+
+    /**
+     * Get all tickets (paginated) - Admin only
+     */
+    @GetMapping("/tickets")
+    @AuthRequired
+    public ResponseEntity<?> getAllTickets(
+            HttpServletRequest request) {
+        log.debug("[api-gateway] [CommunicationController.getAllTickets] GET /api/v1/tickets - Proxying to Communication Service");
+        String path = "/api/v1/tickets";
+        String queryString = request.getQueryString();
+        if (queryString != null && !queryString.isEmpty()) {
+            path += "?" + queryString;
+        }
+        return proxyCommunication(HttpMethod.GET, path, null);
+    }
+
+    /**
+     * Get ticket by ID
+     */
+    @GetMapping("/tickets/{ticketId}")
+    @AuthRequired
+    public ResponseEntity<?> getTicket(@PathVariable String ticketId) {
+        log.debug("[api-gateway] [CommunicationController.getTicket] GET /api/v1/tickets/{} - Proxying to Communication Service", ticketId);
+        return proxyCommunication(HttpMethod.GET, "/api/v1/tickets/" + ticketId, null);
+    }
+
+    /**
+     * Get tickets by current user (paginated)
+     */
+    @GetMapping("/tickets/my-tickets")
+    @AuthRequired
+    public ResponseEntity<?> getMyTickets(
+            HttpServletRequest request) {
+        log.debug("[api-gateway] [CommunicationController.getMyTickets] GET /api/v1/tickets/my-tickets - Proxying to Communication Service");
+        String path = "/api/v1/tickets/my-tickets";
+        String queryString = request.getQueryString();
+        if (queryString != null && !queryString.isEmpty()) {
+            path += "?" + queryString;
+        }
+        return proxyCommunication(HttpMethod.GET, path, null);
+    }
+
+    /**
+     * Get tickets by parcel ID
+     */
+    @GetMapping("/tickets/parcel/{parcelId}")
+    @AuthRequired
+    public ResponseEntity<?> getTicketsByParcel(@PathVariable String parcelId) {
+        log.debug("[api-gateway] [CommunicationController.getTicketsByParcel] GET /api/v1/tickets/parcel/{} - Proxying to Communication Service", parcelId);
+        return proxyCommunication(HttpMethod.GET, "/api/v1/tickets/parcel/" + parcelId, null);
+    }
+
+    /**
+     * Get tickets by delivery assignment ID
+     */
+    @GetMapping("/tickets/assignment/{assignmentId}")
+    @AuthRequired
+    public ResponseEntity<?> getTicketsByAssignment(@PathVariable String assignmentId) {
+        log.debug("[api-gateway] [CommunicationController.getTicketsByAssignment] GET /api/v1/tickets/assignment/{} - Proxying to Communication Service", assignmentId);
+        return proxyCommunication(HttpMethod.GET, "/api/v1/tickets/assignment/" + assignmentId, null);
+    }
+
+    /**
+     * Get tickets by status (paginated) - Admin only
+     */
+    @GetMapping("/tickets/status/{status}")
+    @AuthRequired
+    public ResponseEntity<?> getTicketsByStatus(
+            @PathVariable String status,
+            HttpServletRequest request) {
+        log.debug("[api-gateway] [CommunicationController.getTicketsByStatus] GET /api/v1/tickets/status/{} - Proxying to Communication Service", status);
+        String path = "/api/v1/tickets/status/" + status;
+        String queryString = request.getQueryString();
+        if (queryString != null && !queryString.isEmpty()) {
+            path += "?" + queryString;
+        }
+        return proxyCommunication(HttpMethod.GET, path, null);
+    }
+
+    /**
+     * Get tickets by type (paginated) - Admin only
+     */
+    @GetMapping("/tickets/type/{type}")
+    @AuthRequired
+    public ResponseEntity<?> getTicketsByType(
+            @PathVariable String type,
+            HttpServletRequest request) {
+        log.debug("[api-gateway] [CommunicationController.getTicketsByType] GET /api/v1/tickets/type/{} - Proxying to Communication Service", type);
+        String path = "/api/v1/tickets/type/" + type;
+        String queryString = request.getQueryString();
+        if (queryString != null && !queryString.isEmpty()) {
+            path += "?" + queryString;
+        }
+        return proxyCommunication(HttpMethod.GET, path, null);
+    }
+
+    /**
+     * Update ticket status (admin action)
+     */
+    @PutMapping("/tickets/{ticketId}")
+    @AuthRequired
+    public ResponseEntity<?> updateTicket(
+            @PathVariable String ticketId,
+            @RequestBody Object request) {
+        log.debug("[api-gateway] [CommunicationController.updateTicket] PUT /api/v1/tickets/{} - Proxying to Communication Service", ticketId);
+        return proxyCommunication(HttpMethod.PUT, "/api/v1/tickets/" + ticketId, request);
+    }
+
+    /**
+     * Resolve ticket (admin action)
+     */
+    @PutMapping("/tickets/{ticketId}/resolve")
+    @AuthRequired
+    public ResponseEntity<?> resolveTicket(
+            @PathVariable String ticketId,
+            @RequestBody(required = false) Object requestBody) {
+        log.debug("[api-gateway] [CommunicationController.resolveTicket] PUT /api/v1/tickets/{}/resolve - Proxying to Communication Service", ticketId);
+        return proxyCommunication(HttpMethod.PUT, "/api/v1/tickets/" + ticketId + "/resolve", requestBody);
+    }
+
+    /**
+     * Cancel ticket (admin action)
+     */
+    @PutMapping("/tickets/{ticketId}/cancel")
+    @AuthRequired
+    public ResponseEntity<?> cancelTicket(@PathVariable String ticketId) {
+        log.debug("[api-gateway] [CommunicationController.cancelTicket] PUT /api/v1/tickets/{}/cancel - Proxying to Communication Service", ticketId);
+        return proxyCommunication(HttpMethod.PUT, "/api/v1/tickets/" + ticketId + "/cancel", null);
+    }
+
+    /**
+     * Reassign parcel (admin action)
+     */
+    @PutMapping("/tickets/{ticketId}/reassign")
+    @AuthRequired
+    public ResponseEntity<?> reassignParcel(
+            @PathVariable String ticketId,
+            @RequestBody Object request) {
+        log.debug("[api-gateway] [CommunicationController.reassignParcel] PUT /api/v1/tickets/{}/reassign - Proxying to Communication Service", ticketId);
+        return proxyCommunication(HttpMethod.PUT, "/api/v1/tickets/" + ticketId + "/reassign", request);
+    }
+
+    /**
+     * Get ticket statistics - Admin only
+     */
+    @GetMapping("/tickets/statistics")
+    @AuthRequired
+    public ResponseEntity<?> getTicketStatistics() {
+        log.debug("[api-gateway] [CommunicationController.getTicketStatistics] GET /api/v1/tickets/statistics - Proxying to Communication Service");
+        return proxyCommunication(HttpMethod.GET, "/api/v1/tickets/statistics", null);
+    }
+
+    /**
+     * Get ticket statistics for current user
+     */
+    @GetMapping("/tickets/statistics/my")
+    @AuthRequired
+    public ResponseEntity<?> getMyTicketStatistics() {
+        log.debug("[api-gateway] [CommunicationController.getMyTicketStatistics] GET /api/v1/tickets/statistics/my - Proxying to Communication Service");
+        return proxyCommunication(HttpMethod.GET, "/api/v1/tickets/statistics/my", null);
+    }
+
+
     private ResponseEntity<Object> proxyCommunication(HttpMethod method, String path, Object body) {
         String url = communicationServiceUrl + path;
         ProxyLogContext context = proxyRequestLogger.start(method, COMMUNICATION_SERVICE, url, body);

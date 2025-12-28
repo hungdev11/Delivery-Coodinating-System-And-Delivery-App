@@ -138,6 +138,8 @@ const seedForm = ref<SeedParcelsRequest>({
   clientId: undefined,
 })
 
+const firstLoad = ref(true);
+
 // Tab state - mỗi tab có state riêng
 type TabState = {
   parcels: ParcelDto[]
@@ -1069,7 +1071,9 @@ onMounted(async () => {
   // Load counts for all tabs first
   await loadAllTabCounts()
   // Then load data for active tab
-  await loadParcelsForTab(activeTab.value)
+  await loadParcelsForTab(activeTab.value).then(() => {
+    firstLoad.value = false
+  })
 })
 
 // Cleanup: remove listener on unmount
@@ -1544,7 +1548,7 @@ const tabItems = computed<TabsItem[]>(() => [
       <template v-if="loading">
         <USkeleton v-for="i in 3" :key="i" class="h-48 w-full rounded-lg" />
       </template>
-      <template v-else-if="parcels.length === 0">
+      <template v-else-if="parcels.length === 0 && !firstLoad">
         <UCard>
           <div class="text-center py-12">
             <div class="mx-auto h-12 w-12 text-gray-400">
