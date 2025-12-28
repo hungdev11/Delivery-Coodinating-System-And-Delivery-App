@@ -19,7 +19,7 @@ import { useOverlay } from '@nuxt/ui/runtime/composables/useOverlay.js'
 import { useParcels } from './composables'
 import { useParcelExport } from './composables/useParcelExport'
 import { ParcelDto, type ParcelStatus, type ParcelEvent } from './model.type'
-import { seedParcels, type SeedParcelsRequest, changeParcelStatus } from './api'
+import { seedParcelsSafe, type SeedParcelsRequest, changeParcelStatus } from './api'
 import UserSelect from '@/common/components/UserSelect.vue'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { useTemplateRef } from 'vue'
@@ -133,7 +133,7 @@ const { exportParcels } = useParcelExport()
 const showSeedModal = ref(false)
 const seeding = ref(false)
 const seedForm = ref<SeedParcelsRequest>({
-  count: 20,
+  count: 0, // 0 = unlimited for safe seed (seed all eligible addresses)
   shopId: undefined,
   clientId: undefined,
 })
@@ -902,13 +902,14 @@ const openChat = async (parcel: ParcelDto) => {
 }
 
 /**
- * Handle seed parcels
+ * Handle safe seed parcels (only for addresses without DELAYED/IN_WAREHOUSE parcels)
  */
 const handleSeedParcels = async () => {
-  if (!seedForm.value.count || seedForm.value.count < 1) {
+  // Count is optional for safe seed (0 = unlimited, seed all eligible addresses)
+  if (seedForm.value.count !== undefined && seedForm.value.count < 0) {
     toast.add({
       title: 'Error',
-      description: 'Please enter a valid count (at least 1)',
+      description: 'Count must be 0 (unlimited) or a positive number',
       color: 'error',
     })
     return
@@ -916,17 +917,17 @@ const handleSeedParcels = async () => {
 
   seeding.value = true
   try {
-    const response = await seedParcels(seedForm.value)
+    const response = await seedParcelsSafe(seedForm.value)
     if (response.success && response.result) {
       toast.add({
         title: 'Success',
-        description: `Successfully created ${response.result.successCount} parcel(s), ${response.result.failCount} failed`,
+        description: response.result.message || `Successfully created ${response.result.successCount} parcel(s), ${response.result.failCount} failed`,
         color: 'success',
       })
       showSeedModal.value = false
       // Reset form
       seedForm.value = {
-        count: 20,
+        count: 0, // Default to 0 (unlimited) for safe seed
         shopId: undefined,
         clientId: undefined,
       }
@@ -1440,14 +1441,14 @@ const tabItems = computed<TabsItem[]>(() => [
       <template #actions>
         <div class="flex gap-2">
           <UButton
-            icon="i-heroicons-sparkles"
-            color="primary"
+            icon="i-heroicons-shield-check"
+            color="success"
             variant="soft"
             size="sm"
             class="md:size-md"
             @click="showSeedModal = true"
           >
-            <span class="hidden sm:inline">Seed Parcels</span>
+            <span class="hidden sm:inline">Safe Seed</span>
             <span class="sm:hidden">Seed</span>
           </UButton>
           <UButton icon="i-heroicons-plus" size="sm" class="md:size-md" @click="openCreateModal">
@@ -1676,25 +1677,25 @@ const tabItems = computed<TabsItem[]>(() => [
       @update:show="showAdvancedFilters = $event"
     />
 
-    <!-- Seed Parcels Modal -->
+    <!-- Safe Seed Parcels Modal -->
     <UModal
       v-model:open="showSeedModal"
-      title="Seed Parcels"
-      description="Create parcels randomly or with specific shop/client. Uses primary addresses automatically."
+      title="Safe Seed Parcels"
+      description="Only seed parcels for addresses that don't have parcels in DELAYED or IN_WAREHOUSE status. Prevents duplicate seeding."
       :ui="{ content: 'sm:max-w-md md:max-w-lg' }"
     >
       <template #body>
         <form @submit.prevent="handleSeedParcels" class="space-y-4">
-          <UFormField label="Number of Parcels" required>
+          <UFormField label="Number of Parcels (Optional)">
             <UInput
               v-model.number="seedForm.count"
               type="number"
-              min="1"
-              placeholder="20"
+              min="0"
+              placeholder="0 (unlimited)"
               :disabled="seeding"
             />
             <template #hint>
-              Number of parcels to create (randomly selects shop/client if not specified)
+              Number of parcels to create. Enter 0 or leave empty to seed all eligible addresses (addresses without DELAYED/IN_WAREHOUSE parcels).
             </template>
           </UFormField>
 
@@ -1706,29 +1707,27 @@ const tabItems = computed<TabsItem[]>(() => [
               :disabled="seeding"
             />
             <template #hint>
-              Select a specific shop as sender. If not selected, randomly selects from available
-              shops.
+              Select a specific shop as sender. If not selected, randomly selects from available shops.
             </template>
           </UFormField>
 
           <UFormField label="Client (Optional)">
             <UserSelect
               v-model="seedForm.clientId"
-              placeholder="Select client (or leave empty for random)"
+              placeholder="Select client (or leave empty for all clients)"
               :allow-seed-id="true"
               :disabled="seeding"
             />
             <template #hint>
-              Select a specific client as receiver. If not selected, randomly selects from available
-              clients.
+              Select a specific client as receiver. If not selected, checks all clients for eligible addresses.
             </template>
           </UFormField>
 
           <UAlert
-            color="info"
+            color="success"
             variant="soft"
-            title="Note"
-            description="Parcels will be created using the primary addresses of the selected shop and client. If shop/client is not specified, they will be randomly selected."
+            title="Safe Seed Mode"
+            description="This will only create parcels for addresses that don't already have parcels in DELAYED or IN_WAREHOUSE status. This prevents duplicate seeding and ensures data integrity."
           />
         </form>
       </template>
@@ -1743,7 +1742,7 @@ const tabItems = computed<TabsItem[]>(() => [
             Cancel
           </UButton>
           <UButton color="primary" :loading="seeding" @click="handleSeedParcels">
-            {{ seeding ? 'Seeding...' : 'Seed Parcels' }}
+            {{ seeding ? 'Seeding...' : 'Safe Seed Parcels' }}
           </UButton>
         </div>
       </template>
