@@ -57,6 +57,16 @@ public class ProposalConfigValidator {
                                 newConfig.setResponseActionType(ProposalActionType.INFO_ONLY); 
                                 break;
                                 
+                            case TICKET:
+                                // Legacy/deprecated type - kept for backward compatibility
+                                log.warn("[communication-service] [ProposalConfigValidator.validateAndSeedProposalConfigs] TICKET is a deprecated proposal type. Consider removing from database.");
+                                newConfig.setRequiredRole("ADMIN"); 
+                                newConfig.setDescription("Legacy ticket proposal type (deprecated)");
+                                newConfig.setDefaultTimeoutMinutes(5L);
+                                newConfig.setCreationActionType(ProposalActionType.INFO_ONLY);
+                                newConfig.setResponseActionType(ProposalActionType.INFO_ONLY); 
+                                break;
+                                
                             default:
                                 log.error("[communication-service] [ProposalConfigValidator.validateAndSeedProposalConfigs] Không có cấu hình mặc định cho {}, vui lòng cập nhật ProposalConfigValidator!", type);
                                 newConfig.setRequiredRole("ADMIN"); 

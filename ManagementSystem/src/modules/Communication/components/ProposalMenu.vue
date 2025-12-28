@@ -31,7 +31,7 @@ const handleSelect = (config: ProposalTypeConfig) => {
 </script>
 
 <template>
-  <UPopover v-model:open="showMenu">
+  <UPopover v-model:open="showMenu" :content="{ side: 'right', align: 'start' }">
     <UButton
       icon="i-heroicons-paper-clip"
       variant="ghost"

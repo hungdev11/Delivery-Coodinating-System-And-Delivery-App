@@ -240,8 +240,11 @@ public class ParcelService implements IParcelService{
                     parcel.getCode() != null ? parcel.getCode() : parcel.getId()));
             updateNotification.put("clientType", "ALL");
             
-            // Publish to update-notifications topic
-            kafkaTemplate.send("update-notifications", parcel.getId().toString(), updateNotification);
+            // Publish to update-notifications topic within Kafka transaction
+            kafkaTemplate.executeInTransaction(operations -> {
+                operations.send("update-notifications", parcel.getId().toString(), updateNotification);
+                return true; // Return value required by executeInTransaction
+            });
             
             log.debug("[parcel-service] [ParcelService.publishParcelSucceededNotification] Published parcel succeeded notification: parcelId={}, confirmedBy={}", 
                     parcel.getId(), confirmedBy);
@@ -288,8 +291,11 @@ public class ParcelService implements IParcelService{
                     parcel.getCode() != null ? parcel.getCode() : parcel.getId(), status));
             updateNotification.put("clientType", "ALL");
             
-            // Publish to update-notifications topic
-            kafkaTemplate.send("update-notifications", parcel.getId().toString(), updateNotification);
+            // Publish to update-notifications topic within Kafka transaction
+            kafkaTemplate.executeInTransaction(operations -> {
+                operations.send("update-notifications", parcel.getId().toString(), updateNotification);
+                return true; // Return value required by executeInTransaction
+            });
             
             log.debug("[parcel-service] [ParcelService.publishParcelStatusNotification] Published parcel {} status notification: {}", 
                     parcel.getId(), status);
