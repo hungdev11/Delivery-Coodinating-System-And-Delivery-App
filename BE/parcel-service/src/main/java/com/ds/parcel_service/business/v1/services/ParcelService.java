@@ -30,6 +30,7 @@ import com.ds.parcel_service.application.client.DesDetail;
 import com.ds.parcel_service.application.client.DestinationResponse;
 import com.ds.parcel_service.application.client.ZoneClient;
 import com.ds.parcel_service.application.client.SessionServiceClient;
+import com.ds.parcel_service.application.client.CommunicationServiceClient;
 import com.ds.parcel_service.application.services.AssignmentService;
 import com.ds.parcel_service.common.entities.dto.common.PagedData;
 import com.ds.parcel_service.common.entities.dto.request.ParcelCreateRequest;
@@ -74,6 +75,7 @@ public class ParcelService implements IParcelService{
     private final UserServiceClient userServiceClient;
     private final AssignmentService assignmentService;
     private final SessionServiceClient sessionServiceClient;
+    private final com.ds.parcel_service.application.client.CommunicationServiceClient communicationServiceClient;
     private final org.springframework.kafka.core.KafkaTemplate<String, Object> kafkaTemplate;
 
     private final Map<ParcelStatus, IParcelState> stateMap = Map.of(
@@ -152,6 +154,40 @@ public class ParcelService implements IParcelService{
         // Publish update notification for DISPUTE status
         if (nextStatus == ParcelStatus.DISPUTE) {
             publishParcelStatusNotification(saved, "DISPUTE");
+            
+            // Create NOT_RECEIVED ticket when client reports not receiving parcel
+            if (event == ParcelEvent.CUSTOMER_CONFIRM_NOT_RECEIVED) {
+                try {
+                    // Get assignment info to find deliveryAssignmentId
+                    AssignmentInfo assignmentInfo = assignmentService.getOrFetch(parcelId);
+                    String deliveryAssignmentId = assignmentInfo != null && assignmentInfo.getAssignmentId() != null 
+                        ? assignmentInfo.getAssignmentId().toString() 
+                        : null;
+                    
+                    // Get client ID (receiver)
+                    String clientId = saved.getReceiverId() != null ? saved.getReceiverId().toString() : null;
+                    
+                    if (clientId != null) {
+                        CommunicationServiceClient.CreateNotReceivedTicketRequest ticketRequest = 
+                            new CommunicationServiceClient.CreateNotReceivedTicketRequest(
+                                parcelId.toString(),
+                                deliveryAssignmentId,
+                                clientId,
+                                "Client reported not receiving parcel"
+                            );
+                        
+                        communicationServiceClient.createNotReceivedTicket(ticketRequest);
+                        log.debug("[parcel-service] [ParcelService.processTransition] Created NOT_RECEIVED ticket for parcel: {}, client: {}", 
+                            parcelId, clientId);
+                    } else {
+                        log.warn("[parcel-service] [ParcelService.processTransition] Cannot create NOT_RECEIVED ticket: receiverId is null for parcel {}", parcelId);
+                    }
+                } catch (Exception e) {
+                    log.error("[parcel-service] [ParcelService.processTransition] Failed to create NOT_RECEIVED ticket for parcel {}. Continuing...", 
+                        parcelId, e);
+                    // Don't throw - ticket creation is not critical for parcel status update
+                }
+            }
         }
         
         // Publish update notification for LOST status

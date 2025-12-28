@@ -23,14 +23,14 @@ interface Paging<TKey> {
   size: number;          // items per page
   totalElements: number; // total items
   totalPages: number;    // total pages
-  filters: FilterGroup | null; // applied filters
+  filters: FilterGroupItemV2 | null; // applied filters (V2 format)
   sorts: SortConfig[];   // sort config
   selected?: TKey[];     // optional selected IDs
 }
 
-// Query payload for POST endpoints
+// Query payload for POST endpoints (V2)
 interface QueryPayload {
-  filters?: FilterGroup | null;  // MongoDB-style filter groups
+  filters?: FilterGroupItemV2 | null;  // V2 filter groups
   sorts?: SortConfig[];          // sort configuration
   page?: number;                 // default 0
   size?: number;                 // default 10
@@ -38,13 +38,16 @@ interface QueryPayload {
   selected?: string[];           // selected item IDs
 }
 
-// Filter system types
-interface FilterGroup {
-  logic: 'AND' | 'OR';
-  conditions: (FilterCondition | FilterGroup)[];
+// V2 Filter system types
+interface FilterGroupItemV2 {
+  type: 'group';
+  items: FilterItemV2[];
 }
 
-interface FilterCondition {
+type FilterItemV2 = FilterConditionItemV2 | FilterOperatorItemV2 | FilterGroupItemV2;
+
+interface FilterConditionItemV2 {
+  type: 'condition';
   field: string;
   operator: FilterOperator;
   value: any;
@@ -52,21 +55,26 @@ interface FilterCondition {
   id?: string;
 }
 
+interface FilterOperatorItemV2 {
+  type: 'operator';
+  value: 'AND' | 'OR';
+}
+
 interface SortConfig {
   field: string;
   direction: 'asc' | 'desc';
 }
 
-// Supported filter operators
+// Supported filter operators (enum values)
 type FilterOperator =
-  | 'eq' | 'ne'                    // equals, not equals
-  | 'contains' | 'startsWith' | 'endsWith' | 'regex'  // string operations
-  | 'in' | 'notIn'                 // array operations
-  | 'gt' | 'gte' | 'lt' | 'lte'   // comparison
-  | 'between'                      // range
-  | 'isNull' | 'isNotNull'        // null checks
-  | 'isEmpty' | 'isNotEmpty'      // empty checks
-  | 'containsAny' | 'containsAll' // array contains
+  | 'EQUALS' | 'NOT_EQUALS'                    // equals, not equals
+  | 'CONTAINS' | 'STARTS_WITH' | 'ENDS_WITH' | 'REGEX'  // string operations
+  | 'IN' | 'NOT_IN'                 // array operations
+  | 'GREATER_THAN' | 'GREATER_THAN_OR_EQUAL' | 'LESS_THAN' | 'LESS_THAN_OR_EQUAL'   // comparison
+  | 'BETWEEN'                      // range
+  | 'IS_NULL' | 'IS_NOT_NULL'        // null checks
+  | 'IS_EMPTY' | 'IS_NOT_EMPTY'      // empty checks
+  | 'CONTAINS_ANY' | 'CONTAINS_ALL' // array contains
 ```
 
 ---
@@ -99,27 +107,30 @@ Error:
 
 ## Pagination & Filtering
 
-### GET Endpoints (Legacy - Deprecated)
-Request (query string):
-```
-?page=0&size=10&filters=[]&sorts=[]&selected=[]
-```
+### POST Endpoints (Standard - V2 Filter System)
 
-### POST Endpoints (New Standard)
+All list/query endpoints use POST with V2 filter system.
+
 Request (POST body):
 ```json
 {
   "filters": {
-    "logic": "AND",
-    "conditions": [
+    "type": "group",
+    "items": [
       {
+        "type": "condition",
         "field": "status",
-        "operator": "eq",
+        "operator": "EQUALS",
         "value": "ACTIVE"
       },
       {
+        "type": "operator",
+        "value": "AND"
+      },
+      {
+        "type": "condition",
         "field": "name",
-        "operator": "contains",
+        "operator": "CONTAINS",
         "value": "john",
         "caseSensitive": false
       }
@@ -156,11 +167,12 @@ Response (BaseResponse<PagedData<T>>):
       "totalElements": 100,
       "totalPages": 10,
       "filters": {
-        "logic": "AND",
-        "conditions": [
+        "type": "group",
+        "items": [
           {
+            "type": "condition",
             "field": "status",
-            "operator": "eq",
+            "operator": "EQUALS",
             "value": "ACTIVE"
           }
         ]
@@ -179,109 +191,29 @@ Response (BaseResponse<PagedData<T>>):
 
 ---
 
-## API Migration Guide: GET → POST
-
-### Why POST for List/Query Operations?
-
-1. **Complex Filtering**: GET query strings have length limits and encoding issues with complex nested filters
-2. **Security**: Sensitive filter data is not exposed in URL logs
-3. **Flexibility**: JSON payload allows for complex nested structures
-4. **Consistency**: All query operations use the same endpoint pattern
-
-### Migration Steps
-
-#### 1. Update Frontend API Calls
-```typescript
-// OLD (GET)
-const response = await apiClient.get('/v1/users', {
-  params: { page: 0, size: 10, search: 'john' }
-})
-
-// NEW (POST)
-const response = await apiClient.post('/v1/users', {
-  page: 0,
-  size: 10,
-  search: 'john',
-  filters: {
-    logic: 'AND',
-    conditions: [
-      { field: 'status', operator: 'eq', value: 'ACTIVE' }
-    ]
-  },
-  sorts: [
-    { field: 'name', direction: 'asc' }
-  ]
-})
-```
-
-#### 2. Update Backend Controllers
-```java
-// OLD (Spring Boot)
-@GetMapping("/users")
-public ResponseEntity<BaseResponse<PagedData<UserDto>>> getUsers(
-    @RequestParam(defaultValue = "0") int page,
-    @RequestParam(defaultValue = "10") int size,
-    @RequestParam(required = false) String search
-) { ... }
-
-// NEW (Spring Boot)
-@PostMapping("/users")
-public ResponseEntity<BaseResponse<PagedData<UserDto>>> getUsers(
-    @RequestBody QueryPayload query
-) { ... }
-```
-
-```typescript
-// OLD (Node.js/Express)
-app.get('/v1/users', async (req, res) => {
-  const { page = 0, size = 10, search } = req.query
-  // ...
-})
-
-// NEW (Node.js/Express)
-app.post('/v1/users', async (req, res) => {
-  const { page = 0, size = 10, search, filters, sorts } = req.body
-  // ...
-})
-```
-
-#### 3. Update API Documentation
-- Change HTTP method from GET to POST
-- Move parameters from query string to request body
-- Update examples to show JSON payload structure
-
-### Backward Compatibility
-
-During migration period, maintain both endpoints:
-- `GET /v1/users` (legacy, deprecated)
-- `POST /v1/users` (new standard)
-
-Add deprecation warnings to GET endpoints:
-```json
-{
-  "result": { ... },
-  "message": "This endpoint is deprecated. Use POST /v1/users instead."
-}
-```
-
----
-
-## Filter Examples
+## V2 Filter Examples
 
 ### Basic Filters
+
 ```json
 {
   "filters": {
-    "logic": "AND",
-    "conditions": [
+    "type": "group",
+    "items": [
       {
+        "type": "condition",
         "field": "status",
-        "operator": "eq",
+        "operator": "EQUALS",
         "value": "ACTIVE"
       },
       {
+        "type": "operator",
+        "value": "AND"
+      },
+      {
+        "type": "condition",
         "field": "age",
-        "operator": "gte",
+        "operator": "GREATER_THAN_OR_EQUAL",
         "value": 18
       }
     ]
@@ -289,21 +221,30 @@ Add deprecation warnings to GET endpoints:
 }
 ```
 
+This represents: `status = ACTIVE AND age >= 18`
+
 ### String Operations
+
 ```json
 {
   "filters": {
-    "logic": "AND",
-    "conditions": [
+    "type": "group",
+    "items": [
       {
+        "type": "condition",
         "field": "email",
-        "operator": "contains",
+        "operator": "CONTAINS",
         "value": "@gmail.com",
         "caseSensitive": false
       },
       {
+        "type": "operator",
+        "value": "AND"
+      },
+      {
+        "type": "condition",
         "field": "name",
-        "operator": "startsWith",
+        "operator": "STARTS_WITH",
         "value": "John",
         "caseSensitive": true
       }
@@ -312,29 +253,82 @@ Add deprecation warnings to GET endpoints:
 }
 ```
 
-### Complex Nested Filters
+### Complex Filters with Different Operators
+
+V2 allows different operators between pairs:
 ```json
 {
   "filters": {
-    "logic": "AND",
-    "conditions": [
+    "type": "group",
+    "items": [
       {
+        "type": "condition",
         "field": "status",
-        "operator": "eq",
+        "operator": "EQUALS",
         "value": "ACTIVE"
       },
       {
-        "logic": "OR",
-        "conditions": [
+        "type": "operator",
+        "value": "AND"
+      },
+      {
+        "type": "condition",
+        "field": "age",
+        "operator": "GREATER_THAN_OR_EQUAL",
+        "value": 18
+      },
+      {
+        "type": "operator",
+        "value": "OR"
+      },
+      {
+        "type": "condition",
+        "field": "role",
+        "operator": "EQUALS",
+        "value": "ADMIN"
+      }
+    ]
+  }
+}
+```
+
+This represents: `status = ACTIVE AND age >= 18 OR role = ADMIN`
+
+### Nested Groups
+
+```json
+{
+  "filters": {
+    "type": "group",
+    "items": [
+      {
+        "type": "condition",
+        "field": "status",
+        "operator": "EQUALS",
+        "value": "ACTIVE"
+      },
+      {
+        "type": "operator",
+        "value": "AND"
+      },
+      {
+        "type": "group",
+        "items": [
           {
+            "type": "condition",
             "field": "role",
-            "operator": "in",
-            "value": ["ADMIN", "MANAGER"]
+            "operator": "EQUALS",
+            "value": "ADMIN"
           },
           {
-            "field": "department",
-            "operator": "eq",
-            "value": "IT"
+            "type": "operator",
+            "value": "OR"
+          },
+          {
+            "type": "condition",
+            "field": "role",
+            "operator": "EQUALS",
+            "value": "MANAGER"
           }
         ]
       }
@@ -343,20 +337,29 @@ Add deprecation warnings to GET endpoints:
 }
 ```
 
+This represents: `status = ACTIVE AND (role = ADMIN OR role = MANAGER)`
+
 ### Range Filters
+
 ```json
 {
   "filters": {
-    "logic": "AND",
-    "conditions": [
+    "type": "group",
+    "items": [
       {
+        "type": "condition",
         "field": "salary",
-        "operator": "between",
+        "operator": "BETWEEN",
         "value": [50000, 100000]
       },
       {
+        "type": "operator",
+        "value": "AND"
+      },
+      {
+        "type": "condition",
         "field": "createdAt",
-        "operator": "gte",
+        "operator": "GREATER_THAN_OR_EQUAL",
         "value": "2024-01-01"
       }
     ]
@@ -365,19 +368,26 @@ Add deprecation warnings to GET endpoints:
 ```
 
 ### Date Range Filters
+
 ```json
 {
   "filters": {
-    "logic": "AND",
-    "conditions": [
+    "type": "group",
+    "items": [
       {
+        "type": "condition",
         "field": "createdAt",
-        "operator": "between",
+        "operator": "BETWEEN",
         "value": ["2024-01-01", "2024-12-31"]
       },
       {
+        "type": "operator",
+        "value": "AND"
+      },
+      {
+        "type": "condition",
         "field": "updatedAt",
-        "operator": "gte",
+        "operator": "GREATER_THAN_OR_EQUAL",
         "value": "2024-06-01"
       }
     ]
@@ -385,40 +395,54 @@ Add deprecation warnings to GET endpoints:
 }
 ```
 
-### Date Comparison Filters
+### Null/Empty Checks
+
 ```json
 {
   "filters": {
-    "logic": "OR",
-    "conditions": [
+    "type": "group",
+    "items": [
       {
-        "field": "createdAt",
-        "operator": "gt",
-        "value": "2024-01-01"
+        "type": "condition",
+        "field": "phone",
+        "operator": "IS_NOT_NULL"
       },
       {
-        "field": "createdAt",
-        "operator": "lt",
-        "value": "2024-12-31"
+        "type": "operator",
+        "value": "AND"
+      },
+      {
+        "type": "condition",
+        "field": "description",
+        "operator": "IS_NOT_EMPTY"
       }
     ]
   }
 }
 ```
 
-### Null/Empty Checks
+### Array Operations
+
 ```json
 {
   "filters": {
-    "logic": "AND",
-    "conditions": [
+    "type": "group",
+    "items": [
       {
-        "field": "phone",
-        "operator": "isNotNull"
+        "type": "condition",
+        "field": "role",
+        "operator": "IN",
+        "value": ["ADMIN", "MANAGER", "USER"]
       },
       {
-        "field": "description",
-        "operator": "isNotEmpty"
+        "type": "operator",
+        "value": "AND"
+      },
+      {
+        "type": "condition",
+        "field": "tags",
+        "operator": "CONTAINS_ANY",
+        "value": ["urgent", "important"]
       }
     ]
   }
@@ -524,12 +548,17 @@ Not found:
 ### List with Filtering (POST)
 Request:
 ```json
-POST /v1/users
+POST /api/v2/users
 {
   "filters": {
-    "logic": "AND",
-    "conditions": [
-      { "field": "status", "operator": "eq", "value": "ACTIVE" }
+    "type": "group",
+    "items": [
+      {
+        "type": "condition",
+        "field": "status",
+        "operator": "EQUALS",
+        "value": "ACTIVE"
+      }
     ]
   },
   "sorts": [
@@ -554,9 +583,14 @@ Response:
       "totalElements": 2,
       "totalPages": 1,
       "filters": {
-        "logic": "AND",
-        "conditions": [
-          { "field": "status", "operator": "eq", "value": "ACTIVE" }
+        "type": "group",
+        "items": [
+          {
+            "type": "condition",
+            "field": "status",
+            "operator": "EQUALS",
+            "value": "ACTIVE"
+          }
         ]
       },
       "sorts": [
@@ -570,7 +604,7 @@ Response:
 
 ### Single Item (GET)
 ```json
-GET /v1/users/uuid-1
+GET /api/v1/users/uuid-1
 
 {
   "result": { "id": "uuid-1", "name": "John Doe", "status": "ACTIVE" }
@@ -580,7 +614,7 @@ GET /v1/users/uuid-1
 ### Create Item (POST)
 Request:
 ```json
-POST /v1/users
+POST /api/v1/users
 {
   "name": "John Doe",
   "email": "john@example.com",
