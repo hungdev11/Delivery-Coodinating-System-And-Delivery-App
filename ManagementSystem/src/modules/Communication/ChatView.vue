@@ -832,18 +832,51 @@ const sendProposalRequest = async (type: string, data: string) => {
 
   // For POSTPONE_REQUEST and CONFIRM_REFUSAL, include parcelId in data
   let proposalData = data
-  if ((type === 'POSTPONE_REQUEST' || type === 'CONFIRM_REFUSAL') && currentParcel.value?.id) {
-    try {
-      const dataObj = JSON.parse(data)
-      dataObj.parcelId = currentParcel.value.id
-      proposalData = JSON.stringify(dataObj)
-    } catch (e) {
-      console.warn('⚠️ Failed to parse proposal data, using original data:', e)
-      // Fallback: create new object with parcelId
-      proposalData = JSON.stringify({
-        parcelId: currentParcel.value.id,
-        ...JSON.parse(data || '{}'),
+  if (type === 'POSTPONE_REQUEST' || type === 'CONFIRM_REFUSAL') {
+    // Try to get parcelId from multiple sources:
+    // 1. currentParcel (for CLIENT users)
+    // 2. sessionAssignments (for SHIPPER users or when currentParcel is null)
+    let parcelId: string | null = null
+    
+    if (currentParcel.value?.id) {
+      parcelId = currentParcel.value.id
+    } else if (sessionAssignments.value && sessionAssignments.value.length > 0) {
+      // For SHIPPER creating CONFIRM_REFUSAL, use first assignment's parcelId
+      // Prefer IN_PROGRESS assignment if available
+      const inProgressAssignment = sessionAssignments.value.find(
+        (a) => a.status === 'IN_PROGRESS'
+      )
+      if (inProgressAssignment?.parcelId) {
+        parcelId = inProgressAssignment.parcelId
+      } else if (sessionAssignments.value[0]?.parcelId) {
+        parcelId = sessionAssignments.value[0].parcelId
+      }
+    }
+    
+    if (parcelId) {
+      try {
+        const dataObj = JSON.parse(data)
+        dataObj.parcelId = parcelId
+        proposalData = JSON.stringify(dataObj)
+        console.log(`✅ Added parcelId ${parcelId} to ${type} proposal data`)
+      } catch (e) {
+        console.warn('⚠️ Failed to parse proposal data, using original data:', e)
+        // Fallback: create new object with parcelId
+        proposalData = JSON.stringify({
+          parcelId: parcelId,
+          ...JSON.parse(data || '{}'),
+        })
+      }
+    } else {
+      console.warn(`⚠️ Cannot find parcelId for ${type} proposal. currentParcel:`, currentParcel.value, 'sessionAssignments:', sessionAssignments.value.length)
+      // Show error toast
+      const toast = useToast()
+      toast.add({
+        title: 'Error',
+        description: `Không tìm thấy đơn hàng để tạo ${type === 'CONFIRM_REFUSAL' ? 'yêu cầu xác nhận từ chối' : 'yêu cầu hoãn'}. Vui lòng đảm bảo có đơn hàng đang giao.`,
+        color: 'error',
       })
+      return
     }
   }
 

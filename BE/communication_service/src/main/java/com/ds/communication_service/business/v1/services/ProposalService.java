@@ -133,9 +133,12 @@ public class ProposalService implements IProposalService{
         proposal.setResultData(resultData);
 
         // 3. Cập nhật trạng thái
+        // Parse resultData - có thể là JSON {"status":"ACCEPTED"} hoặc plain string "ACCEPTED"/"DECLINED"
+        String statusValue = parseResultDataStatus(resultData);
+        
         // Đối với ACCEPT_DECLINE, client sẽ gửi "ACCEPTED" hoặc "DECLINED"
         if (proposal.getActionType() == ProposalActionType.ACCEPT_DECLINE) {
-            if ("DECLINED".equals(resultData)) {
+            if ("DECLINED".equalsIgnoreCase(statusValue)) {
                 proposal.setStatus(ProposalStatus.DECLINED);
             } else {
                 // Mặc định mọi phản hồi khác (kể cả "ACCEPTED") là chấp nhận
@@ -190,7 +193,16 @@ public class ProposalService implements IProposalService{
         // Only call external APIs if proposal is ACCEPTED
         if (savedProposal.getStatus() == ProposalStatus.ACCEPTED) {
             if (proposal.getType().equals(ProposalType.CONFIRM_REFUSAL)) {
-                callRefuseParcelApi(proposal.getProposerId(), proposal.getData());
+                // For CONFIRM_REFUSAL: proposer is CLIENT, recipient is SHIPPER
+                // When SHIPPER accepts, use recipientId (SHIPPER) as deliveryManId
+                String deliveryManId = savedProposal.getRecipientId();
+                
+                // Debug logging
+                log.debug("[communication-service] [ProposalService.respondToProposal] Processing CONFIRM_REFUSAL proposal. ProposalId: {}, DeliveryManId: {}", 
+                    savedProposal.getId(), deliveryManId);
+                log.debug("[communication-service] [ProposalService.respondToProposal] Original proposal data: {}", savedProposal.getData());
+                
+                callRefuseParcelApi(deliveryManId, savedProposal.getData());
             }
 
             if (proposal.getType().equals(ProposalType.POSTPONE_REQUEST)) {
@@ -237,23 +249,91 @@ public class ProposalService implements IProposalService{
                 return; // Skip API call if parcelId is empty
             }
             
-            String url = String.format("%s/api/v1/assignments/drivers/%s/parcels/%s/refuse",
-                                   sessionServiceUrl, deliveryManId, parcelId);
-        
-            log.debug("[communication-service] [ProposalService.callRefuseParcelApi] Đang gọi API ngoài: POST {}", url);
+            // For CONFIRM_REFUSAL, we need to postpone the parcel (set to DELAY) instead of refuse (set to FAILED)
+            // Use the postpone endpoint instead of refuse endpoint
+            // Step 1: Query assignmentId from parcelId + deliveryManId
+            UUID assignmentId = null;
+            try {
+                String queryUrl = String.format("%s/api/v1/assignments/active?parcelId=%s&deliveryManId=%s",
+                        sessionServiceUrl, parcelId, deliveryManId);
+                
+                log.info("[communication-service] [ProposalService.callRefuseParcelApi] Querying assignmentId for parcelId: {} and deliveryManId: {}", parcelId, deliveryManId);
+                log.info("[communication-service] [ProposalService.callRefuseParcelApi] Query URL: {}", queryUrl);
+                ResponseEntity<String> queryResponse = restTemplate.getForEntity(queryUrl, String.class);
+                
+                log.info("[communication-service] [ProposalService.callRefuseParcelApi] Response status: {}, Body: {}", 
+                    queryResponse.getStatusCode(), queryResponse.getBody());
+                
+                if (queryResponse.getStatusCode().is2xxSuccessful() && queryResponse.getBody() != null) {
+                    JsonNode responseNode = mapper.readTree(queryResponse.getBody());
+                    if (responseNode.has("result") && !responseNode.get("result").isNull()) {
+                        JsonNode resultNode = responseNode.get("result");
+                        if (resultNode.isTextual()) {
+                            assignmentId = UUID.fromString(resultNode.asText());
+                            log.info("[communication-service] [ProposalService.callRefuseParcelApi] Found assignmentId (textual): {}", assignmentId);
+                        } else if (resultNode.isObject() && resultNode.has("uuid")) {
+                            assignmentId = UUID.fromString(resultNode.get("uuid").asText());
+                            log.info("[communication-service] [ProposalService.callRefuseParcelApi] Found assignmentId (object with uuid): {}", assignmentId);
+                        } else {
+                            assignmentId = UUID.fromString(resultNode.asText());
+                            log.info("[communication-service] [ProposalService.callRefuseParcelApi] Found assignmentId (parsed as text): {}", assignmentId);
+                        }
+                    } else {
+                        log.warn("[communication-service] [ProposalService.callRefuseParcelApi] Response has 'result' field but it's null. Full response: {}", queryResponse.getBody());
+                    }
+                } else {
+                    log.warn("[communication-service] [ProposalService.callRefuseParcelApi] Query failed or empty body. Status: {}, Body: {}", 
+                        queryResponse.getStatusCode(), queryResponse.getBody());
+                }
+            } catch (Exception e) {
+                log.error("[communication-service] [ProposalService.callRefuseParcelApi] Failed to query assignmentId. ParcelId: {}, DeliveryManId: {}, Error: {}", 
+                    parcelId, deliveryManId, e.getMessage(), e);
+            }
             
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            
-            HttpEntity<Void> entity = new HttpEntity<>(headers);
-            
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
-            
-            if (response.getStatusCode().is2xxSuccessful()) {
-                log.debug("[communication-service] [ProposalService.callRefuseParcelApi] Gọi API Refuse Parcel thành công cho Parcel ID: {}", parcelId);
+            // Step 2: Call postpone endpoint to set assignment to FAILED and parcel to DELAY
+            if (assignmentId != null) {
+                String url = String.format("%s/api/v1/assignments/%s/postpone",
+                        sessionServiceUrl, assignmentId);
+                
+                // Create postpone request payload
+                ObjectNode postponePayload = mapper.createObjectNode();
+                postponePayload.put("reason", "Khách từ chối nhận hàng");
+                
+                String postponeData = mapper.writeValueAsString(postponePayload);
+                
+                log.debug("[communication-service] [ProposalService.callRefuseParcelApi] Đang gọi API postpone (thay vì refuse) để set parcel sang DELAY: PUT {}", url);
+                
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                HttpEntity<String> entity = new HttpEntity<>(postponeData, headers);
+                
+                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.PUT, entity, String.class);
+                
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    log.debug("[communication-service] [ProposalService.callRefuseParcelApi] Gọi API Postpone Parcel thành công cho Parcel ID: {} (assignment set to FAILED, parcel set to DELAY)", parcelId);
+                } else {
+                    log.error("[communication-service] [ProposalService.callRefuseParcelApi] API Postpone Parcel trả về status code: {} cho Parcel ID: {}", 
+                        response.getStatusCode(), parcelId);
+                }
             } else {
-                log.debug("[communication-service] [ProposalService.callRefuseParcelApi] API Refuse Parcel trả về status code: {} cho Parcel ID: {}", 
-                    response.getStatusCode(), parcelId);
+                // Fallback to old refuse endpoint if assignmentId not found
+                String url = String.format("%s/api/v1/assignments/drivers/%s/parcels/%s/refuse",
+                                       sessionServiceUrl, deliveryManId, parcelId);
+            
+                log.debug("[communication-service] [ProposalService.callRefuseParcelApi] Fallback: Đang gọi API refuse (old endpoint): POST {}", url);
+                
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                HttpEntity<Void> entity = new HttpEntity<>(headers);
+                
+                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+                
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    log.debug("[communication-service] [ProposalService.callRefuseParcelApi] Gọi API Refuse Parcel thành công cho Parcel ID: {}", parcelId);
+                } else {
+                    log.debug("[communication-service] [ProposalService.callRefuseParcelApi] API Refuse Parcel trả về status code: {} cho Parcel ID: {}", 
+                        response.getStatusCode(), parcelId);
+                }
             }
         } catch (JsonProcessingException e) {
             log.error("[communication-service] [ProposalService.callRefuseParcelApi] Lỗi parse JSON khi gọi Refuse Parcel API. Data: {}", data, e);
@@ -313,8 +393,12 @@ public class ProposalService implements IProposalService{
                 String queryUrl = String.format("%s/api/v1/assignments/active?parcelId=%s&deliveryManId=%s",
                         sessionServiceUrl, parcelId, deliveryManId);
                 
-                log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Querying assignmentId for parcelId: {} and deliveryManId: {}", parcelId, deliveryManId);
+                log.info("[communication-service] [ProposalService.callPostponeParcelApi] Querying assignmentId for parcelId: {} and deliveryManId: {}", parcelId, deliveryManId);
+                log.info("[communication-service] [ProposalService.callPostponeParcelApi] Query URL: {}", queryUrl);
                 ResponseEntity<String> queryResponse = restTemplate.getForEntity(queryUrl, String.class);
+                
+                log.info("[communication-service] [ProposalService.callPostponeParcelApi] Response status: {}, Body: {}", 
+                    queryResponse.getStatusCode(), queryResponse.getBody());
                 
                 if (queryResponse.getStatusCode().is2xxSuccessful() && queryResponse.getBody() != null) {
                     log.debug("[communication-service] [ProposalService.callPostponeParcelApi] Raw response from getActiveAssignmentId: {}", queryResponse.getBody());
@@ -595,6 +679,31 @@ public class ProposalService implements IProposalService{
             log.error("[communication-service] [ProposalService.mergeProposalData] Failed to merge proposal data. Using original data", e);
             return originalData != null ? originalData : "{}";
         }
+    }
+    
+    /**
+     * Parse resultData to extract status value.
+     * Supports both JSON format {"status":"ACCEPTED"} and plain string "ACCEPTED"/"DECLINED"
+     */
+    private String parseResultDataStatus(String resultData) {
+        if (resultData == null || resultData.trim().isEmpty()) {
+            return "ACCEPTED"; // Default to ACCEPTED if empty
+        }
+        
+        try {
+            // Try to parse as JSON first
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode node = mapper.readTree(resultData);
+            if (node.has("status") && !node.get("status").isNull()) {
+                return node.get("status").asText();
+            }
+        } catch (Exception e) {
+            // Not JSON, treat as plain string
+            log.debug("[communication-service] [ProposalService.parseResultDataStatus] resultData is not JSON, treating as plain string: {}", resultData);
+        }
+        
+        // Return as-is if it's a plain string
+        return resultData.trim();
     }
     
     private MessageResponse toDto(Message message) {        
