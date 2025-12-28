@@ -68,7 +68,10 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
      * Tìm assignment trong active session (CREATED hoặc IN_PROGRESS) của một shipper cho một parcel.
      * (Dùng để query assignmentId từ parcelId + deliveryManId khi shipper phản hồi proposal postpone)
      */
-    @Query("SELECT da FROM DeliveryAssignment da JOIN da.session s WHERE da.parcelId = :parcelId AND s.deliveryManId = :deliveryManId AND s.status IN ('CREATED', 'IN_PROGRESS') ORDER BY da.scanedAt DESC")
+    @Query(value = "SELECT da.* FROM delivery_assignments da " +
+            "INNER JOIN delivery_sessions s ON da.session_id = s.id " +
+            "WHERE da.parcel_id = :parcelId AND s.delivery_man_id = :deliveryManId AND s.status IN ('CREATED', 'IN_PROGRESS') " +
+            "ORDER BY da.scaned_at DESC LIMIT 1", nativeQuery = true)
     Optional<DeliveryAssignment> findActiveAssignmentByParcelIdAndDeliveryManId(String parcelId, String deliveryManId);
     
     /**
@@ -76,7 +79,10 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
      * Cho phép complete task ngay cả khi session đã completed/failed (có thể do race condition).
      * (Dùng để complete task khi session có thể đã completed nhưng assignment vẫn IN_PROGRESS)
      */
-    @Query("SELECT da FROM DeliveryAssignment da JOIN da.session s WHERE da.parcelId = :parcelId AND s.deliveryManId = :deliveryManId AND da.status = 'IN_PROGRESS' ORDER BY da.scanedAt DESC")
+    @Query(value = "SELECT da.* FROM delivery_assignments da " +
+            "INNER JOIN delivery_sessions s ON da.session_id = s.id " +
+            "WHERE da.parcel_id = :parcelId AND s.delivery_man_id = :deliveryManId AND da.status = 'IN_PROGRESS' " +
+            "ORDER BY da.scaned_at DESC LIMIT 1", nativeQuery = true)
     Optional<DeliveryAssignment> findInProgressAssignmentByParcelIdAndDeliveryManId(String parcelId, String deliveryManId);
     
     /**

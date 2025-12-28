@@ -336,6 +336,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
 
                 if (failedAssignmentOpt.isPresent()) {
                     DeliveryAssignment failedAssignment = failedAssignmentOpt.get();
+                    DeliverySession session = failedAssignment.getSession();
                     log.debug(
                             "[session-service] [DeliveryAssignmentService.postponeParcel] Found FAILED assignment {} for parcel {}. Keeping as FAILED (client accepted postpone).",
                             failedAssignment.getId(), parcelId);
@@ -354,6 +355,32 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                         parcelEventPublisher.publish(parcelId.toString(), ParcelEvent.POSTPONE);
                     } catch (Exception e) {
                         log.error("[session-service] [DeliveryAssignmentService.postponeParcel] Failed to publish POSTPONE event for FAILED assignment", e);
+                    }
+
+                    // Create DELIVERY_FAILED ticket when assignment is postponed (set to FAILED)
+                    try {
+                        log.info("[session-service] [DeliveryAssignmentService.postponeByCustomer] Attempting to create DELIVERY_FAILED ticket for postponed parcel: parcelId={}, assignmentId={}, shipperId={}", 
+                            parcelId, failedAssignment.getId(), session != null ? session.getDeliveryManId() : "null");
+                        
+                        if (session != null && session.getDeliveryManId() != null) {
+                            CommunicationServiceClient.CreateDeliveryFailedTicketRequest ticketRequest = 
+                                new CommunicationServiceClient.CreateDeliveryFailedTicketRequest(
+                                    parcelId.toString(),
+                                    failedAssignment.getId().toString(),
+                                    session.getDeliveryManId().toString(),
+                                    reason != null ? reason : "Parcel postponed by client request"
+                                );
+                            
+                            communicationServiceClient.createDeliveryFailedTicket(ticketRequest);
+                            log.info("[session-service] [DeliveryAssignmentService.postponeByCustomer] ✅ Successfully created DELIVERY_FAILED ticket for postponed parcel: {}, assignment: {}", 
+                                parcelId, failedAssignment.getId());
+                        } else {
+                            log.warn("[session-service] [DeliveryAssignmentService.postponeByCustomer] Cannot create ticket: session or deliveryManId is null");
+                        }
+                    } catch (Exception e) {
+                        log.error("[session-service] [DeliveryAssignmentService.postponeByCustomer] ❌ Failed to create DELIVERY_FAILED ticket for postponed parcel {} (assignment: {}). Error: {} - {}. Continuing...", 
+                            parcelId, failedAssignment.getId(), e.getClass().getSimpleName(), e.getMessage(), e);
+                        // Don't throw - ticket creation is not critical for assignment status update
                     }
 
                     // Fetch parcel info
