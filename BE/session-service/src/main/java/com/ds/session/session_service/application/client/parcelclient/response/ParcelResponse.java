@@ -41,4 +41,28 @@ public class ParcelResponse {
 
     private BigDecimal lat;
     private BigDecimal lon;
+    
+    // Nested address objects from parcel-service V2 API
+    private AddressInfoDto senderAddress;
+    private AddressInfoDto receiverAddress;
+    
+    /**
+     * Address information DTO
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class AddressInfoDto {
+        private String id;
+        private String userId;
+        private String destinationId;
+        private String note;
+        private String tag;
+        private Boolean isPrimary;
+        private BigDecimal lat;
+        private BigDecimal lon;
+        private String zoneId;
+    }
 }

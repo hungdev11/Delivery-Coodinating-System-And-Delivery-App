@@ -39,6 +39,10 @@ import com.ds.session.session_service.common.entities.dto.response.AutoAssignmen
 import com.ds.session.session_service.common.entities.dto.response.ManualAssignmentResponse;
 import com.ds.session.session_service.common.enums.AssignmentStatus;
 import com.ds.session.session_service.common.enums.SessionStatus;
+import com.ds.session.session_service.application.client.userclient.UserServiceClient;
+import com.ds.session.session_service.application.client.userclient.response.DeliveryManResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.web.reactive.function.client.WebClient;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AdminAssignmentService Tests")
@@ -58,6 +62,15 @@ class AdminAssignmentServiceTest {
 
     @Mock
     private DeliverySessionRepository sessionRepository;
+
+    @Mock
+    private WebClient parcelServiceWebClient;
+
+    @Mock
+    private ObjectMapper objectMapper;
+
+    @Mock
+    private UserServiceClient userServiceClient;
 
     @InjectMocks
     private AdminAssignmentService adminAssignmentService;
@@ -85,7 +98,8 @@ class AdminAssignmentServiceTest {
     @BeforeEach
     void setUp() {
         // Reset mocks
-        reset(assignmentRepository, assignmentParcelRepository, parcelServiceClient, zoneServiceClient, sessionRepository);
+        reset(assignmentRepository, assignmentParcelRepository, parcelServiceClient, zoneServiceClient, 
+              sessionRepository, parcelServiceWebClient, objectMapper, userServiceClient);
     }
 
     @Nested
@@ -252,10 +266,30 @@ class AdminAssignmentServiceTest {
             ParcelResponse parcel2 = createMockParcel(parcelId2, deliveryAddressId, 10.8550, 106.7800, "NORMAL");
             ParcelResponse parcel3 = createMockParcel(parcelId3, deliveryAddressId, 10.8623, 106.8032, "NORMAL");
 
-            when(parcelServiceClient.fetchParcelResponse(parcelId1)).thenReturn(parcel1);
-            when(parcelServiceClient.fetchParcelResponse(parcelId2)).thenReturn(parcel2);
-            when(parcelServiceClient.fetchParcelResponse(parcelId3)).thenReturn(parcel3);
+            Map<String, ParcelResponse> parcelMap = new HashMap<>();
+            parcelMap.put(parcelId1, parcel1);
+            parcelMap.put(parcelId2, parcel2);
+            parcelMap.put(parcelId3, parcel3);
+            
+            when(parcelServiceClient.fetchParcelsBulk(anyList())).thenReturn(parcelMap != null ? parcelMap : new HashMap<>());
             when(assignmentParcelRepository.existsByParcelId(anyString())).thenReturn(false);
+
+            // Mock UserServiceClient for shippers
+            DeliveryManResponse shipper1 = DeliveryManResponse.builder()
+                .userId(shipperId1)
+                .vehicleType("motorbike")
+                .capacityKg(20.0)
+                .build();
+            DeliveryManResponse shipper2 = DeliveryManResponse.builder()
+                .userId(shipperId2)
+                .vehicleType("motorbike")
+                .capacityKg(20.0)
+                .build();
+            
+            Map<String, DeliveryManResponse> shippersMap = new HashMap<>();
+            shippersMap.put(shipperId1, shipper1);
+            shippersMap.put(shipperId2, shipper2);
+            when(userServiceClient.getDeliveryMenByUserIds(anyList())).thenReturn(shippersMap);
 
             // Mock VRP response
             VRPAssignmentResponse.VRPTaskDto task1 = VRPAssignmentResponse.VRPTaskDto.builder()
@@ -311,6 +345,15 @@ class AdminAssignmentServiceTest {
                 .parcels(new ArrayList<>())
                 .build();
 
+            DeliveryAssignment assignment1WithParcels = DeliveryAssignment.builder()
+                .id(assignment1.getId())
+                .shipperId(shipperId1)
+                .deliveryAddressId(deliveryAddressId)
+                .status(AssignmentStatus.PENDING)
+                .assignedAt(assignment1.getAssignedAt())
+                .parcels(new ArrayList<>())
+                .build();
+
             DeliveryAssignment assignment2 = DeliveryAssignment.builder()
                 .id(UUID.randomUUID())
                 .shipperId(shipperId2)
@@ -320,9 +363,21 @@ class AdminAssignmentServiceTest {
                 .parcels(new ArrayList<>())
                 .build();
 
+            DeliveryAssignment assignment2WithParcels = DeliveryAssignment.builder()
+                .id(assignment2.getId())
+                .shipperId(shipperId2)
+                .deliveryAddressId(deliveryAddressId)
+                .status(AssignmentStatus.PENDING)
+                .assignedAt(assignment2.getAssignedAt())
+                .parcels(new ArrayList<>())
+                .build();
+
+            // Each assignment is saved twice: once when created, once after adding parcels
             when(assignmentRepository.save(any(DeliveryAssignment.class)))
-                .thenReturn(assignment1)
-                .thenReturn(assignment2);
+                .thenReturn(assignment1)        // First save for shipper1 assignment
+                .thenReturn(assignment1WithParcels)  // Second save for shipper1 assignment with parcels
+                .thenReturn(assignment2)        // First save for shipper2 assignment
+                .thenReturn(assignment2WithParcels); // Second save for shipper2 assignment with parcels
 
             // When
             AutoAssignmentResponse response = adminAssignmentService.createAutoAssignment(request);
@@ -378,10 +433,24 @@ class AdminAssignmentServiceTest {
             ParcelResponse parcel1 = createMockParcel(parcelId1, deliveryAddressId, 10.8505, 106.7718, "NORMAL");
             ParcelResponse parcel2 = createMockParcel(parcelId2, deliveryAddressId, 10.8550, 106.7800, "NORMAL");
 
-            when(parcelServiceClient.fetchParcelResponse(parcelId1)).thenReturn(parcel1);
-            when(parcelServiceClient.fetchParcelResponse(parcelId2)).thenReturn(parcel2);
+            Map<String, ParcelResponse> parcelMap = new HashMap<>();
+            parcelMap.put(parcelId1, parcel1);
+            parcelMap.put(parcelId2, parcel2);
+            
+            when(parcelServiceClient.fetchParcelsBulk(anyList())).thenReturn(parcelMap);
             when(assignmentParcelRepository.existsByParcelId(parcelId1)).thenReturn(false);
             when(assignmentParcelRepository.existsByParcelId(parcelId2)).thenReturn(true); // Already assigned
+
+            // Mock UserServiceClient for shipper
+            DeliveryManResponse shipper = DeliveryManResponse.builder()
+                .userId(shipperId)
+                .vehicleType("motorbike")
+                .capacityKg(20.0)
+                .build();
+            
+            Map<String, DeliveryManResponse> shippersMap = new HashMap<>();
+            shippersMap.put(shipperId, shipper);
+            when(userServiceClient.getDeliveryMenByUserIds(anyList())).thenReturn(shippersMap);
 
             // Mock VRP response with only parcel1
             VRPAssignmentResponse.VRPTaskDto task1 = VRPAssignmentResponse.VRPTaskDto.builder()
@@ -415,7 +484,19 @@ class AdminAssignmentServiceTest {
                 .parcels(new ArrayList<>())
                 .build();
 
-            when(assignmentRepository.save(any(DeliveryAssignment.class))).thenReturn(assignment);
+            DeliveryAssignment assignmentWithParcels = DeliveryAssignment.builder()
+                .id(assignment.getId())
+                .shipperId(shipperId)
+                .deliveryAddressId(deliveryAddressId)
+                .status(AssignmentStatus.PENDING)
+                .assignedAt(assignment.getAssignedAt())
+                .parcels(new ArrayList<>())
+                .build();
+
+            // Assignment is saved twice: once when created, once after adding parcels
+            when(assignmentRepository.save(any(DeliveryAssignment.class)))
+                .thenReturn(assignment)
+                .thenReturn(assignmentWithParcels);
 
             // When
             AutoAssignmentResponse response = adminAssignmentService.createAutoAssignment(request);
@@ -445,8 +526,21 @@ class AdminAssignmentServiceTest {
 
             ParcelResponse parcel = createMockParcel(parcelId, "address-1", 10.8505, 106.7718, "NORMAL");
 
-            when(parcelServiceClient.fetchParcelResponse(parcelId)).thenReturn(parcel);
+            Map<String, ParcelResponse> parcelMap = new HashMap<>();
+            parcelMap.put(parcelId, parcel);
+            when(parcelServiceClient.fetchParcelsBulk(anyList())).thenReturn(parcelMap);
             when(assignmentParcelRepository.existsByParcelId(parcelId)).thenReturn(false);
+
+            // Mock UserServiceClient for shipper
+            DeliveryManResponse shipper = DeliveryManResponse.builder()
+                .userId(shipperId)
+                .vehicleType("motorbike")
+                .capacityKg(20.0)
+                .build();
+            
+            Map<String, DeliveryManResponse> shippersMap = new HashMap<>();
+            shippersMap.put(shipperId, shipper);
+            when(userServiceClient.getDeliveryMenByUserIds(anyList())).thenReturn(shippersMap);
 
             BaseResponse<VRPAssignmentResponse> baseResponse = BaseResponse.<VRPAssignmentResponse>builder()
                 .success(false)
@@ -476,7 +570,9 @@ class AdminAssignmentServiceTest {
 
             ParcelResponse parcel = createMockParcel(parcelId, "address-1", 10.8505, 106.7718, "NORMAL");
 
-            when(parcelServiceClient.fetchParcelResponse(parcelId)).thenReturn(parcel);
+            Map<String, ParcelResponse> parcelMap = new HashMap<>();
+            parcelMap.put(parcelId, parcel);
+            when(parcelServiceClient.fetchParcelsBulk(anyList())).thenReturn(parcelMap);
             when(assignmentParcelRepository.existsByParcelId(parcelId)).thenReturn(true); // Already assigned
 
             // When & Then

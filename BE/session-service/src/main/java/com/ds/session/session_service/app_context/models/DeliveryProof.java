@@ -41,8 +41,8 @@ public class DeliveryProof {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assignment_id", nullable = false, updatable = false)
-    private DeliveryAssignment assignment;
+    @JoinColumn(name = "assignment_parcel_id", nullable = false, updatable = false)
+    private DeliveryAssignmentParcel assignmentParcel;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, updatable = false)
@@ -72,4 +72,3 @@ public class DeliveryProof {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 }
-

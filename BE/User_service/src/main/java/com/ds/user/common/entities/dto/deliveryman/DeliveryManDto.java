@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -34,4 +35,7 @@ public class DeliveryManDto {
     
     // Zone information (primary zone from working zones - zone with order = 1)
     private String zoneId;
+    
+    // Working zones (all zone IDs, ordered by priority)
+    private List<String> zoneIds;
 }

@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.ds.session.session_service.app_context.models.DeliveryAssignment;
@@ -36,6 +37,11 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
 
     Optional<DeliveryAssignment> findByIdAndStatus(UUID assignmentId, AssignmentStatus status);
     Page<DeliveryAssignment> findByShipperIdAndStatus(UUID shipperId, AssignmentStatus status, Pageable pageable);
+    
+    /**
+     * Find assignments by shipper ID (String) and status
+     */
+    Page<DeliveryAssignment> findByShipperIdAndStatus(String shipperId, AssignmentStatus status, Pageable pageable);
 
     /**
      * Tìm một assignment (task) dựa trên session_id và parcel_id.
@@ -116,7 +122,13 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
     List<DeliveryAssignment> findBySession_IdIn(List<UUID> sessionIds);
     
     /**
-     * Bulk query: Find assignments by list of shipper IDs
+     * Bulk query: Find assignments by list of shipper IDs (UUID)
      */
     List<DeliveryAssignment> findByShipperIdIn(List<UUID> shipperIds);
+    
+    /**
+     * Bulk query: Find assignments by list of shipper IDs (String)
+     */
+    @Query("SELECT da FROM DeliveryAssignment da WHERE da.shipperId IN :shipperIds")
+    List<DeliveryAssignment> findByShipperIdStringIn(@Param("shipperIds") List<String> shipperIds);
 }

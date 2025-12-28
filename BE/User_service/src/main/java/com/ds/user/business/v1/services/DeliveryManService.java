@@ -280,12 +280,18 @@ public class DeliveryManService implements IDeliveryManService {
     private DeliveryManDto mapToDto(DeliveryMan deliveryMan) {
         User user = deliveryMan.getUser();
         
-        // Get primary zoneId from working zones (zone with order = 1, or first zone if no order=1)
+        // Get working zones (ordered by priority)
+        List<String> zoneIds = new java.util.ArrayList<>();
         String primaryZoneId = null;
         try {
             List<WorkingZone> workingZones = 
                 workingZoneRepository.findByDeliveryManIdOrderByOrderAsc(deliveryMan.getId());
             if (!workingZones.isEmpty()) {
+                // Extract all zone IDs ordered by priority
+                zoneIds = workingZones.stream()
+                    .map(WorkingZone::getZoneId)
+                    .collect(Collectors.toList());
+                
                 // Get zone with order = 1 (highest priority), or first zone if no order=1 exists
                 primaryZoneId = workingZones.stream()
                     .filter(wz -> wz.getOrder() != null && wz.getOrder() == 1)
@@ -317,6 +323,7 @@ public class DeliveryManService implements IDeliveryManService {
                 .lastSessionStartTime(null)
                 // Zone information
                 .zoneId(primaryZoneId)
+                .zoneIds(zoneIds)
                 .build();
     }
 }

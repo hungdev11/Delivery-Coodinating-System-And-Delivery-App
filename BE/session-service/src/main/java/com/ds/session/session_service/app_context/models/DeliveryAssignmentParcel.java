@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -15,8 +16,12 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -61,4 +66,27 @@ public class DeliveryAssignmentParcel {
     @Column(name = "parcel_id", length = 36, nullable = false, updatable = false)
     @JdbcTypeCode(Types.VARCHAR)
     private String parcelId;
+
+    /**
+     * One-to-Many relationship with DeliveryProof.
+     * A parcel assignment can have multiple proofs (e.g., pickup, delivered, returned).
+     */
+    @OneToMany(
+        mappedBy = "assignmentParcel",
+        fetch = FetchType.LAZY,
+        cascade = CascadeType.PERSIST
+    )
+    @Builder.Default
+    private List<DeliveryProof> proofs = new ArrayList<>();
+    
+    /**
+     * Helper method to add a proof to this parcel assignment
+     */
+    public void addProof(DeliveryProof proof) {
+        if (proofs == null) {
+            proofs = new ArrayList<>();
+        }
+        proofs.add(proof);
+        proof.setAssignmentParcel(this);
+    }
 }

@@ -24,6 +24,7 @@ public class KeycloakInitializationService {
     private final UserInitializationService userInitializationService;
     private final UserAddressSeedService userAddressSeedService;
     private final WorkingShiftSeedService workingShiftSeedService;
+    private final WorkingZoneSeedService workingZoneSeedService;
 
     /**
      * Initialize all Keycloak data based on configuration
@@ -133,6 +134,15 @@ public class KeycloakInitializationService {
                 // Don't fail entire initialization if shift seeding fails
             }
 
+            // Seed working zones for delivery men
+            // Note: This is done after users and delivery men are created
+            try {
+                workingZoneSeedService.seedWorkingZonesForAllDeliveryMen(realmConfig);
+            } catch (Exception e) {
+                log.error("Failed to seed working zones for realm '{}': {}",
+                        realmConfig.getName(), e.getMessage(), e);
+                // Don't fail entire initialization if zone seeding fails
+            }
 
         } catch (Exception e) {
             log.error("Failed to initialize realm '{}': {}", realmConfig.getName(), e.getMessage(), e);

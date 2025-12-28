@@ -118,6 +118,38 @@ public class UserServiceClient {
     }
 
     /**
+     * Get all delivery men from User Service API (no filters)
+     * @return List of DeliveryManResponse
+     */
+    public List<DeliveryManResponse> getAllDeliveryMen() {
+        try {
+            // Use V2 query API without filters to get all delivery men
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("page", 0);
+            requestBody.put("size", 1000); // Request up to 1000 delivery men at once
+            
+            DeliveryManQueryResponse response = userServiceWebClient.post()
+                .uri("/api/v2/users/shippers")
+                .bodyValue(requestBody)
+                .retrieve()
+                .bodyToMono(DeliveryManQueryResponse.class)
+                .block();
+
+            List<DeliveryManResponse> result = new java.util.ArrayList<>();
+            if (response != null && response.getResult() != null 
+                    && response.getResult().getData() != null) {
+                for (DeliveryManDto dm : response.getResult().getData()) {
+                    result.add(mapToDeliveryManResponse(dm));
+                }
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("Error fetching all delivery men from User Service. Error: {}", e.getMessage());
+            return new java.util.ArrayList<>();
+        }
+    }
+
+    /**
      * Map DeliveryManDto from user-service to DeliveryManResponse
      */
     private DeliveryManResponse mapToDeliveryManResponse(DeliveryManDto dto) {
@@ -131,6 +163,8 @@ public class UserServiceClient {
             .phone(dto.getPhone())
             .vehicleType(dto.getVehicleType())
             .capacityKg(dto.getCapacityKg())
+            .zoneId(dto.getZoneId())
+            .zoneIds(dto.getZoneIds())
             .build();
     }
 
@@ -179,6 +213,8 @@ public class UserServiceClient {
         private String phone;
         private String vehicleType;
         private Double capacityKg;
+        private String zoneId;
+        private java.util.List<String> zoneIds;
 
         public java.util.UUID getId() { return id; }
         public void setId(java.util.UUID id) { this.id = id; }
@@ -198,5 +234,9 @@ public class UserServiceClient {
         public void setVehicleType(String vehicleType) { this.vehicleType = vehicleType; }
         public Double getCapacityKg() { return capacityKg; }
         public void setCapacityKg(Double capacityKg) { this.capacityKg = capacityKg; }
+        public String getZoneId() { return zoneId; }
+        public void setZoneId(String zoneId) { this.zoneId = zoneId; }
+        public java.util.List<String> getZoneIds() { return zoneIds; }
+        public void setZoneIds(java.util.List<String> zoneIds) { this.zoneIds = zoneIds; }
     }
 }

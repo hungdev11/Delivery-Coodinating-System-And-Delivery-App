@@ -6,7 +6,10 @@
  * Supports multiple task types: seed, assignment, etc.
  */
 
-import { ref, computed, onUnmounted, onMounted } from 'vue'
+import { ref, computed, onUnmounted, onMounted, resolveComponent } from 'vue'
+
+const UButton = resolveComponent('UButton');
+const UCard = resolveComponent('UCard');
 
 export interface ProgressTask {
   id: string
@@ -102,7 +105,7 @@ onUnmounted(() => {
 const toggleMinimize = () => {
   isMinimized.value = !isMinimized.value
   emit('minimize')
-  
+
   // Adjust position when minimizing to keep bottom-right alignment
   if (containerRef.value) {
     const width = isMinimized.value ? 200 : (containerRef.value.offsetWidth || 400)

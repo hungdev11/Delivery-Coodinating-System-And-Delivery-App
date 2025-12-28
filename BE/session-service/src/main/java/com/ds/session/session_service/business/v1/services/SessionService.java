@@ -3,7 +3,9 @@ package com.ds.session.session_service.business.v1.services;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -31,6 +33,7 @@ import com.ds.session.session_service.common.entities.dto.common.PagedData;
 import com.ds.session.session_service.common.entities.dto.request.CreateSessionRequest;
 import com.ds.session.session_service.common.entities.dto.request.PagingRequestV2;
 import com.ds.session.session_service.common.entities.dto.response.AssignmentResponse;
+import com.ds.session.session_service.common.entities.dto.response.DeliveryProofResponse;
 import com.ds.session.session_service.common.entities.dto.response.SessionResponse;
 import com.ds.session.session_service.common.entities.dto.sort.SortConfig;
 import com.ds.session.session_service.common.enums.AssignmentStatus;
@@ -52,6 +55,8 @@ public class SessionService implements ISessionService {
 
     private final DeliverySessionRepository sessionRepository;
     private final DeliveryAssignmentRepository assignmentRepository;
+    private final com.ds.session.session_service.app_context.repositories.DeliveryAssignmentParcelRepository assignmentParcelRepository;
+    private final com.ds.session.session_service.app_context.repositories.DeliveryProofRepository proofRepository;
     private final ParcelServiceClient parcelApiClient; 
     private final ParcelEventPublisher parcelEventPublisher;
     private final UserServiceClient userServiceClient;
@@ -968,13 +973,37 @@ public class SessionService implements ISessionService {
     }
 
     private AssignmentResponse toAssignmentResponse(DeliveryAssignment assignment) {
+        // Get all parcels for this assignment
+        List<com.ds.session.session_service.app_context.models.DeliveryAssignmentParcel> assignmentParcels = 
+            assignmentParcelRepository.findByAssignmentId(assignment.getId());
+        
+        // Extract parcel IDs
+        List<String> parcelIds = assignmentParcels.stream()
+            .map(ap -> ap.getParcelId())
+            .collect(Collectors.toList());
+        
+        // Get proofs for each parcel
+        Map<String, List<DeliveryProofResponse>> proofsByParcel = new java.util.HashMap<>();
+        for (com.ds.session.session_service.app_context.models.DeliveryAssignmentParcel ap : assignmentParcels) {
+            List<DeliveryProofResponse> proofs = proofRepository.findByAssignmentParcelId(ap.getId())
+                .stream()
+                .map(DeliveryProofResponse::from)
+                .collect(Collectors.toList());
+            proofsByParcel.put(ap.getParcelId(), proofs);
+        }
+        
+        // Get first parcel ID for backward compatibility
+        String firstParcelId = parcelIds.isEmpty() ? assignment.getParcelId() : parcelIds.get(0);
+        
         return AssignmentResponse.builder()
             .id(assignment.getId())
-            .parcelId(assignment.getParcelId())
+            .parcelId(firstParcelId) // Backward compatibility
+            .parcelIds(parcelIds)
             .status(assignment.getStatus())
             .failReason(assignment.getFailReason())
             .scanedAt(assignment.getScanedAt())
             .updatedAt(assignment.getUpdatedAt())
+            .proofsByParcel(proofsByParcel)
             .build();
     }
     

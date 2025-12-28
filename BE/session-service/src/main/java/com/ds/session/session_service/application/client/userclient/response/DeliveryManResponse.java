@@ -1,6 +1,7 @@
 package com.ds.session.session_service.application.client.userclient.response;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import lombok.AllArgsConstructor;
@@ -27,4 +28,8 @@ public class DeliveryManResponse {
     private String lastName;
     private String phone;
     private String status;
+    
+    // Zone information
+    private String zoneId; // Primary zone
+    private List<String> zoneIds; // All working zones (ordered by priority)
 }

@@ -42,17 +42,9 @@ public class DeliveryProofService implements IDeliveryProofService {
     public List<DeliveryProofResponse> getProofsByParcel(
             String parcelId
     ) {
-        List<DeliveryAssignment> assignments =
-            assignmentRepo.findAllByParcelId(parcelId);
-
-        if (assignments.isEmpty()) {
-            throw new ResourceNotFound("Parcel not found");
-        }
-
-        return assignments.stream()
-            .flatMap(a ->
-                proofRepo.findByAssignmentId(a.getId()).stream()
-            )
+        // Use the new findByParcelId method that queries directly through assignmentParcel
+        return proofRepo.findByParcelId(parcelId)
+            .stream()
             .map(DeliveryProofResponse::from)
             .toList();
     }

@@ -118,12 +118,6 @@ public class DeliveryAssignment {
     @Builder.Default
     private List<DeliveryAssignmentParcel> parcels = new ArrayList<>();
 
-    @OneToMany(
-        mappedBy = "assignment",
-        fetch = FetchType.LAZY,
-        cascade = CascadeType.PERSIST
-    )
-    private List<DeliveryProof> proofs = new ArrayList<>();
 
     // Thời gian hết hạn để shipper phản hồi (accept/reject)
     @Column(name = "expired_at")
@@ -132,22 +126,6 @@ public class DeliveryAssignment {
     // Thời gian chờ trước khi có thể assign đơn cho shipper này lại (tính bằng phút)
     private int expiredCooldown;
 
-    // helper method (rất quan trọng)
-    public void addProof(DeliveryProof proof) {
-        if (!inExecuteStatus()) {
-            throw new IllegalArgumentException("Cannot add proof when assignment is not in execute status");
-        }
-        proofs.add(proof);
-        proof.setAssignment(this);
-    }
-
-    private boolean inExecuteStatus() {
-        return List.of(
-            AssignmentStatus.IN_PROGRESS,
-            AssignmentStatus.COMPLETED,
-            AssignmentStatus.FAILED)
-            .contains(this.status);
-    }
 
     /**
      * Accept task - called when shipper accepts the assignment

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ds.session.session_service.app_context.models.DeliveryAssignment;
+import com.ds.session.session_service.app_context.models.DeliveryAssignmentParcel;
 import com.ds.session.session_service.app_context.models.DeliveryProof;
 import com.ds.session.session_service.app_context.models.DeliverySession;
 import com.ds.session.session_service.app_context.repositories.DeliveryAssignmentRepository;
@@ -61,6 +62,7 @@ import lombok.extern.slf4j.Slf4j;
 public class DeliveryAssignmentService implements IDeliveryAssignmentService {
 
     private final DeliveryAssignmentRepository deliveryAssignmentRepository;
+    private final com.ds.session.session_service.app_context.repositories.DeliveryAssignmentParcelRepository deliveryAssignmentParcelRepository;
     private final DeliverySessionRepository deliverySessionRepository;
     private final ParcelServiceClient parcelServiceClient;
     private final CommunicationServiceClient communicationServiceClient;
@@ -72,7 +74,10 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     private final DeliveryProofRepository deliveryProofRepository;
     private final com.ds.session.session_service.app_context.repositories.DeliveryConfirmationPointRepository confirmationPointRepository;
 
-    private void uploadProof(
+    /**
+     * Upload proof for all parcels in an assignment
+     */
+    private void uploadProofForAllParcels(
         DeliveryAssignment assignment,
         ProofType type,
         List<String> imageUrls
@@ -89,10 +94,57 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         DeliveryAssignment managedAssignment = deliveryAssignmentRepository.findById(assignment.getId())
             .orElseThrow(() -> new IllegalStateException("Assignment not found: " + assignment.getId()));
 
-        // Get deliveryManId from session (ensure session is loaded)
+        // Get all parcels for this assignment
+        List<DeliveryAssignmentParcel> assignmentParcels = 
+            deliveryAssignmentParcelRepository.findByAssignmentId(managedAssignment.getId());
+
+        if (assignmentParcels.isEmpty()) {
+            log.warn("[DeliveryAssignmentService] No parcels found for assignment {}. Cannot upload proof.", 
+                managedAssignment.getId());
+            return;
+        }
+
+        // Upload proof for each parcel
+        for (DeliveryAssignmentParcel assignmentParcel : assignmentParcels) {
+            uploadProof(managedAssignment, assignmentParcel.getParcelId(), type, imageUrls);
+        }
+    }
+
+    /**
+     * Upload proof for a specific parcel in an assignment
+     */
+    private void uploadProof(
+        DeliveryAssignment assignment,
+        String parcelId,
+        ProofType type,
+        List<String> imageUrls
+    ) {
+        if (imageUrls == null || imageUrls.isEmpty()) {
+            throw new IllegalArgumentException("Proof images are required");
+        }
+
+        if (imageUrls.size() > 6) {
+            throw new IllegalArgumentException("Maximum 6 proof images allowed");
+        }
+
+        // Ensure assignment is managed - reload to get fresh entity
+        DeliveryAssignment managedAssignment = deliveryAssignmentRepository.findById(assignment.getId())
+            .orElseThrow(() -> new IllegalStateException("Assignment not found: " + assignment.getId()));
+
+        // Find the specific DeliveryAssignmentParcel for this parcel
+        List<DeliveryAssignmentParcel> assignmentParcels = 
+            deliveryAssignmentParcelRepository.findByAssignmentId(managedAssignment.getId());
+        
+        DeliveryAssignmentParcel targetAssignmentParcel = assignmentParcels.stream()
+            .filter(ap -> ap.getParcelId().equals(parcelId))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException(
+                "Parcel " + parcelId + " not found in assignment " + managedAssignment.getId()));
+
+        // Get deliveryManId from assignment
         String deliveryManId = managedAssignment.getShipperId();
 
-        // Persist proofs directly to ensure assignment_id is set correctly
+        // Persist proofs linked to the specific DeliveryAssignmentParcel
         for (String url : imageUrls) {
             DeliveryProof proof = DeliveryProof.builder()
                 .type(type)
@@ -102,18 +154,18 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-            // Set assignment BEFORE persisting - this is critical!
-            proof.setAssignment(managedAssignment);
+            // Set assignmentParcel BEFORE persisting - this is critical!
+            proof.setAssignmentParcel(targetAssignmentParcel);
             
-            // Persist proof directly to ensure assignment_id is set
+            // Persist proof directly
             deliveryProofRepository.save(proof);
             
             // Also add to collection to maintain bidirectional relationship
-            managedAssignment.getProofs().add(proof);
+            targetAssignmentParcel.addProof(proof);
         }
 
-        // Save the managed assignment to update updatedAt timestamp
-        deliveryAssignmentRepository.save(managedAssignment);
+        // Save the assignment parcel to update the relationship
+        deliveryAssignmentParcelRepository.save(targetAssignmentParcel);
     }
 
     @Override
@@ -179,7 +231,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
 
         DeliveryAssignment assignment = assignmentOpt.get();
 
-        uploadProof(assignment, ProofType.DELIVERED, request.getProofImageUrls());
+        uploadProofForAllParcels(assignment, ProofType.DELIVERED, request.getProofImageUrls());
 
         return updateTaskState(
                 assignment.getId(),
@@ -200,7 +252,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             throw new IllegalStateException("Assignment is not in IN_PROGRESS status. Current status: " + assignment.getStatus());
         }
 
-        uploadProof(assignment, ProofType.DELIVERED, request.getProofImageUrls());
+        uploadProofForAllParcels(assignment, ProofType.DELIVERED, request.getProofImageUrls());
 
         // Save confirmation point if location provided
         if (request.getCurrentLat() != null && request.getCurrentLon() != null) {
@@ -229,7 +281,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         }
 
         // Upload proofs with type RETURNED
-        uploadProof(assignment, ProofType.RETURNED, request.getProofImageUrls());
+        uploadProofForAllParcels(assignment, ProofType.RETURNED, request.getProofImageUrls());
 
         // Save confirmation point if location provided
         if (request.getCurrentLat() != null && request.getCurrentLon() != null) {

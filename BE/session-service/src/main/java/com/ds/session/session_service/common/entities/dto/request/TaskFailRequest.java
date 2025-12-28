@@ -17,4 +17,3 @@ public class TaskFailRequest {
     @NotNull(message = "RouteInfo is required")
     private RouteInfo routeInfo;
 }
-
