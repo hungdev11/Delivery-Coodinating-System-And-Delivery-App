@@ -522,6 +522,9 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         // 10. Create DELIVERY_FAILED ticket when shipper reports delivery failure
         if (newStatus == AssignmentStatus.FAILED && parcelEvent == ParcelEvent.CAN_NOT_DELIVERY) {
             try {
+                log.info("[session-service] [DeliveryAssignmentService.updateTaskState] Attempting to create DELIVERY_FAILED ticket: parcelId={}, assignmentId={}, shipperId={}", 
+                    parcelId, assignment.getId(), deliveryManId);
+                
                 CommunicationServiceClient.CreateDeliveryFailedTicketRequest ticketRequest = 
                     new CommunicationServiceClient.CreateDeliveryFailedTicketRequest(
                         parcelId.toString(),
@@ -531,11 +534,11 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                     );
                 
                 communicationServiceClient.createDeliveryFailedTicket(ticketRequest);
-                log.debug("[session-service] [DeliveryAssignmentService.updateTaskState] Created DELIVERY_FAILED ticket for parcel: {}, assignment: {}", 
+                log.info("[session-service] [DeliveryAssignmentService.updateTaskState] ✅ Successfully created DELIVERY_FAILED ticket for parcel: {}, assignment: {}", 
                     parcelId, assignment.getId());
             } catch (Exception e) {
-                log.error("[session-service] [DeliveryAssignmentService.updateTaskState] Failed to create DELIVERY_FAILED ticket for parcel {}. Continuing...", 
-                    parcelId, e);
+                log.error("[session-service] [DeliveryAssignmentService.updateTaskState] ❌ Failed to create DELIVERY_FAILED ticket for parcel {} (assignment: {}). Error: {} - {}. Continuing...", 
+                    parcelId, assignment.getId(), e.getClass().getSimpleName(), e.getMessage(), e);
                 // Don't throw - ticket creation is not critical for assignment status update
             }
         }
@@ -978,6 +981,9 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
 
             // Create DELIVERY_FAILED ticket when assignment is postponed (set to FAILED)
             try {
+                log.info("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] Attempting to create DELIVERY_FAILED ticket for postponed parcel: parcelId={}, assignmentId={}, shipperId={}", 
+                    assignment.getParcelId(), assignment.getId(), session.getDeliveryManId());
+                
                 CommunicationServiceClient.CreateDeliveryFailedTicketRequest ticketRequest = 
                     new CommunicationServiceClient.CreateDeliveryFailedTicketRequest(
                         assignment.getParcelId().toString(),
@@ -987,11 +993,11 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                     );
                 
                 communicationServiceClient.createDeliveryFailedTicket(ticketRequest);
-                log.debug("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] Created DELIVERY_FAILED ticket for postponed parcel: {}, assignment: {}", 
+                log.info("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] ✅ Successfully created DELIVERY_FAILED ticket for postponed parcel: {}, assignment: {}", 
                     assignment.getParcelId(), assignment.getId());
             } catch (Exception e) {
-                log.error("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] Failed to create DELIVERY_FAILED ticket for postponed parcel {}. Continuing...", 
-                    assignment.getParcelId(), e);
+                log.error("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] ❌ Failed to create DELIVERY_FAILED ticket for postponed parcel {} (assignment: {}). Error: {} - {}. Continuing...", 
+                    assignment.getParcelId(), assignment.getId(), e.getClass().getSimpleName(), e.getMessage(), e);
                 // Don't throw - ticket creation is not critical for assignment status update
             }
         }
