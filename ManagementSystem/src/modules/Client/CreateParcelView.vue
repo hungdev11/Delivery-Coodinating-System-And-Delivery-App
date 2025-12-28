@@ -167,7 +167,7 @@ onMounted(() => {
           <UFormField label="Sender Address" required>
             <USelect
               v-model="form.senderDestinationId"
-              :options="
+              :items="
                 addresses.map((addr) => ({
                   label: `${addr.destinationDetails?.name || 'Unnamed'}${addr.isPrimary ? ' (Primary)' : ''}`,
                   value: addr.destinationId,
@@ -181,7 +181,7 @@ onMounted(() => {
           <UFormField label="Receiver Address" required>
             <USelect
               v-model="form.receiverDestinationId"
-              :options="
+              :items="
                 addresses.map((addr) => ({
                   label: `${addr.destinationDetails?.name || 'Unnamed'}${addr.isPrimary ? ' (Primary)' : ''}`,
                   value: addr.destinationId,
@@ -225,7 +225,7 @@ onMounted(() => {
         <UFormField label="Delivery Type">
           <USelect
             v-model="form.deliveryType"
-            :options="[
+            :items="[
               { label: 'URGENT', value: 'URGENT' },
               { label: 'EXPRESS', value: 'EXPRESS' },
               { label: 'FAST', value: 'FAST' },

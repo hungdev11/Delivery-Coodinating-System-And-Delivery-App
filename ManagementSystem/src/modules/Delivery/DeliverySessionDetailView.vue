@@ -654,7 +654,7 @@ const assignmentColumns: TableColumn<EnrichedAssignment>[] = [
                 <label class="block text-sm font-medium mb-2">Loại routing</label>
                 <USelect
                   v-model="selectedRoutingType"
-                  :options="routingTypeOptions"
+                  :items="routingTypeOptions"
                   @update:model-value="loadRoute"
                 />
               </div>

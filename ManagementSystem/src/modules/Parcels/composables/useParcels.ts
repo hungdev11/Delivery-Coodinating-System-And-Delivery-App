@@ -256,6 +256,17 @@ export function useParcels() {
   const getFilterableColumns = (): FilterableColumn[] => {
     return [
       {
+        field: 'id',
+        label: 'ID',
+        type: 'string',
+        caseSensitive: false,
+        filterable: true,
+        filterType: 'text',
+        filterConfig: {
+          placeholder: 'Enter parcel ID...',
+        },
+      },
+      {
         field: 'code',
         label: 'Code',
         type: 'string',

@@ -218,7 +218,7 @@ The Zones module supports filtering by distribution center:
 ```vue
 <USelect
   :model-value="selectedCenterId"
-  :options="centerOptions"
+  :items="centerOptions"
   @update:model-value="filterByCenter"
 />
 ```

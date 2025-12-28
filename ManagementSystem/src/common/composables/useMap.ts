@@ -115,10 +115,22 @@ export function useMap() {
     if (markerData.popup) {
       const popup = new maplibregl.Popup({ offset: 25 }).setHTML(markerData.popup)
       marker.setPopup(popup)
+      
+      // Auto-open popup on click if no custom onClick handler
+      if (!markerData.onClick) {
+        el.addEventListener('click', () => {
+          popup.addTo(map.value)
+        })
+      }
     }
 
     if (markerData.onClick) {
       el.addEventListener('click', markerData.onClick)
+    } else if (markerData.popup) {
+      // If popup exists but no onClick, open popup on click
+      el.addEventListener('click', () => {
+        marker.togglePopup()
+      })
     }
 
     markers.value.set(markerData.id, marker)

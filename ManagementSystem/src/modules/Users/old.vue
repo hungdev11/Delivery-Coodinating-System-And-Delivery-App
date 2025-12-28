@@ -403,7 +403,7 @@ watch(searchValue, (newValue) => {
         <div class="w-full sm:w-48">
           <USelect
             v-model="statusFilter"
-            :options="statusOptions"
+            :items="statusOptions"
             placeholder="Filter by status"
             size="lg"
           />

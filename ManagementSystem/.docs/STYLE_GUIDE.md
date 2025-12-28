@@ -161,7 +161,7 @@ const breakpoints = {
 
 <!-- Select -->
 <UFormField label="Status" name="status">
-  <USelect v-model="form.status" :options="statusOptions" />
+  <USelect v-model="form.status" :items="statusOptions" />
 </UFormField>
 ```
 

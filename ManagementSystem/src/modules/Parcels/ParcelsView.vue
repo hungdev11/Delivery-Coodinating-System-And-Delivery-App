@@ -30,7 +30,7 @@ import type { SortingState, Column } from '@tanstack/table-core'
 import type { FilterCondition, FilterGroup } from '../../common/types/filter'
 import { createSortConfig } from '../../common/utils/query-builder'
 import TableHeaderCell from '../../common/components/TableHeaderCell.vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { getCurrentUser } from '@/common/guards/roleGuard.guard'
 import { useGlobalChat, type GlobalChatListener } from '../Communication/composables'
 import { useConversations } from '../Communication/composables'
@@ -59,6 +59,9 @@ const LazyParcelQRModal = defineAsyncComponent(() => import('./components/Parcel
 const LazyChangeStatusModal = defineAsyncComponent(
   () => import('./components/ChangeStatusModal.vue'),
 )
+const LazyParcelProofModal = defineAsyncComponent(
+  () => import('./components/ParcelProofModal.vue'),
+)
 // const LazyParcelDetailModal = defineAsyncComponent(
 //   () => import('./components/ParcelDetailModal.vue'),
 // )
@@ -71,6 +74,7 @@ const overlay = useOverlay()
 const table = useTemplateRef('table')
 const toast = useToast()
 const router = useRouter()
+const route = useRoute()
 const currentUser = getCurrentUser()
 const { findOrCreateConversation } = useConversations()
 const { create: createProposalRequest } = useProposals()
@@ -420,6 +424,11 @@ const columns: TableColumn<ParcelDto>[] = [
                 onClick: () => openQRModal(parcel),
               },
               {
+                label: 'View proofs',
+                icon: 'i-heroicons-photo',
+                onClick: () => openProofModal(parcel),
+              },
+              {
                 label: 'Edit parcel',
                 icon: 'i-heroicons-pencil',
                 onClick: () => openEditModal(parcel),
@@ -763,6 +772,22 @@ const openChangeStatusModal = async (parcel: ParcelDto) => {
 }
 
 /**
+ * Check if can view proofs (for DELIVERED, SUCCEEDED, DISPUTE statuses)
+ */
+const canViewProofs = (parcel: ParcelDto) => {
+  return ['DELIVERED', 'SUCCEEDED', 'DISPUTE'].includes(parcel.status)
+}
+
+/**
+ * Open proof modal
+ */
+const openProofModal = async (parcel: ParcelDto) => {
+  const modal = overlay.create(LazyParcelProofModal)
+  const instance = modal.open({ parcelId: parcel.id, parcelCode: parcel.code })
+  await instance.result
+}
+
+/**
  * Handle change status and create proposal if needed
  */
 const handleChangeStatus = async (
@@ -1065,10 +1090,65 @@ const getOperatorLabel = (operator: string): string => {
   return operatorMap[operator] || operator
 }
 
+/**
+ * Initialize filters from route params
+ */
+const initializeFiltersFromRoute = () => {
+  const routeId = route.query.id as string | undefined
+  const routeStatus = route.query.status as string | undefined
+
+  if (routeId || routeStatus) {
+    const conditions: FilterCondition[] = []
+
+    if (routeId) {
+      conditions.push({
+        field: 'id',
+        operator: 'eq',
+        value: routeId,
+      })
+    }
+
+    if (routeStatus) {
+      conditions.push({
+        field: 'status',
+        operator: 'eq',
+        value: routeStatus,
+      })
+    }
+
+    if (conditions.length > 0) {
+      // Set active tab based on status if provided (before updating filters)
+      if (routeStatus) {
+        const statusToTab: Record<string, string> = {
+          IN_WAREHOUSE: 'pending',
+          ON_ROUTE: 'delivering',
+          DELIVERED: 'need-confirm',
+          DISPUTE: 'need-confirm',
+          SUCCEEDED: 'delivered',
+          FAILED: 'cancelled',
+          DELAYED: 'pending',
+        }
+        const targetTab = statusToTab[routeStatus] || 'all'
+        activeTab.value = targetTab
+      }
+
+      // Update filters (this will trigger loadParcelsForTab via watch)
+      baseUpdateFilters({
+        logic: 'AND',
+        conditions,
+      })
+    }
+  }
+}
+
 // Load parcels on mount
 // Register update notification listener
 onMounted(async () => {
   globalChat.addListener(updateNotificationListener)
+  
+  // Initialize filters from route params
+  initializeFiltersFromRoute()
+  
   // Load counts for all tabs first
   await loadAllTabCounts()
   // Then load data for active tab
@@ -1380,6 +1460,13 @@ watch(activeTab, (newTab) => {
     loadParcelsForTab(newTab)
   }
 })
+
+// Watch for route query changes to re-initialize filters
+watch(() => route.query, (newQuery) => {
+  if (newQuery.id || newQuery.status) {
+    initializeFiltersFromRoute()
+  }
+}, { immediate: false })
 
 // Watch for search/filter changes to reload current tab
 watch([searchValue, baseFilters, sorts], () => {

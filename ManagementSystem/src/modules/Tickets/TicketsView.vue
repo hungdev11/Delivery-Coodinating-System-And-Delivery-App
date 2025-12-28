@@ -628,10 +628,15 @@ const openReassignModal = async (ticket: TicketDto) => {
 }
 
 /**
- * Navigate to parcel detail
+ * Navigate to parcel detail with filter
  */
-const viewParcel = (parcelId: string) => {
-  router.push(`/parcels?highlight=${parcelId}`)
+const viewParcel = (parcelId: string, parcelStatus?: string) => {
+  const params: Record<string, string> = { id: parcelId }
+  if (parcelStatus) {
+    params.status = parcelStatus
+  }
+  const queryString = new URLSearchParams(params).toString()
+  router.push(`/parcels?${queryString}`)
 }
 
 // Table columns configuration
@@ -708,13 +713,16 @@ const columns: TableColumn<TicketDto>[] = [
         },
       }),
     cell: ({ row }) => {
-      const parcelId = row.getValue('parcelId') as string
+      const ticket = row.original
+      const parcelId = ticket.parcelId
+      // Try to get parcel status from ticket if available (some tickets may have parcel status info)
+      const parcelStatus = (ticket as any).parcelStatus as string | undefined
       return h(
         UButton,
         {
           variant: 'link',
           size: 'sm',
-          onClick: () => viewParcel(parcelId),
+          onClick: () => viewParcel(parcelId, parcelStatus),
         },
         () => parcelId.substring(0, 8) + '...',
       )

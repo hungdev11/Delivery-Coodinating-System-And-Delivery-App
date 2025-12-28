@@ -14,8 +14,12 @@ import {
   reportParcelNotReceived,
   retractDispute,
   getLatestAssignmentForParcel,
+  getParcelById,
   type LatestAssignmentResponse,
 } from '@/modules/Parcels/api'
+import { getSessionDemoRoute } from '@/modules/Delivery/api'
+import type { DemoRouteResponse } from '@/modules/Zones/routing.type'
+import { parseRouteGeometry } from '@/modules/Zones/utils/routingHelper'
 import { ParcelDto, type ParcelStatus } from '@/modules/Parcels/model.type'
 import { getCurrentUser } from '@/common/guards/roleGuard.guard'
 import type { TableColumn } from '@nuxt/ui'
@@ -72,37 +76,130 @@ const activeTab = ref<string | number>('pending')
 // Tracking modal state
 const trackingParcel = ref<ParcelDto | null>(null)
 const trackingSessionId = ref<string | null>(null)
+const trackingAssignmentId = ref<string | null>(null)
+const trackingDeliveryManId = ref<string | null>(null)
+const trackingAssignmentStatus = ref<string | null>(null)
 const trackingLocation = ref<{ lat: number; lon: number; timestamp?: string } | null>(null)
 const trackingLoading = ref(false)
+const trackingRoute = ref<DemoRouteResponse['result'] | null>(null)
+const trackingRouteLoading = ref(false)
+const showTrackingModal = ref(false)
+const mapRoutes = ref<Array<{ coordinates: [number, number][]; distance: number; duration: number; properties?: Record<string, unknown> }>>([])
 
 type TrackingMarker = {
   id: string
   coordinates: [number, number]
-  type: string
+  type: 'center' | 'delivery' | 'warehouse' | 'custom'
   title: string
   color: string
+  popup?: string
+  parcelId?: string
 }
 
 const trackingMarkers = computed<TrackingMarker[]>(() => {
-  if (!trackingLocation.value) return []
+  const markers: TrackingMarker[] = []
 
-  const markers: TrackingMarker[] = [
-    {
+  // Add shipper location if available
+  if (trackingLocation.value && 
+      typeof trackingLocation.value.lat === 'number' && 
+      typeof trackingLocation.value.lon === 'number' &&
+      !isNaN(trackingLocation.value.lat) && !isNaN(trackingLocation.value.lon) &&
+      trackingLocation.value.lat >= -90 && trackingLocation.value.lat <= 90 &&
+      trackingLocation.value.lon >= -180 && trackingLocation.value.lon <= 180) {
+    const timestamp = trackingLocation.value.timestamp 
+      ? new Date(trackingLocation.value.timestamp).toLocaleString('vi-VN')
+      : 'Vừa cập nhật'
+    
+    markers.push({
       id: 'shipper',
       coordinates: [trackingLocation.value.lon, trackingLocation.value.lat],
-      type: 'shipper',
+      type: 'custom',
       title: 'Vị trí shipper',
       color: '#ef4444',
-    },
-  ]
+      popup: `
+        <div class="p-2">
+          <h3 class="font-semibold text-sm mb-1">🚚 Vị trí shipper</h3>
+          <p class="text-xs text-gray-600 mb-1">
+            <strong>Vĩ độ:</strong> ${trackingLocation.value.lat.toFixed(6)}
+          </p>
+          <p class="text-xs text-gray-600 mb-1">
+            <strong>Kinh độ:</strong> ${trackingLocation.value.lon.toFixed(6)}
+          </p>
+          <p class="text-xs text-gray-500">
+            <strong>Cập nhật:</strong> ${timestamp}
+          </p>
+        </div>
+      `,
+    })
+  }
 
+  // Add destination (parcel destination address location)
+  // Use parcel's lat/lon which should be the destination address coordinates
+  // This matches Android behavior where endPoint is taken from route (parcel destination)
   if (trackingParcel.value?.lat != null && trackingParcel.value?.lon != null) {
+    const lat = trackingParcel.value.lat
+    const lon = trackingParcel.value.lon
+    
+    // Validate coordinates before adding marker
+    if (typeof lat === 'number' && typeof lon === 'number' &&
+        !isNaN(lat) && !isNaN(lon) &&
+        lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+      const parcel = trackingParcel.value
+      const receiverName = parcel.receiverName || parcel.receiverId || 'N/A'
+      const parcelCode = parcel.code || parcel.id?.substring(0, 8) || 'N/A'
+      const destination = parcel.targetDestination || 'N/A'
+      
+      markers.push({
+        id: 'destination',
+        coordinates: [lon, lat], // [lon, lat] format for MapLibre
+        type: 'delivery',
+        title: 'Địa chỉ giao hàng',
+        color: '#3b82f6',
+        popup: `
+          <div class="p-2">
+            <h3 class="font-semibold text-sm mb-1">📦 Địa chỉ giao hàng</h3>
+            <p class="text-xs text-gray-600 mb-1">
+              <strong>Người nhận:</strong> ${receiverName}
+            </p>
+            <p class="text-xs text-gray-600 mb-1">
+              <strong>Mã đơn:</strong> ${parcelCode}
+            </p>
+            <p class="text-xs text-gray-600 mb-1">
+              <strong>Địa chỉ:</strong> ${destination}
+            </p>
+            <p class="text-xs text-gray-500">
+              <strong>Vị trí:</strong> ${lat.toFixed(6)}, ${lon.toFixed(6)}
+            </p>
+          </div>
+        `,
+        parcelId: parcel.id,
+      })
+    }
+  }
+
+  // Only show warehouse if shipper location is not available
+  // Starting point should be shipper's real-time location (from WebSocket tracking)
+  // If shipper location is not available yet, show warehouse as fallback
+  if (!trackingLocation.value) {
+    const warehouseLat = 10.82398098
+    const warehouseLon = 106.79611036
     markers.push({
-      id: 'destination',
-      coordinates: [trackingParcel.value.lon, trackingParcel.value.lat],
-      type: 'destination',
-      title: 'Địa chỉ giao hàng',
-      color: '#3b82f6',
+      id: 'warehouse',
+      coordinates: [warehouseLon, warehouseLat], // [lon, lat]
+      type: 'warehouse',
+      title: 'Kho hàng',
+      color: '#16a34a',
+      popup: `
+        <div class="p-2">
+          <h3 class="font-semibold text-sm mb-1">🏭 Kho hàng</h3>
+          <p class="text-xs text-gray-600 mb-1">
+            <strong>Điểm xuất phát (dự phòng)</strong>
+          </p>
+          <p class="text-xs text-gray-500">
+            <strong>Vị trí:</strong> ${warehouseLat.toFixed(6)}, ${warehouseLon.toFixed(6)}
+          </p>
+        </div>
+      `,
     })
   }
 
@@ -132,10 +229,29 @@ const paginationSummary = computed(() => {
 
 /**
  * Ensure WebSocket is connected for current user (client)
+ * Waits for connection to be fully established before returning
  */
 const ensureWebSocketConnected = async () => {
-  if (connected.value || !currentUser?.id) return
+  if (!currentUser?.id) return
+  
+  // If already connected, return immediately
+  if (connected.value) return
+  
+  // Start connection
   await connect(currentUser.id)
+  
+  // Wait for connection to be established (with timeout)
+  const maxWaitTime = 10000 // 10 seconds
+  const checkInterval = 100 // Check every 100ms
+  const startTime = Date.now()
+  
+  while (!connected.value && (Date.now() - startTime) < maxWaitTime) {
+    await new Promise(resolve => setTimeout(resolve, checkInterval))
+  }
+  
+  if (!connected.value) {
+    throw new Error('WebSocket connection timeout')
+  }
 }
 
 /**
@@ -294,18 +410,90 @@ const loadAllTabCounts = async () => {
 }
 
 /**
+ * Load route for tracking session
+ */
+const loadTrackingRoute = async (sessionId: string) => {
+  if (!sessionId || trackingRouteLoading.value) return
+
+  trackingRouteLoading.value = true
+  try {
+    const response = await getSessionDemoRoute(sessionId, {
+      vehicle: 'bicycle',
+      routingType: 'full',
+    })
+    if (response?.result) {
+      trackingRoute.value = response.result
+      
+      // Parse route geometry to coordinates for map display
+      const routeGeometry = response.result.route?.geometry
+      if (routeGeometry) {
+        const coordinates = parseRouteGeometry(routeGeometry)
+        if (coordinates.length > 0) {
+          mapRoutes.value = [
+            {
+              coordinates,
+              distance: response.result.route?.distance ?? 0,
+              duration: response.result.route?.duration ?? 0,
+              properties: {
+                color: '#1d4ed8',
+                width: 5,
+                opacity: 0.85,
+              },
+            },
+          ]
+        } else {
+          mapRoutes.value = []
+        }
+      } else {
+        mapRoutes.value = []
+      }
+    } else {
+      mapRoutes.value = []
+    }
+  } catch (error) {
+    console.error('Failed to load tracking route:', error)
+    // Don't show error - route is optional
+  } finally {
+    trackingRouteLoading.value = false
+  }
+}
+
+/**
  * Open real-time tracking for a parcel in delivering tab.
  * Client subscribes only when viewing their parcel.
  */
 const handleTrackShipper = async (parcel: ParcelDto) => {
   if (!parcel.id) return
+  
+  // Open modal immediately
   trackingParcel.value = parcel
+  showTrackingModal.value = true
   trackingLocation.value = null
   trackingSessionId.value = null
+  trackingAssignmentId.value = null
+  trackingDeliveryManId.value = null
+  trackingAssignmentStatus.value = null
+  trackingRoute.value = null
+  mapRoutes.value = []
   trackingLoading.value = true
 
   try {
     await ensureWebSocketConnected()
+    
+    // Fetch fresh parcel info from API to ensure we have correct location (lat/lon)
+    let freshParcel: ParcelDto | null = null
+    try {
+      const parcelResponse = await getParcelById(parcel.id)
+      if (parcelResponse?.result) {
+        freshParcel = new ParcelDto(parcelResponse.result)
+        // Update trackingParcel with fresh data (especially lat/lon)
+        trackingParcel.value = freshParcel
+      }
+    } catch (error) {
+      console.warn('Failed to fetch fresh parcel info, using cached data:', error)
+      // Continue with original parcel data if fetch fails
+    }
+    
     const latest: LatestAssignmentResponse | null = await getLatestAssignmentForParcel(parcel.id)
     if (!latest || !latest.sessionId) {
       toast.add({
@@ -318,7 +506,16 @@ const handleTrackShipper = async (parcel: ParcelDto) => {
       return
     }
 
+    // Store assignment information
     trackingSessionId.value = latest.sessionId
+    trackingAssignmentId.value = latest.assignmentId
+    trackingDeliveryManId.value = latest.deliveryManId
+    trackingAssignmentStatus.value = latest.status
+
+    // Load route for visualization
+    if (latest.sessionId) {
+      await loadTrackingRoute(latest.sessionId)
+    }
 
     // Subscribe to session tracking topic
     const destination = `/topic/sessions/${latest.sessionId}/tracking`
@@ -344,10 +541,17 @@ const handleTrackShipper = async (parcel: ParcelDto) => {
 }
 
 const closeTrackingModal = () => {
+  showTrackingModal.value = false
   trackingParcel.value = null
   trackingSessionId.value = null
+  trackingAssignmentId.value = null
+  trackingDeliveryManId.value = null
+  trackingAssignmentStatus.value = null
   trackingLocation.value = null
+  trackingRoute.value = null
+  mapRoutes.value = []
   trackingLoading.value = false
+  trackingRouteLoading.value = false
 }
 
 /**
@@ -1006,35 +1210,90 @@ onMounted(async () => {
 
     <!-- Tracking modal (aligned with other modals) -->
     <UModal
-      :v-model:open="!!trackingParcel"
+      :open="showTrackingModal"
       :title="trackingParcel ? `Theo dõi shipper - ${trackingParcel.code}` : 'Theo dõi shipper'"
       :description="trackingSessionId ? `Phiên giao: ${trackingSessionId}` : 'Đang kết nối vị trí shipper'"
+      @update:open="showTrackingModal = $event"
       @close="closeTrackingModal"
+      :ui="{ content: 'sm:max-w-2xl md:max-w-4xl', footer: 'justify-end' }"
     >
       <template #body>
-        <div class="space-y-3">
-          <p v-if="trackingLoading" class="text-gray-500">Đang kết nối tới vị trí shipper...</p>
-          <p v-else-if="!trackingLocation" class="text-gray-500">
-            Chưa nhận được vị trí. Vui lòng giữ màn hình mở vài giây.
-          </p>
-          <div v-else class="space-y-3">
-            <MapView
-              height="280px"
-              :show-zones="false"
-              :show-routing="false"
-              :markers="trackingMarkers"
-              :auto-fit="true"
-              :fit-padding="40"
-            />
-            <p><span class="font-semibold">Vĩ độ:</span> {{ trackingLocation.lat }}</p>
-            <p><span class="font-semibold">Kinh độ:</span> {{ trackingLocation.lon }}</p>
-            <p v-if="trackingLocation.timestamp">
-              <span class="font-semibold">Cập nhật lúc:</span>
-              {{ new Date(trackingLocation.timestamp).toLocaleString('vi-VN') }}
-            </p>
-            <p class="text-xs text-gray-500">
-              (Gợi ý: có thể hiển thị vị trí này trên bản đồ trong bước tiếp theo.)
-            </p>
+        <div class="space-y-4">
+          <!-- Loading state -->
+          <div v-if="trackingLoading" class="text-center py-4">
+            <UIcon name="i-heroicons-arrow-path" class="w-6 h-6 animate-spin text-gray-400 mx-auto mb-2" />
+            <p class="text-gray-500">Đang kết nối tới vị trí shipper...</p>
+          </div>
+
+          <!-- Assignment info -->
+          <div v-if="!trackingLoading && trackingSessionId" class="space-y-2 border-b pb-3">
+            <div class="grid grid-cols-2 gap-2 text-sm">
+              <div v-if="trackingAssignmentId">
+                <span class="text-gray-500">Assignment ID:</span>
+                <p class="font-mono text-xs">{{ trackingAssignmentId.substring(0, 8) }}...</p>
+              </div>
+              <div v-if="trackingAssignmentStatus">
+                <span class="text-gray-500">Trạng thái:</span>
+                <UBadge :color="trackingAssignmentStatus === 'IN_PROGRESS' ? 'primary' : 'neutral'" variant="soft" size="xs">
+                  {{ trackingAssignmentStatus }}
+                </UBadge>
+              </div>
+              <div v-if="trackingDeliveryManId">
+                <span class="text-gray-500">Shipper ID:</span>
+                <p class="font-mono text-xs">{{ trackingDeliveryManId.substring(0, 8) }}...</p>
+              </div>
+              <div v-if="trackingSessionId">
+                <span class="text-gray-500">Session ID:</span>
+                <p class="font-mono text-xs">{{ trackingSessionId.substring(0, 8) }}...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Map and location info -->
+          <div v-if="!trackingLoading" class="space-y-3">
+            <div v-if="!trackingLocation && !trackingRoute" class="text-center py-4 text-gray-500">
+              <UIcon name="i-heroicons-map-pin" class="w-8 h-8 mx-auto mb-2 text-gray-300" />
+              <p>Chưa nhận được vị trí. Vui lòng giữ màn hình mở vài giây.</p>
+            </div>
+            <div v-else class="space-y-3">
+              <MapView
+                height="320px"
+                :show-zones="false"
+                :show-routing="mapRoutes.length > 0"
+                :routes="mapRoutes"
+                :markers="trackingMarkers"
+                :auto-fit="true"
+                :fit-padding="40"
+              />
+              
+              <!-- Location details -->
+              <div v-if="trackingLocation" class="space-y-2 border-t pt-3">
+                <p class="text-sm">
+                  <span class="font-semibold">Vị trí shipper:</span>
+                  <span class="text-gray-600"> {{ trackingLocation.lat.toFixed(6) }}, {{ trackingLocation.lon.toFixed(6) }}</span>
+                </p>
+                <p v-if="trackingLocation.timestamp" class="text-sm">
+                  <span class="font-semibold">Cập nhật lúc:</span>
+                  <span class="text-gray-600"> {{ new Date(trackingLocation.timestamp).toLocaleString('vi-VN') }}</span>
+                </p>
+              </div>
+
+              <!-- Route info -->
+              <div v-if="trackingRoute?.route" class="space-y-2 border-t pt-3">
+                <p class="text-sm">
+                  <span class="font-semibold">Tuyến đường:</span>
+                  <span class="text-gray-600"> {{ trackingRoute.route.distance ? `${(trackingRoute.route.distance / 1000).toFixed(2)} km` : 'Đang tính toán...' }}</span>
+                </p>
+                <p v-if="trackingRoute.route.duration" class="text-sm">
+                  <span class="font-semibold">Thời gian dự kiến:</span>
+                  <span class="text-gray-600"> {{ Math.round(trackingRoute.route.duration / 60) }} phút</span>
+                </p>
+                <p v-if="trackingRoute.summary" class="text-sm">
+                  <span class="font-semibold">Tổng số điểm dừng:</span>
+                  <span class="text-gray-600"> {{ trackingRoute.summary.totalWaypoints }}</span>
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </template>
