@@ -113,14 +113,12 @@ public class ProposalService implements IProposalService{
         // 6. GỬI SỰ KIỆN TẠO MỚI QUA WEBSOCKET
         // MessageResponse (được tạo bởi toDto) cần trả về
         // toàn bộ object 'proposal' hoặc ít nhất là 'actionType' của nó.
-        log.debug("[communication-service] [ProposalService.createProposal] Gửi sự kiện TẠO PROPOSAL đến 2 user: {} và {}", senderId, dto.getRecipientId());
+        // CHỈ GỬI ĐẾN RECIPIENT, KHÔNG GỬI ĐẾN SENDER (người gửi không cần nhận notification về proposal mà chính họ tạo)
+        log.debug("[communication-service] [ProposalService.createProposal] Gửi sự kiện TẠO PROPOSAL đến recipient: {}", dto.getRecipientId());
         MessageResponse messageResponse = toDto(savedMessage);
 
         messagingTemplate.convertAndSendToUser(
             dto.getRecipientId(), "/queue/messages", messageResponse             
-        );
-        messagingTemplate.convertAndSendToUser(
-            senderId, "/queue/messages", messageResponse             
         );
         
         log.debug("[communication-service] [ProposalService.createProposal] Proposal {} (Type: {}) đã được tạo bởi User {}", savedProposal.getId(), dto.getType(), senderId);
