@@ -199,7 +199,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 deliveryManId,
                 request.getRouteInfo(),
                 AssignmentStatus.FAILED,
-                ParcelEvent.POSTPONE,
+                ParcelEvent.CAN_NOT_DELIVERY, // Use CAN_NOT_DELIVERY to trigger ticket creation
                 request.getFailReason()
         );
     }
@@ -974,6 +974,25 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             } catch (Exception e) {
                 log.error("Failed to publish parcel status event for parcel {}: {}", assignment.getParcelId(),
                         e.getMessage(), e);
+            }
+
+            // Create DELIVERY_FAILED ticket when assignment is postponed (set to FAILED)
+            try {
+                CommunicationServiceClient.CreateDeliveryFailedTicketRequest ticketRequest = 
+                    new CommunicationServiceClient.CreateDeliveryFailedTicketRequest(
+                        assignment.getParcelId().toString(),
+                        assignment.getId().toString(),
+                        session.getDeliveryManId().toString(),
+                        request.getReason() != null ? request.getReason() : "Parcel postponed by client request"
+                    );
+                
+                communicationServiceClient.createDeliveryFailedTicket(ticketRequest);
+                log.debug("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] Created DELIVERY_FAILED ticket for postponed parcel: {}, assignment: {}", 
+                    assignment.getParcelId(), assignment.getId());
+            } catch (Exception e) {
+                log.error("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] Failed to create DELIVERY_FAILED ticket for postponed parcel {}. Continuing...", 
+                    assignment.getParcelId(), e);
+                // Don't throw - ticket creation is not critical for assignment status update
             }
         }
 
