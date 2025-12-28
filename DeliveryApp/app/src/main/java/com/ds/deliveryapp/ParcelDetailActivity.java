@@ -150,7 +150,7 @@ public class ParcelDetailActivity extends AppCompatActivity {
         } else {
             String status = parcel.getStatus().toString();
             if (!"IN_WAREHOUSE".equals(status)
-                || parcel.getFailCount() > 3
+                //|| parcel.getFailCount() > 3
             ){
                 btnAcceptTask.setText("KHÔNG THỂ NHẬN NHIỆM VỤ");
                 btnAcceptTask.setEnabled(false);
