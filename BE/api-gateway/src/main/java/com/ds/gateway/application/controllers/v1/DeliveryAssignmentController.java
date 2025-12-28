@@ -1,5 +1,6 @@
 package com.ds.gateway.application.controllers.v1;
 
+import com.ds.gateway.common.entities.dto.common.BaseResponse;
 import com.ds.gateway.common.interfaces.ISessionServiceClient;
 
 import jakarta.validation.Valid;
@@ -123,5 +124,13 @@ public class DeliveryAssignmentController {
     public ResponseEntity<?> getLatestAssignmentForParcel(@PathVariable String parcelId) {
         log.debug("[api-gateway] [DeliveryAssignmentController.getLatestAssignmentForParcel] GET /api/v1/assignments/parcels/{}/latest-assignment", parcelId);
         return assignmentClient.getLatestAssignmentForParcel(parcelId);
+    }
+
+    @PostMapping("/{assignmentId}/fail")
+    public ResponseEntity<?> failTaskByAssignmentId(
+            @PathVariable UUID assignmentId,
+            @RequestBody Object request) {
+        log.debug("Failing assignment {} with proof images: {}", assignmentId);
+        return assignmentClient.failTask(assignmentId, request);
     }
 }

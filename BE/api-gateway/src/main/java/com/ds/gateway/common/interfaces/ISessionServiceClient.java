@@ -22,6 +22,7 @@ public interface ISessionServiceClient {
     ResponseEntity<?> completeTaskByAssignmentId(UUID assignmentId, Object request);
     ResponseEntity<?> returnToWarehouse(UUID assignmentId, Object request);
     ResponseEntity<?> failTask(UUID deliveryManId, UUID parcelId, Object taskFailRequest);
+    ResponseEntity<?> failTask(UUID assignmentId, Object taskFailRequest);
     ResponseEntity<?> refuseTask(UUID deliveryManId, UUID parcelId);
     ResponseEntity<?> postponeTask(UUID deliveryManId, UUID parcelId, String addInfo);
     ResponseEntity<?> lastestShipperForParcel(UUID parcelId);

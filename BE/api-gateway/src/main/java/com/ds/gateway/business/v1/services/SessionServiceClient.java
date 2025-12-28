@@ -398,4 +398,11 @@ public class SessionServiceClient implements ISessionServiceClient {
         log.debug("[api-gateway] [SessionServiceClient.getActualRouteForSession] WebClient: GET -> {}", uri);
         return callGet(uri);
     }
+
+    @Override
+    public ResponseEntity<?> failTask(UUID assignmentId, Object taskFailRequest) {
+        String uri = String.format("/api/v1/assignments/%s/fail", assignmentId);
+        log.debug("[api-gateway] [SessionServiceClient.failTask] POST -> {}", uri);
+        return callPost(uri, taskFailRequest);
+    }
 }

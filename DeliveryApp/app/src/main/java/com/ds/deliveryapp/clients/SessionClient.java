@@ -148,7 +148,7 @@ public interface SessionClient {
      * Shipper báo giao hàng THẤT BẠI.
      * Ánh xạ tới: DeliveryAssignmentController.failTask
      */
-    @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/fail")
+    @POST("/api/v1/assignments/{assignmentId}/fail")
     Call<BaseResponse<DeliveryAssignment>> failTask(
             @Path("assignmentId") String assignmentId,
             @Body TaskFailRequest request // Body này chứa reason + routeInfo
