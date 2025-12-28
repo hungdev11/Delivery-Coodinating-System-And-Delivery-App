@@ -1018,17 +1018,24 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             // route
         } else {
             // Set to FAILED (when client accepts postpone request)
+            log.info("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] Setting assignment {} to FAILED status for parcel {}", 
+                assignmentId, assignment.getParcelId());
             assignment.setStatus(AssignmentStatus.FAILED);
             assignment.setFailReason(request.getReason());
 
+            // Save assignment FIRST to ensure status is persisted before publishing event
+            deliveryAssignmentRepository.save(assignment);
+            log.info("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] ✅ Assignment {} saved with FAILED status", assignmentId);
+
             // Publish parcel event to change parcel status to DELAY
             try {
-                log.debug("Publishing parcel event: POSTPONE for parcel: {} (assignment set to FAILED)", assignment.getParcelId());
+                log.info("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] Publishing parcel event: POSTPONE for parcel: {} (assignment set to FAILED)", assignment.getParcelId());
                 parcelEventPublisher.publish(assignment.getParcelId(), ParcelEvent.POSTPONE);
-                log.debug("Successfully published parcel event: POSTPONE for parcel: {}", assignment.getParcelId());
+                log.info("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] ✅ Successfully published parcel event: POSTPONE for parcel: {}", assignment.getParcelId());
             } catch (Exception e) {
-                log.error("Failed to publish parcel status event for parcel {}: {}", assignment.getParcelId(),
+                log.error("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] ❌ Failed to publish parcel status event for parcel {}: {}", assignment.getParcelId(),
                         e.getMessage(), e);
+                // Don't throw - assignment status is already saved, event can be retried
             }
 
             // Create DELIVERY_FAILED ticket when assignment is postponed (set to FAILED)
@@ -1054,9 +1061,15 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             }
         }
 
-        // 8. Save assignment
-        deliveryAssignmentRepository.save(assignment);
-        log.debug("Assignment {} updated", assignmentId);
+        // 8. Save assignment (only if not already saved above in FAILED case)
+        if (!shouldMoveToEnd) {
+            // Already saved above for FAILED case
+            log.debug("Assignment {} already saved (FAILED case)", assignmentId);
+        } else {
+            // Save for MOVE_TO_END case
+            deliveryAssignmentRepository.save(assignment);
+            log.debug("Assignment {} updated (MOVE_TO_END case)", assignmentId);
+        }
 
         // // 9. Check if session should be auto-completed
         // if (isPostponeOutsideSession) {
@@ -1067,27 +1080,18 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
         // }
 
         // 10. Fetch parcel information (includes receiver info from UserSnapshot)
+        // Note: Parcel status is already updated via event publisher (line 1027), no need to call changeParcelStatus again
         ParcelInfo parcel = null;
         String receiverName = null;
         try {
-            if (!shouldMoveToEnd) {
-                // Only update parcel status if not moving to end
-                ParcelResponse parcelResponse = parcelServiceClient.changeParcelStatus(assignment.getParcelId(),
-                        ParcelEvent.POSTPONE);
-                if (parcelResponse != null) {
-                    parcel = parcelMapper.toParcelInfo(parcelResponse);
-                    receiverName = parcel != null ? parcel.getReceiverName() : null;
-                }
-            } else {
-                // If moving to end, just fetch parcel info without changing status
-                ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(assignment.getParcelId());
-                if (parcelResponse != null) {
-                    parcel = parcelMapper.toParcelInfo(parcelResponse);
-                    receiverName = parcel != null ? parcel.getReceiverName() : null;
-                }
+            // Just fetch parcel info without changing status (status already updated via event)
+            ParcelResponse parcelResponse = parcelServiceClient.fetchParcelResponse(assignment.getParcelId());
+            if (parcelResponse != null) {
+                parcel = parcelMapper.toParcelInfo(parcelResponse);
+                receiverName = parcel != null ? parcel.getReceiverName() : null;
             }
         } catch (Exception e) {
-            log.debug("[session-service] [DeliveryAssignmentService.sendPostponeNotification] Failed to fetch parcel info for parcel {}: {}", assignment.getParcelId(), e.getMessage());
+            log.debug("[session-service] [DeliveryAssignmentService.postponeByAssignmentId] Failed to fetch parcel info for parcel {}: {}", assignment.getParcelId(), e.getMessage());
         }
 
         // 11. Send notification if parcel is postponed (out of session)
