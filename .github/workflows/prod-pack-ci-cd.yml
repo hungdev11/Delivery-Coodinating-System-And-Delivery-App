@@ -7,6 +7,7 @@ on:
       - 'prod-pack/**'
       - 'osrm-management-system/**'
       - '.github/workflows/prod-pack-ci-cd.yml'
+      - 'prod-pack/docker-compose.yml'
 
 jobs:
   deploy-prod-pack:
