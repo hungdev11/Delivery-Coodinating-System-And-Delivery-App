@@ -21,6 +21,7 @@ import com.ds.session.session_service.app_context.repositories.DeliveryAssignmen
 import com.ds.session.session_service.app_context.repositories.DeliverySessionRepository;
 import com.ds.session.session_service.application.client.parcelclient.ParcelServiceClient;
 import com.ds.session.session_service.application.client.parcelclient.response.ParcelResponse;
+import com.ds.session.session_service.application.client.communicationclient.CommunicationServiceClient;
 import com.ds.session.session_service.infrastructure.kafka.ParcelEventPublisher;
 import com.ds.session.session_service.infrastructure.kafka.EventProducer;
 import com.ds.session.session_service.common.entities.dto.event.AssignmentCompletedEvent;
@@ -48,6 +49,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 import com.ds.session.session_service.app_context.repositories.DeliveryProofRepository;
+import com.ds.session.session_service.common.entities.dto.request.FailTaskRequest;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,6 +63,7 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
     private final DeliveryAssignmentRepository deliveryAssignmentRepository;
     private final DeliverySessionRepository deliverySessionRepository;
     private final ParcelServiceClient parcelServiceClient;
+    private final CommunicationServiceClient communicationServiceClient;
     private final ParcelEventPublisher parcelEventPublisher;
     private final EventProducer eventProducer;
     private final ParcelMapper parcelMapper;
@@ -166,6 +169,38 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
                 AssignmentStatus.COMPLETED,
                 ParcelEvent.DELIVERY_SUCCESSFUL,
                 null
+        );
+    }
+
+    @Override
+    public DeliveryAssignmentResponse failTaskByAssignmentId(UUID assignmentId, FailTaskRequest request) {
+        DeliveryAssignment assignment = deliveryAssignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new ResourceNotFound("Assignment not found: " + assignmentId));
+        
+        // Validate assignment is in progress
+        if (assignment.getStatus() != AssignmentStatus.IN_PROGRESS) {
+            throw new IllegalStateException("Assignment is not in IN_PROGRESS status. Current status: " + assignment.getStatus());
+        }
+
+        uploadProof(assignment, ProofType.FAILED, request.getProofImageUrls());
+
+        // Save confirmation point if location provided
+        if (request.getCurrentLat() != null && request.getCurrentLon() != null) {
+            saveConfirmationPoint(assignment, request.getCurrentLat(), request.getCurrentLon(), 
+                request.getCurrentTimestamp(), "FAILED");
+        }
+
+        // Get parcelId and deliveryManId from assignment
+        UUID parcelId = UUID.fromString(assignment.getParcelId());
+        UUID deliveryManId = UUID.fromString(assignment.getSession().getDeliveryManId());
+
+        return updateTaskState(
+                parcelId,
+                deliveryManId,
+                request.getRouteInfo(),
+                AssignmentStatus.FAILED,
+                ParcelEvent.POSTPONE,
+                request.getFailReason()
         );
     }
 
@@ -481,6 +516,27 @@ public class DeliveryAssignmentService implements IDeliveryAssignmentService {
             } catch (Exception e) {
                 log.error("[session-service] [DeliveryAssignmentService.completeTask] Failed to publish AssignmentCompletedEvent for parcel {}. Continuing...", parcelId, e);
                 // Don't throw - notification is not critical for task completion
+            }
+        }
+
+        // 10. Create DELIVERY_FAILED ticket when shipper reports delivery failure
+        if (newStatus == AssignmentStatus.FAILED && parcelEvent == ParcelEvent.CAN_NOT_DELIVERY) {
+            try {
+                CommunicationServiceClient.CreateDeliveryFailedTicketRequest ticketRequest = 
+                    new CommunicationServiceClient.CreateDeliveryFailedTicketRequest(
+                        parcelId.toString(),
+                        assignment.getId().toString(),
+                        deliveryManId.toString(),
+                        failReason != null ? failReason : "Shipper reported delivery failure"
+                    );
+                
+                communicationServiceClient.createDeliveryFailedTicket(ticketRequest);
+                log.debug("[session-service] [DeliveryAssignmentService.updateTaskState] Created DELIVERY_FAILED ticket for parcel: {}, assignment: {}", 
+                    parcelId, assignment.getId());
+            } catch (Exception e) {
+                log.error("[session-service] [DeliveryAssignmentService.updateTaskState] Failed to create DELIVERY_FAILED ticket for parcel {}. Continuing...", 
+                    parcelId, e);
+                // Don't throw - ticket creation is not critical for assignment status update
             }
         }
 

@@ -77,7 +77,7 @@
       <!-- Copyright Footer -->
       <div class="w-full text-center px-4">
         <p class="text-xs text-gray-500 dark:text-gray-400">
-          © {{ currentYear }} ERP Management System. All rights reserved.
+          © {{ currentYear }} DSS Management System. All rights reserved.
         </p>
       </div>
     </div>

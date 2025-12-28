@@ -34,6 +34,13 @@ public interface SessionClient {
             @Body CompleteTaskRequest request
     );
 
+    @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/fail-with-urls")
+    Call<BaseResponse<DeliveryAssignment>> failTaskWithUrls(
+            @Path("deliveryManId") String deliveryManId,
+            @Path("parcelId") String parcelId,
+            @Body TaskFailRequest request
+    );
+
     /**
      * Complete task by assignmentId - more efficient endpoint
      * Prefer this endpoint when assignmentId is available
@@ -143,8 +150,7 @@ public interface SessionClient {
      */
     @POST("/api/v1/assignments/drivers/{deliveryManId}/parcels/{parcelId}/fail")
     Call<BaseResponse<DeliveryAssignment>> failTask(
-            @Path("deliveryManId") String deliveryManId,
-            @Path("parcelId") String parcelId,
+            @Path("assignmentId") String assignmentId,
             @Body TaskFailRequest request // Body này chứa reason + routeInfo
     );
 

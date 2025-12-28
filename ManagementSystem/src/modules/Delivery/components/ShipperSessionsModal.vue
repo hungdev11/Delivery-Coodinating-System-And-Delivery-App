@@ -25,7 +25,6 @@ const emit = defineEmits<{ close: [result: unknown] }>()
 const router = useRouter()
 const sessions = ref<DeliverySessionDto[]>([])
 const sessionsLoading = ref(false)
-const showInactive = ref(false)
 const activeSessionId = ref<string | null>(null)
 
 onMounted(async () => {
@@ -93,10 +92,20 @@ const inactiveSessions = computed(
 )
 
 const displayedSessions = computed(() => {
-  if (showInactive.value) {
-    return sessions.value
-  }
-  return sessions.value.filter((session) => session.isActive)
+  // Sort: active session first, then by startTime desc
+  return [...sessions.value].sort((a, b) => {
+    const aIsActive = activeSessionId.value === a.id
+    const bIsActive = activeSessionId.value === b.id
+    
+    // Active session always comes first
+    if (aIsActive && !bIsActive) return -1
+    if (!aIsActive && bIsActive) return 1
+    
+    // Then sort by startTime desc
+    const aTime = a.startTime ? new Date(a.startTime).getTime() : 0
+    const bTime = b.startTime ? new Date(b.startTime).getTime() : 0
+    return bTime - aTime
+  })
 })
 
 const handleClose = () => {
@@ -204,8 +213,8 @@ const columns: TableColumn<DeliverySessionDto>[] = [
     :title="`Sessions for ${shipper.displayName}`"
     :description="`Total sessions: ${totalSessions}`"
     :close="{ onClick: handleClose }"
+    fullscreen
     :ui="{
-      content: 'min-w-[100vh] w-full md:min-w-none sm:min-w-none sm:max-w-md md:max-w-lg',
       footer: 'justify-end w-full',
     }"
   >
@@ -224,42 +233,25 @@ const columns: TableColumn<DeliverySessionDto>[] = [
           >
         </div>
 
-        <div v-if="inactiveSessions > 0" class="flex justify-end">
-          <UButton
-            :variant="showInactive ? 'solid' : 'outline'"
-            size="sm"
-            @click="showInactive = !showInactive"
-          >
-            {{ showInactive ? 'Hide' : 'Show' }} Inactive ({{ inactiveSessions }})
-          </UButton>
-        </div>
-
         <USkeleton v-if="sessionsLoading" class="h-48 w-full" />
-
-        <div v-else>
-          <UAlert
-            v-if="displayedSessions.length === 0"
-            color="neutral"
-            variant="soft"
-            title="No sessions found"
-            :description="
-              showInactive
-                ? 'This shipper has no delivery sessions yet.'
-                : 'No active sessions. Click Show Inactive to view completed sessions.'
-            "
-          />
 
           <UTable
             v-else
             :data="displayedSessions"
             :columns="columns"
+          :loading="sessionsLoading"
             :ui="{
               empty: 'text-center py-12',
               root: 'h-[50vh]',
               thead: 'sticky top-0 bg-white dark:bg-gray-800',
             }"
-          />
+        >
+          <template #empty>
+            <div class="text-center py-12">
+              <p class="text-gray-500">No sessions found for this shipper</p>
         </div>
+          </template>
+        </UTable>
       </div>
     </template>
 

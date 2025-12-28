@@ -61,7 +61,7 @@ public class ProofAdapter extends RecyclerView.Adapter<ProofAdapter.ProofViewHol
         }
 
         // Show proof type
-        String typeLabel = "DELIVERED".equals(proof.getType()) ? "Đã giao" : "Trả kho";
+        String typeLabel = "DELIVERED".equals(proof.getType()) ? "Đã giao" : "RETURN".equals(proof.getType()) ? "Trả kho" : "Thất bại";
         holder.tvType.setText(typeLabel);
 
         // Click to view full screen

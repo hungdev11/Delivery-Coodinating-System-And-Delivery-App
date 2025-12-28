@@ -16,6 +16,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 /**
@@ -121,10 +122,8 @@ public class ParcelSeedService {
 
             log.debug("   Found {} shops and {} clients", shops.size(), clients.size());
 
-            // Get primary addresses for shops and clients
+            // Get primary addresses for shops
             Map<String, String> shopAddresses = new HashMap<>();
-            Map<String, String> clientAddresses = new HashMap<>();
-
             for (User shop : shops) {
                 Optional<UserAddress> primaryAddress = userAddressRepository.findByUserIdAndIsPrimaryTrue(shop.getId());
                 if (primaryAddress.isPresent()) {
@@ -132,30 +131,33 @@ public class ParcelSeedService {
                 }
             }
 
+            // Get ALL addresses for clients (not just primary) - one parcel per client/address
+            List<ClientAddressInfo> clientAddressList = new ArrayList<>();
             for (User client : clients) {
-                Optional<UserAddress> primaryAddress = userAddressRepository
-                        .findByUserIdAndIsPrimaryTrue(client.getId());
-                if (primaryAddress.isPresent()) {
-                    clientAddresses.put(client.getId(), primaryAddress.get().getDestinationId());
+                List<UserAddress> clientAddresses = userAddressRepository.findByUserId(client.getId());
+                for (UserAddress clientAddress : clientAddresses) {
+                    clientAddressList.add(new ClientAddressInfo(client.getId(), clientAddress.getDestinationId()));
                 }
             }
 
-            if (shopAddresses.isEmpty() || clientAddresses.isEmpty()) {
-                log.debug("[user-service] [ParcelSeedService.seedParcels] Cannot seed parcels: Shops or clients missing primary addresses");
-                log.debug("[user-service] [ParcelSeedService.seedParcels]    Shops with addresses: {}, Clients with addresses: {}",
-                        shopAddresses.size(), clientAddresses.size());
+            if (shopAddresses.isEmpty() || clientAddressList.isEmpty()) {
+                log.debug("[user-service] [ParcelSeedService.seedParcels] Cannot seed parcels: Shops or clients missing addresses");
+                log.debug("[user-service] [ParcelSeedService.seedParcels]    Shops with addresses: {}, Client addresses: {}",
+                        shopAddresses.size(), clientAddressList.size());
                 return new SeedParcelsResult(0, count, count);
             }
 
             log.debug("   Shops with primary addresses: {}", shopAddresses.size());
-            log.debug("   Clients with primary addresses: {}", clientAddresses.size());
+            log.debug("   Client addresses (total): {}", clientAddressList.size());
 
             // Get address details for shop and client addresses
             Map<String, AddressInfo> addressInfoMap = new HashMap<>();
 
             Set<String> allDestinationIds = new HashSet<>();
             allDestinationIds.addAll(shopAddresses.values());
-            allDestinationIds.addAll(clientAddresses.values());
+            for (ClientAddressInfo clientAddr : clientAddressList) {
+                allDestinationIds.add(clientAddr.destinationId);
+            }
 
             for (String destinationId : allDestinationIds) {
                 try {
@@ -175,31 +177,50 @@ public class ParcelSeedService {
                 log.error("[user-service] [ParcelSeedService.seedParcels] Shop ID {} not found or missing primary address", shopId);
                 return new SeedParcelsResult(0, 0, count);
             }
-            if (clientId != null && !clientAddresses.containsKey(clientId)) {
-                log.error("[user-service] [ParcelSeedService.seedParcels] Client ID {} not found or missing primary address", clientId);
-                return new SeedParcelsResult(0, 0, count);
+            if (clientId != null) {
+                // Filter client addresses to only those for the specified client
+                clientAddressList = clientAddressList.stream()
+                        .filter(ca -> ca.clientId.equals(clientId))
+                        .collect(Collectors.toList());
+                if (clientAddressList.isEmpty()) {
+                    log.error("[user-service] [ParcelSeedService.seedParcels] Client ID {} not found or missing addresses", clientId);
+                    return new SeedParcelsResult(0, 0, count);
+                }
             }
 
-            // Create parcels
+            // Create parcels: one parcel per client/address
+            // If count is specified and less than total addresses, randomly select; otherwise use all
             Random random = new Random();
             List<String> shopIds = new ArrayList<>(shopAddresses.keySet());
-            List<String> clientIds = new ArrayList<>(clientAddresses.keySet());
+            
+            // Determine how many parcels to create
+            int targetCount = count > 0 && count < clientAddressList.size() ? count : clientAddressList.size();
+            List<ClientAddressInfo> selectedClientAddresses;
+            if (count > 0 && count < clientAddressList.size()) {
+                // Randomly select addresses
+                Collections.shuffle(clientAddressList, random);
+                selectedClientAddresses = clientAddressList.subList(0, targetCount);
+            } else {
+                // Use all addresses
+                selectedClientAddresses = clientAddressList;
+            }
 
             String[] deliveryTypes = { "NORMAL", "EXPRESS", "FAST", "URGENT", "ECONOMY" };
             int successCount = 0;
             int failCount = 0;
 
-            for (int i = 0; i < count; i++) {
+            for (int i = 0; i < selectedClientAddresses.size(); i++) {
                 Map<String, Object> parcelRequest = null;
                 String code = null;
                 try {
-                    // Select shop and client (use provided or randomly select)
+                    ClientAddressInfo clientAddr = selectedClientAddresses.get(i);
+                    
+                    // Select shop (use provided or randomly select)
                     String selectedShopId = shopId != null ? shopId : shopIds.get(random.nextInt(shopIds.size()));
-                    String selectedClientId = clientId != null ? clientId
-                            : clientIds.get(random.nextInt(clientIds.size()));
+                    String selectedClientId = clientAddr.clientId;
 
                     String senderDestinationId = shopAddresses.get(selectedShopId);
-                    String receiverDestinationId = clientAddresses.get(selectedClientId);
+                    String receiverDestinationId = clientAddr.destinationId;
 
                     if (senderDestinationId == null || receiverDestinationId == null) {
                         log.debug("[user-service] [ParcelSeedService.seedParcels] Skipping parcel {}: Missing address", i + 1);
@@ -217,7 +238,7 @@ public class ParcelSeedService {
                     }
 
                     // Generate parcel code (use timestamp to avoid duplicates)
-                    code = "PARCEL-" + System.currentTimeMillis() + "-" + String.format("%03d", i + 1);
+                    code = "PARCEL-" + System.currentTimeMillis() + "-" + String.format("%04d", i + 1);
 
                     // Random delivery type and weight/value
                     String deliveryType = deliveryTypes[random.nextInt(deliveryTypes.length)];
@@ -263,7 +284,7 @@ public class ParcelSeedService {
                         if (isSuccess) {
                             successCount++;
                             if ((i + 1) % 5 == 0) {
-                                log.debug("   Created {}/{} parcels...", i + 1, count);
+                                log.debug("   Created {}/{} parcels...", i + 1, selectedClientAddresses.size());
                             }
                         } else {
                             failCount++;
@@ -292,8 +313,9 @@ public class ParcelSeedService {
                 }
             }
 
-            log.debug("[user-service] [ParcelSeedService.seedParcels] Parcel seeding completed: {} successful, {} failed", successCount, failCount);
-            return new SeedParcelsResult(successCount, failCount, count);
+            log.debug("[user-service] [ParcelSeedService.seedParcels] Parcel seeding completed: {} successful, {} failed (target: {})", 
+                    successCount, failCount, selectedClientAddresses.size());
+            return new SeedParcelsResult(successCount, failCount, selectedClientAddresses.size());
 
         } catch (Exception e) {
             log.error("[user-service] [ParcelSeedService.seedParcels] Error during parcel seeding", e);
@@ -356,6 +378,19 @@ public class ParcelSeedService {
         AddressInfo(String name, String addressText) {
             this.name = name;
             // addressText is available but not currently used in parcel creation
+        }
+    }
+
+    /**
+     * Client address information holder
+     */
+    private static class ClientAddressInfo {
+        String clientId;
+        String destinationId;
+
+        ClientAddressInfo(String clientId, String destinationId) {
+            this.clientId = clientId;
+            this.destinationId = destinationId;
         }
     }
 }

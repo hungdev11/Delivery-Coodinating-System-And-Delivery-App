@@ -14,4 +14,20 @@ public interface CommunicationServiceClient {
      */
     @PostMapping("/api/v1/location-tracking/events")
     void sendLocationTrackingEvent(@RequestBody LocationTrackingEvent event);
+
+    /**
+     * Create a DELIVERY_FAILED ticket when shipper reports delivery failure
+     */
+    @PostMapping("/api/v1/tickets/delivery-failed")
+    void createDeliveryFailedTicket(@RequestBody CreateDeliveryFailedTicketRequest request);
+
+    /**
+     * Request DTO for creating delivery failed ticket
+     */
+    record CreateDeliveryFailedTicketRequest(
+        String parcelId,
+        String deliveryAssignmentId,
+        String shipperId,
+        String description
+    ) {}
 }

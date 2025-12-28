@@ -9,6 +9,7 @@ import { settingsRoutes } from '@/modules/Settings/Settings.routes'
 import { addressesRoutes } from '@/modules/Addresses/Addresses.routes'
 import { communicationRoutes } from '@/modules/Communication/Communication.routes'
 import { parcelsRoutes } from '@/modules/Parcels/Parcels.routes'
+import { ticketsRoutes } from '@/modules/Tickets/Tickets.routes'
 import { clientRoutes } from '@/modules/Client/Client.routes'
 import { systemManagementRoutes } from '@/modules/SystemManagement/SystemManagement.routes'
 
@@ -24,6 +25,7 @@ const router = createRouter({
     ...addressesRoutes,
     ...communicationRoutes,
     ...parcelsRoutes,
+    ...ticketsRoutes,
     ...clientRoutes,
     ...systemManagementRoutes,
     {

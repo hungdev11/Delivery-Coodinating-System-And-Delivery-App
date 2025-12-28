@@ -46,4 +46,5 @@ public class ParcelResponse {
     private Integer priority;
     private Boolean isDelayed;
     private LocalDateTime delayedUntil;
+    private Integer failCount;
 }

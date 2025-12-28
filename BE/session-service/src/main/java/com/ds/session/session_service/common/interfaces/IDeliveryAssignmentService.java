@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.ds.session.session_service.common.entities.dto.request.CompleteTaskRequest;
+import com.ds.session.session_service.common.entities.dto.request.FailTaskRequest;
 import com.ds.session.session_service.common.entities.dto.request.PagingRequestV0;
 import com.ds.session.session_service.common.entities.dto.request.PagingRequestV2;
 import com.ds.session.session_service.common.entities.dto.request.RouteInfo;
@@ -29,6 +30,14 @@ public interface IDeliveryAssignmentService {
      * @return Updated assignment response
      */
     DeliveryAssignmentResponse completeTaskByAssignmentId(UUID assignmentId, CompleteTaskRequest request);
+
+    /**
+     * Fail task by assignmentId directly - more efficient than using parcelId + driverId
+     * @param assignmentId The assignment ID to fail
+     * @param request Fail task request with routeInfo and proofImageUrls, fail reason
+     * @return Updated assignment response
+     */
+    DeliveryAssignmentResponse failTaskByAssignmentId(UUID assignmentId, FailTaskRequest request);
     
     /**
      * Record return to warehouse for FAILED or DELAYED assignments.

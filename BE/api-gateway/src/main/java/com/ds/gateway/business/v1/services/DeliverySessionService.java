@@ -208,14 +208,37 @@ public class DeliverySessionService {
             Map<Integer, List<Map<String, Object>>> priorityGroupsMap = new HashMap<>();
             Map<String, Object> startPoint = null;
             List<Map<String, Object>> allWaypoints = new ArrayList<>();
+            List<String> missingCoordinates = new ArrayList<>();
             
             for (int i = 0; i < parcelFutures.size(); i++) {
                 try {
                     Map<String, Object> parcelData = parcelFutures.get(i).get();
+                    String parcelId = (String) assignments.get(i).get("parcelId");
+                    
                     if (parcelData != null) {
                         // Extract lat/lon directly from parcel data
                         Object latObj = parcelData.get("lat");
                         Object lonObj = parcelData.get("lon");
+                        
+                        // Fallback: check destination field
+                        if (latObj == null || lonObj == null) {
+                            Object destinationObj = parcelData.get("destination");
+                            if (destinationObj instanceof Map) {
+                                Map<String, Object> destination = (Map<String, Object>) destinationObj;
+                                latObj = destination.get("lat");
+                                lonObj = destination.get("lon");
+                            }
+                        }
+                        
+                        // Fallback: check sendTo field (legacy)
+                        if (latObj == null || lonObj == null) {
+                            Object sendToObj = parcelData.get("sendTo");
+                            if (sendToObj instanceof Map) {
+                                Map<String, Object> sendTo = (Map<String, Object>) sendToObj;
+                                latObj = sendTo.get("lat");
+                                lonObj = sendTo.get("lon");
+                            }
+                        }
                         
                         if (latObj != null && lonObj != null) {
                             Double lat = null;
@@ -233,55 +256,73 @@ public class DeliverySessionService {
                                 Map<String, Object> waypoint = new HashMap<>();
                                 waypoint.put("lat", lat);
                                 waypoint.put("lon", lon);
-                                waypoint.put("parcelId", assignments.get(i).get("parcelId"));
+                                waypoint.put("parcelId", parcelId);
                                 allWaypoints.add(waypoint);
-                                log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Added waypoint {}: lat={}, lon={}, parcelId={}", i, lat, lon, assignments.get(i).get("parcelId"));
+                                log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Added waypoint {}: lat={}, lon={}, parcelId={}", i, lat, lon, parcelId);
                             } else {
-                                log.warn("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Invalid lat/lon for parcel {}: latObj={}, lonObj={}", assignments.get(i).get("parcelId"), latObj, lonObj);
+                                log.warn("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Invalid lat/lon for parcel {}: latObj={}, lonObj={}", parcelId, latObj, lonObj);
+                                missingCoordinates.add(parcelId);
                             }
                         } else {
-                            log.warn("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Missing lat/lon for parcel {}", assignments.get(i).get("parcelId"));
+                            log.warn("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Missing lat/lon for parcel {}", parcelId);
+                            missingCoordinates.add(parcelId);
                         }
                     } else {
-                        log.warn("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Parcel data is null for assignment {}", assignments.get(i).get("parcelId"));
+                        log.warn("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Parcel data is null for assignment {}", parcelId);
+                        missingCoordinates.add(parcelId);
                     }
                 } catch (Exception e) {
-                    log.error("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Error processing parcel {}: {}", assignments.get(i).get("parcelId"), e.getMessage(), e);
+                    String parcelId = (String) assignments.get(i).get("parcelId");
+                    log.error("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Error processing parcel {}: {}", parcelId, e.getMessage(), e);
+                    missingCoordinates.add(parcelId);
                 }
             }
             
             log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Collected {} waypoints from {} parcels", allWaypoints.size(), parcelFutures.size());
 
             if (allWaypoints.isEmpty()) {
-                log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] No valid waypoints found for session {}", sessionId);
-                return ResponseEntity.badRequest().body(Map.of("error", "No valid waypoints found for route calculation"));
+                log.warn("[api-gateway] [DeliverySessionService.getDemoRouteForSession] No valid waypoints found for session {}. Missing coordinates for {} parcels: {}", sessionId, missingCoordinates.size(), missingCoordinates);
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "No valid waypoints found for route calculation",
+                    "message", "All parcels in this session are missing location coordinates (lat/lon). Please ensure parcels have valid delivery addresses.",
+                    "sessionId", sessionId.toString(),
+                    "assignmentsCount", assignments.size(),
+                    "missingCoordinatesCount", missingCoordinates.size(),
+                    "missingParcelIds", missingCoordinates
+                ));
             }
 
             // Derive start point:
-            // 1) Prefer session start/current location if present
-            // 2) Fallback to driver's first parcel location but keep it in destinations
-            Double startLat = overrideStartLat != null ? overrideStartLat : toDouble(sessionData.get("startLat"));
-            Double startLon = overrideStartLon != null ? overrideStartLon : toDouble(sessionData.get("startLon"));
+            // 1) Prefer override coordinates if provided
+            // 2) Prefer session start/current location if present
+            // 3) Fallback to fixed warehouse coordinates (10.82398098, 106.79611036)
+            Double startLat = overrideStartLat;
+            Double startLon = overrideStartLon;
+            
             if (startLat == null || startLon == null) {
-                startLat = overrideStartLat != null ? overrideStartLat : toDouble(sessionData.get("currentLat"));
-                startLon = overrideStartLon != null ? overrideStartLon : toDouble(sessionData.get("currentLon"));
+                startLat = toDouble(sessionData.get("startLat"));
+                startLon = toDouble(sessionData.get("startLon"));
             }
             if (startLat == null || startLon == null) {
-                startLat = overrideStartLat != null ? overrideStartLat : toDouble(sessionData.get("lat"));
-                startLon = overrideStartLon != null ? overrideStartLon : toDouble(sessionData.get("lon"));
+                startLat = toDouble(sessionData.get("currentLat"));
+                startLon = toDouble(sessionData.get("currentLon"));
+            }
+            if (startLat == null || startLon == null) {
+                startLat = toDouble(sessionData.get("lat"));
+                startLon = toDouble(sessionData.get("lon"));
+            }
+            
+            // Fallback to fixed warehouse coordinates if still no start point
+            if (startLat == null || startLon == null) {
+                startLat = 10.82398098;
+                startLon = 106.79611036;
+                log.debug("[api-gateway] [DeliverySessionService.getDemoRouteForSession] Using fixed warehouse coordinates as start point: lat={}, lon={}", startLat, startLon);
             }
 
-            if (startLat != null && startLon != null) {
-                startPoint = new HashMap<>();
-                startPoint.put("lat", startLat);
-                startPoint.put("lon", startLon);
-                startPoint.put("parcelId", "START");
-            } else {
-                // Fallback: reuse first waypoint but do NOT remove it from destinations
-                Map<String, Object> firstWaypoint = new HashMap<>(allWaypoints.get(0));
-                startPoint = new HashMap<>(firstWaypoint);
-                startPoint.put("parcelId", "START");
-            }
+            startPoint = new HashMap<>();
+            startPoint.put("lat", startLat);
+            startPoint.put("lon", startLon);
+            startPoint.put("parcelId", "START");
             
             // Group ALL waypoints by priority based on deliveryType (including the first one)
             for (int i = 0; i < allWaypoints.size(); i++) {
