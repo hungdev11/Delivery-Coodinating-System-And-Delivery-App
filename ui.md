@@ -22,3 +22,4 @@
 - Make a common component first (like table, form, etc.)
 - Define style guide for the project (with a default theme)
 - Make it able to build and deploy to production
+ 
